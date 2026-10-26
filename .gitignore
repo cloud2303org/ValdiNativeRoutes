@@ -1,0 +1,11 @@
+.DS_Store
+valdi/bazel-*
+valdi/node_modules
+valdi/modules/*/tsconfig.json
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+android/app/libs/*.aar
+*.iml
+.idea

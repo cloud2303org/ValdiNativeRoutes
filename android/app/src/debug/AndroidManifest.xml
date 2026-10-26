@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Debug only: the Valdi runtime opens its debugger / hot reload service on port 13592. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>

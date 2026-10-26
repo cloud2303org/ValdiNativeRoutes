@@ -1,0 +1,9 @@
+load("@valdi//bzl/valdi:valdi_exported_library.bzl", "valdi_exported_library")
+
+# Exported as an .aar / .xcframework; the Compose and SwiftUI hosts own navigation.
+valdi_exported_library(
+    name = "valdi_pages",
+    ios_bundle_id = "io.valdiroutes.pages",
+    ios_bundle_name = "ValdiPages",
+    deps = ["//modules/app_pages"],
+)

@@ -128,7 +128,7 @@ final class ValdiHost {
                 )
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated {
-                        AppUI.shared.showModal(options) { result in
+                        _ = AppUI.shared.showModal(options) { result in
                             switch result {
                             case let .success(reply):
                                 done("", VRModalReply(confirm: reply.confirm, cancel: reply.cancel, content: reply.content))
@@ -219,7 +219,7 @@ final class ValdiHost {
     private static func present(_ options: PresentationOptions, _ done: @escaping (String, VRPresentationReply) -> Void) {
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
-                AppUI.shared.showPresentation(options) { result in
+                _ = AppUI.shared.showPresentation(options) { result in
                     switch result {
                     case let .success(reply):
                         done("", VRPresentationReply(confirm: reply.confirm, cancel: reply.cancel, value: reply.value,

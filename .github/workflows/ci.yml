@@ -129,7 +129,7 @@ jobs:
       - name: Restore vision dependencies
         if: matrix.target != 'npm'
         id: vision
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: vision/vendor/install
           key: vision-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-ndk27.1.12297006-${{ hashFiles('vision/vendor-lock.json', 'vision/scripts/prepare-native.cjs') }}
@@ -138,6 +138,12 @@ jobs:
         env:
           VISION_TARGET: ${{ matrix.target == 'android' && 'android-arm64' || 'ios' }}
         run: node vision/scripts/prepare-native.cjs --target "$VISION_TARGET" --jobs 3 2>&1 | tee .ci/vision.log
+      - name: Save prepared vision dependencies
+        if: matrix.target != 'npm' && steps.vision.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: vision/vendor/install
+          key: ${{ steps.vision.outputs.cache-primary-key }}
       - name: Build Android debug APK
         if: matrix.target == 'android'
         run: pnpm build:android --no-daemon --max-workers=3 --stacktrace 2>&1 | tee .ci/build.log

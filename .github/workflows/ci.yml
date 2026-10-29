@@ -72,21 +72,6 @@ jobs:
           key: bazel-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-${{ hashFiles('valdi/.bazelversion') }}-${{ github.sha }}-${{ inputs.upstream_tag || 'pinned' }}
           restore-keys: |
             bazel-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-${{ hashFiles('valdi/.bazelversion') }}-
-      - name: Build matching host tools
-        working-directory: valdi
-        run: |
-          "$BAZEL_BIN" build --jobs=3 --local_ram_resources=4096 --experimental_disk_cache_gc_max_size=3G \
-            @valdi//valdi/compiler/toolbox:valdi_compiler_toolbox \
-            @valdi//compiler/clientsql:sqlite_316_validator 2>&1 | tee ../.ci/host-tools.log
-      - name: Save host tool action cache
-        if: steps.bazel-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: ~/.cache/bazel-disk-cache
-          key: ${{ steps.bazel-cache.outputs.cache-primary-key }}
-      - name: Build application modules
-        if: matrix.target == 'npm'
-        run: pnpm build 2>&1 | tee .ci/build.log
       - name: Runtime fingerprint
         if: matrix.target != 'npm'
         id: runtime-input
@@ -122,6 +107,25 @@ jobs:
             ios/Frameworks/ValdiRuntime.xcframework
             ios/Frameworks/valdi_ota.json
           key: runtime-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-debug-${{ steps.runtime-output.outputs.key }}-${{ hashFiles('scripts/export-*.sh', 'valdi/pnpm-lock.yaml', 'valdi/patches/**') }}
+      - name: Check host tools materialized by runtime export
+        id: host-tools
+        run: node scripts/ci.mjs tools-valid
+      - name: Build matching host tools
+        if: steps.host-tools.outputs.valid != 'true'
+        working-directory: valdi
+        run: |
+          "$BAZEL_BIN" build --jobs=3 --local_ram_resources=4096 --experimental_disk_cache_gc_max_size=3G \
+            @valdi//valdi/compiler/toolbox:valdi_compiler_toolbox \
+            @valdi//compiler/clientsql:sqlite_316_validator 2>&1 | tee ../.ci/host-tools.log
+      - name: Save host tool action cache
+        if: steps.bazel-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/bazel-disk-cache
+          key: ${{ steps.bazel-cache.outputs.cache-primary-key }}
+      - name: Build application modules
+        if: matrix.target == 'npm'
+        run: pnpm build 2>&1 | tee .ci/build.log
       - name: Restore vision dependencies
         if: matrix.target != 'npm'
         id: vision

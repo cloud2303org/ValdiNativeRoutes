@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync } from 'node:fs';
-import { checkRuntime } from './prerequisites.mjs';
+import { checkBuildTools, checkRuntime } from './prerequisites.mjs';
 import { root } from './upstream.mjs';
 
 function output(name, value) {
@@ -18,6 +18,14 @@ if (command === 'toolchain') {
     capture('cmake', ['--version']), capture('ninja', ['--version'])].join('\n');
   console.log(versions);
   output('key', createHash('sha256').update(versions).digest('hex'));
+} else if (command === 'tools-valid') {
+  try {
+    checkBuildTools(root);
+    output('valid', 'true');
+  } catch (error) {
+    console.log(error.message);
+    output('valid', 'false');
+  }
 } else if (['runtime-key', 'runtime-valid'].includes(command) && ['android', 'ios'].includes(platform)) {
   if (command === 'runtime-key') {
     const stamp = JSON.parse(execFileSync(process.execPath, ['scripts/ota.mjs', 'valdi-hash', platform, 'debug'], { cwd: root, encoding: 'utf8' }));
@@ -31,4 +39,4 @@ if (command === 'toolchain') {
       output('valid', 'false');
     }
   }
-} else throw new Error('Usage: node scripts/ci.mjs toolchain | runtime-key PLATFORM | runtime-valid PLATFORM');
+} else throw new Error('Usage: node scripts/ci.mjs toolchain | tools-valid | runtime-key PLATFORM | runtime-valid PLATFORM');

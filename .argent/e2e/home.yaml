@@ -1,0 +1,14 @@
+# Shared start: signs in if the login page is showing, then waits for the home page.
+# The login page needs a non-empty password. The account field is the one next to its label, the password field is
+# the one after the account field (text selectors do not reach the secure field on Android).
+steps:
+  - launch: { native: io.valdiroutes.app }
+  # The JS runtime can render the login page after launch returns. Wait for either real start screen before
+  # deciding whether sign-in is needed; otherwise the optional branch can inspect a still-empty tree.
+  - await: { visible: { text: { matches: '^(欢迎回来|push 详情页)$' } }, timeout: 20000 }
+  - when: { visible: { text: "欢迎回来" } }
+    steps:
+      - type: { into: { role: TextField, next: { text: "账号" } }, text: "tester", submit: false }
+      - type: { into: { role: TextField, after: { role: TextField, next: { text: "账号" } } }, text: "{{secret:DEMO_LOGIN_PASSWORD}}", submit: false }
+      - tap: { text: "登录" }
+  - await: { visible: { text: "push 详情页" } }

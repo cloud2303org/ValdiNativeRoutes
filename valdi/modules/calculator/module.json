@@ -1,0 +1,4 @@
+{
+  "nativeBuild": "bazel",
+  "iosModuleName": "Calculator"
+}

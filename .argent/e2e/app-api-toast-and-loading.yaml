@@ -1,0 +1,18 @@
+steps:
+  - run: home
+  # iOS only: the toast and the loading mask are in the iOS runner tree. Android toasts are not (checked on emulator).
+  - when: { platform: ios }
+    steps:
+      - scroll-to: { target: { text: "showToast 成功" } }
+      - tap: { text: "showToast 成功" }
+      - await: { visible: { text: "保存成功" }, timeout: 3000 }
+      - wait: 2000
+      - assert: { hidden: { text: "保存成功" } }
+      # Scroll past it first: otherwise it can stop under the floating tab bar, and the tap opens the 组件 tab.
+      - scroll-to: { target: { text: "选择器、日期、图片预览" } }
+      - scroll-to: { target: { text: "showLoading 2 秒（遮罩）" }, direction: up }
+      - tap: { text: "showLoading 2 秒（遮罩）" }
+      - await: { visible: { text: "加载中" }, timeout: 3000 }
+      - tap: { text: "showModal 确认" }
+      - await: { visible: { text: "加载完成" }, timeout: 4000 }
+      - assert: { hidden: { text: "删除" } }

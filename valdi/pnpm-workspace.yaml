@@ -1,0 +1,2 @@
+patchedDependencies:
+  '@snap/valdi@1.2.1': patches/@snap__valdi@1.2.1.patch

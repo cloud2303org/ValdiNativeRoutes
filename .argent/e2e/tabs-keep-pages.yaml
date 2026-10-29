@@ -1,0 +1,8 @@
+steps:
+  - run: home
+  - tap: { text: "组件" }
+  - await: { visible: { text: "页面内滚轮" } }
+  - tap: { text: "设备" }
+  - await: { visible: { text: "Wi-Fi 与 NFC" } }
+  - tap: { text: "首页" }
+  - await: { visible: { text: "结果：还没有结果" } }

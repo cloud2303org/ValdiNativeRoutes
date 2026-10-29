@@ -1,4 +1,3 @@
-import { StatefulComponent } from 'valdi_core/src/Component';
 import { IRenderedElement } from 'valdi_core/src/IRenderedElement';
 import { Style } from 'valdi_core/src/Style';
 import { systemFont } from 'valdi_core/src/SystemFont';
@@ -8,8 +7,9 @@ import { getAppDb } from './db';
 import { FocusScroller } from './FocusScroller';
 import { FormField } from './FormField';
 import { PageContext, PageViewModel } from './Page';
+import { Page } from './PageComponent';
 import { PageHeader } from './PageHeader';
-import { readParams, Router } from './routes';
+import { Router, readParams } from './routes';
 
 const SCROLL_FIELDS = ['姓名', '电话', '邮箱', '公司', '城市', '街道', '门牌号', '邮编'];
 const NOTES = '备注';
@@ -26,7 +26,7 @@ interface State {
  * @Component({viewModel: 'PageViewModel', context: 'PageContext'})
  * @ExportModel({ios: 'VRFormPage', android: 'io.valdiroutes.pages.FormPage'})
  */
-export class FormPage extends StatefulComponent<PageViewModel, State, PageContext> {
+export class FormPage extends Page<PageViewModel, State, PageContext> {
   state: State = { values: {} };
 
   private focusScroller = new FocusScroller();

@@ -1,0 +1,8 @@
+steps:
+  - run: home
+  - scroll-to: { target: { text: "Wi-Fi 与 NFC" } }
+  - tap: { text: "Wi-Fi 与 NFC" }
+  - await: { visible: { text: "startWifi" } }
+  - tap: { text: "startDiscovery，贴近卡片" }
+  - await: { visible: { text: "startDiscovery:fail" } }
+  - await: { visible: { text: "does not support NFC" } }

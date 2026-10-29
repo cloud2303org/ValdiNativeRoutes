@@ -1,0 +1,83 @@
+diff --git a/.metadata/.bazelrc.template b/.metadata/.bazelrc.template
+index c5531464c2eb48745ce48003f2b1a6d86353d21e..0202351ff0da688850b6595b173806605f384264 100644
+--- a/.metadata/.bazelrc.template
++++ b/.metadata/.bazelrc.template
+@@ -4,6 +4,11 @@ common --registry=https://bcr.bazel.build
+ 
+ common --enable_platform_specific_config
+ 
++# Bazel 8, as Valdi's own .bazelrc: some Valdi BUILD files glob for files that don't exist on every host, and some
++# rules still return legacy struct providers.
++common --noincompatible_disallow_empty_glob
++common --incompatible_disallow_struct_provider_syntax=false
++
+ # Disable workers for repo fetching to prevent OOM
+ common --experimental_worker_for_repo_fetching=off
+ 
+diff --git a/.metadata/.bazelversion.template b/.metadata/.bazelversion.template
+index b26a34e470564db32e10075b9d1a6236dc91f6b5..2b0aa21219df8fcc057961e80a1c8cd5dfaa7708 100644
+--- a/.metadata/.bazelversion.template
++++ b/.metadata/.bazelversion.template
+@@ -1 +1 @@
+-7.2.1
++8.2.1
+diff --git a/.metadata/MODULE.bazel.template b/.metadata/MODULE.bazel.template
+index 6a89672b9d157d72bbb9f2bc11b143b27efbbd73..5fc3db5529edc23d783047de05f0d2cf11e792a4 100644
+--- a/.metadata/MODULE.bazel.template
++++ b/.metadata/MODULE.bazel.template
+@@ -1,5 +1,8 @@
+ module(name = "{{WORKSPACE_NAME}}", version = "0.1")
+ 
++# Bazel 8 makes @platforms visible to the root module only with a dep. Same version as Valdi.
++bazel_dep(name = "platforms", version = "1.1.0")
++
+ # -- Valdi framework (https://github.com/Snapchat/Valdi) ---------------------
+ VALDI_TAG = "{{VALDI_RELEASE_TAG}}"
+ VALDI_URL = "https://github.com/Snapchat/Valdi/archive/" + VALDI_TAG + ".tar.gz"
+@@ -53,7 +56,7 @@ register_toolchains("@local_config_apple_cc_toolchains//:all")
+ register_toolchains("@llvm_toolchain//:all")
+ 
+ # -- Android dependencies ----------------------------------------------------
+-bazel_dep(name = "rules_java", version = "7.4.0")
++bazel_dep(name = "rules_java", version = "8.14.0")
+ bazel_dep(name = "rules_android", version = "0.6.5")
+ # Resolve rules_android from the Valdi registry, which carries the hermetic Android SDK
+ # patch (registry/modules/rules_android/0.6.5) so bootstrapped apps build Android targets
+@@ -85,9 +88,9 @@ use_repo(hermetic_ndk_extension, "androidndk")
+ 
+ register_toolchains("@androidndk//:all")
+ 
+-bazel_dep(name = "rules_kotlin", version = "1.9.0")
+-single_version_override(module_name = "rules_kotlin", version = "1.9.0")
+-bazel_dep(name = "rules_jvm_external", version = "6.2")
++bazel_dep(name = "rules_kotlin", version = "2.3.10")
++single_version_override(module_name = "rules_kotlin", version = "2.3.10")
++bazel_dep(name = "rules_jvm_external", version = "6.6")
+ 
+ # -- Maven (Android) ---------------------------------------------------------
+ maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+@@ -149,7 +152,7 @@ maven.install(
+ use_repo(maven, "android_mvn")
+ 
+ # -- Version pins (must match Valdi's MODULE.bazel) ---------------------------
+-single_version_override(module_name = "protobuf", version = "27.0")
++single_version_override(module_name = "protobuf", version = "29.3")
+ single_version_override(module_name = "rules_apple", version = "4.0.0")
+ single_version_override(module_name = "rules_pkg", version = "0.9.1")
+ single_version_override(module_name = "zlib", version = "1.3.2")
+diff --git a/dist/utils/BazelClient.js b/dist/utils/BazelClient.js
+index 20b717e0a92232fdd707cee6f2f3b0b7c6cc1f5a..55f83d8dab06747620190b19cfb839f888a1e416 100644
+--- a/dist/utils/BazelClient.js
++++ b/dist/utils/BazelClient.js
+@@ -92,8 +92,9 @@ class BazelLabel {
+     get apparentRepo() {
+         if (!this.repo)
+             return undefined;
+-        const tildeIndex = this.repo.indexOf('~');
+-        return tildeIndex >= 0 ? this.repo.slice(0, tildeIndex) : this.repo;
++        // Canonical repo names: valdi~ under Bazel 7, valdi+ under Bazel 8.
++        const separatorIndex = this.repo.search(/[~+]/);
++        return separatorIndex >= 0 ? this.repo.slice(0, separatorIndex) : this.repo;
+     }
+     toString() {
+         const repoPrefix = this.repo ? `@${this.repo}` : '';

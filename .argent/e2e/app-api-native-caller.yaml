@@ -1,0 +1,17 @@
+steps:
+  - run: home
+  - tap: { text: "打开原生选择页，等结果" }
+  - await: { idle: true }
+  - when: { platform: ios }
+    steps:
+      # SwiftUI rows are not in the runner tree; the showModal button's centre from describe.
+      - tool: gesture-tap
+        args: { x: 0.5, y: 0.668 }
+  - when: { platform: android }
+    steps:
+      - tap: { text: "原生调用 showModal" }
+  - await: { visible: { text: "app.ui.showModal" } }
+  - when: { platform: android }
+    steps:
+      - tap: { text: "确定" }
+      - assert: { hidden: { text: "app.ui.showModal" } }

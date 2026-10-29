@@ -1,0 +1,14 @@
+steps:
+  - run: home
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "全屏页 + 普通 view + 输入框" } }
+  - tap: { text: "全屏页 + 普通 view + 输入框" }
+  - tap: { role: TextField }
+  - when: { platform: ios }
+    steps:
+      # The simulator keyboard is not in the runner tree, so the raised keyboard can't be checked here, and the
+      # runner doesn't read a TextField's typed value. Typing fails without a focused field, so it checks focus.
+      - type: { into: { role: TextField }, text: "hi", submit: false }
+  - when: { platform: android }
+    steps:
+      - await: { visible: { text: "Shift" } }

@@ -1,0 +1,24 @@
+steps:
+  - run: home
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "OpenCV 与 ncnn" } }
+  - tap: { text: "OpenCV 与 ncnn" }
+  - await: { visible: { text: "运行示例" } }
+  - tap: { text: "运行示例" }
+  - await: { visible: { text: "计算完成" }, timeout: 15000 }
+  - await: { visible: { text: "OpenCV Mobile：4." } }
+  - await: { visible: { text: "ncnn：" } }
+  - await: { visible: { text: "图片：256 × 192" } }
+  - await: { visible: { text: "推理输入：64 × 64" } }
+  - await: { visible: { text: "OpenCV 处理：" } }
+  - await: { visible: { text: "ncnn 推理：" } }
+  - await: { visible: { text: "边缘像素：" } }
+  - await: { visible: { text: "合成原图" } }
+  - scroll-to: { target: { text: "Canny 边缘图" } }
+  - await: { visible: { text: "Canny 边缘图" } }
+  - scroll-to: { target: { text: "红色通道 R" } }
+  - await: { visible: { text: "红色通道 R" } }
+  - scroll-to: { target: { text: "绿色通道 G" } }
+  - await: { visible: { text: "绿色通道 G" } }
+  - scroll-to: { target: { text: "蓝色通道 B" } }
+  - await: { visible: { text: "蓝色通道 B" } }

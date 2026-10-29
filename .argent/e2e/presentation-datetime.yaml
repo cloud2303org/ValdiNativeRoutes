@@ -1,0 +1,28 @@
+steps:
+  - run: home
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "选择器、日期、图片预览" } }
+  - tap: { text: "选择器、日期、图片预览" }
+  - await: { visible: { text: "操作菜单 showActionSheet" } }
+  - tap: { text: "采样时间（datetime）" }
+  - await: { visible: { text: "时间  " } }
+  - await: { visible: { text: "日期  2026-10-02" } }
+  - tap: { text: "时间  " }
+  - await: { idle: true }
+  - when: { platform: ios }
+    steps:
+      - swipe: { direction: up, from: { text: "时" }, momentum: false, duration: 600 }
+  # Android: the hour wheel's rows are in the tree; one row up, 09时 → 10时.
+  - when: { platform: android }
+    steps:
+      - swipe: { from: { text: "09时" }, by: { y: -0.043 }, momentum: false, duration: 600 }
+      - await: { visible: { text: "时间  10:30" } }
+  - await: { idle: true }
+  - tap: { text: "确定" }
+  # The result line sits under the page title; scrolling up to a changing text is flaky on iOS.
+  - scroll-to: { target: { text: "选择与展示" }, direction: up }
+  - await: { visible: { text: '"confirm":true' } }
+  - await: { visible: { text: "2026-10-02" } }
+  - when: { platform: android }
+    steps:
+      - assert: { visible: { text: "2026-10-02 10:30" } }

@@ -1,0 +1,20 @@
+steps:
+  - run: home
+  - await: { visible: { text: "onShow 1 次（navigation）· onHide 0 次（-）" } }
+  - tap: { text: "组件" }
+  - tap: { text: "首页" }
+  - await: { visible: { text: "onShow 2 次（tab）· onHide 1 次（tab）" } }
+  - tap: { text: "push 详情页" }
+  - await: { visible: { text: "详情 #1" } }
+  - wait: 4000
+  - tap: { text: "返回" }
+  - await: { visible: { text: "onShow 3 次（navigation）· onHide 2 次（covered）" } }
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "Sheet + 普通 view + 输入框" } }
+  - tap: { text: "Sheet + 普通 view + 输入框" }
+  - await: { visible: { text: "发送" } }
+  - tap: { text: "‹ 返回" }
+  # The home page's result line sits under its first button; scrolling up to a changing text is flaky on iOS.
+  - scroll-to: { target: { text: "push 详情页" }, direction: up }
+  - await: { visible: { text: "结果：表单取消了" } }
+  - await: { visible: { text: "onShow 3 次（navigation）· onHide 2 次（covered）" } }

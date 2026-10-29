@@ -1,0 +1,16 @@
+steps:
+  - run: home
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "选择器、日期、图片预览" } }
+  - tap: { text: "选择器、日期、图片预览" }
+  - await: { visible: { text: "操作菜单 showActionSheet" } }
+  - tap: { text: "连续不同弹层（排队）" }
+  - await: { visible: { text: "开始采样" } }
+  - assert: { hidden: { text: "完成记录" } }
+  - tap: { text: "确定" }
+  - await: { visible: { text: "取消" }, timeout: 5000 }
+  - assert: { hidden: { text: "完成记录" } }
+  - tap: { text: "确定" }
+  - await: { visible: { text: "完成记录" }, timeout: 5000 }
+  - tap: { text: "确定" }
+  - await: { visible: { text: "showBottomSheet:ok" } }

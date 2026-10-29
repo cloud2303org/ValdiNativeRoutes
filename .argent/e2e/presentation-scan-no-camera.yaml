@@ -1,0 +1,17 @@
+steps:
+  - run: home
+  # iOS only: the simulator has no camera, so the scanner shows why and its back answers 'cancel'.
+  - when: { platform: ios }
+    steps:
+      - scroll-to: { target: { text: "showToast 成功" } }
+      - scroll-to: { target: { text: "选择器、日期、图片预览" } }
+      - tap: { text: "选择器、日期、图片预览" }
+      - await: { visible: { text: "操作菜单 showActionSheet" } }
+      - scroll-to: { target: { text: "scanCode 扫码" } }
+      - tap: { text: "scanCode 扫码" }
+      - await: { visible: { text: "当前设备没有可用相机" }, timeout: 5000 }
+      - tap: { id: "scanner-state-action" }
+      - await: { idle: true }
+      # The result line sits under the page title; scroll back to the title, then read it.
+      - scroll-to: { target: { text: "选择与展示" }, direction: up }
+      - await: { visible: { text: "scanCode:fail cancel" }, timeout: 5000 }

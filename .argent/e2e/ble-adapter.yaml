@@ -1,0 +1,9 @@
+steps:
+  - run: home
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "打开蓝牙 api 页" } }
+  - tap: { text: "打开蓝牙 api 页" }
+  - tap: { text: "openBluetoothAdapter" }
+  - await: { visible: { text: "openBluetoothAdapter:" } }
+  - tap: { text: "startBluetoothDevicesDiscovery" }
+  - await: { visible: { text: "startBluetoothDevicesDiscovery:" } }

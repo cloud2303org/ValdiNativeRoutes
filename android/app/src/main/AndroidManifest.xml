@@ -1,9 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Bluetooth (api.openBluetoothAdapter and the rest), as in ExpoNativeRoutes android/native/ble. Runtime
+         requests go through PermissionHost (ble/permission.ts): scan/connect or advertise/connect on 12+, location before. -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <!-- Wi-Fi (src/wifi), as in ExpoNativeRoutes android/native/wifi. Scans and full SSID/BSSID reads need location on
+         every version: blessed-kotlin's maxSdkVersion 30 is removed (BLE before 12 uses them too). Runtime requests go
+         through PermissionHost. -->
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" tools:remove="android:maxSdkVersion" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" tools:remove="android:maxSdkVersion" />
+    <!-- NFC reader mode (src/nfc), as in ExpoNativeRoutes android/native/nfc. -->
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
+    <uses-permission android:name="android.permission.NFC" />
+    <!-- api.scanCode and api.chooseImage's camera, as in ExpoNativeRoutes android/native/ui. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- api.previewImage loads https images (also the Valdi debugger in debug builds). -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".App"
         android:label="Valdi 路由"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:supportsRtl="true"
         android:theme="@style/Theme.ValdiNativeRoutes">
         <!-- Valdi root views are retained across the back stack, so the activity is never recreated for
@@ -18,5 +50,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- The camera app writes chooseImage's photo into the attachment cache through this provider. -->
+        <provider
+            android:name="io.nativeroutes.ui.AttachmentFileProvider"
+            android:authorities="${applicationId}.ui.attachments"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/ui_attachment_paths" />
+        </provider>
     </application>
 </manifest>

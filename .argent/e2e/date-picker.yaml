@@ -1,0 +1,12 @@
+steps:
+  - run: home
+  # The bottom tab bar covers the last rows of the list, so scroll past them first.
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "选择器、日期、图片预览" } }
+  - tap: { text: "选择器、日期、图片预览" }
+  - await: { visible: { text: "操作菜单 showActionSheet" } }
+  - tap: { text: "采样日期：2026-10-02" }
+  - await: { visible: { text: "确定" } }
+  - tap: { text: "取消" }
+  - await: { hidden: { text: "确定" } }
+  - await: { visible: { text: "采样日期：" } }

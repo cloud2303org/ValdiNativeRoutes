@@ -1,0 +1,17 @@
+steps:
+  - run: home
+  # iOS only: Android's route options have no fullScreen cover.
+  - when: { platform: ios }
+    steps:
+      - scroll-to: { target: { text: "Sheet + 普通 view + 输入框" } }
+      - scroll-to: { target: { text: "路由动画" } }
+      - tap: { text: "路由动画" }
+      - await: { visible: { text: "全屏覆盖" } }
+      - tap: { text: "全屏覆盖" }
+      - await: { visible: { text: "再看一次" } }
+      - tap: { text: "再看一次" }
+      - await: { idle: true }
+      - tap: { text: "返回" }
+      - await: { idle: true }
+      - tap: { text: "‹ 返回" }
+      - await: { visible: { text: "无动画" } }

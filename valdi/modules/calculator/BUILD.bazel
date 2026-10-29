@@ -1,0 +1,13 @@
+load("//bzl/node_module:module.bzl", "node_valdi_module")
+
+# Based on Valdi's polyglot_bridge_module template, using only our module rules.
+node_valdi_module(
+    name = "calculator",
+    srcs = glob(["src/**/*.ts", "src/**/*.tsx"]),
+    config = "module.json",
+    ios_module_name = "Calculator",
+    res = glob(["res/**"]),
+    android_srcs = glob(["android/**/*.kt"]),
+    ios_srcs = glob(["ios/**/*.m"]),
+    ios_hdrs = glob(["ios/**/*.h"]),
+)

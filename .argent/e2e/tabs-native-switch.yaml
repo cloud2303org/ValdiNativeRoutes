@@ -1,0 +1,17 @@
+steps:
+  - run: home
+  - tap: { text: "打开原生选择页，等结果" }
+  - await: { idle: true }
+  - when: { platform: ios }
+    steps:
+      # SwiftUI rows are not in the runner tree; the switchTab button's centre from describe.
+      - tool: gesture-tap
+        args: { x: 0.5, y: 0.608 }
+  - when: { platform: android }
+    steps:
+      - tap: { text: "原生调用 switchTab('wheels')" }
+  - await: { visible: { text: "页面内滚轮" } }
+  - tap: { text: "首页" }
+  # The home page's result line sits under its first button; scrolling up to a changing text is flaky on iOS.
+  - scroll-to: { target: { text: "push 详情页" }, direction: up }
+  - await: { visible: { text: "结果：原生页取消了" } }

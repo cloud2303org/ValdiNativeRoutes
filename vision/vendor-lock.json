@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "opencv": {
+    "version": "4.13.0",
+    "distribution": "opencv-mobile",
+    "release": "v36",
+    "commit": "0d81551eb80b53a48eed83ea36cbc769b11e120a",
+    "url": "https://github.com/nihui/opencv-mobile/releases/download/v36/opencv-mobile-4.13.0.zip",
+    "file": "opencv-mobile-4.13.0.zip",
+    "directory": "opencv-mobile-4.13.0",
+    "sha256": "0aeaea4837d19894765aae23cb82fc4b87cec07449bee4b4404a63bdda15d6ee",
+    "license": "Apache-2.0"
+  },
+  "ncnn": {
+    "version": "20260526",
+    "commit": "e54f7b1f88434e1d844ea0551b880a1cfb079ce1",
+    "url": "https://codeload.github.com/Tencent/ncnn/tar.gz/e54f7b1f88434e1d844ea0551b880a1cfb079ce1",
+    "file": "ncnn-20260526.tar.gz",
+    "directory": "ncnn-e54f7b1f88434e1d844ea0551b880a1cfb079ce1",
+    "sha256": "999e904d1631f46381728c68c3255af67d2cf4dbfbab8e3a7f2343e7a6dffc3d",
+    "license": "BSD-3-Clause"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "private": true,
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "postinstall": "node scripts/install.mjs",
+    "build": "node scripts/project.mjs modules",
+    "build:android": "node scripts/project.mjs android",
+    "build:ios": "node scripts/project.mjs ios",
+    "test": "node scripts/project.mjs test",
+    "test:e2e:android": "sh scripts/e2e.sh android",
+    "test:e2e:ios": "sh scripts/e2e.sh ios",
+    "check": "biome check valdi/modules",
+    "format": "biome format --write valdi/modules"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.3"
+  }
+}

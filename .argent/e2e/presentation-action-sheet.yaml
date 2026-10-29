@@ -1,0 +1,10 @@
+steps:
+  - run: home
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "选择器、日期、图片预览" } }
+  - tap: { text: "选择器、日期、图片预览" }
+  - await: { visible: { text: "操作菜单 showActionSheet" } }
+  - tap: { text: "操作菜单 showActionSheet" }
+  - await: { visible: { text: "设备操作" } }
+  - tap: { text: "复制编号" }
+  - await: { visible: { text: "showActionSheet:ok" } }

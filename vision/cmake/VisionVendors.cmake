@@ -1,0 +1,18 @@
+# Real source-built archives prepared by scripts/prepare-native.cjs.
+if(NOT VISION_VENDOR_TARGET)
+  message(FATAL_ERROR "Set VISION_VENDOR_TARGET to the prepared target")
+endif()
+get_filename_component(VISION_PACKAGE_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+set(VISION_VENDOR_PREFIX "${VISION_PACKAGE_ROOT}/vendor/install/${VISION_VENDOR_TARGET}")
+if(NOT EXISTS "${VISION_VENDOR_PREFIX}/native-routes-vision.json")
+  message(FATAL_ERROR "Run pnpm vision:prepare --target ${VISION_VENDOR_TARGET} first")
+endif()
+add_library(native_routes_vision_vendors INTERFACE)
+target_include_directories(native_routes_vision_vendors INTERFACE
+  "${VISION_VENDOR_PREFIX}/include/opencv4" "${VISION_VENDOR_PREFIX}/include/ncnn")
+foreach(VISION_LIBRARY opencv_highgui opencv_imgproc opencv_core ncnn)
+  target_link_libraries(native_routes_vision_vendors INTERFACE "${VISION_VENDOR_PREFIX}/lib/lib${VISION_LIBRARY}.a")
+endforeach()
+if(ANDROID)
+  target_link_libraries(native_routes_vision_vendors INTERFACE m dl log)
+endif()

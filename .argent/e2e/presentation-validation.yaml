@@ -1,0 +1,13 @@
+steps:
+  - run: home
+  # The bottom tab bar covers the last rows of the list, so scroll past them first.
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "选择器、日期、图片预览" } }
+  - tap: { text: "选择器、日期、图片预览" }
+  - await: { visible: { text: "操作菜单 showActionSheet" } }
+  - scroll-to: { target: { text: "参数校验（valibot，错误在入口给出）" } }
+  - tap: { text: "参数校验（valibot，错误在入口给出）" }
+  - await: { visible: { text: "showActionSheet:fail itemList must contain 1 to 6 nonempty strings" } }
+  - await: { visible: { text: "showPicker:fail picker values must be unique" } }
+  - await: { visible: { text: "previewImage:fail current must be one of urls" } }
+  - await: { visible: { text: "showToast:fail title must not be empty" } }

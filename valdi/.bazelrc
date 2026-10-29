@@ -1,8 +1,13 @@
-# Valdi custom Bazel registry (patched rules_swift, rules_kotlin, etc.)
-common --registry=https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry
+# Registry from the same immutable Valdi fork commit as MODULE.bazel
+common --registry=https://raw.githubusercontent.com/cloud2303org/Valdi/67e02521ce5bcf88aa0690e300a3135cb84379a4/registry
 common --registry=https://bcr.bazel.build
 
 common --enable_platform_specific_config
+
+# Bazel 8, as Valdi's own .bazelrc: some Valdi BUILD files glob for files that don't exist on every host (the NDK's
+# darwin-x86_64 libc++), and some rules still return legacy struct providers.
+common --noincompatible_disallow_empty_glob
+common --incompatible_disallow_struct_provider_syntax=false
 
 # Disable workers for repo fetching to prevent OOM
 common --experimental_worker_for_repo_fetching=off
@@ -14,7 +19,9 @@ common --experimental_enable_android_migration_apis=true
 common --incompatible_java_common_parameters=false
 
 # Flags for compilation
-common --define enable_web=true
+# This workspace exports native runtimes. Web has a separate TS build and is not
+# an output of the Node runtime-module backend.
+common --define enable_web=
 
 build --tool_java_language_version=17
 build --java_language_version=11
@@ -45,6 +52,10 @@ build --ios_minimum_os=15.0
 build --experimental_objc_fastbuild_options=""
 ## HACK inject this in the default toolchain which is only used on macos until we switch to bazel_toolchains
 build:macos --copt=-fvisibility=hidden
+# The iOS app compiles the Valdi bindings itself (ios/Generated/valdi, tools/valdi-rolldown/codegen.ts) against
+# valdi_core's Objective-C API, so ValdiRuntime.framework exports that (SCValdiMarshallableObject, SCValdiBridgeFunction,
+# SCValdiFieldValue…); everything else stays hidden.
+build:macos --per_file_copt=external/valdi[+~]/valdi_core/src/valdi_core/ios/.*@-fvisibility=default
 
 # java configuration
 ## Disable some java checks for now, djinni generates code that errors out
@@ -72,8 +83,10 @@ build --strategy=ValdiCompile=worker
 build:macos --spawn_strategy=local
 build:linux --sandbox_writable_path=/var/tmp
 
-# Disable disk cache to save disk space
-build --disk_cache=""
+# Keep build outputs across Bazel server restarts and invalidated caches, so an export rebuilds only what changed. Shared
+# by every checkout; Bazel trims it to 30 GB when idle.
+build --disk_cache=~/.cache/bazel-disk-cache
+build --experimental_disk_cache_gc_max_size=30G
 
 # common build configuration
 build --generate_json_trace_profile
@@ -89,6 +102,8 @@ build --experimental_reuse_sandbox_directories
 # Default JS engine
 build --flag_alias=valdi_js_engine=@valdi//bzl/valdi:js_engine
 build --valdi_js_engine=hermes
+# Precompile modules to Hermes bytecode (Valdi's default is QuickJS), so release builds run Hermes V1 too.
+build --@valdi//bzl/valdi:js_bytecode_format=hermes
 
 # Valdi Open Source Flags
 build --define=open_source_build=true

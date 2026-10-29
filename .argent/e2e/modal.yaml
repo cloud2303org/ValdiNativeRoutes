@@ -1,0 +1,10 @@
+steps:
+  - run: home
+  # The bottom tab bar covers the last rows of the list, so scroll past them first.
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "showModal 确认" } }
+  - tap: { text: "showModal 确认" }
+  - tap: { text: "删除" }
+  # The home page's result line sits under its first button; scrolling up to a changing text is flaky on iOS.
+  - scroll-to: { target: { text: "push 详情页" }, direction: up }
+  - await: { visible: { text: "结果：确认删除" } }

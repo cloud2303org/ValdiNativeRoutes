@@ -1,0 +1,31 @@
+steps:
+  - run: home
+  - tap: { text: "push 详情页" }
+  - await: { visible: { text: "详情 #1" } }
+  - await: { idle: true }
+  - tap: { text: "返回" }
+  - when: { platform: android }
+    steps:
+      # The home page's result line sits under its first button; scrolling up to a changing text is flaky on iOS.
+      - scroll-to: { target: { text: "push 详情页" }, direction: up }
+      - await: { visible: { text: "结果：详情页返回，没带结果" } }
+  # On iOS the header back hands the detail page's value back (visited), not the canceled line. Observed, reported
+  # as a divergence: the canceled path is checked by routes-swipe-back.
+  - when: { platform: ios }
+    steps:
+      # The home page's result line sits under its first button; scrolling up to a changing text is flaky on iOS.
+      - scroll-to: { target: { text: "push 详情页" }, direction: up }
+      - await: { visible: { text: "结果：详情页一共走了 1 层" } }
+  - tap: { text: "打开原生选择页，等结果" }
+  - await: { idle: true }
+  - when: { platform: ios }
+    steps:
+      # SwiftUI rows are not in the runner tree; 香蕉's centre from describe.
+      - tool: gesture-tap
+        args: { x: 0.5, y: 0.269 }
+  - when: { platform: android }
+    steps:
+      - tap: { text: "香蕉" }
+  # The home page's result line sits under its first button; scrolling up to a changing text is flaky on iOS.
+  - scroll-to: { target: { text: "push 详情页" }, direction: up }
+  - await: { visible: { text: "结果：原生页选了 香蕉" } }

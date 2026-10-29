@@ -1,9 +1,33 @@
 load("@valdi//bzl/valdi:valdi_exported_library.bzl", "valdi_exported_library")
 
-# Exported as an .aar / .xcframework; the Compose and SwiftUI hosts own navigation.
+# Exported as valdi_runtime.aar (libvaldi_runtime.so) and ValdiRuntime.xcframework: the Valdi runtime, Valdi's own
+# modules, and the app's C++ (native/: app_pages' @ExportModule implementations). app_pages' JavaScript, resources and
+# Kotlin/Objective-C bindings come from tools/valdi-rolldown, built by the apps' Gradle and Xcode builds.
 valdi_exported_library(
-    name = "valdi_pages",
-    ios_bundle_id = "io.valdiroutes.pages",
-    ios_bundle_name = "ValdiPages",
-    deps = ["//modules/app_pages"],
+    name = "valdi_runtime",
+    # Valdi's defaults (bzl/valdi/valdi_exported_library.bzl), except that Valdi's own .kotlin_module files stay: the
+    # app compiles the generated bindings against this jar, and Kotlin finds top-level declarations (the
+    # InflationCompletion typealias) only through them. Patterns are grep -E over the jar's paths; what remains of
+    # META-INF is its top-level files named valdi*/src_valdi_modules* (Valdi's modules), not the dependencies'.
+    android_excluded_class_path_patterns = [
+        "org/intellij/.*",
+        "org/jetbrains/.*",
+        "kotlin/.*",
+        "com/snap/valdi/support/R\\.class",
+        "com/snap/valdi/support/R\\$.*\\.class",
+        "android/support/.*",
+        "androidx/.*",
+        "META-INF/[^/]+/",
+        "META-INF/([^vs][^/]*|v[^a][^/]*|s[^r][^/]*|[vs])$",
+    ],
+    ios_bundle_id = "io.valdiroutes.runtime",
+    ios_bundle_name = "ValdiRuntime",
+    # Linked into the runtime on both platforms, so it uses the runtime's own C++ library (libc++ is static in
+    # libvaldi_runtime.so); bzl/patches/valdi/export_native_deps.patch adds the parameter.
+    native_deps = ["//native:app_pages_native"],
+    deps = [
+        "@valdi//src/valdi_modules/src/valdi/client_sql",
+        "@valdi//src/valdi_modules/src/valdi/valdi_core",
+        "@valdi//src/valdi_modules/src/valdi/valdi_tsx",
+    ],
 )

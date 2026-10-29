@@ -1,0 +1,32 @@
+# chooseImage from the photo library: the reply has a file:// copy of the chosen photo.
+steps:
+  - run: home
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "选择器、日期、图片预览" } }
+  - tap: { text: "选择器、日期、图片预览" }
+  - await: { visible: { text: "操作菜单 showActionSheet" } }
+  - scroll-to: { target: { text: "chooseImage（相册或拍照，最多 3 张）" } }
+  - tap: { text: "chooseImage（相册或拍照，最多 3 张）" }
+  - await: { visible: { text: "从相册选择" } }
+  - tap: { text: "从相册选择" }
+  # iOS: PHPicker runs in its own process, so nothing in it is in the runner tree: its first photo and its ✓ are points
+  # (the layout with the "私密访问照片" banner, which shows until someone closes it). The sheet doesn't always open at
+  # the same height (about 3% lower after the camera test), so each point is where both positions overlap.
+  - when: { platform: ios }
+    steps:
+      # It slides up and loads the library first; a tap before that selects nothing (and the ✓ stays disabled).
+      - wait: 5000
+      - tap: { x: 0.16, y: 0.46 }
+      - wait: 1500
+      - tap: { x: 0.904, y: 0.167 }
+  # Android: the system photo picker, in the runner tree. scripts/e2e.sh puts a photo on the device first.
+  - when: { platform: android }
+    steps:
+      - tap: { text: "Photo taken on" }
+      - await: { visible: { text: "Add" } }
+      - tap: { text: "Add" }
+  - await: { hidden: { text: "从相册选择" } }
+  # The result line sits under the page title; scrolling up to a changing text is flaky on iOS.
+  - scroll-to: { target: { text: "选择与展示" }, direction: up }
+  - await: { visible: { text: "chooseImage:ok" }, timeout: 15000 }
+  - assert: { visible: { text: "file://" } }

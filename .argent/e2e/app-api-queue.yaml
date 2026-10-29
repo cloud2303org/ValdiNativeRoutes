@@ -1,0 +1,13 @@
+steps:
+  - run: home
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "连续两个 showModal（排队）" } }
+  - tap: { text: "连续两个 showModal（排队）" }
+  - await: { visible: { text: "第一个" } }
+  - assert: { visible: { text: "关掉以后才会出现第二个" } }
+  - tap: { text: "确定" }
+  - await: { visible: { text: "第二个" } }
+  - tap: { text: "取消" }
+  # The home page's result line sits under its first button; scrolling up to a changing text is flaky on iOS.
+  - scroll-to: { target: { text: "push 详情页" }, direction: up }
+  - await: { visible: { text: "结果：两个都关了：确定、取消" } }

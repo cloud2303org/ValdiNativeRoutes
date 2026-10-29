@@ -1,0 +1,16 @@
+steps:
+  - run: home
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "选择器、日期、图片预览" } }
+  - tap: { text: "选择器、日期、图片预览" }
+  - await: { visible: { text: "操作菜单 showActionSheet" } }
+  - tap: { text: "采样位置：进水口" }
+  - await: { visible: { text: "出水口" } }
+  - swipe: { direction: up, from: { text: "进水口" }, momentum: false, duration: 600 }
+  - tap: { text: "确定" }
+  - await: { visible: { text: "采样位置：出水口" } }
+  - tap: { text: "采样位置：出水口" }
+  - await: { visible: { text: "出水口" } }
+  - swipe: { direction: down, from: { text: "出水口" }, momentum: false, duration: 600 }
+  - tap: { text: "取消" }
+  - await: { visible: { text: "采样位置：出水口" } }

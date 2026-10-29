@@ -1,0 +1,19 @@
+steps:
+  - run: home
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "选择器、日期、图片预览" } }
+  - tap: { text: "选择器、日期、图片预览" }
+  - await: { visible: { text: "操作菜单 showActionSheet" } }
+  - tap: { text: "图片预览（从第二张开始）" }
+  - await: { visible: { text: "第 2 张，共 2 张" }, timeout: 10000 }
+  - swipe: right
+  - await: { visible: { text: "第 1 张，共 2 张" } }
+  - when: { platform: ios }
+    steps:
+      # The viewer has no accessible close control: a tap inside it (on its counter) closes it.
+      - tap: { text: "第 1 张，共 2 张" }
+  - when: { platform: android }
+    steps:
+      - tool: button
+        args: { button: back }
+  - await: { visible: { text: "操作菜单 showActionSheet" } }

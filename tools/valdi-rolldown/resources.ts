@@ -4,18 +4,15 @@
 //   res.assetcatalog  uncompressed archive of {width, height, type} uint32s (image=1, font=2)
 //   Android           drawable-<density>/<module>_<name>.webp from the image's largest variant, and the keep rules
 //                     release resource shrinking needs (the runtime finds the drawables by name)
-//   iOS               <module>.bundle/<name>@2x.png and @3x.png, the converted ones quantized (pngquant); the
+//   iOS               <module>.bundle/<name>@2x.png and @3x.png, the converted ones palette-quantized; the
 //                     runtime finds the bundle by the module's name, in the main bundle first
 // An image is res/<name>.png or res/<name>@<scale>x.png (webp too); the largest scale is the source.
 // Fonts are res/*.ttf, normalized to snake_case and stored in the module archive as res/<name>.ttf.
-import { execFile, execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { promisify } from 'node:util';
+import sharp from 'sharp';
 import { packet, type ArchiveEntries } from './archive';
 import type { ValdiModule } from './valdiTs';
-
-const run = promisify(execFile);
 
 export interface Image {
   /** As in the catalog: the file name without scale and extension, `-` as `_`. */
@@ -43,8 +40,8 @@ const ANDROID_DENSITIES = [
   ['xxxhdpi', 4],
 ] as const;
 
-/** The module's images, by name, from res/ (undefined without res/); sizes are read with the toolbox. */
-export function findImages(module: ValdiModule, toolbox: string): Image[] | undefined {
+/** The module's images, by name, from res/ (undefined without res/). */
+export async function findImages(module: ValdiModule): Promise<Image[] | undefined> {
   const dir = path.join(module.dir, 'res');
   if (!existsSync(dir)) return undefined;
   const byName = new Map<string, Image>();
@@ -55,7 +52,8 @@ export function findImages(module: ValdiModule, toolbox: string): Image[] | unde
     const scale = match[2] ? Number(match[2]) : 1;
     if ((byName.get(name)?.scale ?? 0) >= scale) continue;
     const absolute = path.join(dir, file);
-    const { width, height } = JSON.parse(execFileSync(toolbox, ['image_info', '-i', absolute], { encoding: 'utf8' }));
+    const { width, height } = await sharp(absolute).metadata();
+    if (!width || !height) throw new Error(`Image has no dimensions: ${absolute}`);
     byName.set(name, { name, file: absolute, extension: match[3], scale, width, height });
   }
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -171,22 +169,23 @@ export function assetCatalog(images: Image[], fonts: Font[] = []): Buffer {
   return packet(entries);
 }
 
-/** ImageConverter.getConversionInfo: the image's size at `scale`, rounded, padded to a multiple of the scale. */
-function sizeArguments(image: Image, scale: number): string[] {
+/** Preserve ImageConverter.getConversionInfo's existing rounding and remainder-padding contract. */
+function imageSize(image: Image, scale: number): { width: number; height: number } {
   const extent = (pixels: number) => {
     const size = Math.round((pixels / image.scale) * scale);
     return size + (size % Math.trunc(scale));
   };
-  return ['-w', String(extent(image.width)), '-h', String(extent(image.height))];
+  return { width: extent(image.width), height: extent(image.height) };
 }
 
 /** The Android resources of the images, into `dir` (a res/ directory). */
-export async function writeAndroidResources(module: ValdiModule, images: Image[], dir: string, toolbox: string) {
+export async function writeAndroidResources(module: ValdiModule, images: Image[], dir: string) {
   const conversions = images.flatMap(image =>
     ANDROID_DENSITIES.map(async ([density, scale]) => {
       const output = path.join(dir, `drawable-${density}`, `${module.name}_${image.name}.webp`);
       mkdirSync(path.dirname(output), { recursive: true });
-      await run(toolbox, ['image_convert', '-i', image.file, '-o', output, ...sizeArguments(image, scale), '-q', '0.75']);
+      await sharp(image.file).resize({ ...imageSize(image, scale), fit: 'fill', kernel: 'mitchell' })
+        .webp({ quality: 75 }).toFile(output);
     }),
   );
   await Promise.all(conversions);
@@ -202,7 +201,7 @@ export async function writeAndroidResources(module: ValdiModule, images: Image[]
 }
 
 /** The iOS resources of the images: <module>.bundle in `dir` (the app's resources). */
-export async function writeIosResources(module: ValdiModule, images: Image[], dir: string, toolbox: string) {
+export async function writeIosResources(module: ValdiModule, images: Image[], dir: string) {
   if (!images.length) return;
   const bundle = path.join(dir, `${module.name}.bundle`);
   mkdirSync(bundle, { recursive: true });
@@ -215,9 +214,8 @@ export async function writeIosResources(module: ValdiModule, images: Image[], di
           copyFileSync(image.file, output);
           return;
         }
-        await run(toolbox, ['image_convert', '-i', image.file, '-o', output, ...sizeArguments(image, scale)]);
-        // ImageConverter.optimizePNG.
-        await run(toolbox, ['pngquant', '-i', output]);
+        await sharp(image.file).resize({ ...imageSize(image, scale), fit: 'fill', kernel: 'mitchell' })
+          .png({ palette: true }).toFile(output);
       }),
     ),
   );

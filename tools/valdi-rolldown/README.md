@@ -4,7 +4,14 @@ For the native bindings (Kotlin, Objective-C and C++, checked against Valdi's co
 `npx tsx codegen/goldens.ts`), see the repository README's “构建” and “C++ 绑定” sections.
 
 The build and dev server generate `app_pages/res` from the files directly inside
-`valdi/modules/app_pages/res/`. Images keep their existing platform resource pipeline.
+`valdi/modules/app_pages/res/`. Image metadata/conversion uses prebuilt `sharp`; density sizes, resource names and the asset catalog stay compatible.
+Android emits WebP at quality 75; iOS keeps matching PNG variants and palette-encodes converted PNGs.
+Mitchell sampling follows the old Skia resize path; encoder output is not required to be byte-identical.
+
+Release uses the pinned official `hermes-compiler` package. `hermes.ts` checks it against the runtime Hermes version,
+wraps each CommonJS module as Valdi expects, invokes hermesc, and prepends the Valdi header. A changed upstream
+wrapper/header fails explicitly. Run `pnpm test` at the root for image, compiler/protocol and binding golden checks.
+The application build/dev server no longer needs the Valdi toolbox. SQL generation still uses its SQLite validator.
 
 ## Custom fonts
 

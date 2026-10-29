@@ -19,6 +19,7 @@ function main() {
       runPnpm(['--dir', 'tools/valdi-rolldown', 'build', ...forwarded], root);
     } else {
       run(process.execPath, ['--test', 'scripts/tests/prerequisites.test.mjs', 'scripts/tests/upstream.test.mjs'], root);
+      runPnpm(['--dir', 'tools/valdi-rolldown', 'exec', 'tsx', '--test', 'resources.test.ts', 'hermes.test.ts'], root);
       runPnpm(['--dir', 'tools/valdi-rolldown', 'exec', 'tsx', 'codegen/goldens.ts', ...forwarded], root);
     }
     return;

@@ -33,7 +33,7 @@ companion 的 TypeScript / source-map 默认导入适配会先归一化，因此
    `MODULE.bazel` 移除对应条目和补丁文件；仍需保留的改动则重新适配。不要为了通过 fetch 直接删掉冲突补丁。
 3. 运行 `node scripts/upstream.mjs report`，查看 `.ci/upstream/`。
    按下表同步真正发生变化的部分，然后运行 `pnpm test`，审查 golden 差异和生成绑定。
-4. 在 `valdi/` 构建 toolbox 和 SQLite validator（命令见 README），然后在根目录运行 `pnpm build`。
+4. 在 `valdi/` 构建 SQLite validator（命令见 README），然后在根目录运行 `pnpm build`。
    重新导出两端运行时，准备视觉依赖，运行 `pnpm build:android`、`pnpm build:ios`。
 5. 提交源代码、补丁、版本 pin 和更新后的 `valdi/MODULE.bazel.lock`；通过正常 PR CI 后，再在设备上检查
    导航、输入、图片、SQL、原生桥接和热重载。Release / OTA 使用前另外验证匹配配置的运行时与 Hermes 字节码。
@@ -41,6 +41,7 @@ companion 的 TypeScript / source-map 默认导入适配会先归一化，因此
 | 我们维护的位置 | 升级时关注的上游内容 | 同步方式 |
 | --- | --- | --- |
 | `valdi/bzl/patches/valdi/` | 补丁目标文件、Hermes VM/编译器接口、导出规则 | 保留补丁栈，逐个判断保留、改写或移除 |
+| `tools/valdi-rolldown/hermes.ts`、工具 package/lock | `JavaScriptUtils.cpp` 模块包装/文件头、Hermes 编译选项和版本 | 更新官方 hermes-compiler 固定版本，运行协议检查和 Release 装载验证 |
 | `valdi/third_party/hermes_v1/` | Hermes pin、构建参数、ABI | 与适配补丁一起审查，重新导出运行时 |
 | `tools/valdi-rolldown/vendor/companion/` | `compiler/companion/src/` 的 JSXProcessor、AST 及其依赖 | 按报告移植变化，保留 ESM 导入适配和本地声明 |
 | `tools/valdi-rolldown/vendor/clientsql/` | `compiler/clientsql/src/` | 同步使用的 Python 文件，核对 validator 的版本与协议 |

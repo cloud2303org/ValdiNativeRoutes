@@ -24,7 +24,7 @@ export function checkDependencies(root) {
       throw new Error(`Missing valdi dependency ${name}. Run pnpm install from the repository root.`);
     }
   }
-  for (const name of ['tsx', 'typescript', 'rolldown']) {
+  for (const name of ['tsx', 'typescript', 'rolldown', 'sharp', 'hermes-compiler']) {
     if (!existsSync(path.join(root, 'tools/valdi-rolldown/node_modules', name))) {
       throw new Error(`Missing build dependency ${name}. Run pnpm install from the repository root.`);
     }
@@ -66,9 +66,7 @@ export function prepareSources(root) {
 export function checkBuildTools(root) {
   const out = path.join(root, 'valdi/bazel-out');
   const configs = existsSync(out) ? readdirSync(out) : [];
-  const toolbox = configs.some(config => existsSync(path.join(out, config, 'bin/external/valdi+/valdi/compiler/toolbox/valdi_compiler_toolbox')));
-  const prepareHostTools = 'Prepare the host build tools (no Android/iOS runtime export needed):\n  cd valdi\n  bazel build @valdi//valdi/compiler/toolbox:valdi_compiler_toolbox @valdi//compiler/clientsql:sqlite_316_validator';
-  if (!toolbox) throw new Error(`Valdi toolbox is missing (images and Hermes bytecode).\n${prepareHostTools}`);
+  const prepareHostTools = 'Prepare the SQL validator (no Android/iOS runtime export needed):\n  cd valdi\n  bazel build @valdi//compiler/clientsql:sqlite_316_validator';
   const validator = process.env.VALDI_SQLITE_VALIDATOR;
   if (validator ? !existsSync(validator) : !configs.some(config => ['valdi+', 'valdi~'].some(repo =>
     existsSync(path.join(out, config, 'bin/external', repo, 'compiler/clientsql/sqlite_316_validator'))))) {

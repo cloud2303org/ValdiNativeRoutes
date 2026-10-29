@@ -72,13 +72,12 @@ test('an iOS export is checked independently against its platform', t => {
 test('a clean checkout reports missing sources and tools with preparation commands', t => {
   const { root } = fixture(t);
   assert.throws(() => checkSources(root), /Valdi sources are not prepared.*\n.*prepare-valdi\.mjs/);
-  assert.throws(() => checkBuildTools(root), /toolbox is missing.*\n.*\n.*\n.*bazel build/);
+  assert.throws(() => checkBuildTools(root), /SQLite 3.16 validator is missing.*\n.*\n.*\n.*bazel build/);
 });
 
-test('standalone host build tools are accepted without exporting a mobile runtime', t => {
+test('SQL validator is sufficient without a Valdi toolbox or mobile runtime', t => {
   const { root, write } = fixture(t);
   const bin = 'valdi/bazel-out/darwin_arm64-fastbuild/bin/external/valdi+';
-  write(`${bin}/valdi/compiler/toolbox/valdi_compiler_toolbox`, 'host tool');
   write(`${bin}/compiler/clientsql/sqlite_316_validator`, 'host tool');
   assert.doesNotThrow(() => checkBuildTools(root));
 });

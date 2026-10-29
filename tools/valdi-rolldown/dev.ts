@@ -23,7 +23,7 @@ import { readFileSync, watch } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import type { ArchiveEntries } from './archive';
-import { appModules, buildModule, genDir, inlineSourceMaps, modulesDir, root, toolbox } from './pipeline';
+import { appModules, buildModule, genDir, inlineSourceMaps, modulesDir, root } from './pipeline';
 import { addFontEntries, assetCatalog, findFonts, findImages, writeResTs, type Font, type Image } from './resources';
 import { generateSqlgen, sqliteValidator } from './sqlgen';
 import { valdiTs, type ValdiModule } from './valdiTs';
@@ -41,7 +41,6 @@ interface Resource {
 
 // ---- Building
 
-const tool = toolbox();
 const validator = sqliteValidator(path.join(root, 'valdi'));
 
 /** One module: its resources, its generated sources and its TypeScript program, kept between builds. */
@@ -51,16 +50,24 @@ class ModuleBuild {
   readonly plugin: ReturnType<typeof valdiTs>;
   lastDiagnostics: string | undefined;
 
-  constructor(readonly module: ValdiModule) {
-    this.loadResources();
+  private constructor(readonly module: ValdiModule, images: Image[] | undefined) {
+    this.updateResources(images);
     this.generateSql();
     this.plugin = valdiTs(module);
   }
 
   /** Reads res/ again; res.ts changes with the image and font names. */
-  loadResources() {
+  static async create(module: ValdiModule): Promise<ModuleBuild> {
+    return new ModuleBuild(module, await findImages(module));
+  }
+
+  async loadResources() {
+    this.updateResources(await findImages(this.module));
+  }
+
+  private updateResources(images: Image[] | undefined) {
     const { module } = this;
-    this.images = findImages(module, tool);
+    this.images = images;
     this.fonts = findFonts(module) ?? [];
     if (writeResTs(module, this.images, genDir(module.name), this.fonts)) this.plugin?.invalidate(path.join(genDir(module.name), 'res.ts'));
   }
@@ -88,7 +95,7 @@ class ModuleBuild {
   }
 }
 
-const modules = new Map(appModules().map(module => [module.name, new ModuleBuild(module)]));
+const modules = new Map(await Promise.all(appModules().map(async module => [module.name, await ModuleBuild.create(module)] as const)));
 
 /** What the apps have, per bundle and file: the last build's output. */
 const current = new Map<string, ArchiveEntries>();
@@ -288,7 +295,7 @@ watch(modulesDir, { recursive: true }, (_event, file) => {
         const files = [...batch.values()].flatMap(changes => [...changes.files]);
         for (const module of modules.values()) for (const file of files) module.plugin.invalidate(file);
         for (const [name, changes] of batch) {
-          if (changes.res) modules.get(name)!.loadResources();
+          if (changes.res) await modules.get(name)!.loadResources();
           if (changes.sql) modules.get(name)!.generateSql();
         }
         const changed = await build(batch.keys());

@@ -107,15 +107,14 @@ jobs:
             ios/Frameworks/ValdiRuntime.xcframework
             ios/Frameworks/valdi_ota.json
           key: runtime-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-debug-${{ steps.runtime-output.outputs.key }}-${{ hashFiles('scripts/export-*.sh', 'valdi/pnpm-lock.yaml', 'valdi/patches/**') }}
-      - name: Check host tools materialized by runtime export
+      - name: Check SQL validator availability
         id: host-tools
         run: node scripts/ci.mjs tools-valid
-      - name: Build matching host tools
+      - name: Prepare SQL validator
         if: steps.host-tools.outputs.valid != 'true'
         working-directory: valdi
         run: |
           "$BAZEL_BIN" build --jobs=3 --local_ram_resources=4096 --experimental_disk_cache_gc_max_size=3G \
-            @valdi//valdi/compiler/toolbox:valdi_compiler_toolbox \
             @valdi//compiler/clientsql:sqlite_316_validator 2>&1 | tee ../.ci/host-tools.log
       - name: Save Bazel action cache
         if: always() && !cancelled() && steps.bazel-cache.outcome == 'success' && steps.bazel-cache.outputs.cache-hit != 'true'

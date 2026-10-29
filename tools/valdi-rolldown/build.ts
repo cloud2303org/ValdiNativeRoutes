@@ -10,8 +10,8 @@
 // Debug builds are JavaScript with each file's source map inline. --release: Hermes bytecode, as Valdi's release
 // builds ship (and minified), with the maps in <module>.map.json next to the archive.
 //
-// What Valdi's build still provides: the toolbox (bytecode, images) and the SQLite validator sqlgen needs, both
-// built by Bazel. Type errors fail the build, after it is written. --compare also emits each file as the Valdi
+// Images use prebuilt sharp, bytecode uses pinned prebuilt hermesc. SQL still needs SQLite's small native validator.
+// Type errors fail the build, after it is written. --compare also emits each file as the Valdi
 // compiler would (CommonJS straight from TypeScript) and diffs the render code against its web output.
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -28,7 +28,6 @@ import {
   precompile,
   root,
   sourceMapJson,
-  toolbox,
   type Built,
 } from './pipeline';
 import { addFontEntries, assetCatalog, findFonts, findImages, writeAndroidResources, writeIosResources, writeResTs } from './resources';
@@ -45,7 +44,6 @@ const androidRes = option('--res');
 const iosRes = option('--ios-res');
 const release = process.argv.includes('--release');
 const minify = release || process.argv.includes('--minify');
-const tool = toolbox();
 
 if (archivesOnly) {
   mkdirSync(out, { recursive: true });
@@ -59,7 +57,7 @@ const validator = sqliteValidator(path.join(root, 'valdi'));
 for (const module of appModules()) {
   const started = performance.now();
   // Generated sources first: the program the plugin starts with includes them.
-  const images = findImages(module, tool);
+  const images = await findImages(module);
   const fonts = findFonts(module) ?? [];
   writeResTs(module, images, genDir(module.name), fonts);
   generateSqlgen(module, genDir(module.name), validator);
@@ -77,10 +75,10 @@ for (const module of appModules()) {
     }
   }
 
-  if (androidRes) await writeAndroidResources(module, images ?? [], androidRes, tool);
+  if (androidRes) await writeAndroidResources(module, images ?? [], androidRes);
   if (iosRes) {
     rmSync(path.join(iosRes, `${module.name}.bundle`), { recursive: true, force: true });
-    await writeIosResources(module, images ?? [], iosRes, tool);
+    await writeIosResources(module, images ?? [], iosRes);
   }
 
   const errors = plugin.diagnostics();

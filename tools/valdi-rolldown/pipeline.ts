@@ -1,14 +1,10 @@
 // What build.ts (one build) and dev.ts (the dev server) share: the modules, and building them with rolldown.
-import { execFile } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { rolldown, RolldownMagicString, type Plugin, type PreRenderedChunk } from 'rolldown';
 import type { ArchiveEntries } from './archive';
 import { sourceFiles, type ValdiModule, type ValdiTsPlugin } from './valdiTs';
 
-const run = promisify(execFile);
 
 export const root = path.resolve(import.meta.dirname, '../..');
 const valdi = path.join(root, 'valdi');
@@ -203,42 +199,5 @@ export function sourceMapJson(name: string, { maps }: Built): string {
   return JSON.stringify(Object.fromEntries([...maps].map(([file, map]) => [`${name}/${file}`, map])));
 }
 
-/** Valdi's precompiled-module header (JavaScriptUtils.cpp, kPreCompiledJsModuleMagic), before the bytecode. */
-const isPrecompiled = (content: Buffer) => content.length >= 4 && content.readUInt32LE(0) === 0x0100c634;
-
-/**
- * Valdi's host toolbox (the one its compiler runs for release builds), built by Bazel with the runtime: its Hermes
- * is the app's, so the bytecode version matches. Accept an export's exec-tool build or a standalone host-tool build.
- */
-export function toolbox(): string {
-  const out = path.join(valdi, 'bazel-out');
-  const found = (existsSync(out) ? readdirSync(out) : [])
-    .map(name => path.join(out, name, 'bin/external/valdi+/valdi/compiler/toolbox/valdi_compiler_toolbox'))
-    .filter(file => existsSync(file))
-    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
-  if (!found.length) throw new Error('No valdi_compiler_toolbox: in valdi/, run bazel build @valdi//valdi/compiler/toolbox:valdi_compiler_toolbox');
-  return found[0];
-}
-
-/**
- * Release builds ship Hermes bytecode, on iOS too (its release runtime can't compile source): each .js entry becomes
- * the toolbox's output, Valdi's precompiled-module header and the bytecode, under the same name.
- */
-export async function precompile(entries: ArchiveEntries): Promise<void> {
-  const tool = toolbox();
-  const dir = mkdtempSync(path.join(tmpdir(), 'valdi-hbc-'));
-  try {
-    await Promise.all(
-      [...entries].filter(([name, content]) => name.endsWith('.js') && !isPrecompiled(content)).map(async ([name, content], i) => {
-        const input = path.join(dir, `${i}.js`);
-        const output = path.join(dir, `${i}.bin`);
-        writeFileSync(input, content);
-        // -f: the module path as the stack traces show it, without .js, as Valdi's JavaScriptPreCompiler passes it.
-        await run(tool, ['precompile', '-i', input, '-o', output, '-f', name.slice(0, -3), '-e', 'hermes']);
-        entries.set(name, readFileSync(output));
-      }),
-    );
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
+// Kept as a pipeline export for the build entry point.
+export { precompile } from './hermes';

@@ -57,16 +57,16 @@ cd android && ./gradlew :app:installDebug
 
 根目录安装通过 `postinstall` 依次安装 `valdi/` 和 `tools/valdi-rolldown/`，各自使用已有的 frozen lockfile，
 然后生成页面的 tsconfig；安装阶段不编译原生代码。首次导出会先获取 Valdi 的类型源码，再检查 C++ 绑定，
-避免干净目录里类型声明尚未准备好就检查绑定。构建入口会检查依赖、运行时指纹、toolbox、SQL 校验器及视觉库，
+避免干净目录里类型声明尚未准备好就检查绑定。构建入口会检查依赖、运行时指纹、SQL 校验器及视觉库，
 缺失或过期时给出具体准备命令；只改 TS 或宿主代码不会因此要求重新导出 Valdi 运行时。
 
 视觉库尚未准备时，Android 运行 `node vision/scripts/prepare-native.cjs --target android-arm64`，
 iOS 运行 `node vision/scripts/prepare-native.cjs --target ios`。iOS 构建需要 macOS、Xcode 和 XcodeGen。
 
 只构建 TS 模块时，不必导出 Android/iOS 运行时：首次先运行 `node scripts/prepare-valdi.mjs` 获取类型声明，
-再在 `valdi/` 执行 `bazel build @valdi//valdi/compiler/toolbox:valdi_compiler_toolbox @valdi//compiler/clientsql:sqlite_316_validator`
-准备本机的图片/字节码工具和 SQL 校验器，之后使用根目录 `pnpm build`。`pnpm test` 的 golden 对比只需要类型源码，
-不需要 toolbox 或移动端运行时。
+再在 `valdi/` 执行 `bazel build @valdi//compiler/clientsql:sqlite_316_validator`
+准备 SQL 校验器；图片处理使用预编译 `sharp`，Release 字节码使用固定版本的官方 `hermes-compiler`，之后使用根目录 `pnpm build`。`pnpm test` 的 golden 对比只需要类型源码，
+不需要 toolbox 或移动端运行时；包含图片与 Hermes 适配测试。
 
 改 TS、图片、`.sq` 不用再导出：Gradle 和 Xcode 构建时调用 `tools/valdi-rolldown` 编译页面（见“构建”）。开发时 `scripts/hotreload.sh` 把改动直接推到正在运行的 debug 包。
 
@@ -260,7 +260,7 @@ Hermes 固定为 `260318099.0.4`，构建定义在 `valdi/third_party/hermes_v1/
 - `ts_target_es2020.patch` 把 TypeScript 输出从 ES2016 提到 ES2020（`lib` 到 ES2021，Hermes 支持 `replaceAll`、`Promise.allSettled`），`async/await`、对象展开、`?.`、`??` 都原样输出。`terser5.patch` 把 Valdi 的压缩器从 terser 4.6.10 换成 5.44.1（4.x 解析不了 `?.` 和 `??`），按 ES2020 压缩。
 - `android_16kb_pages.patch` 给 Valdi 链接 `.so` 加 `-Wl,-z,max-page-size=16384`，三个 ABI 都按 16 KB 对齐（lld 在 arm64/armv7 默认 4 KB）。不对齐的包在 16 KB 页设备上会进兼容模式并弹出 "isn't 16 KB compatible" 提示。检查：`llvm-readelf -lW libvaldi_runtime.so` 的 LOAD 对齐为 `0x4000`，`zipalign -c -P 16 -v 4 app-release.apk` 通过。AVD `ValdiRoutes_16K`（`google_apis_ps16k`）可以实测。
 - 64 位 Android 的 `libhermesvm-config.h` 用压缩指针、连续堆和装箱 double，与 Hermes 自己的 Android 构建（`HEAP_HV_PREFER32`）一致。
-- iOS 也用 Hermes（`.bazelrc` 的引擎设置是全局的）。模块是 Hermes 字节码时 `hermes_release.patch` 不编 `valdi_jscore`，也不再链接系统 JavaScriptCore（`otool -L` 里没有）。Valdi 的编译器只给 Android release 预编译字节码，iOS release 拿到的是 JS 源码，精简 Hermes 跑不了，启动时报 `Hermes not compiled with compilation enabled`。`ios_hermes_bytecode.patch` 让字节码格式是 Hermes 时 iOS release 也用同一份字节码，debug 仍是源码。这两个补丁现在只影响 Valdi 自带的模块；我们的模块由 `tools/valdi-rolldown` 用导出时编出的同一个 `valdi_compiler_toolbox` 编成字节码，两个平台的 release 都是。
+- iOS 也用 Hermes（`.bazelrc` 的引擎设置是全局的）。模块是 Hermes 字节码时 `hermes_release.patch` 不编 `valdi_jscore`，也不再链接系统 JavaScriptCore（`otool -L` 里没有）。Valdi 的编译器只给 Android release 预编译字节码，iOS release 拿到的是 JS 源码，精简 Hermes 跑不了，启动时报 `Hermes not compiled with compilation enabled`。`ios_hermes_bytecode.patch` 让字节码格式是 Hermes 时 iOS release 也用同一份字节码，debug 仍是源码。这两个补丁现在只影响 Valdi 自带的模块；我们的模块由 `tools/valdi-rolldown` 调用与运行时同版本的官方 `hermes-compiler` 编成字节码，两个平台的 release 都是。
 - `ios_export_drawing_hdrs.patch`：导出的 xcframework 里 `SCValdiDrawingModuleFactory.h` 引用了 drawing 模块的 `SCCDrawingTypes.h`，但没打包进去，宿主一 `import ValdiRuntime` 就编译失败。补丁把 drawing 模块的 ObjC 头加进导出列表。
 - `no_fbjni.patch` 允许未接入 fbjni 的宿主构建，但不会把 JSI finalizer 线程附加到 JVM。以后若引入需要访问 JNI 的 JSI finalizer，必须重新处理该线程的 JVM 附加。
 
@@ -312,14 +312,14 @@ scripts/ota-pack-android.sh 0.1 0.1-h1       # 热更新：在发版的代码上
 
 iOS 是 `scripts/export-ios.sh release`、`project.yml` 的 `VALDI_OTA_URL`、`scripts/ota-pack-ios.sh <App 版本> <version>`。本地测试：`(cd ota/dist && python3 -m http.server 8765)`，`adb reverse tcp:8765 tcp:8765`，用 `-PvaldiOtaUrl=http://127.0.0.1:8765` 构建（`network_security_config.xml` 只对 127.0.0.1/localhost 放开明文 HTTP）。
 
-`ota-pack-*.sh` 由 `ota.mjs` 调 `tools/valdi-rolldown` 的 `build.ts --release` 编出模块（字节码和 `<module>.map.json`）和图片，和安装包里的是同一套构建；不用重新导出运行时，字节码用的是 `valdi/bazel-out` 里导出时编好的 toolbox。
+`ota-pack-*.sh` 由 `ota.mjs` 调 `tools/valdi-rolldown` 的 `build.ts --release` 编出模块（字节码和 `<module>.map.json`）和图片，和安装包里的是同一套构建；不用重新导出运行时，字节码用的是 pnpm 安装的同版本 `hermes-compiler`，无需 toolbox。
 
 ## 构建（tools/valdi-rolldown）
 
 我们的模块不再经过 Valdi 的编译器（Swift 写的，只能在 Bazel 里跑），由 `tools/valdi-rolldown` 用 Node 构建，产物和 Valdi 的格式一样，运行时照常加载：
 
 - **编译**：TypeScript LanguageService 做类型检查（有错构建就失败），`.tsx` 用 Valdi 自己的 JSX 转换（`vendor/companion/`，MIT），再由 rolldown 输出 CommonJS：每个源文件是一个入口，输出一个 Valdi 模块文件，懒加载和内存警告时卸载都和原来一样；npm 代码按引用关系拆分（见“npm 依赖”）。
-- **打包**：`.valdimodule`（zstd 压缩的 ValdiPacket）。debug 是 JS 加内联 source map；release 用导出时编出的 `valdi_compiler_toolbox` 编成 Hermes 字节码，source map 单独放 `<module>.map.json`。
+- **打包**：`.valdimodule`（zstd 压缩的 ValdiPacket）。debug 是 JS 加内联 source map；release 用官方预编译 `hermes-compiler` 编成 Hermes 字节码，由 Node 补齐 Valdi 模块包装和文件头，source map 单独放 `<module>.map.json`。
 - **图片**：`res/` 生成 `res.ts` 和 `res.assetcatalog`；Android 输出 5 种密度的 webp 和 keep.xml，iOS 输出 `app_pages.bundle`（@2x/@3x）。
 - **ClientSQL**：`sqlgen.ts` 用 Valdi 原版的 Python 生成器（`vendor/clientsql/`）把 `sql/` 生成到 `tools/valdi-rolldown/.gen/app_pages/src/sqlgen/`。生成器要用 SQLite 3.16 校验器：`$VALDI_SQLITE_VALIDATOR`，或者 `valdi/bazel-out` 里最新的一份（没有就在 `valdi/` 下 `bazel build @valdi//compiler/clientsql:sqlite_316_validator`）。
 - **原生绑定**：`codegen.ts` 是 Valdi 编译器绑定生成的 TS 移植，从 `@ExportModel`、`@ExportProxy`、`@ExportFunction`、`@ExportModule`、`@ExportEnum` 生成 Kotlin、Objective-C 和 C++，结果提交进 git。`npx tsx codegen/goldens.ts` 拿 Valdi 源码里的编译器 golden（`tools/ci/compiler_goldens`）逐字节对比三种语言；app_pages 的输出也和 Valdi 的 Bazel 构建一致。构建只跑 `--check`，过期就失败并给出命令；改了导出给原生的接口后手动重新生成：
@@ -335,7 +335,7 @@ iOS 是 `scripts/export-ios.sh release`、`project.yml` 的 `VALDI_OTA_URL`、`s
 - **模块**：`valdi/modules/` 下每个有 `src/` 的目录都是一个模块，不用登记，各自打成 `<模块>.valdimodule`（自己的图片、sqlgen、npm 代码），绑定也按模块生成到同一组目录。模块之间按路径导入（`import { X } from 'other/src/X'`），运行时 Valdi 加载对方的模块。新建：`pnpm new-module <名字>`（snake_case，它也是 Kotlin 包 `com.snap.modules.<名字>`、Objective-C 目录和 C++ 命名空间），写出 `src/<Name>Component.tsx`（Valdi 的 ui_component 模板）、所有模块的 tsconfig.json 和这个模块的绑定；iOS 要再 `xcodegen generate` 把新的 Objective-C 文件加进工程。没有 `@Export…` 的模块不生成 C++ 文件，所以不需要重新导出运行时。删掉一个模块后，删它在 `android/app/generated/valdi`、`ios/Generated/valdi` 里的绑定，再跑 `pnpm tsconfig`。
 - **IDE**：各模块的 `tsconfig.json` 由 `pnpm tsconfig` 生成（`new-module` 会跑），代替 `valdi projectsync`：Valdi 的基础配置、运行时带的 Valdi 模块（只有这些能导入）、所有 app 模块，生成的源码（`res.ts`、`sqlgen`）在 `tools/valdi-rolldown/.gen/`。`valdi/modules/app_pages/BUILD.bazel` 已经用不到了。
 
-导出脚本只在 Valdi 本身（`MODULE.bazel`、补丁、`.bazelrc`）或 `valdi/native`（C++，见下一节）变了时才需要跑：它提供运行时 aar / xcframework、`valdi_compiler_toolbox` 和指纹的 Valdi 一半。
+导出脚本只在 Valdi 本身（`MODULE.bazel`、补丁、`.bazelrc`）或 `valdi/native`（C++，见下一节）变了时才需要跑：它提供运行时 aar / xcframework 和指纹的 Valdi 一半；导出内置模块时仍可能构建上游 toolbox，应用 Node 管线不再调用它。
 
 ## C++ 绑定
 

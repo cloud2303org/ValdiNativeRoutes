@@ -8,8 +8,8 @@
 OpenCV/ncnn 编译是单独的原生准备步骤，不在 npm 安装阶段运行。构建入口先检查缺失的产物及运行时指纹，
 Valdi/Hermes 配置、补丁或应用 C++ 变化会提示重新导出；页面 TS 与宿主 Kotlin/Swift 的变化不会误触发运行时重导出。
 首次导出先运行 `scripts/prepare-valdi.mjs`，通过 Bazel 的 `fetch --repo=@valdi` 获取类型声明，再检查 C++ 绑定。
-只获取已固定版本和补丁的源码，不解析应用模块、旧 TS 编译器或 C++ 工具链目标。仅构建 TS 模块时可单独编译 host toolbox
-和 SQLite 校验器，无需导出整个 Android/iOS 运行时；`pipeline.ts` 同时支持这种 host 产物和导出时的 exec-tool 产物。
+只获取已固定版本和补丁的源码，不解析应用模块、旧 TS 编译器或 C++ 工具链目标。仅构建 TS 模块时只需准备 SQLite 校验器，无需导出 Android/iOS 运行时。图片由预编译 sharp 处理，
+Release 字节码由官方 hermes-compiler 生成，应用 Node 管线不再依赖 toolbox。
 
 已清理 `valdi/package.json` 中无应用引用的旧 ESLint/Jasmine/ts-node/esbuild 直接开发依赖；保留
 `@snap/valdi` 和 TypeScript。Valdi CLI 自己的 peer / transitive 依赖仍由它的依赖关系安装，不把它们当作前端规范工具。
@@ -21,7 +21,7 @@ Valdi/Hermes 配置、补丁或应用 C++ 变化会提示重新导出；页面 T
 
 | 任务 | 验证内容 | 产物 |
 | --- | --- | --- |
-| npm | `pnpm test`、host toolbox / SQLite validator、`pnpm build` | golden / 构建日志 |
+| npm | `pnpm test`、SQLite validator、`pnpm build` | golden / 构建日志 |
 | android | `pnpm test`、匹配运行时与视觉依赖、`pnpm build:android` | Debug APK、日志 |
 | ios | `pnpm test`、匹配运行时与视觉依赖、`pnpm build:ios` | 模拟器 App 压缩包、日志 |
 
@@ -32,8 +32,8 @@ Xcode / SDK / CMake / Ninja 的实际版本写入日志和缓存键。Actions �
 CI 将 Bazel / Gradle / Xcode 并发限制为 3，Bazel 调度内存为 4 GB，磁盘 action cache 空闲清理目标为 3 GB。
 
 三条任务会先跑 golden 再编原生工具，尽早发现 Node 绑定生成与上游语义的差异。
-原生任务先恢复或导出运行时，优先使用导出过程产出的 host 工具；缺失时才单独编译，避免冷构建两次。
-host 工具准备完成后立即保存 action cache，后续视觉库、宿主构建或产物上传失败也不会丢掉这份缓存。
+原生任务先恢复或导出运行时；SQL 校验器缺失时只编译该目标，不再为了应用图片和字节码准备整个 toolbox。
+SQL 校验器和视觉依赖准备完成后立即保存对应缓存，后续 App 编译或上传失败也不会丢掉它们。
 同一分支的运行中构建会完成以保存缓存，后续提交只保留最新的待运行版本。
 artifact 上传是可选步骤：账号存储额度不足时会在日志和任务 summary 中警告，测试/构建仍按自身结果判定；
 这种情况下无法下载 APK、模拟器 App 和报告，只能查看 workflow 日志。清理账号其他仓库的产物或调整额度需单独处理。
@@ -66,12 +66,15 @@ helloworld / Widgets / Web 示例构建、Snap 发布和 GCP 缓存认证。这�
   AAR / XCFramework；`valdi/native` 实现和生成绑定也链接在其中。
 - **Valdi 自带的模块**：`valdi/BUILD.bazel` 仍依赖 `valdi_core`、`valdi_tsx`、`client_sql`。
   它们随运行时导出，仍会使用上游 Valdi 编译器；替换应用编译管线不等于删除整个 Swift 编译器依赖。
-- **Valdi toolbox**：读取图片信息、转换图片，以及用匹配运行时版本的 Hermes 编译 release 字节码。
+- **应用图片**：pnpm 的预编译 `sharp`，保留尺寸、density、命名、透明度和 catalog 协议，编码字节可变化。
+- **应用 Release 字节码**：固定的官方 `hermes-compiler`，启动时检查版本与 `hermes.BUILD` 一致，
+  Node 保留当前 Valdi 的模块函数包装和文件头；上游协议变化会明确报错。
+- **上游 toolbox**：Valdi 自带模块随原生运行时导出时仍可能使用；应用 Node 管线不调用它。
 - **ClientSQL**：Node 调度 vendored Python 生成器，仍需 SQLite 3.16 校验器。
 - **宿主**：Android Gradle / SDK / NDK / CMake；iOS Xcode / XcodeGen / SwiftPM。
 - **视觉依赖**：`vision/scripts/prepare-native.cjs` 按 `vision/vendor-lock.json` 准备 OpenCV Mobile / ncnn。
 
-这些产物没有全部提交，因此 CI 显式构建 host 工具，并在缓存缺失时导出运行时、构建视觉库。
+这些产物没有全部提交，因此 CI 显式准备 SQL 校验器，并在缓存缺失时导出运行时、构建视觉库。
 运行时缓存按平台、架构、Debug 配置、工具链和 `ota.mjs` 的 Valdi 指纹匹配，还纳入导出脚本、CLI lock 和 patch。
 恢复后仍运行与本地相同的 `checkRuntime`；过期就重新导出，宿主构建继续保留原有 `check-export` 检查。
 视觉缓存按平台、工具链、NDK、vendor lock 和准备脚本匹配。Bazel 仅缓存可校验的 action 输出与下载，
@@ -86,7 +89,7 @@ helloworld / Widgets / Web 示例构建、Snap 发布和 GCP 缓存认证。这�
 这次 CI 到 Debug 构建为止，不启动模拟器、不运行 e2e、不签名发布。UI 测试的默认设备来自当前开发环境，
 接入 CI 时必须通过 `ANDROID_DEVICE` / `IOS_DEVICE` 指定 runner 自己创建的设备，再安装本次产物并提供测试 secret。
 Android 当前只打包 arm64，届时需要选择相应设备或明确增加测试 ABI。
-`pnpm test` 包含前置检查、升级脚本测试和绑定 golden 对比；构建通过也不代表 UI、热重载或 Release 字节码验证通过。
+`pnpm test` 包含前置检查、升级脚本测试、图片/字节码适配测试和绑定 golden 对比；构建通过也不代表 UI、热重载或 Release 字节码验证通过。
 
 ## 格式化范围
 

@@ -29,7 +29,8 @@ Release 字节码由官方 hermes-compiler 生成，应用 Node 管线不再依�
 并获取固定 commit 的 Valdi fork 源码。使用 `macos-26` arm64 runner，匹配当前只有 arm64 的视觉库模拟器 slice；
 runner 的架构见 [GitHub 官方列表](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
 Xcode / SDK / CMake / Ninja 的实际版本写入日志和缓存键。Actions 固定到 commit SHA。
-CI 将 Bazel / Gradle / Xcode 并发限制为 3，Bazel 调度内存为 4 GB，磁盘 action cache 空闲清理目标为 3 GB。
+CI 不额外指定 Bazel / Gradle / Xcode / Ninja 的构建并发或 Bazel 调度内存，使用各工具默认值。
+Bazel 磁盘 action cache 空闲清理目标保留为 3 GB；这与构建并发、调度内存无关。
 
 三条任务先跑测试和 golden，尽早发现 Node 绑定生成与上游语义的差异。
 原生任务恢复或导出运行时，不再单独编译应用 host 工具或 SQL 校验器。
@@ -80,6 +81,10 @@ helloworld / Widgets / Web 示例构建、Snap 发布和 GCP 缓存认证。这�
 恢复后仍运行与本地相同的 `checkRuntime`；过期就重新导出，宿主构建继续保留原有 `check-export` 检查。
 视觉缓存按平台、工具链、NDK、vendor lock 和准备脚本匹配。Bazel 仅缓存可校验的 action 输出与下载，
 不缓存 `bazel-out` / `bazel-valdi` 绝对路径链接或整个 output base。
+
+GitHub 缓存默认在超过 7 天未访问或仓库缓存总量超过 10 GB 时淘汰，容量不足时优先删除最久未访问的条目；
+具体以仓库设置和 [GitHub 缓存规则](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching) 为准。
+输入变化导致缓存不匹配不等于旧缓存被删除；输入未变也只有在缓存尚存且当前分支可访问时才能恢复。
 
 只改页面或宿主 Kotlin / Swift 时可复用匹配的导出运行时；更改 Valdi fork 提交、工具链或应用 C++ 时重新导出。
 缓存都是加速手段，干净 runner 仍有完整的准备路径。原生冷构建较重，首次 GitHub runner 的耗时、磁盘和内存

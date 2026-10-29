@@ -1,0 +1,24 @@
+# showDatePicker, confirmed: the day wheel moves one row (2日 → 3日), and the page gets the date dayjs formats.
+steps:
+  - run: home
+  # The bottom tab bar covers the last rows of the list, so scroll past them first.
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "选择器、日期、图片预览" } }
+  - tap: { text: "选择器、日期、图片预览" }
+  - await: { visible: { text: "操作菜单 showActionSheet" } }
+  - tap: { text: "采样日期：2026-10-02" }
+  - await: { visible: { text: "确定" } }
+  - await: { idle: true }
+  # One row up on the day wheel, without a fling.
+  - when: { platform: android }
+    steps:
+      - swipe: { from: { text: "2日" }, by: { y: -0.045 }, momentum: false, duration: 600 }
+      - await: { visible: { text: "3日" } }
+  # iOS: the wheel's rows are in its accessibility tree only, not in the view tree the runner reads, so the day
+  # column is a point (the right third of the sheet's wheels, on its selected row).
+  - when: { platform: ios }
+    steps:
+      - swipe: { from: { x: 0.82, y: 0.8 }, by: { y: -0.045 }, momentum: false, duration: 600 }
+  - tap: { text: "确定" }
+  - await: { visible: { text: "采样日期：2026-10-03" } }
+  - assert: { visible: { text: "\"value\":\"2026-10-03\"" } }

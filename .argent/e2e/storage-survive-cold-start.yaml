@@ -1,0 +1,9 @@
+steps:
+  - run: home
+  - assert: { text: { in: { text: "首页打开过" }, matches: '^首页打开过 \d+ 次' } }
+  - run: home
+  - assert: { text: { in: { text: "首页打开过" }, matches: '^首页打开过 \d+ 次' } }
+  - tap: { text: "clearStorageSync" }
+  - await: { visible: { text: "结果：清空了，demo.homeOpens 读出来是 undefined" } }
+  - run: home
+  - await: { visible: { text: "首页打开过 1 次" } }

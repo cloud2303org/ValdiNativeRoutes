@@ -1,0 +1,4 @@
+steps:
+  - run: home
+  - tap: { text: "setStorageSync(undefined)（入参校验）" }
+  - await: { visible: { text: "setStorageSync:fail data must be JSON" } }

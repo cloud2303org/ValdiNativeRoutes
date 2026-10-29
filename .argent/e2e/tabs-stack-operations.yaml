@@ -1,0 +1,18 @@
+steps:
+  - run: home
+  - tap: { text: "push 详情页" }
+  - tap: { text: "push 详情 #2" }
+  - await: { visible: { text: "栈：main → detail → detail（canGoBack true）" } }
+  - tap: { text: "replace 成详情 #3" }
+  - await: { visible: { text: "详情 #3" } }
+  - tap: { text: "back(2)" }
+  - await: { visible: { text: "结果：详情页返回，没带结果" } }
+  - tap: { text: "push 详情页" }
+  - tap: { text: "switchTab('device')" }
+  - await: { visible: { text: "Wi-Fi 与 NFC" } }
+  - tap: { text: "首页" }
+  - tap: { text: "push 详情页" }
+  - tap: { text: "reset('main', { tab: 'wheels' })" }
+  - await: { visible: { text: "页面内滚轮" } }
+  - tap: { text: "首页" }
+  - await: { visible: { text: "结果：还没有结果" } }

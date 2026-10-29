@@ -27,6 +27,9 @@ import androidx.dynamicanimation.animation.SpringAnimation
 import androidx.dynamicanimation.animation.SpringForce
 import kotlin.math.abs
 
+/** A view that owns every vertical drag starting on it, such as a picker wheel: the sheet never takes those over. */
+interface OwnsVerticalDrags
+
 /**
  * A modal bottom sheet in the current window: a scrim plus a panel that snaps between detents. Dragging follows the
  * finger and hands over to the content's scroll: a downward drag moves the sheet only once the scroll under the
@@ -83,6 +86,8 @@ class SheetHostView(context: Context) : ViewGroup(context) {
     private var activePointerId = MotionEvent.INVALID_POINTER_ID
     private var scrimPressed = false
     private var scrimTouchActive = false
+    /** The touch started on an [OwnsVerticalDrags] view. */
+    private var touchOwnedByContent = false
     private var scrimProgress = 0f
     private var capPx = Float.NaN
 
@@ -244,7 +249,7 @@ class SheetHostView(context: Context) : ViewGroup(context) {
     override fun requestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {
         // A scroll requests exclusive ownership once it starts scrolling. Keep observing at this sheet so the same
         // pointer can transfer at the scroll's edge; ancestors still respect the child's request.
-        if (disallowIntercept && !isPanning && activePointerId != MotionEvent.INVALID_POINTER_ID &&
+        if (disallowIntercept && !isPanning && !touchOwnedByContent && activePointerId != MotionEvent.INVALID_POINTER_ID &&
             isAtMaxDragCandidate() && findScrollableAtTouch() != null
         ) {
             parent?.requestDisallowInterceptTouchEvent(true)
@@ -272,9 +277,10 @@ class SheetHostView(context: Context) : ViewGroup(context) {
                 initialTouchY = event.y
                 lastTouchY = event.y
                 activePointerId = event.getPointerId(0)
+                touchOwnedByContent = startsOnDragOwner()
             }
             MotionEvent.ACTION_MOVE -> {
-                if (activePointerId == MotionEvent.INVALID_POINTER_ID) return false
+                if (activePointerId == MotionEvent.INVALID_POINTER_ID || touchOwnedByContent) return false
                 val pointerIndex = event.findPointerIndex(activePointerId)
                 if (pointerIndex < 0) return false
                 val y = event.getY(pointerIndex)
@@ -294,6 +300,7 @@ class SheetHostView(context: Context) : ViewGroup(context) {
                 activePointerId = MotionEvent.INVALID_POINTER_ID
                 scrimPressed = false
                 scrimTouchActive = false
+                touchOwnedByContent = false
             }
         }
         return false
@@ -389,6 +396,24 @@ class SheetHostView(context: Context) : ViewGroup(context) {
         val y = initialTouchY - sheetContainer.top - sheetContainer.translationY
         if (x < 0f || x >= sheetContainer.width || y < 0f || y >= sheetContainer.height) return null
         return findScrollableAtPoint(sheetContainer, x, y)
+    }
+
+    private fun startsOnDragOwner(): Boolean {
+        val x = initialTouchX - sheetContainer.left - sheetContainer.translationX
+        val y = initialTouchY - sheetContainer.top - sheetContainer.translationY
+        if (x < 0f || x >= sheetContainer.width || y < 0f || y >= sheetContainer.height) return false
+        return ownsDragAtPoint(sheetContainer, x, y)
+    }
+
+    private fun ownsDragAtPoint(view: View, x: Float, y: Float): Boolean {
+        if (!view.isShown) return false
+        if (view is OwnsVerticalDrags) return true
+        if (view !is ViewGroup) return false
+        return (view.childCount - 1 downTo 0).map { view.getChildAt(it) }.any { child ->
+            val childX = x - child.left - child.translationX
+            val childY = y - child.top - child.translationY
+            childX >= 0f && childX < child.width && childY >= 0f && childY < child.height && ownsDragAtPoint(child, childX, childY)
+        }
     }
 
     private fun findScrollableAtPoint(view: View, x: Float, y: Float): View? {

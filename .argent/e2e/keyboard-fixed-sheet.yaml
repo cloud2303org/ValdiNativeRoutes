@@ -1,0 +1,11 @@
+steps:
+  - run: home
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "Sheet + 普通 view + 输入框" } }
+  - scroll-to: { target: { text: "Sheet + scroll + 输入框" } }
+  - tap: { text: "Sheet + scroll + 输入框" }
+  - await: { visible: { text: "Sheet 里的长表单" } }
+  - tap: { role: TextField }
+  # The keyboard isn't in the runner tree, so its height can't be checked. The sheet's title staying on screen
+  # shows the fixed sheet kept its place while the field had focus.
+  - await: { visible: { text: "Sheet 里的长表单" } }

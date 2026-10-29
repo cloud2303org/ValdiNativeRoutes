@@ -1,7 +1,7 @@
 import { ElementRef } from 'valdi_core/src/ElementRef';
 import { IRenderedElement } from 'valdi_core/src/IRenderedElement';
-import { ScrollEvent } from 'valdi_tsx/src/GestureEvents';
 import { ElementFrame } from 'valdi_tsx/src/Geometry';
+import { ScrollEvent } from 'valdi_tsx/src/GestureEvents';
 import { ScrollViewInteractive } from 'valdi_tsx/src/NativeTemplateElements';
 
 /** Space kept between the focused input and the edge of the scroll. */
@@ -58,7 +58,10 @@ export class FocusScroller {
     this.scrollTo(scroll, Math.max(Math.min(next, content - height), 0));
   }
 
-  private positionInScroll(scroll: IRenderedElement, element: IRenderedElement): { top: number; bottom: number } | undefined {
+  private positionInScroll(
+    scroll: IRenderedElement,
+    element: IRenderedElement,
+  ): { top: number; bottom: number } | undefined {
     // Frames are relative to the parent, so summing them up to the scroll gives the position in its content.
     let top = 0;
     let current: IRenderedElement | undefined = element;

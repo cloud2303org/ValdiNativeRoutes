@@ -1,9 +1,8 @@
 #!/bin/sh
-# Hot reload the Valdi pages into the running debug app (emulator or device over adb).
-# The app must be a debug build of the exported aar; it listens on port 13592.
+# Hot reload the Valdi pages into the running debug apps: the Android emulators and the booted iOS simulator; a phone
+# only when ANDROID_SERIAL names it. Rebuilds the modules whose sources, res/ or sql/ change and pushes what changed.
+# The apps listen on port 13592. tools/valdi-rolldown/dev.ts; `pnpm install` in tools/valdi-rolldown installs it.
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
-export JAVA_HOME=${JAVA_HOME:-$(/usr/libexec/java_home -v 17)}
-export ANDROID_HOME=${ANDROID_HOME:-$HOME/Library/Android/sdk}
-cd "$root/valdi"
-exec valdi hotreload --target //modules/app_pages:app_pages_hotreload
+cd "$root/tools/valdi-rolldown"
+exec pnpm dev

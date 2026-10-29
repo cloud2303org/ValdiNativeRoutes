@@ -1,0 +1,34 @@
+# A wheel in a sheet: dragging down on it (already on its first row) must not pull the sheet down, let alone close it;
+# the sheet's title area still drags it closed.
+steps:
+  - run: home
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "页面内滚轮（组件）" } }
+  - tap: { text: "页面内滚轮（组件）" }
+  - await: { visible: { text: "采样位置：进水口" } }
+  - await: { idle: true }
+  - when: { platform: ios }
+    steps:
+      - scroll-to: { target: { text: "在 Sheet 里打开" } }
+  # Android: a swipe that starts on a wheel turns the wheel instead of scrolling the page, so it starts on a label.
+  - when: { platform: android }
+    steps:
+      - swipe: { from: { text: "地区：" }, by: { y: -0.45 }, momentum: false, duration: 600 }
+  - tap: { text: "在 Sheet 里打开" }
+  - await: { visible: { text: "Sheet 里的滚轮" } }
+  - await: { idle: true }
+  # Down on the sheet's location wheel. iOS: its row is a label. Android: the wheel's rows aren't in the runner tree,
+  # so its selected row is a point (between the 采样位置 and 采样日期 labels).
+  - when: { platform: ios }
+    steps:
+      - swipe: { from: { text: "进水口", after: { text: "Sheet 里的滚轮" } }, by: { y: 0.3 }, momentum: false, duration: 600 }
+  - when: { platform: android }
+    steps:
+      - swipe: { from: { x: 0.5, y: 0.47 }, by: { y: 0.3 }, momentum: false, duration: 600 }
+  - await: { idle: true }
+  - assert: { visible: { text: "Sheet 里的滚轮" } }
+  - assert: { visible: { text: "采样位置：进水口" } }
+  # The title area drags the sheet closed.
+  - swipe: { from: { text: "Sheet 里的滚轮" }, by: { y: 0.5 } }
+  - await: { hidden: { text: "Sheet 里的滚轮" } }
+  - await: { visible: { text: "在 Sheet 里打开" } }

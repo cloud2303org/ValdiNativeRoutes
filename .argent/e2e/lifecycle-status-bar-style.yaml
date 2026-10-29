@@ -1,0 +1,7 @@
+steps:
+  - run: home
+  - tap: { text: "push 详情页" }
+  - await: { visible: { text: "详情 #1" } }
+  - tap: { text: "setStatusBarStyle('light')" }
+  - tap: { text: "setStatusBarStyle('auto')" }
+  - await: { idle: true }

@@ -1,0 +1,16 @@
+steps:
+  - run: home
+  # iOS only: the simulator has no camera. Android's chooseImage has no camera-unavailable path to check.
+  - when: { platform: ios }
+    steps:
+      - scroll-to: { target: { text: "showToast 成功" } }
+      - scroll-to: { target: { text: "选择器、日期、图片预览" } }
+      - tap: { text: "选择器、日期、图片预览" }
+      - await: { visible: { text: "操作菜单 showActionSheet" } }
+      - scroll-to: { target: { text: "chooseImage（相册或拍照，最多 3 张）" } }
+      - tap: { text: "chooseImage（相册或拍照，最多 3 张）" }
+      - await: { visible: { text: "拍照" } }
+      - tap: { text: "拍照" }
+      # The result line sits under the page title; scrolling up to a changing text is flaky on iOS.
+      - scroll-to: { target: { text: "选择与展示" }, direction: up }
+      - await: { visible: { text: "chooseImage:fail E_CAMERA_UNAVAILABLE" }, timeout: 5000 }

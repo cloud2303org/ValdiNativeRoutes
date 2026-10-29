@@ -1,0 +1,537 @@
+diff -ruN a/valdi/src/valdi/hermes/Hermes.hpp b/valdi/src/valdi/hermes/Hermes.hpp
+--- a/valdi/src/valdi/hermes/Hermes.hpp
++++ b/valdi/src/valdi/hermes/Hermes.hpp
+@@ -16,7 +16,7 @@
+ #endif
+ 
+ #include "hermes/ADT/ManagedChunkedList.h"
+-#include "hermes/BCGen/HBC/BytecodeProviderFromSrc.h"
++#include "hermes/BCGen/HBC/BCProviderFromSrc.h"
+ #include "hermes/Optimizer/PassManager/Pipeline.h"
+ #include "hermes/Support/MemoryBuffer.h"
+ #include "hermes/VM/Callable.h"
+diff -ruN a/valdi/src/valdi/hermes/HermesDebuggerRegistry.cpp b/valdi/src/valdi/hermes/HermesDebuggerRegistry.cpp
+--- a/valdi/src/valdi/hermes/HermesDebuggerRegistry.cpp
++++ b/valdi/src/valdi/hermes/HermesDebuggerRegistry.cpp
+@@ -14,35 +14,30 @@
+ #include "valdi_core/cpp/Utils/ValueUtils.hpp"
+ 
+ #include <hermes/hermes.h>
+-#include <hermes/inspector/chrome/CDPHandler.h>
++#if defined(HERMES_API)
++#include <hermes/cdp/CDPAgent.h>
++#include <hermes/cdp/CDPDebugAPI.h>
++#endif
+ 
+ namespace Valdi::Hermes {
+ 
+-class RuntimeAdapterImpl : public facebook::hermes::inspector_modern::RuntimeAdapter {
+-public:
+-    RuntimeAdapterImpl(const std::shared_ptr<facebook::hermes::HermesRuntime>& jsiRuntime,
+-                       JavaScriptTaskScheduler* taskScheduler)
+-        : _jsiRuntime(jsiRuntime), _taskScheduler(taskScheduler) {}
+-    ~RuntimeAdapterImpl() override = default;
+-
+-    facebook::hermes::HermesRuntime& getRuntime() final {
+-        return *_jsiRuntime;
+-    }
+-
+-    void tickleJs() final {
++#if defined(HERMES_API)
++/// Hermes V1 runs debugger work through tasks that need the runtime while JS isn't running; run them on the JS thread.
++static facebook::hermes::debugger::EnqueueRuntimeTaskFunc makeEnqueueRuntimeTask(
++    const std::shared_ptr<facebook::hermes::HermesRuntime>& jsiRuntime, JavaScriptTaskScheduler* taskScheduler) {
++    std::weak_ptr<facebook::hermes::HermesRuntime> weakRuntime = jsiRuntime;
++    Ref<JavaScriptTaskScheduler> scheduler(taskScheduler);
++    return [weakRuntime, scheduler](facebook::hermes::debugger::RuntimeTask task) {
+         constexpr auto reason = JsThreadDispatchReason::DebuggerTickle;
+-        _taskScheduler->dispatchOnJsThreadAsync(reason, [](JavaScriptEntryParameters& entryParameters) {
+-            auto globalObject = entryParameters.jsContext.getGlobalObject(entryParameters.exceptionTracker);
+-            JSFunctionCallContext callContext(entryParameters.jsContext, nullptr, 0, entryParameters.exceptionTracker);
+-            entryParameters.jsContext.callObjectProperty(globalObject.get(), "__tickleJs", callContext);
++        scheduler->dispatchOnJsThreadAsync(reason, [weakRuntime, task = std::move(task)](JavaScriptEntryParameters&) {
++            if (auto runtime = weakRuntime.lock()) {
++                task(*runtime);
++            }
+         });
+-    }
++    };
++}
++#endif
+ 
+-private:
+-    std::shared_ptr<facebook::hermes::HermesRuntime> _jsiRuntime;
+-    Ref<JavaScriptTaskScheduler> _taskScheduler;
+-};
+-
+ HermesDebuggerRegistry::HermesDebuggerRegistry() = default;
+ HermesDebuggerRegistry::~HermesDebuggerRegistry() = default;
+ 
+@@ -52,19 +47,23 @@
+                                                HermesRuntimeId parentRuntimeId) {
+ #if defined(HERMES_API)
+     jsiRuntime->registerForProfiling();
+-    auto hermesHandler = facebook::hermes::inspector_modern::chrome::CDPHandler::create(
+-        std::make_unique<RuntimeAdapterImpl>(jsiRuntime, taskScheduler));
+     std::lock_guard<Mutex> lock(_mutex);
+-    HermesRuntimeId runtimeId = StringCache::getGlobal().makeString(std::to_string(++_runtimeIdSequence));
++    auto sequence = ++_runtimeIdSequence;
++    HermesRuntimeId runtimeId = StringCache::getGlobal().makeString(std::to_string(sequence));
++    std::shared_ptr<facebook::hermes::cdp::CDPDebugAPI> debugAPI =
++        facebook::hermes::cdp::CDPDebugAPI::create(*jsiRuntime);
++    std::shared_ptr<facebook::hermes::cdp::CDPAgent> hermesAgent = facebook::hermes::cdp::CDPAgent::create(
++        static_cast<int32_t>(sequence),
++        *debugAPI,
++        makeEnqueueRuntimeTask(jsiRuntime, taskScheduler),
++        [this, runtimeId](const std::string& message) { this->onHermesMessage(message, runtimeId); });
+     auto& entry = _entries.emplace_back();
+     entry.runtimeId = runtimeId;
+-    entry.hermesHandler = hermesHandler;
++    entry.jsiRuntime = jsiRuntime;
++    entry.debugAPI = std::move(debugAPI);
++    entry.hermesAgent = std::move(hermesAgent);
+     entry.parentRuntimeId = parentRuntimeId;
+ 
+-    hermesHandler->registerCallbacks(
+-        [this, runtimeId](const auto& message) { this->onHermesMessage(message, runtimeId); },
+-        /* no-op for the unregister handler */ []() {});
+-
+     if (parentRuntimeId != kRuntimeIdUndefined) {
+         for (auto* listener : _listeners) {
+             if (listener->getConnectedRuntimeId() == parentRuntimeId) {
+@@ -166,17 +165,19 @@
+ }
+ 
+ void HermesDebuggerRegistry::submitMessageToHermes(const Value& message, HermesRuntimeId runtimeId) {
++#if defined(HERMES_API)
+-    std::shared_ptr<facebook::hermes::inspector_modern::chrome::CDPHandler> hermesHandler = nullptr;
++    std::shared_ptr<facebook::hermes::cdp::CDPAgent> hermesAgent = nullptr;
+     {
+         std::lock_guard<Mutex> lock(_mutex);
+         for (auto entry : _entries) {
+             if (entry.runtimeId == runtimeId) {
+-                hermesHandler = entry.hermesHandler;
++                hermesAgent = entry.hermesAgent;
+             }
+         }
+     }
+-    if (hermesHandler)
+-        hermesHandler->handle(valueToJsonString(message));
++    if (hermesAgent)
++        hermesAgent->handleCommand(valueToJsonString(message));
++#endif
+     return;
+ }
+ 
+diff -ruN a/valdi/src/valdi/hermes/HermesDebuggerRegistry.hpp b/valdi/src/valdi/hermes/HermesDebuggerRegistry.hpp
+--- a/valdi/src/valdi/hermes/HermesDebuggerRegistry.hpp
++++ b/valdi/src/valdi/hermes/HermesDebuggerRegistry.hpp
+@@ -22,9 +22,10 @@
+ 
+ namespace facebook::hermes {
+ class HermesRuntime;
+-namespace inspector_modern::chrome {
+-class CDPHandler;
+-}
++namespace cdp {
++class CDPAgent;
++class CDPDebugAPI;
++} // namespace cdp
+ } // namespace facebook::hermes
+ 
+ namespace Valdi {
+@@ -70,7 +71,10 @@
+     struct Entry {
+         HermesRuntimeId runtimeId;
+         HermesRuntimeId parentRuntimeId;
+-        std::shared_ptr<facebook::hermes::inspector_modern::chrome::CDPHandler> hermesHandler;
++        // Declared in dependency order so the agent is destroyed before the debug API, and that before the runtime.
++        std::shared_ptr<facebook::hermes::HermesRuntime> jsiRuntime;
++        std::shared_ptr<facebook::hermes::cdp::CDPDebugAPI> debugAPI;
++        std::shared_ptr<facebook::hermes::cdp::CDPAgent> hermesAgent;
+         bool isWorker() const {
+             return parentRuntimeId != kRuntimeIdUndefined;
+         }
+diff -ruN a/valdi/src/valdi/hermes/HermesJavaScriptCompiler.cpp b/valdi/src/valdi/hermes/HermesJavaScriptCompiler.cpp
+--- a/valdi/src/valdi/hermes/HermesJavaScriptCompiler.cpp
++++ b/valdi/src/valdi/hermes/HermesJavaScriptCompiler.cpp
+@@ -9,6 +9,8 @@
+ #include "utils/platform/TargetPlatform.hpp"
+ #include "valdi/hermes/HermesUtils.hpp"
+ 
++#include "hermes/BCGen/HBC/BytecodeStream.h"
++
+ namespace Valdi::Hermes {
+ 
+ class BytesViewBuffer : public hermes::Buffer {
+@@ -80,10 +82,11 @@
+ 
+     ByteBufferOStream stream(*output);
+ 
+-    hermes::hbc::BytecodeSerializer serializer{stream, options};
+-    serializer.serialize(
++    hermes::hbc::serializeBytecodeModule(
+         *compiledBytecode->getBytecodeModule(),
+-        llvh::SHA1::hash(llvh::makeArrayRef(reinterpret_cast<const uint8_t*>(script.data()), script.size())));
++        llvh::SHA1::hash(llvh::makeArrayRef(reinterpret_cast<const uint8_t*>(script.data()), script.size())),
++        stream,
++        options);
+ 
+     return stream.toBytesView();
+ }
+@@ -93,8 +96,8 @@
+     compileFlags.format = outputFormat;
+     compileFlags.strict = true;
+     compileFlags.includeLibHermes = false;
+-    compileFlags.enableBlockScoping = true;
+-    compileFlags.enableES6Classes = true;
++    // Hermes V1 always supports ES6 classes; block scoping is still opt-in.
++    compileFlags.enableES6BlockScoping = true;
+     compileFlags.debug = debug;
+     compileFlags.emitAsyncBreakCheck = true;
+ 
+@@ -113,16 +116,15 @@
+     auto buffer =
+         std::make_unique<hermes::OwnedMemoryBuffer>(llvh::MemoryBuffer::getMemBuffer(llvh::StringRef(script)));
+ 
+-    auto res = hermes::hbc::BCProviderFromSrc::createBCProviderFromSrc(
+-        std::move(buffer),
+-        llvh::StringRef(sourceFilename.data(), sourceFilename.size()),
+-        nullptr,
+-        compileFlags,
+-        {},
+-        {},
+-        nullptr,
+-        runOptimizations,
+-        bytecodeGenerationsOptions);
++    auto res = hermes::hbc::BCProviderFromSrc::create(std::move(buffer),
++                                                      llvh::StringRef(sourceFilename.data(), sourceFilename.size()),
++                                                      /* sourceMap */ llvh::StringRef(),
++                                                      compileFlags,
++                                                      "global",
++                                                      {},
++                                                      nullptr,
++                                                      runOptimizations,
++                                                      bytecodeGenerationsOptions);
+ 
+     if (!res.first) {
+         exceptionTracker.onError(res.second);
+diff -ruN a/valdi/src/valdi/hermes/HermesJavaScriptContext.cpp b/valdi/src/valdi/hermes/HermesJavaScriptContext.cpp
+--- a/valdi/src/valdi/hermes/HermesJavaScriptContext.cpp
++++ b/valdi/src/valdi/hermes/HermesJavaScriptContext.cpp
+@@ -67,9 +67,8 @@
+         .withMaxNumRegisters(256 * 1024)
+         .withMicrotaskQueue(true)
+         .withEnableHermesInternal(true)
+-        .withES6Promise(true)
+-        .withES6Class(true)
+-        .withEnableBlockScoping(true)
++        // Promise and classes are always enabled in Hermes V1.
++        .withES6BlockScoping(true)
+         .build();
+ }
+ 
+@@ -80,7 +79,7 @@
+       _managedValues(kManagedValuesOccupancyRatio, kManagedValuesSizingWeight) {
+ #if defined(HERMES_API)
+     _jsiRuntime = facebook::hermes::makeHermesRuntime(makeRuntimeConfig());
+-    _runtime = _jsiRuntime->getVMRuntimeUnsafe();
++    _runtime = static_cast<hermes::vm::Runtime*>(_jsiRuntime->getVMRuntimeUnsafe());
+ #else
+     _sharedRuntime = hermes::vm::Runtime::create(makeRuntimeConfig());
+     _runtime = _sharedRuntime.get();
+@@ -279,7 +278,7 @@
+                                                 runtimeModuleFlags,
+                                                 llvh::StringRef(sourceFilename.data(), sourceFilename.length()),
+                                                 hermes::vm::Runtime::makeNullHandle<hermes::vm::Environment>(),
+-                                                hermes::vm::Handle<>(&_runtime->global_));
++                                                _runtime->getGlobal());
+ 
+     return checkCallAndGetValue(evaluateResult, exceptionTracker);
+ }
+@@ -305,7 +304,7 @@
+                                                 runtimeModuleFlags,
+                                                 jsSourceURL,
+                                                 hermes::vm::Runtime::makeNullHandle<hermes::vm::Environment>(),
+-                                                hermes::vm::Handle<>(&_runtime->global_));
++                                                _runtime->getGlobal());
+ 
+     return checkCallAndGetValue(evaluateResult, exceptionTracker);
+ #endif
+@@ -378,11 +377,9 @@
+         return newUndefined();
+     }
+ 
+-    auto prototype = hermes::vm::vmcast<hermes::vm::JSObject>(_runtime->weakRefPrototype);
++    auto weakRef = hermes::vm::JSWeakRef::create(*_runtime, _runtime->weakRefPrototype);
++    weakRef->setTarget(*_runtime, hermes::vm::SmallHermesValue::encodeHermesValue(jsObject.getHermesValue(), *_runtime));
+ 
+-    auto weakRef = hermes::vm::JSWeakRef::create(*_runtime, _runtime->makeHandle(prototype));
+-    weakRef->setTarget(*_runtime, std::move(jsObject));
+-
+     return toJSValueRefUncached(weakRef.getHermesValue());
+ }
+ 
+@@ -454,7 +451,8 @@
+ JSValueRef HermesJavaScriptContext::newArray(size_t initialSize, JSExceptionTracker& exceptionTracker) {
+     hermes::vm::GCScope gcScope(*_runtime);
+ 
+-    auto result = hermes::vm::JSArray::create(*_runtime, initialSize, initialSize);
++    auto size = static_cast<hermes::vm::JSArray::size_type>(initialSize);
++    auto result = hermes::vm::JSArray::create(*_runtime, size, size);
+ 
+     if (checkException(result.getStatus(), exceptionTracker)) {
+         return toJSValueRef(result.getValue().getHermesValue());
+@@ -472,15 +470,13 @@
+         auto arrayBuffer = _runtime->makeHandle(hermes::vm::JSArrayBuffer::create(
+             *_runtime, hermes::vm::Handle<hermes::vm::JSObject>::vmcast(&_runtime->arrayBufferPrototype)));
+ 
+-        auto status = hermes::vm::JSArrayBuffer::setExternalDataBlock(*_runtime,
+-                                                                      arrayBuffer,
+-                                                                      const_cast<uint8_t*>(buffer.data()),
+-                                                                      buffer.size(),
+-                                                                      unsafeBridgeRetain(buffer.getSource().get()),
+-                                                                      &freeNativeState);
+-        if (!checkException(status, exceptionTracker)) {
+-            return newUndefined();
+-        }
++        // Hermes V1 owns the external data through a shared_ptr; releasing it releases the source.
++        hermes::vm::JSArrayBuffer::setExternalDataBlock(
++            *_runtime,
++            arrayBuffer,
++            const_cast<uint8_t*>(buffer.data()),
++            static_cast<hermes::vm::JSArrayBuffer::size_type>(buffer.size()),
++            std::shared_ptr<void>(unsafeBridgeRetain(buffer.getSource().get()), &freeContext));
+ 
+         return toJSValueRef(arrayBuffer.getHermesValue());
+     }
+@@ -584,13 +580,11 @@
+         hermes::vm::Handle<hermes::vm::JSObject>::vmcast(&_runtime->functionPrototype),
+         backendClass.get(),
+         &callNativeClassConstructor,
+-        0,
+-        &createNativeClassObject,
+-        hermes::vm::CellKind::JSObjectKind));
++        0));
+ 
+     auto className = newSymbolIDFromString(classDefinition.getName().toStringView());
+     auto defineConstructorStatus = hermes::vm::Callable::defineNameLengthAndPrototype(
+-        constructor, *_runtime, className.get(), 0, prototype, hermes::vm::Callable::WritablePrototype::No, false);
++        constructor, *_runtime, className.get(), 0, prototype, hermes::vm::Callable::WritablePrototype::No);
+     if (!checkException(defineConstructorStatus, exceptionTracker)) {
+         return newUndefined();
+     }
+@@ -935,8 +929,13 @@
+ 
+     auto handle = hermes::vm::Handle<hermes::vm::Callable>::vmcast(hermesValue);
+ 
+-    auto thisRes = hermes::vm::Callable::createThisForConstruct_RJS(handle, *_runtime);
+-    auto objHandle = _runtime->makeHandle<hermes::vm::JSObject>(std::move(*thisRes));
++    // new.target is the callee itself. Hermes V1 returns undefined here for callables that make their own `this`
++    // (native constructors, classes); their constructor result is then the object.
++    auto thisRes = hermes::vm::Callable::createThisForConstruct_RJS(handle, *_runtime, handle);
++    if (!checkException(thisRes.getStatus(), callContext.getExceptionTracker())) {
++        return newUndefined();
++    }
++    auto objHandle = _runtime->makeHandle(std::move(*thisRes));
+ 
+     hermes::vm::ScopedNativeCallFrame callFrame(*_runtime,
+                                                 static_cast<uint32_t>(callContext.getParameterSize()),
+@@ -974,11 +973,14 @@
+     for (uint32_t i = beginIndex; i < endIndex; i++) {
+         hermes::vm::GCScope innerGCScope(*_runtime);
+ 
+-        auto name = propertyNames->at(*_runtime, i);
++        auto name = propertyNames->at(i).unboxToHV(*_runtime);
+ 
+         JSPropertyNameRef propertyName;
+ 
+-        if (name.isString()) {
++        if (name.isSymbol()) {
++            // Hermes V1 returns most string keys as uniqued SymbolIDs (for-in never yields JS symbols).
++            propertyName = toPropertyNameRef(_runtime->makeHandle(name.getSymbol()));
++        } else if (name.isString()) {
+             auto symbolId = hermes::vm::stringToSymbolID(*_runtime, hermes::vm::createPseudoHandle(name.getString()));
+             if (!checkException(symbolId.getStatus(), exceptionTracker)) {
+                 return;
+@@ -1056,7 +1058,7 @@
+     } else if (hermesValue.isBool()) {
+         return hermesValue.getBool();
+     } else if (hermesValue.isString()) {
+-        return hermesValue.getString()->getSize() != 0;
++        return hermesValue.getString()->getStringLength() != 0;
+     } else {
+         return true;
+     }
+@@ -1181,7 +1183,7 @@
+             return JSTypedArray();
+         }
+ 
+-        auto* data = handle->getDataBlock(*_runtime);
++        auto* data = handle->getDataBlock();
+         auto size = handle->size();
+ 
+         return JSTypedArray(TypedArrayType::ArrayBuffer, data, size, JSValueRef::makeUnretained(*this, value));
+@@ -1192,7 +1194,7 @@
+         }
+ 
+         auto type = getTypedArrayType(*hermesValue);
+-        auto* data = handle->begin(*_runtime);
++        auto* data = handle->data(*_runtime);
+         auto size = static_cast<size_t>(handle->getByteLength());
+         auto* arrayBuffer = handle->getBuffer(*_runtime);
+ 
+diff -ruN a/valdi/src/valdi/hermes/HermesUtils.cpp b/valdi/src/valdi/hermes/HermesUtils.cpp
+--- a/valdi/src/valdi/hermes/HermesUtils.cpp
++++ b/valdi/src/valdi/hermes/HermesUtils.cpp
+@@ -92,14 +92,15 @@
+ }
+ 
+ hermes::vm::CallResult<hermes::vm::HermesValue> callTrampoline(void* context,
+-                                                               hermes::vm::Runtime& runtime,
+-                                                               hermes::vm::NativeArgs args) {
++                                                               hermes::vm::Runtime& runtime) {
++    // Hermes V1 passes native functions their arguments through the current frame.
++    hermes::vm::NativeArgs args = runtime.getCurrentFrame().getNativeArgs();
+     auto* functionData = unsafeBridgeUnretained<JSFunctionData>(context);
+ 
+     auto thisRef = functionData->jsContext.toJSValueRef(args.getThisArg());
+     JSValueRef outArguments[args.getArgCount()];
+     for (size_t i = 0; i < args.getArgCount(); i++) {
+-        outArguments[i] = functionData->jsContext.toJSValueRef(args.getArg(i));
++        outArguments[i] = functionData->jsContext.toJSValueRef(args.getArg(static_cast<unsigned>(i)));
+     }
+ 
+     JSExceptionTracker exceptionTracker(functionData->jsContext);
+@@ -124,15 +125,16 @@
+ }
+ 
+ hermes::vm::CallResult<hermes::vm::HermesValue> callNativeClassInstanceMember(void* context,
+-                                                                              hermes::vm::Runtime& runtime,
+-                                                                              hermes::vm::NativeArgs args) {
++                                                                              hermes::vm::Runtime& runtime) {
++    // Hermes V1 passes native functions their arguments through the current frame.
++    hermes::vm::NativeArgs args = runtime.getCurrentFrame().getNativeArgs();
+     auto functionData = unsafeBridge<HermesNativeClassFunctionData>(context);
+     auto& jsContext = functionData->jsContext;
+ 
+     auto argumentCount = args.getArgCount();
+     JSValueRef arguments[argumentCount];
+     for (size_t i = 0; i < argumentCount; i++) {
+-        arguments[i] = jsContext.toJSValueRef(args.getArg(i));
++        arguments[i] = jsContext.toJSValueRef(args.getArg(static_cast<unsigned>(i)));
+     }
+ 
+     JSExceptionTracker exceptionTracker(jsContext);
+@@ -164,15 +166,16 @@
+ }
+ 
+ hermes::vm::CallResult<hermes::vm::HermesValue> callNativeClassStaticMember(void* context,
+-                                                                            hermes::vm::Runtime& runtime,
+-                                                                            hermes::vm::NativeArgs args) {
++                                                                            hermes::vm::Runtime& runtime) {
++    // Hermes V1 passes native functions their arguments through the current frame.
++    hermes::vm::NativeArgs args = runtime.getCurrentFrame().getNativeArgs();
+     auto functionData = unsafeBridge<HermesNativeClassFunctionData>(context);
+     auto& jsContext = functionData->jsContext;
+ 
+     auto argumentCount = args.getArgCount();
+     JSValueRef arguments[argumentCount];
+     for (size_t i = 0; i < argumentCount; i++) {
+-        arguments[i] = jsContext.toJSValueRef(args.getArg(i));
++        arguments[i] = jsContext.toJSValueRef(args.getArg(static_cast<unsigned>(i)));
+     }
+ 
+     JSExceptionTracker exceptionTracker(jsContext);
+@@ -195,14 +198,10 @@
+     return HermesJavaScriptContext::toHermesValue(result.get());
+ }
+ 
+-hermes::vm::CallResult<hermes::vm::PseudoHandle<hermes::vm::JSObject>> createNativeClassObject(
+-    hermes::vm::Runtime& runtime, hermes::vm::Handle<hermes::vm::JSObject> prototype, void* /*context*/) {
+-    return hermes::vm::JSObject::create(runtime, prototype);
+-}
+-
+ hermes::vm::CallResult<hermes::vm::HermesValue> callNativeClassConstructor(void* context,
+-                                                                           hermes::vm::Runtime& runtime,
+-                                                                           hermes::vm::NativeArgs args) {
++                                                                           hermes::vm::Runtime& runtime) {
++    // Hermes V1 passes native functions their arguments through the current frame.
++    hermes::vm::NativeArgs args = runtime.getCurrentFrame().getNativeArgs();
+     auto classData = unsafeBridge<HermesNativeClassData>(context);
+     if (!args.isConstructorCall()) {
+         return runtime.raiseTypeError("Native class constructor must be called with new");
+@@ -223,18 +222,29 @@
+         return runtime.raiseTypeError("Native class cannot be constructed from JavaScript");
+     }
+ 
++    // Hermes V1 native constructors make their own `this` (the VM passes undefined): create it from
++    // new.target.prototype, like the object creator passed to NativeConstructor::create used to.
++    hermes::vm::GCScope gcScope(runtime);
++    auto parentResult = hermes::vm::NativeConstructor::parentForNewThis_RJS(
++        runtime, hermes::vm::Handle<hermes::vm::Callable>::vmcast(newTargetObject), runtime.objectPrototype);
++    if (parentResult == hermes::vm::ExecutionStatus::EXCEPTION) {
++        return hermes::vm::ExecutionStatus::EXCEPTION;
++    }
++    auto parent = runtime.makeHandle(std::move(*parentResult));
++    auto thisObject = runtime.makeHandle(hermes::vm::JSObject::create(runtime, parent));
++
+     auto& jsContext = classData->jsContext;
+     auto argumentCount = args.getArgCount();
+     JSValueRef arguments[argumentCount];
+     for (size_t i = 0; i < argumentCount; i++) {
+-        arguments[i] = jsContext.toJSValueRef(args.getArg(i));
++        arguments[i] = jsContext.toJSValueRef(args.getArg(static_cast<unsigned>(i)));
+     }
+ 
+     JSExceptionTracker exceptionTracker(jsContext);
+     const auto& referenceInfo = classData->nativeClass->getConstructorReferenceInfo();
+     JSFunctionNativeCallContext callContext(
+         jsContext, argumentCount == 0 ? nullptr : arguments, argumentCount, exceptionTracker, referenceInfo);
+-    auto thisValue = jsContext.toJSValueRef(args.getThisArg());
++    auto thisValue = jsContext.toJSValueRef(thisObject.getHermesValue());
+     callContext.setThisValue(thisValue.get());
+ 
+     if (handleInterrupt(jsContext, exceptionTracker)) {
+@@ -249,12 +259,11 @@
+         return onJsCallError(runtime, exceptionTracker);
+     }
+ 
+-    auto thisObject = args.dyncastThis<hermes::vm::JSObject>();
+     auto instanceData = makeShared<JSNativeClassInstanceData>(classData->nativeClass, nativeOpaque);
+     if (setNativeState(runtime, thisObject, instanceData) == hermes::vm::ExecutionStatus::EXCEPTION) {
+         return hermes::vm::ExecutionStatus::EXCEPTION;
+     }
+-    return args.getThisArg();
++    return thisObject.getHermesValue();
+ }
+ 
+ void ByteBufferOStream::write_impl(const char* Ptr, size_t Size) {
+diff -ruN a/valdi/src/valdi/hermes/HermesUtils.hpp b/valdi/src/valdi/hermes/HermesUtils.hpp
+--- a/valdi/src/valdi/hermes/HermesUtils.hpp
++++ b/valdi/src/valdi/hermes/HermesUtils.hpp
+@@ -118,20 +118,16 @@
+                                            const Ref<RefCountable>& data);
+ 
+ hermes::vm::CallResult<hermes::vm::HermesValue> callTrampoline(void* context,
+-                                                               hermes::vm::Runtime& runtime,
+-                                                               hermes::vm::NativeArgs args);
++                                                               hermes::vm::Runtime& runtime);
+ 
+ hermes::vm::CallResult<hermes::vm::HermesValue> callNativeClassInstanceMember(
+-    void* context, hermes::vm::Runtime& runtime, hermes::vm::NativeArgs args);
++    void* context, hermes::vm::Runtime& runtime);
+ 
+ hermes::vm::CallResult<hermes::vm::HermesValue> callNativeClassStaticMember(
+-    void* context, hermes::vm::Runtime& runtime, hermes::vm::NativeArgs args);
++    void* context, hermes::vm::Runtime& runtime);
+ 
+ hermes::vm::CallResult<hermes::vm::HermesValue> callNativeClassConstructor(
+-    void* context, hermes::vm::Runtime& runtime, hermes::vm::NativeArgs args);
+-
+-hermes::vm::CallResult<hermes::vm::PseudoHandle<hermes::vm::JSObject>> createNativeClassObject(
+-    hermes::vm::Runtime& runtime, hermes::vm::Handle<hermes::vm::JSObject> prototype, void* context);
++    void* context, hermes::vm::Runtime& runtime);
+ 
+ class ByteBufferOStream : public llvh::raw_ostream {
+     ByteBuffer& _output;

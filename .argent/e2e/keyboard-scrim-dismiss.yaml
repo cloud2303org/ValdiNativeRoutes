@@ -1,0 +1,14 @@
+steps:
+  - run: home
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "Sheet + 普通 view + 输入框" } }
+  - tap: { text: "Sheet + 普通 view + 输入框" }
+  - await: { visible: { text: "发送" } }
+  # The scrim has no accessible label on either platform. Its band above the sheet is the only unlabeled target: a
+  # point, with a hard check (the form is cancelled).
+  - echo: "scrim band above the form sheet, unlabeled in the tree"
+  - tool: gesture-tap
+    args: { x: 0.5, y: 0.15 }
+  # The home page's result line sits under its first button; scrolling up to a changing text is flaky on iOS.
+  - scroll-to: { target: { text: "push 详情页" }, direction: up }
+  - await: { visible: { text: "结果：表单取消了" } }

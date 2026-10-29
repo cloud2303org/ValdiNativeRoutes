@@ -1,0 +1,2 @@
+# npm packages (the Valdi CLI and its templates); Bazel must not read their BUILD files as packages.
+node_modules

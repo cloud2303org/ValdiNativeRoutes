@@ -1,0 +1,16 @@
+steps:
+  - run: home
+  - tap: { text: "退出登录" }
+  - await: { visible: { text: "退出登录？" } }
+  - tap: { text: "确定" }
+  - await: { visible: { text: "欢迎回来" }, timeout: 10000 }
+  - launch: { native: io.valdiroutes.app }
+  - await: { visible: { text: "欢迎回来" }, timeout: 20000 }
+  - tap: { text: "登录" }
+  - await: { visible: { text: "欢迎回来" } }
+  - type: { into: { role: TextField, next: { text: "账号" } }, text: "alice", submit: false }
+  - type: { into: { role: TextField, after: { role: TextField, next: { text: "账号" } } }, text: "{{secret:DEMO_LOGIN_PASSWORD}}", submit: false }
+  - tap: { text: "登录" }
+  - await: { visible: { text: "push 详情页" } }
+  - launch: { native: io.valdiroutes.app }
+  - await: { visible: { text: "push 详情页" }, timeout: 20000 }

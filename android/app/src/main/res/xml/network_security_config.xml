@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plain HTTP only to this machine: a local over-the-air server reached through `adb reverse` (README). Packages are
+     signed (ValdiOta.kt), so the transport doesn't have to be trusted; production servers use HTTPS anyway. -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

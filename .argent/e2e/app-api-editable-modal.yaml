@@ -1,0 +1,15 @@
+steps:
+  - run: home
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "showModal 输入" } }
+  - tap: { text: "showModal 输入" }
+  - tap: { role: TextField }
+  - when: { platform: android }
+    steps:
+      - await: { visible: { text: "Shift" } }
+  # Typed, not pasted: paste isn't available on a TCP-connected Android device and doesn't reliably land on iOS.
+  - type: { into: { role: TextField }, text: "2", submit: false }
+  - tap: { text: "确定" }
+  # The home page's result line sits under its first button; scrolling up to a changing text is flaky on iOS.
+  - scroll-to: { target: { text: "push 详情页" }, direction: up }
+  - await: { visible: { text: "结果：新名字：采样设备2" } }

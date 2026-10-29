@@ -1,0 +1,19 @@
+steps:
+  - run: home.yaml
+  - await: { idle: true }
+  - echo: 打开详情页，向下滚动到最后一个状态栏按钮，再滚回顶部；导航栏始终固定。
+  - tap:
+      text: push 详情页
+  - await: { visible: { text: { matches: '^详情 #1$' } } }
+  - await: { idle: true }
+  - scroll-to: { target: { text: "setStatusBarStyle('auto')" } }
+  - await: { visible: { text: "setStatusBarStyle('auto')" } }
+  - tap:
+      text: setStatusBarStyle('auto')
+  # Reveal the first body line: the next button can otherwise sit behind the fixed navigation bar.
+  - scroll-to: { target: { text: "来自 home" }, direction: up }
+  - await: { visible: { text: "push 详情 #2" } }
+  - tap:
+      text: "push 详情 #2"
+  - await: { visible: { text: { matches: '^详情 #2$' } } }
+  - await: { idle: true }

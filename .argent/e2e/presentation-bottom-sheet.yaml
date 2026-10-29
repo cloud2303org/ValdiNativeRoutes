@@ -1,0 +1,11 @@
+steps:
+  - run: home
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "选择器、日期、图片预览" } }
+  - tap: { text: "选择器、日期、图片预览" }
+  - await: { visible: { text: "操作菜单 showActionSheet" } }
+  - tap: { text: "文本底部弹层 showBottomSheet" }
+  - await: { visible: { text: "采样说明" } }
+  - await: { visible: { text: "请在固定采样点收集水样，记录采样时间并检查设备状态。" } }
+  - tap: { text: "我知道了" }
+  - await: { visible: { text: "showBottomSheet:ok" } }

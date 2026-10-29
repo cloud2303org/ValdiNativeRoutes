@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The page background (MainActivity's PageBackground, the Valdi pages' #f3f4f6). -->
+    <color name="page_background">#F3F4F6</color>
+</resources>

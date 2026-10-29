@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.ValdiNativeRoutes" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- The starting window has the page's color, so nothing flashes white before the first page draws. -->
+    <style name="Theme.ValdiNativeRoutes" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/page_background</item>
+    </style>
 </resources>

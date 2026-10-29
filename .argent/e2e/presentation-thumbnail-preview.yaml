@@ -1,0 +1,22 @@
+# previewImage from a thumbnail: opens on the tapped photo, swipes to the previous one, and a downward drag closes it
+# (the reply is previewImage:ok). The thumbnails are found by their accessibilityId (photo-<index>).
+steps:
+  - run: home
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "选择器、日期、图片预览" } }
+  - tap: { text: "选择器、日期、图片预览" }
+  - await: { visible: { text: "操作菜单 showActionSheet" } }
+  - scroll-to: { target: { text: "附件与扫码" } }
+  - tap: { id: "photo-2" }
+  - await: { visible: { text: "第 3 张，共 3 张" }, timeout: 10000 }
+  - await: { idle: true }
+  # A deliberate drag: a quick flick is sometimes dropped by a busy emulator's pager.
+  - swipe: { from: { x: 0.15, y: 0.5 }, by: { x: 0.7 }, duration: 500 }
+  - await: { visible: { text: "第 2 张，共 3 张" } }
+  - await: { idle: true }
+  # Dragging the photo down closes the viewer.
+  - swipe: { from: { x: 0.5, y: 0.4 }, by: { y: 0.45 }, duration: 500 }
+  - await: { hidden: { text: "第 2 张，共 3 张" } }
+  # The result line sits under the page title; scrolling up to a changing text is flaky on iOS.
+  - scroll-to: { target: { text: "选择与展示" }, direction: up }
+  - await: { visible: { text: "previewImage:ok" } }

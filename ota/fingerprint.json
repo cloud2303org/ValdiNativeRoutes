@@ -1,0 +1,31 @@
+{
+  "comment": "Inputs of the over-the-air compatibility fingerprint (scripts/ota.mjs, android/app/build.gradle.kts). An update installs only on a binary with the same fingerprint. Paths are relative to the repository root; directories are walked recursively, skipping names that start with a dot.",
+  "valdi": [
+    "valdi/MODULE.bazel",
+    "valdi/MODULE.bazel.lock",
+    "valdi/.bazelrc",
+    "valdi/.bazelversion",
+    "valdi/bzl/patches",
+    "valdi/third_party",
+    "valdi/native"
+  ],
+  "android": [
+    "android/app/src",
+    "android/app/build.gradle.kts",
+    "android/app/proguard-rules.pro",
+    "android/build.gradle.kts",
+    "android/settings.gradle.kts",
+    "android/gradle.properties",
+    "android/gradle",
+    "vision/cpp",
+    "vision/vendor-lock.json",
+    "ota/public.pem"
+  ],
+  "ios": [
+    "ios/ValdiRoutes",
+    "ios/project.yml",
+    "vision/cpp",
+    "vision/vendor-lock.json",
+    "ota/public.pem"
+  ]
+}

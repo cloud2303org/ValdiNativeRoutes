@@ -1,0 +1,15 @@
+steps:
+  - run: home
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "Wi-Fi 与 NFC" } }
+  - tap: { text: "Wi-Fi 与 NFC" }
+  - await: { visible: { text: "startWifi" } }
+  # The platforms differ: the simulator has no Wi-Fi configuration, the emulator starts scanning.
+  - when: { platform: ios }
+    steps:
+      - tap: { text: "startWifi" }
+      - await: { visible: { text: "startWifi:fail" } }
+  - when: { platform: android }
+    steps:
+      - tap: { text: "startWifi" }
+      - await: { visible: { text: "startWifi:ok" } }

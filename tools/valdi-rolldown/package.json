@@ -1,0 +1,18 @@
+{
+  "name": "valdi-rolldown",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsx build.ts",
+    "dev": "tsx dev.ts",
+    "new-module": "tsx new-module.ts",
+    "tsconfig": "tsx tsconfig.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "rolldown": "1.2.15",
+    "source-map": "0.5.7",
+    "tsx": "^4.23.15",
+    "typescript": "5.3.3"
+  }
+}

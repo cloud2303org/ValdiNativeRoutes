@@ -1,0 +1,153 @@
+name: Application CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      upstream_tag:
+        description: 'Optional Valdi tag to try in this runner only (empty = committed pin)'
+        type: string
+        default: ''
+      widgets_tag:
+        description: 'Optional Widgets tag, only used with upstream_tag'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+env:
+  VALDI_BAZEL_ARGS: '--jobs=3 --local_ram_resources=4096 --experimental_disk_cache_gc_max_size=3G'
+
+concurrency:
+  group: app-ci-${{ github.event_name }}-${{ github.ref }}-${{ inputs.upstream_tag || 'pinned' }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    # The iOS vision simulator slice is arm64. Keep host tools on the same supported macOS image.
+    runs-on: macos-26
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [npm, android, ios]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Select upstream candidate
+        if: inputs.upstream_tag != ''
+        env:
+          UPSTREAM_TAG: ${{ inputs.upstream_tag }}
+          WIDGETS_TAG: ${{ inputs.widgets_tag }}
+        run: |
+          args=("$UPSTREAM_TAG")
+          if [[ -n "$WIDGETS_TAG" ]]; then args+=("$WIDGETS_TAG"); fi
+          node scripts/upstream.mjs pin "${args[@]}"
+      - uses: ./.github/actions/prepare
+        id: prepare
+      - name: Golden and build prerequisite tests
+        run: pnpm test 2>&1 | tee .ci/test.log
+      - name: Restore Bazel action cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/bazel-disk-cache
+          key: bazel-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-${{ hashFiles('valdi/.bazelversion') }}-${{ github.sha }}-${{ inputs.upstream_tag || 'pinned' }}
+          restore-keys: |
+            bazel-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-${{ hashFiles('valdi/.bazelversion') }}-
+      - name: Build matching host tools
+        working-directory: valdi
+        run: |
+          "$BAZEL_BIN" build --jobs=3 --local_ram_resources=4096 --experimental_disk_cache_gc_max_size=3G \
+            @valdi//valdi/compiler/toolbox:valdi_compiler_toolbox \
+            @valdi//compiler/clientsql:sqlite_316_validator 2>&1 | tee ../.ci/host-tools.log
+      - name: Build application modules
+        if: matrix.target == 'npm'
+        run: pnpm build 2>&1 | tee .ci/build.log
+      - name: Set up Android SDK
+        if: matrix.target == 'android'
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        with:
+          packages: 'platforms;android-37 build-tools;37.0.0 ndk;27.1.12297006 cmake;3.22.1'
+          log-accepted-android-sdk-licenses: false
+      - name: Install XcodeGen
+        if: matrix.target == 'ios'
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Runtime fingerprint
+        if: matrix.target != 'npm'
+        id: runtime-input
+        run: node scripts/ci.mjs runtime-key "${{ matrix.target }}"
+      - name: Restore exported runtime
+        if: matrix.target != 'npm'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            android/app/libs/valdi_runtime.aar
+            android/app/libs/valdi_ota.json
+            ios/Frameworks/ValdiRuntime.xcframework
+            ios/Frameworks/valdi_ota.json
+          key: runtime-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-debug-${{ steps.runtime-input.outputs.key }}-${{ hashFiles('scripts/export-*.sh', 'valdi/pnpm-lock.yaml', 'valdi/patches/**') }}
+      - name: Validate cached runtime
+        if: matrix.target != 'npm'
+        id: runtime
+        run: node scripts/ci.mjs runtime-valid "${{ matrix.target }}"
+      - name: Export runtime on cache miss or fingerprint mismatch
+        if: matrix.target != 'npm' && steps.runtime.outputs.valid != 'true'
+        run: sh "scripts/export-${{ matrix.target }}.sh" debug 2>&1 | tee .ci/export.log
+      - name: Final runtime fingerprint
+        if: matrix.target != 'npm'
+        id: runtime-output
+        run: node scripts/ci.mjs runtime-key "${{ matrix.target }}"
+      - name: Save matching runtime
+        if: matrix.target != 'npm' && steps.runtime.outputs.valid != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            android/app/libs/valdi_runtime.aar
+            android/app/libs/valdi_ota.json
+            ios/Frameworks/ValdiRuntime.xcframework
+            ios/Frameworks/valdi_ota.json
+          key: runtime-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-debug-${{ steps.runtime-output.outputs.key }}-${{ hashFiles('scripts/export-*.sh', 'valdi/pnpm-lock.yaml', 'valdi/patches/**') }}
+      - name: Restore vision dependencies
+        if: matrix.target != 'npm'
+        id: vision
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: vision/vendor/install
+          key: vision-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-ndk27.1.12297006-${{ hashFiles('vision/vendor-lock.json', 'vision/scripts/prepare-native.cjs') }}
+      - name: Build vision dependencies
+        if: matrix.target != 'npm' && steps.vision.outputs.cache-hit != 'true'
+        env:
+          VISION_TARGET: ${{ matrix.target == 'android' && 'android-arm64' || 'ios' }}
+        run: node vision/scripts/prepare-native.cjs --target "$VISION_TARGET" --jobs 3 2>&1 | tee .ci/vision.log
+      - name: Build Android debug APK
+        if: matrix.target == 'android'
+        run: pnpm build:android --no-daemon --max-workers=3 --stacktrace 2>&1 | tee .ci/build.log
+      - name: Build iOS simulator app
+        if: matrix.target == 'ios'
+        run: |
+          pnpm build:ios -jobs 3 2>&1 | tee .ci/build.log
+          tar -czf .ci/ValdiRoutes-simulator.tar.gz -C ios/build/Build/Products/Debug-iphonesimulator ValdiRoutes.app
+      - name: Capture upgrade inputs and source review
+        if: always()
+        run: |
+          mkdir -p .ci
+          git diff -- valdi/MODULE.bazel valdi/MODULE.bazel.lock valdi/.bazelrc > .ci/upstream-pin.diff
+          if [[ -f .ci/upstream/vendor.md ]]; then cat .ci/upstream/vendor.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Upload build evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: app-${{ matrix.target }}-${{ github.run_id }}
+          retention-days: 7
+          include-hidden-files: true
+          if-no-files-found: warn
+          path: |
+            .ci/
+            android/app/build/outputs/apk/debug/*.apk

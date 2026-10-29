@@ -1,0 +1,15 @@
+# The C++ @ExportModule (app_pages/src/cpp/Cpp.d.ts, valdi/native/src/Cpp.cpp) called from the "OpenCV 与 ncnn" page:
+# a constant, a string in and out, and an array in with a model out, all computed in the C++ linked into the runtime.
+steps:
+  - run: home
+  # The bottom tab bar covers the last rows of the list, so scroll past them first.
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "OpenCV 与 ncnn" } }
+  - tap: { text: "OpenCV 与 ncnn" }
+  - await: { visible: { text: "运行示例" } }
+  - await: { idle: true }
+  - scroll-to: { target: { text: "调用 C++ 模块" } }
+  - tap: { text: "调用 C++ 模块" }
+  - await: { visible: { text: "8edd0c64a239f3331d8348b7378ff325adf44f3d2ec82112fb89d44212ca2d9e" } }
+  - assert: { visible: { text: "count 8 · mean 3.875 · min 1 · max 9" } }
+  - assert: { visible: { text: "编译：clang" } }

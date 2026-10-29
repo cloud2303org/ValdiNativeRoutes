@@ -5,7 +5,20 @@ valdi/modules/*/tsconfig.json
 android/.gradle
 android/build
 android/app/build
+android/app/.cxx
 android/local.properties
 android/app/libs/*.aar
+android/app/libs/valdi_res/
 *.iml
 .idea
+/node_modules
+android/app/libs/valdi_ota.json
+ota/private.pem
+ota/build/
+ota/dist/
+
+# Argent e2e secrets ({{secret:NAME}} in .argent/e2e): local only.
+.argent/secrets.env
+
+# CI logs, upstream comparison reports and simulator archives.
+/.ci/

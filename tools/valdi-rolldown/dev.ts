@@ -13,8 +13,7 @@
 //
 // res/ images go too: an image as res/<name>.<ext> (the app keeps the name, without scale and extension, and loads it
 // from there instead of the APK), with the regenerated res.assetcatalog (sizes) and res.js (names). An image added or
-// renamed shows in Valdi pages; native views that load the APK's drawables (the tab bar) need a rebuilt app. A .sq
-// change regenerates sqlgen/ and pushes the files that change (a new table needs the database's migrations, as ever).
+// renamed shows in Valdi pages; native views that load the APK's drawables (the tab bar) need a rebuilt app.
 // Font files and their catalog entries go too; already-loaded platform fonts may require an app restart. A module
 // created while it runs is picked up on the next start.
 import { isUtf8 } from 'node:buffer';
@@ -23,9 +22,8 @@ import { readFileSync, watch } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import type { ArchiveEntries } from './archive';
-import { appModules, buildModule, genDir, inlineSourceMaps, modulesDir, root } from './pipeline';
+import { appModules, buildModule, genDir, inlineSourceMaps, modulesDir } from './pipeline';
 import { addFontEntries, assetCatalog, findFonts, findImages, writeResTs, type Font, type Image } from './resources';
-import { generateSqlgen, sqliteValidator } from './sqlgen';
 import { valdiTs, type ValdiModule } from './valdiTs';
 
 const DEVICE_PORT = 13592;
@@ -41,8 +39,6 @@ interface Resource {
 
 // ---- Building
 
-const validator = sqliteValidator(path.join(root, 'valdi'));
-
 /** One module: its resources, its generated sources and its TypeScript program, kept between builds. */
 class ModuleBuild {
   private images: Image[] | undefined;
@@ -52,7 +48,6 @@ class ModuleBuild {
 
   private constructor(readonly module: ValdiModule, images: Image[] | undefined) {
     this.updateResources(images);
-    this.generateSql();
     this.plugin = valdiTs(module);
   }
 
@@ -70,11 +65,6 @@ class ModuleBuild {
     this.images = images;
     this.fonts = findFonts(module) ?? [];
     if (writeResTs(module, this.images, genDir(module.name), this.fonts)) this.plugin?.invalidate(path.join(genDir(module.name), 'res.ts'));
-  }
-
-  /** Generates sqlgen/ again from sql/; the TypeScript files that changed are read again. */
-  generateSql() {
-    for (const file of generateSqlgen(this.module, genDir(this.module.name), validator)) this.plugin?.invalidate(file);
   }
 
   async build(): Promise<ArchiveEntries> {
@@ -268,7 +258,6 @@ pollDevices();
 interface Pending {
   files: Set<string>;
   res: boolean;
-  sql: boolean;
 }
 let pending = new Map<string, Pending>();
 let timer: NodeJS.Timeout | undefined;
@@ -278,10 +267,9 @@ watch(modulesDir, { recursive: true }, (_event, file) => {
   if (!file) return;
   const [name, dir] = file.split(path.sep);
   if (!modules.has(name)) return;
-  const changes = pending.get(name) ?? { files: new Set<string>(), res: false, sql: false };
+  const changes = pending.get(name) ?? { files: new Set<string>(), res: false };
   if (dir === 'src' && /\.tsx?$/.test(file)) changes.files.add(path.join(modulesDir, file));
   else if (dir === 'res') changes.res = true;
-  else if (dir === 'sql') changes.sql = true;
   else return;
   pending.set(name, changes);
   clearTimeout(timer);
@@ -296,7 +284,6 @@ watch(modulesDir, { recursive: true }, (_event, file) => {
         for (const module of modules.values()) for (const file of files) module.plugin.invalidate(file);
         for (const [name, changes] of batch) {
           if (changes.res) await modules.get(name)!.loadResources();
-          if (changes.sql) modules.get(name)!.generateSql();
         }
         const changed = await build(batch.keys());
         for (const device of devices.values()) device.send(changed);
@@ -314,4 +301,4 @@ for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
     process.exit(0);
   });
 }
-console.log(`Watching src, res and sql of ${[...modules.keys()].join(', ')}`);
+console.log(`Watching src and res of ${[...modules.keys()].join(', ')}`);

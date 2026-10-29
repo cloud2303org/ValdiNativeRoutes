@@ -8,8 +8,8 @@
 OpenCV/ncnn 编译是单独的原生准备步骤，不在 npm 安装阶段运行。构建入口先检查缺失的产物及运行时指纹，
 Valdi/Hermes 配置、补丁或应用 C++ 变化会提示重新导出；页面 TS 与宿主 Kotlin/Swift 的变化不会误触发运行时重导出。
 首次导出先运行 `scripts/prepare-valdi.mjs`，通过 Bazel 的 `fetch --repo=@valdi` 获取类型声明，再检查 C++ 绑定。
-只获取已固定版本和补丁的源码，不解析应用模块、旧 TS 编译器或 C++ 工具链目标。仅构建 TS 模块时只需准备 SQLite 校验器，无需导出 Android/iOS 运行时。图片由预编译 sharp 处理，
-Release 字节码由官方 hermes-compiler 生成，应用 Node 管线不再依赖 toolbox。
+只获取已固定版本和补丁的源码，不解析应用模块、旧 TS 编译器或 C++ 工具链目标。仅构建 TS 模块时无需编译原生 host 工具或导出 Android/iOS 运行时。图片由预编译 sharp 处理，
+Release 字节码由官方 hermes-compiler 生成，应用 Node 管线不再依赖 toolbox、ClientSQL Python 生成器或 SQLite 3.16 校验器。
 
 已清理 `valdi/package.json` 中无应用引用的旧 ESLint/Jasmine/ts-node/esbuild 直接开发依赖；保留
 `@snap/valdi` 和 TypeScript。Valdi CLI 自己的 peer / transitive 依赖仍由它的依赖关系安装，不把它们当作前端规范工具。
@@ -21,7 +21,7 @@ Release 字节码由官方 hermes-compiler 生成，应用 Node 管线不再依�
 
 | 任务 | 验证内容 | 产物 |
 | --- | --- | --- |
-| npm | `pnpm test`、SQLite validator、`pnpm build` | golden / 构建日志 |
+| npm | `pnpm test`、`pnpm build` | golden / 构建日志 |
 | android | `pnpm test`、匹配运行时与视觉依赖、`pnpm build:android` | Debug APK、日志 |
 | ios | `pnpm test`、匹配运行时与视觉依赖、`pnpm build:ios` | 模拟器 App 压缩包、日志 |
 
@@ -31,9 +31,9 @@ runner 的架构见 [GitHub 官方列表](https://docs.github.com/en/actions/ref
 Xcode / SDK / CMake / Ninja 的实际版本写入日志和缓存键。Actions 固定到 commit SHA。
 CI 将 Bazel / Gradle / Xcode 并发限制为 3，Bazel 调度内存为 4 GB，磁盘 action cache 空闲清理目标为 3 GB。
 
-三条任务会先跑 golden 再编原生工具，尽早发现 Node 绑定生成与上游语义的差异。
-原生任务先恢复或导出运行时；SQL 校验器缺失时只编译该目标，不再为了应用图片和字节码准备整个 toolbox。
-SQL 校验器和视觉依赖准备完成后立即保存对应缓存，后续 App 编译或上传失败也不会丢掉它们。
+三条任务先跑测试和 golden，尽早发现 Node 绑定生成与上游语义的差异。
+原生任务恢复或导出运行时，不再单独编译应用 host 工具或 SQL 校验器。
+运行时和视觉依赖准备完成后立即保存对应缓存，后续 App 编译或上传失败也不会丢掉它们。
 同一分支的运行中构建会完成以保存缓存，后续提交只保留最新的待运行版本。
 artifact 上传是可选步骤：账号存储额度不足时会在日志和任务 summary 中警告，测试/构建仍按自身结果判定；
 这种情况下无法下载 APK、模拟器 App 和报告，只能查看 workflow 日志。清理账号其他仓库的产物或调整额度需单独处理。
@@ -70,11 +70,12 @@ helloworld / Widgets / Web 示例构建、Snap 发布和 GCP 缓存认证。这�
 - **应用 Release 字节码**：固定的官方 `hermes-compiler`，启动时检查版本与 `hermes.BUILD` 一致，
   Node 保留当前 Valdi 的模块函数包装和文件头；上游协议变化会明确报错。
 - **上游 toolbox**：Valdi 自带模块随原生运行时导出时仍可能使用；应用 Node 管线不调用它。
-- **ClientSQL**：Node 调度 vendored Python 生成器，仍需 SQLite 3.16 校验器。
+- **数据库**：原生 ClientSQL SQLite 模块保留；应用查询暂用 `src/sqlgen/` 的固定源码，后续接入 Drizzle。
+  `.sq`、Python 生成器和 SQLite 3.16 校验器已从应用构建移除。
 - **宿主**：Android Gradle / SDK / NDK / CMake；iOS Xcode / XcodeGen / SwiftPM。
 - **视觉依赖**：`vision/scripts/prepare-native.cjs` 按 `vision/vendor-lock.json` 准备 OpenCV Mobile / ncnn。
 
-这些产物没有全部提交，因此 CI 显式准备 SQL 校验器，并在缓存缺失时导出运行时、构建视觉库。
+这些产物没有全部提交，因此 CI 在缓存缺失时导出运行时、构建视觉库。
 运行时缓存按平台、架构、Debug 配置、工具链和 `ota.mjs` 的 Valdi 指纹匹配，还纳入导出脚本、CLI lock 和 patch。
 恢复后仍运行与本地相同的 `checkRuntime`；过期就重新导出，宿主构建继续保留原有 `check-export` 检查。
 视觉缓存按平台、工具链、NDK、vendor lock 和准备脚本匹配。Bazel 仅缓存可校验的 action 输出与下载，

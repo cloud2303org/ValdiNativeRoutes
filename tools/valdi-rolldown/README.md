@@ -11,7 +11,9 @@ Mitchell sampling follows the old Skia resize path; encoder output is not requir
 Release uses the pinned official `hermes-compiler` package. `hermes.ts` checks it against the runtime Hermes version,
 wraps each CommonJS module as Valdi expects, invokes hermesc, and prepends the Valdi header. A changed upstream
 wrapper/header fails explicitly. Run `pnpm test` at the root for image, compiler/protocol and binding golden checks.
-The application build/dev server no longer needs the Valdi toolbox. SQL generation still uses its SQLite validator.
+The application build/dev server needs neither the Valdi toolbox nor the ClientSQL Python generator / SQLite 3.16 validator.
+The existing submission demo uses the checked-in transitional snapshot in `valdi/modules/app_pages/src/sqlgen/`;
+Drizzle will replace it later. The native SQLite implementation remains in the exported runtime.
 
 ## Custom fonts
 

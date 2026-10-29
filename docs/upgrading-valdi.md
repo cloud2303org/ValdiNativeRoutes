@@ -15,9 +15,9 @@
 
 - `prepare.log`：下载、模块解析和补丁应用失败的位置。
 - `upstream-pin.diff`：版本、registry 和该任务解析后的 `MODULE.bazel.lock` 变化。
-- `upstream/vendor.md` 和 `.diff`：我们使用的 companion / ClientSQL 文件与候选上游的差异。
+- `upstream/vendor.md` 和 `.diff`：我们使用的 companion 文件与候选上游的差异。
 - `test.log`：Kotlin、Objective-C、C++ golden 差异，以及构建前置检查测试。
-- `host-tools.log`、`export.log`、`build.log`：匹配工具、运行时和宿主构建结果。
+- `export.log`、`build.log`：运行时和宿主构建结果。
 
 companion 的 TypeScript / source-map 默认导入适配会先归一化，因此当前版本应为 0 处差异。
 报告只比较我们已有的 vendored 文件；上游新增文件、代码生成语义和依赖变化仍需阅读源码。
@@ -33,7 +33,7 @@ companion 的 TypeScript / source-map 默认导入适配会先归一化，因此
    `MODULE.bazel` 移除对应条目和补丁文件；仍需保留的改动则重新适配。不要为了通过 fetch 直接删掉冲突补丁。
 3. 运行 `node scripts/upstream.mjs report`，查看 `.ci/upstream/`。
    按下表同步真正发生变化的部分，然后运行 `pnpm test`，审查 golden 差异和生成绑定。
-4. 在 `valdi/` 构建 SQLite validator（命令见 README），然后在根目录运行 `pnpm build`。
+4. 在根目录运行 `pnpm build`；应用 Node 构建无需先编译原生 host 工具。
    重新导出两端运行时，准备视觉依赖，运行 `pnpm build:android`、`pnpm build:ios`。
 5. 提交源代码、补丁、版本 pin 和更新后的 `valdi/MODULE.bazel.lock`；通过正常 PR CI 后，再在设备上检查
    导航、输入、图片、SQL、原生桥接和热重载。Release / OTA 使用前另外验证匹配配置的运行时与 Hermes 字节码。
@@ -44,9 +44,9 @@ companion 的 TypeScript / source-map 默认导入适配会先归一化，因此
 | `tools/valdi-rolldown/hermes.ts`、工具 package/lock | `JavaScriptUtils.cpp` 模块包装/文件头、Hermes 编译选项和版本 | 更新官方 hermes-compiler 固定版本，运行协议检查和 Release 装载验证 |
 | `valdi/third_party/hermes_v1/` | Hermes pin、构建参数、ABI | 与适配补丁一起审查，重新导出运行时 |
 | `tools/valdi-rolldown/vendor/companion/` | `compiler/companion/src/` 的 JSXProcessor、AST 及其依赖 | 按报告移植变化，保留 ESM 导入适配和本地声明 |
-| `tools/valdi-rolldown/vendor/clientsql/` | `compiler/clientsql/src/` | 同步使用的 Python 文件，核对 validator 的版本与协议 |
+| `valdi/modules/app_pages/src/sqlgen/`（过渡源码） | 原生 ClientSQL 连接与事务接口 | Drizzle 接入前保持数据库文件标识和现有行为，不恢复旧生成工具 |
 | `tools/valdi-rolldown/codegen/` | Swift 编译器的 parser、models、Kotlin/ObjC/C++ 生成器及模板 | 把语义变化移植到 TypeScript，再对照候选上游 golden |
-| `tools/valdi-rolldown/{pipeline,valdiTs,archive,resources,sqlgen}.ts` | 模块归档格式、运行时加载协议、资源/SQL 约定 | 逐项适配我们自己的 Node 管线 |
+| `tools/valdi-rolldown/{pipeline,valdiTs,archive,resources}.ts` | 模块归档格式、运行时加载协议、资源约定 | 逐项适配我们自己的 Node 管线 |
 | `valdi/patches/@snap__valdi@1.2.1.patch` | npm CLI 的 Bazel 参数、export 行为 | CLI 独立升级时核对 patch，更新 pnpm lock |
 | `android/`、`ios/`、`valdi/native/` | 原生运行时 API、模块注册、生成绑定 ABI | 用匹配的新运行时编译并进行设备验证 |
 

@@ -45,7 +45,7 @@ GitHub Actions 运行 golden、TS 构建、Android Debug APK 和 iOS 模拟器 A
 CI 的范围和缓存规则见 [构建与 CI 边界](docs/build-and-ci.md)，
 上游版本试跑、补丁及 vendored 代码的同步步骤见 [同步 Valdi 上游](docs/upgrading-valdi.md)。
 
-首次准备依赖和原生运行时仍需下面的步骤；改 TS、图片、SQL 后直接使用上面的根目录命令：
+首次准备依赖和原生运行时仍需下面的步骤；改 TS、图片后直接使用上面的根目录命令：
 
 ```sh
 pnpm install                               # 一次安装根目录、页面和构建工具的锁定依赖，生成 tsconfig
@@ -53,22 +53,22 @@ scripts/export-android.sh                   # 只在第一次和 Valdi 本身变
 cd android && ./gradlew :app:installDebug
 ```
 
-需要 JDK 17、Android SDK、Node、pnpm、python3（ClientSQL 生成器）。Valdi 命令行工具不用全局安装：它是 `valdi/package.json` 里的开发依赖（`@snap/valdi` 1.2.1），导出脚本用 `pnpm exec valdi` 调它。导出只编 Valdi 运行时（`libvaldi_runtime.so`、Valdi 的 Kotlin 和它自带的模块）以及构建要用的 Valdi 工具，第一次从头编译约 17 分钟。aar 里有三种 CPU 架构，APK 只打包 arm64（`abiFilters`）。
+需要 JDK 17、Android SDK、Node、pnpm。Valdi 命令行工具不用全局安装：它是 `valdi/package.json` 里的开发依赖（`@snap/valdi` 1.2.1），导出脚本用 `pnpm exec valdi` 调它。导出只编 Valdi 运行时（`libvaldi_runtime.so`、Valdi 的 Kotlin 和它自带的模块）以及构建要用的 Valdi 工具，第一次从头编译约 17 分钟。aar 里有三种 CPU 架构，APK 只打包 arm64（`abiFilters`）。
 
 根目录安装通过 `postinstall` 依次安装 `valdi/` 和 `tools/valdi-rolldown/`，各自使用已有的 frozen lockfile，
 然后生成页面的 tsconfig；安装阶段不编译原生代码。首次导出会先获取 Valdi 的类型源码，再检查 C++ 绑定，
-避免干净目录里类型声明尚未准备好就检查绑定。构建入口会检查依赖、运行时指纹、SQL 校验器及视觉库，
+避免干净目录里类型声明尚未准备好就检查绑定。构建入口会检查依赖、运行时指纹及视觉库，
 缺失或过期时给出具体准备命令；只改 TS 或宿主代码不会因此要求重新导出 Valdi 运行时。
 
 视觉库尚未准备时，Android 运行 `node vision/scripts/prepare-native.cjs --target android-arm64`，
 iOS 运行 `node vision/scripts/prepare-native.cjs --target ios`。iOS 构建需要 macOS、Xcode 和 XcodeGen。
 
-只构建 TS 模块时，不必导出 Android/iOS 运行时：首次先运行 `node scripts/prepare-valdi.mjs` 获取类型声明，
-再在 `valdi/` 执行 `bazel build @valdi//compiler/clientsql:sqlite_316_validator`
-准备 SQL 校验器；图片处理使用预编译 `sharp`，Release 字节码使用固定版本的官方 `hermes-compiler`，之后使用根目录 `pnpm build`。`pnpm test` 的 golden 对比只需要类型源码，
-不需要 toolbox 或移动端运行时；包含图片与 Hermes 适配测试。
+只构建 TS 模块时，不必导出 Android/iOS 运行时：首次运行 `node scripts/prepare-valdi.mjs` 获取类型声明，
+之后使用根目录 `pnpm build`。图片处理使用预编译 `sharp`，Release 字节码使用固定版本的官方 `hermes-compiler`；
+应用构建不再需要 toolbox、ClientSQL Python 生成器或 SQLite 3.16 校验器。
+`pnpm test` 包含图片与 Hermes 适配测试和绑定 golden 对比，只需要类型源码与 npm 依赖。
 
-改 TS、图片、`.sq` 不用再导出：Gradle 和 Xcode 构建时调用 `tools/valdi-rolldown` 编译页面（见“构建”）。开发时 `scripts/hotreload.sh` 把改动直接推到正在运行的 debug 包。
+改 TS、图片不用再导出：Gradle 和 Xcode 构建时调用 `tools/valdi-rolldown` 编译页面（见“构建”）。开发时 `scripts/hotreload.sh` 把改动直接推到正在运行的 debug 包。
 
 iOS：
 
@@ -209,7 +209,10 @@ this.router.push('detail', { id: 1, from: 'home' }, 'push', {
 
 ## SQLite（ClientSQL）
 
-`modules/app_pages/sql/AppDb/*.sq` 里写建表和命名查询，编译时生成类型化的 TS（`src/sqlgen/`）。`src/db.ts` 打开共享的 `AppDb`，例如 `getAppDb().submissionQueries.insertSubmission(...)`，`watchCountSubmissions` 在表变化时自动回调。`src/sqlgen/` 由构建生成（`tools/valdi-rolldown/sqlgen.ts`，见“构建”），不用导出；热重载也监听 `sql/`。
+应用构建已移除 `.sq` 生成流程、vendored Python 生成器和 SQLite 3.16 校验器。现有三份查询代码原样固定在
+`modules/app_pages/src/sqlgen/`，作为接入 Drizzle 前的过渡源码；不再自动生成。`src/db.ts` 仍打开共享的 `AppDb`，
+表单保存、计数订阅、事务和数据库调试视图沿用现有实现，数据库文件标识与 schema version 不变。
+Drizzle 尚未接入，后续一起替换 schema、驱动和迁移；原生 SQLite 模块继续随运行时导出。
 
 数据库在启动时由宿主调用 `startAppServices()`（`db.ts`，`@ExportFunction`）打开，不能等页面第一次用到时再打开。原因是 ClientSQL 返回的连接由原生函数组成，Valdi 会把它们和创建时所在的 Context 绑在一起：在首页里打开，连接就属于首页的根 view。Android 按返回键退出时 Activity 销毁，根 view 一起销毁，之后所有查询都失败，计数显示 0。宿主在常驻的 JS 作用域里调用它，连接就一直有效。以后新增应用级、返回原生对象的服务（例如 `persistence`），也要在这里创建。
 
@@ -247,7 +250,7 @@ Valdi 用 beta-0.2.1，补丁都在 `valdi/bzl/patches/valdi/`，以后升级 Va
 
 **Bazel 8 和 Valdi 命令行工具的补丁。** Valdi 0.2.1 本身用 Bazel 8.2.1（`valdi/.bazelversion`），但命令行工具 1.2.1 的 `bootstrap` 模板还停在 Valdi 0.1.x：Bazel 7.2.1、protobuf 27.0、rules_java 7.4.0、rules_kotlin 1.9.0、rules_jvm_external 6.2，`projectsync` 也只认 Bazel 7 的外部仓库名（`valdi~`），不认 Bazel 8 的（`valdi+`）。`valdi/patches/@snap__valdi@1.2.1.patch`（`pnpm patch`，登记在 `pnpm-workspace.yaml`）把模板改成和 Valdi 0.2.1 一致，并让 `projectsync` 认 `+`。这个项目自己的 `.bazelversion`、`MODULE.bazel`、`.bazelrc` 也按同样的版本改过（另加 `platforms` 依赖和两个 Bazel 8 参数）。升级命令行工具时先看上游是否已修复，修复了就删掉补丁。Bazel 的磁盘缓存在 `~/.cache/bazel-disk-cache`，空闲时自动清理到 30 GB 以内（`.bazelrc` 的 `--experimental_disk_cache_gc_max_size`）。
 
-`valdi/bzl/patches/valdi/clientsql_rules_python.patch`：Valdi 的 ClientSQL 工具用的是 Bazel 内置的 `py_binary`，在 rules_python 1.9 下启动时不设置导入路径，`.sq` 编译和 `valdi hotreload` 都会报 `No module named 'python'`。补丁改成从 rules_python 加载这些规则。我们自己的构建直接用 `python3` 跑这个生成器（`tools/valdi-rolldown/vendor/clientsql/`），不经过 Bazel，只有 Valdi 自带的模块还经过这个补丁。升级 Valdi 时先看上游是否已修复，修复了就删掉补丁。
+`valdi/bzl/patches/valdi/clientsql_rules_python.patch`：Valdi 的 ClientSQL 工具用的是 Bazel 内置的 `py_binary`，在 rules_python 1.9 下启动时不设置导入路径，`.sq` 编译和 `valdi hotreload` 都会报 `No module named 'python'`。补丁改成从 rules_python 加载这些规则。应用 Node 构建已移除该生成器；此补丁仅为上游原生导出路径保留。升级 Valdi 时先看上游是否已修复，修复了就删掉补丁。
 
 ### Hermes V1
 
@@ -321,7 +324,7 @@ iOS 是 `scripts/export-ios.sh release`、`project.yml` 的 `VALDI_OTA_URL`、`s
 - **编译**：TypeScript LanguageService 做类型检查（有错构建就失败），`.tsx` 用 Valdi 自己的 JSX 转换（`vendor/companion/`，MIT），再由 rolldown 输出 CommonJS：每个源文件是一个入口，输出一个 Valdi 模块文件，懒加载和内存警告时卸载都和原来一样；npm 代码按引用关系拆分（见“npm 依赖”）。
 - **打包**：`.valdimodule`（zstd 压缩的 ValdiPacket）。debug 是 JS 加内联 source map；release 用官方预编译 `hermes-compiler` 编成 Hermes 字节码，由 Node 补齐 Valdi 模块包装和文件头，source map 单独放 `<module>.map.json`。
 - **图片**：`res/` 生成 `res.ts` 和 `res.assetcatalog`；Android 输出 5 种密度的 webp 和 keep.xml，iOS 输出 `app_pages.bundle`（@2x/@3x）。
-- **ClientSQL**：`sqlgen.ts` 用 Valdi 原版的 Python 生成器（`vendor/clientsql/`）把 `sql/` 生成到 `tools/valdi-rolldown/.gen/app_pages/src/sqlgen/`。生成器要用 SQLite 3.16 校验器：`$VALDI_SQLITE_VALIDATOR`，或者 `valdi/bazel-out` 里最新的一份（没有就在 `valdi/` 下 `bazel build @valdi//compiler/clientsql:sqlite_316_validator`）。
+- **数据库**：应用不再运行 SQL 代码生成。当前 `src/sqlgen/` 为保留存储行为的固定过渡源码，后续由 Drizzle schema、驱动与迁移接管；原生 SQLite 能力保留。
 - **原生绑定**：`codegen.ts` 是 Valdi 编译器绑定生成的 TS 移植，从 `@ExportModel`、`@ExportProxy`、`@ExportFunction`、`@ExportModule`、`@ExportEnum` 生成 Kotlin、Objective-C 和 C++，结果提交进 git。`npx tsx codegen/goldens.ts` 拿 Valdi 源码里的编译器 golden（`tools/ci/compiler_goldens`）逐字节对比三种语言；app_pages 的输出也和 Valdi 的 Bazel 构建一致。构建只跑 `--check`，过期就失败并给出命令；改了导出给原生的接口后手动重新生成：
 
   ```sh
@@ -332,8 +335,8 @@ iOS 是 `scripts/export-ios.sh release`、`project.yml` 的 `VALDI_OTA_URL`、`s
 
 - **接入**：Android 是 Gradle 的 `<variant>ValdiModules`（产物进 assets 和 res）和 `valdiCodegenCheck`（挂在 preBuild）；iOS 是 `project.yml` 的 “Valdi bindings check” 和 “Valdi modules” 两个构建脚本（产物进 app 的资源目录，Valdi 先在这里找模块）。改了 `project.yml` 要重新 `xcodegen generate`。
 - **命令行**：`pnpm build [--release] [--minify] [--out <dir>] [--res <dir>] [--ios-res <dir>]`；`pnpm dev` 是热重载（`scripts/hotreload.sh`），监听 `src/`、`res/`、`sql/`，把改动推给 Android 模拟器和启动着的 iOS 模拟器（端口 13592，Valdi daemon 的协议），代替 `valdi hotreload`。真机只在 `ANDROID_SERIAL` 指定时才推，因为装着别的构建的 app 收到推送会出问题。
-- **模块**：`valdi/modules/` 下每个有 `src/` 的目录都是一个模块，不用登记，各自打成 `<模块>.valdimodule`（自己的图片、sqlgen、npm 代码），绑定也按模块生成到同一组目录。模块之间按路径导入（`import { X } from 'other/src/X'`），运行时 Valdi 加载对方的模块。新建：`pnpm new-module <名字>`（snake_case，它也是 Kotlin 包 `com.snap.modules.<名字>`、Objective-C 目录和 C++ 命名空间），写出 `src/<Name>Component.tsx`（Valdi 的 ui_component 模板）、所有模块的 tsconfig.json 和这个模块的绑定；iOS 要再 `xcodegen generate` 把新的 Objective-C 文件加进工程。没有 `@Export…` 的模块不生成 C++ 文件，所以不需要重新导出运行时。删掉一个模块后，删它在 `android/app/generated/valdi`、`ios/Generated/valdi` 里的绑定，再跑 `pnpm tsconfig`。
-- **IDE**：各模块的 `tsconfig.json` 由 `pnpm tsconfig` 生成（`new-module` 会跑），代替 `valdi projectsync`：Valdi 的基础配置、运行时带的 Valdi 模块（只有这些能导入）、所有 app 模块，生成的源码（`res.ts`、`sqlgen`）在 `tools/valdi-rolldown/.gen/`。`valdi/modules/app_pages/BUILD.bazel` 已经用不到了。
+- **模块**：`valdi/modules/` 下每个有 `src/` 的目录都是一个模块，不用登记，各自打成 `<模块>.valdimodule`（自己的图片、npm 代码），绑定也按模块生成到同一组目录。模块之间按路径导入（`import { X } from 'other/src/X'`），运行时 Valdi 加载对方的模块。新建：`pnpm new-module <名字>`（snake_case，它也是 Kotlin 包 `com.snap.modules.<名字>`、Objective-C 目录和 C++ 命名空间），写出 `src/<Name>Component.tsx`（Valdi 的 ui_component 模板）、所有模块的 tsconfig.json 和这个模块的绑定；iOS 要再 `xcodegen generate` 把新的 Objective-C 文件加进工程。没有 `@Export…` 的模块不生成 C++ 文件，所以不需要重新导出运行时。删掉一个模块后，删它在 `android/app/generated/valdi`、`ios/Generated/valdi` 里的绑定，再跑 `pnpm tsconfig`。
+- **IDE**：各模块的 `tsconfig.json` 由 `pnpm tsconfig` 生成（`new-module` 会跑），代替 `valdi projectsync`：Valdi 的基础配置、运行时带的 Valdi 模块（只有这些能导入）、所有 app 模块，生成的资源声明（`res.ts`）在 `tools/valdi-rolldown/.gen/`。`valdi/modules/app_pages/BUILD.bazel` 已经用不到了。
 
 导出脚本只在 Valdi 本身（`MODULE.bazel`、补丁、`.bazelrc`）或 `valdi/native`（C++，见下一节）变了时才需要跑：它提供运行时 aar / xcframework 和指纹的 Valdi 一半；导出内置模块时仍可能构建上游 toolbox，应用 Node 管线不再调用它。
 

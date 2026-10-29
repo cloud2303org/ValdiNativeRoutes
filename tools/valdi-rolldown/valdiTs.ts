@@ -4,7 +4,7 @@
 // one CommonJS file per source file (pipeline.ts).
 //
 // Imports are resolved the way Valdi lays modules out: `<module>/…` and relative paths inside the module are bundled,
-// looked up in the module's directory first and then in the compiler's generated TypeScript (client_sql's sqlgen);
+// looked up in the module's directory first and then in generated resource declarations (res.ts);
 // npm packages (in `nodeModules`) are left to rolldown, which bundles them; every other module (valdi_core, …) stays
 // an external require.
 import { existsSync, readFileSync } from 'node:fs';
@@ -19,7 +19,7 @@ export interface ValdiModule {
   name: string;
   /** The module's directory, holding tsconfig.json and src/. */
   dir: string;
-  /** Directories with generated sources laid out like `dir`: res.ts (resources.ts), src/sqlgen (sqlgen.ts). */
+  /** Directories with generated sources laid out like `dir`: res.ts (resources.ts). */
   generatedDirs: string[];
   /** Where the npm packages it imports are (only declared dependencies are there, as pnpm installs them). */
   nodeModules?: string;

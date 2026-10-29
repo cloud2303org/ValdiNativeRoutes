@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { checkBuildTools, checkRuntime, checkSources, checkVision } from '../prerequisites.mjs';
+import { checkRuntime, checkSources, checkVision } from '../prerequisites.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -69,17 +69,9 @@ test('an iOS export is checked independently against its platform', t => {
   assert.doesNotThrow(() => checkRuntime(root, 'ios'));
 });
 
-test('a clean checkout reports missing sources and tools with preparation commands', t => {
+test('a clean checkout reports missing sources with a preparation command', t => {
   const { root } = fixture(t);
   assert.throws(() => checkSources(root), /Valdi sources are not prepared.*\n.*prepare-valdi\.mjs/);
-  assert.throws(() => checkBuildTools(root), /SQLite 3.16 validator is missing.*\n.*\n.*\n.*bazel build/);
-});
-
-test('SQL validator is sufficient without a Valdi toolbox or mobile runtime', t => {
-  const { root, write } = fixture(t);
-  const bin = 'valdi/bazel-out/darwin_arm64-fastbuild/bin/external/valdi+';
-  write(`${bin}/compiler/clientsql/sqlite_316_validator`, 'host tool');
-  assert.doesNotThrow(() => checkBuildTools(root));
 });
 
 test('vision dependencies must include all linked Android archives', t => {

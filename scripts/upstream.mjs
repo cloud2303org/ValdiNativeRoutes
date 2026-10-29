@@ -42,7 +42,7 @@ export function vendorReport(directory, upstream, output) {
     'Compares the files we use. TypeScript/source-map default-import adaptation is normalized.',
     'New upstream files and changes to the locally ported code generator still require source review.', ''];
   let changed = 0;
-  for (const group of ['companion', 'clientsql']) {
+  for (const group of ['companion']) {
     const local = path.join(directory, 'tools/valdi-rolldown/vendor', group);
     const remote = path.join(upstream, 'compiler', group, 'src');
     for (const name of sourceFiles(local)) {

@@ -11,7 +11,7 @@ const valdi = path.join(root, 'valdi');
 /** app_pages' last Bazel build, which build.ts --compare reads (the Valdi compiler's web output). */
 export const bin = path.join(valdi, 'bazel-out/darwin_arm64-fastbuild/bin/modules/app_pages');
 
-/** Where the modules' generated sources go (res.ts, src/sqlgen), one directory per module. */
+/** Where the modules' generated sources go (res.ts), one directory per module. */
 const genRoot = path.join(import.meta.dirname, '.gen');
 export const genDir = (name: string) => path.join(genRoot, name);
 
@@ -43,8 +43,8 @@ const RUNTIME_MODULES = ['client_sql', 'coreutils', 'jasmine', 'source_map', 'va
 
 /**
  * Writes `module`'s tsconfig.json, as `valdi projectsync` did from Bazel: Valdi's base config and globals, the
- * runtime's modules, and every app module (`<module>/…`), each also found in its generated sources (res.ts, sqlgen),
- * which rootDirs merges into the module's own tree for relative imports (`./sqlgen/AppDb`). Returns whether it
+ * runtime's modules, and every app module (`<module>/…`), each also found in its generated resources (res.ts),
+ * which rootDirs merges into the module's own tree for imports. Returns whether it
  * changed. Valdi's sources are read through the bazel-valdi link the exports leave.
  */
 export function writeTsconfig(module: ValdiModule, modules: ValdiModule[]): boolean {

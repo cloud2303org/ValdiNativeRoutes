@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, symlinkSync, unlinkSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, realpathSync, symlinkSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
 export function run(command, args, cwd) {
@@ -61,17 +61,6 @@ export function prepareSources(root) {
   if (existing) unlinkSync(link);
   symlinkSync(outputBase, link, 'dir');
   checkSources(root);
-}
-
-export function checkBuildTools(root) {
-  const out = path.join(root, 'valdi/bazel-out');
-  const configs = existsSync(out) ? readdirSync(out) : [];
-  const prepareHostTools = 'Prepare the SQL validator (no Android/iOS runtime export needed):\n  cd valdi\n  bazel build @valdi//compiler/clientsql:sqlite_316_validator';
-  const validator = process.env.VALDI_SQLITE_VALIDATOR;
-  if (validator ? !existsSync(validator) : !configs.some(config => ['valdi+', 'valdi~'].some(repo =>
-    existsSync(path.join(out, config, 'bin/external', repo, 'compiler/clientsql/sqlite_316_validator'))))) {
-    throw new Error(`SQLite 3.16 validator is missing${validator ? ` at VALDI_SQLITE_VALIDATOR=${validator}` : ''}.\n${prepareHostTools}`);
-  }
 }
 
 export function checkRuntime(root, platform) {

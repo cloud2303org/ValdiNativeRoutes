@@ -12,8 +12,6 @@ valdi_module(
     ]),
     # Tab bar icons (TAB_BAR in routes.ts); the native tab bars load the exported variants.
     res = glob(["res/**/*.png"]),
-    sql_db_names = ["AppDb"],
-    sql_srcs = glob(["sql/**/*.sq"]),
     visibility = ["//visibility:public"],
     deps = [
         "@valdi//src/valdi_modules/src/valdi/client_sql",

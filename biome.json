@@ -6,7 +6,11 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["valdi/modules/**", "!**/tsconfig.json"]
+    "includes": [
+      "valdi/modules/**",
+      "!**/tsconfig.json",
+      "!**/src/sqlgen/**"
+    ]
   },
   "formatter": {
     "indentStyle": "space",

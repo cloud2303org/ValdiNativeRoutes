@@ -10,7 +10,7 @@
 // Debug builds are JavaScript with each file's source map inline. --release: Hermes bytecode, as Valdi's release
 // builds ship (and minified), with the maps in <module>.map.json next to the archive.
 //
-// Images use prebuilt sharp, bytecode uses pinned prebuilt hermesc. SQL still needs SQLite's small native validator.
+// Images use prebuilt sharp, bytecode uses pinned prebuilt hermesc; no native host build tool is required.
 // Type errors fail the build, after it is written. --compare also emits each file as the Valdi
 // compiler would (CommonJS straight from TypeScript) and diffs the render code against its web output.
 import { createHash } from 'node:crypto';
@@ -26,12 +26,10 @@ import {
   genDir,
   inlineSourceMaps,
   precompile,
-  root,
   sourceMapJson,
   type Built,
 } from './pipeline';
 import { addFontEntries, assetCatalog, findFonts, findImages, writeAndroidResources, writeIosResources, writeResTs } from './resources';
-import { generateSqlgen, sqliteValidator } from './sqlgen';
 import { sourceFiles, valdiTs } from './valdiTs';
 
 const option = (name: string) => {
@@ -53,14 +51,12 @@ if (archivesOnly) {
 }
 
 if (androidRes) rmSync(androidRes, { recursive: true, force: true });
-const validator = sqliteValidator(path.join(root, 'valdi'));
 for (const module of appModules()) {
   const started = performance.now();
   // Generated sources first: the program the plugin starts with includes them.
   const images = await findImages(module);
   const fonts = findFonts(module) ?? [];
   writeResTs(module, images, genDir(module.name), fonts);
-  generateSqlgen(module, genDir(module.name), validator);
   const plugin = valdiTs(module);
   const built = await buildModule(module, plugin, minify);
   if (images || fonts.length) built.entries.set('res.assetcatalog', assetCatalog(images ?? [], fonts));

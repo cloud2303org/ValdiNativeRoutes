@@ -1,7 +1,7 @@
 // Root build commands only build; installing/launching an app belongs to the device workflow.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkBuildTools, checkDependencies, checkRuntime, checkSources, checkVision, run, runPnpm } from './prerequisites.mjs';
+import { checkDependencies, checkRuntime, checkSources, checkVision, run, runPnpm } from './prerequisites.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const [platform, ...forwarded] = process.argv.slice(2);
@@ -15,7 +15,6 @@ function main() {
     if (platform === 'test' && sourceOption >= 0) forwarded[sourceOption + 1] = path.resolve(forwarded[sourceOption + 1]);
     checkSources(root, platform === 'test' && sourceOption >= 0 ? forwarded[sourceOption + 1] : undefined);
     if (platform === 'modules') {
-      checkBuildTools(root);
       runPnpm(['--dir', 'tools/valdi-rolldown', 'build', ...forwarded], root);
     } else {
       run(process.execPath, ['--test', 'scripts/tests/prerequisites.test.mjs', 'scripts/tests/upstream.test.mjs'], root);
@@ -37,7 +36,6 @@ function main() {
   checkDependencies(root);
   checkRuntime(root, platform);
   checkSources(root);
-  checkBuildTools(root);
   checkVision(root, platform);
   if (platform === 'android') {
     run('./gradlew', [':app:assembleDebug', ...forwarded], path.join(root, 'android'));

@@ -22,7 +22,8 @@ env:
 
 concurrency:
   group: app-ci-${{ github.event_name }}-${{ github.ref }}-${{ inputs.upstream_tag || 'pinned' }}
-  cancel-in-progress: true
+  # Let a cold native build finish and populate caches; retain only the newest queued revision.
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -54,8 +55,18 @@ jobs:
         id: prepare
       - name: Golden and build prerequisite tests
         run: pnpm test 2>&1 | tee .ci/test.log
+      - name: Set up Android SDK
+        if: matrix.target == 'android'
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        with:
+          packages: 'platforms;android-37.0 build-tools;37.0.0 ndk;27.1.12297006 cmake;3.22.1'
+          log-accepted-android-sdk-licenses: false
+      - name: Install XcodeGen
+        if: matrix.target == 'ios'
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
       - name: Restore Bazel action cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        id: bazel-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/bazel-disk-cache
           key: bazel-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-${{ hashFiles('valdi/.bazelversion') }}-${{ github.sha }}-${{ inputs.upstream_tag || 'pinned' }}
@@ -67,18 +78,15 @@ jobs:
           "$BAZEL_BIN" build --jobs=3 --local_ram_resources=4096 --experimental_disk_cache_gc_max_size=3G \
             @valdi//valdi/compiler/toolbox:valdi_compiler_toolbox \
             @valdi//compiler/clientsql:sqlite_316_validator 2>&1 | tee ../.ci/host-tools.log
+      - name: Save host tool action cache
+        if: steps.bazel-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/bazel-disk-cache
+          key: ${{ steps.bazel-cache.outputs.cache-primary-key }}
       - name: Build application modules
         if: matrix.target == 'npm'
         run: pnpm build 2>&1 | tee .ci/build.log
-      - name: Set up Android SDK
-        if: matrix.target == 'android'
-        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
-        with:
-          packages: 'platforms;android-37 build-tools;37.0.0 ndk;27.1.12297006 cmake;3.22.1'
-          log-accepted-android-sdk-licenses: false
-      - name: Install XcodeGen
-        if: matrix.target == 'ios'
-        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
       - name: Runtime fingerprint
         if: matrix.target != 'npm'
         id: runtime-input
@@ -142,6 +150,8 @@ jobs:
           if [[ -f .ci/upstream/vendor.md ]]; then cat .ci/upstream/vendor.md >> "$GITHUB_STEP_SUMMARY"; fi
       - name: Upload build evidence
         if: always()
+        id: artifacts
+        continue-on-error: true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: app-${{ matrix.target }}-${{ github.run_id }}
@@ -151,3 +161,8 @@ jobs:
           path: |
             .ci/
             android/app/build/outputs/apk/debug/*.apk
+      - name: Report unavailable artifacts
+        if: always() && steps.artifacts.outcome == 'failure'
+        run: |
+          echo '::warning::Build evidence upload failed. See the upload step for the storage/quota error; test and build results remain independent.'
+          echo 'Artifact upload failed. Logs remain available in the workflow; downloadable APK/App/report artifacts are unavailable for this job. Check the upload step and account storage quota.' >> "$GITHUB_STEP_SUMMARY"

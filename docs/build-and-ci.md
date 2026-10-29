@@ -32,6 +32,10 @@ Xcode / SDK / CMake / Ninja 的实际版本写入日志和缓存键。Actions �
 CI 将 Bazel / Gradle / Xcode 并发限制为 3，Bazel 调度内存为 4 GB，磁盘 action cache 空闲清理目标为 3 GB。
 
 三条任务会先跑 golden 再编原生工具，尽早发现 Node 绑定生成与上游语义的差异。
+host 工具编译完成后立即保存 action cache，后续 SDK、宿主构建或产物上传失败也不会丢掉这份缓存。
+同一分支的运行中构建会完成以保存缓存，后续提交只保留最新的待运行版本。
+artifact 上传是可选步骤：账号存储额度不足时会在日志和任务 summary 中警告，测试/构建仍按自身结果判定；
+这种情况下无法下载 APK、模拟器 App 和报告，只能查看 workflow 日志。清理账号其他仓库的产物或调整额度需单独处理。
 上游 workflow 位于 Bazel 获取的 `valdi/bazel-valdi/external/valdi+/.github/workflows/`，只作为参考，
 不会作为本仓库的 CI 执行。升级操作和手动试跑见 [同步 Valdi 上游](upgrading-valdi.md)。
 

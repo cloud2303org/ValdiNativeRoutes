@@ -1,5 +1,5 @@
-# Valdi custom Bazel registry (patched rules_swift, rules_kotlin, etc.)
-common --registry=https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry
+# Registry from the same immutable Valdi fork commit as MODULE.bazel
+common --registry=https://raw.githubusercontent.com/cloud2303org/Valdi/4fb1c1af7aacc8b77d2fdb2fc0c38752ae847ef3/registry
 common --registry=https://bcr.bazel.build
 
 common --enable_platform_specific_config

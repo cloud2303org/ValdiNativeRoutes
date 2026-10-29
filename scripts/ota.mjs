@@ -68,7 +68,7 @@ const bindingSources = {
   ios: { dir: 'ios/Generated/valdi', extensions: ['.h', '.m'] },
 };
 
-/** The Valdi side of the fingerprint, as exported: the toolchain (Valdi, Hermes, patches) and valdi/native. */
+/** The Valdi side of the fingerprint, as exported: the toolchain (Valdi fork, Hermes) and valdi/native. */
 const valdiHash = () => digest(fileEntries(inputs.valdi));
 
 /**
@@ -117,7 +117,7 @@ function buildModules(platform) {
 /** What the parts of a fingerprint are, for the errors that name the changed ones. */
 const partNames = {
   config: 'the Valdi runtime build (debug/release export)',
-  valdi: 'Valdi, its patches or valdi/native (ota/fingerprint.json "valdi")',
+  valdi: 'the Valdi fork/toolchain or valdi/native (ota/fingerprint.json "valdi")',
   bindings: 'the native bindings (a native interface of a module)',
   native: 'the native sources (ota/fingerprint.json "<platform>")',
 };

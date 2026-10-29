@@ -5,12 +5,12 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
-      upstream_tag:
-        description: 'Optional Valdi tag to try in this runner only (empty = committed pin)'
+      valdi_commit:
+        description: 'Optional 40-character Valdi fork commit to try (empty = committed pin)'
         type: string
         default: ''
       widgets_tag:
-        description: 'Optional Widgets tag, only used with upstream_tag'
+        description: 'Optional Widgets tag, only used with valdi_commit'
         type: string
         default: ''
 
@@ -21,7 +21,7 @@ env:
   VALDI_BAZEL_ARGS: '--jobs=3 --local_ram_resources=4096 --experimental_disk_cache_gc_max_size=3G'
 
 concurrency:
-  group: app-ci-${{ github.event_name }}-${{ github.ref }}-${{ inputs.upstream_tag || 'pinned' }}
+  group: app-ci-${{ github.event_name }}-${{ github.ref }}-${{ inputs.valdi_commit || 'pinned' }}
   # Let a cold native build finish and populate caches; retain only the newest queued revision.
   cancel-in-progress: false
 
@@ -42,13 +42,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - name: Select upstream candidate
-        if: inputs.upstream_tag != ''
+      - name: Select framework fork commit
+        if: inputs.valdi_commit != ''
         env:
-          UPSTREAM_TAG: ${{ inputs.upstream_tag }}
+          VALDI_COMMIT: ${{ inputs.valdi_commit }}
           WIDGETS_TAG: ${{ inputs.widgets_tag }}
         run: |
-          args=("$UPSTREAM_TAG")
+          args=("$VALDI_COMMIT")
           if [[ -n "$WIDGETS_TAG" ]]; then args+=("$WIDGETS_TAG"); fi
           node scripts/upstream.mjs pin "${args[@]}"
       - uses: ./.github/actions/prepare
@@ -69,7 +69,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/bazel-disk-cache
-          key: bazel-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-${{ hashFiles('valdi/.bazelversion') }}-${{ github.sha }}-${{ inputs.upstream_tag || 'pinned' }}
+          key: bazel-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-${{ hashFiles('valdi/.bazelversion') }}-${{ github.sha }}-${{ inputs.valdi_commit || 'pinned' }}
           restore-keys: |
             bazel-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-${{ hashFiles('valdi/.bazelversion') }}-
       - name: Runtime fingerprint

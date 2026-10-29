@@ -2,7 +2,7 @@
 # Rebuild the Valdi runtime into ios/Frameworks/ValdiRuntime.xcframework: the runtime, Valdi's own modules (valdi_core,
 # valdi_tsx, client_sql) and the app's C++ (valdi/native: @ExportModule implementations and their bindings). app_pages
 # and the npm packages are built by the app's Xcode build (tools/valdi-rolldown), its Objective-C bindings are
-# ios/Generated/valdi, so this is only needed when Valdi itself (MODULE.bazel, patches) or valdi/native changes.
+# ios/Generated/valdi, so this is only needed when the pinned Valdi fork/toolchain or valdi/native changes.
 # Usage: scripts/export-ios.sh [debug|release] [output dir, default ios/Frameworks]
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)

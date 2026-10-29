@@ -1,5 +1,5 @@
 name: Prepare application toolchain
-description: Locked JS dependencies and the patched, pinned Valdi sources
+description: Locked JS dependencies and the pinned Valdi fork sources
 outputs:
   toolchain:
     description: OS, architecture, Xcode SDK and native build tool digest

@@ -6,9 +6,9 @@
 
 根目录 `pnpm install` 的 postinstall 安装两个子项目的锁定依赖，并生成编辑器 tsconfig。运行时导出和
 OpenCV/ncnn 编译是单独的原生准备步骤，不在 npm 安装阶段运行。构建入口先检查缺失的产物及运行时指纹，
-Valdi/Hermes 配置、补丁或应用 C++ 变化会提示重新导出；页面 TS 与宿主 Kotlin/Swift 的变化不会误触发运行时重导出。
+Valdi fork 提交、工具链配置或应用 C++ 变化会提示重新导出；页面 TS 与宿主 Kotlin/Swift 的变化不会误触发运行时重导出。
 首次导出先运行 `scripts/prepare-valdi.mjs`，通过 Bazel 的 `fetch --repo=@valdi` 获取类型声明，再检查 C++ 绑定。
-只获取已固定版本和补丁的源码，不解析应用模块、旧 TS 编译器或 C++ 工具链目标。仅构建 TS 模块时无需编译原生 host 工具或导出 Android/iOS 运行时。图片由预编译 sharp 处理，
+只获取已固定的 fork 源码，不解析应用模块、旧 TS 编译器或 C++ 工具链目标。仅构建 TS 模块时无需编译原生 host 工具或导出 Android/iOS 运行时。图片由预编译 sharp 处理，
 Release 字节码由官方 hermes-compiler 生成，应用 Node 管线不再依赖 toolbox、ClientSQL Python 生成器或 SQLite 3.16 校验器。
 
 已清理 `valdi/package.json` 中无应用引用的旧 ESLint/Jasmine/ts-node/esbuild 直接开发依赖；保留
@@ -26,7 +26,7 @@ Release 字节码由官方 hermes-compiler 生成，应用 Node 管线不再依�
 | ios | `pnpm test`、匹配运行时与视觉依赖、`pnpm build:ios` | 模拟器 App 压缩包、日志 |
 
 共用 `prepare` composite action 安装 Node 24、根目录固定的 pnpm、JDK 17，安装三个 frozen lockfile，
-并获取固定版本和补丁的 Valdi 源码。使用 `macos-26` arm64 runner，匹配当前只有 arm64 的视觉库模拟器 slice；
+并获取固定 commit 的 Valdi fork 源码。使用 `macos-26` arm64 runner，匹配当前只有 arm64 的视觉库模拟器 slice；
 runner 的架构见 [GitHub 官方列表](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
 Xcode / SDK / CMake / Ninja 的实际版本写入日志和缓存键。Actions 固定到 commit SHA。
 CI 将 Bazel / Gradle / Xcode 并发限制为 3，Bazel 调度内存为 4 GB，磁盘 action cache 空闲清理目标为 3 GB。
@@ -81,7 +81,7 @@ helloworld / Widgets / Web 示例构建、Snap 发布和 GCP 缓存认证。这�
 视觉缓存按平台、工具链、NDK、vendor lock 和准备脚本匹配。Bazel 仅缓存可校验的 action 输出与下载，
 不缓存 `bazel-out` / `bazel-valdi` 绝对路径链接或整个 output base。
 
-只改页面或宿主 Kotlin / Swift 时可复用匹配的导出运行时；更改 Valdi 版本、补丁、Hermes 或应用 C++ 时重新导出。
+只改页面或宿主 Kotlin / Swift 时可复用匹配的导出运行时；更改 Valdi fork 提交、工具链或应用 C++ 时重新导出。
 缓存都是加速手段，干净 runner 仍有完整的准备路径。原生冷构建较重，首次 GitHub runner 的耗时、磁盘和内存
 仍需以实际运行结果调整；本地构建通过不代表 hosted runner 已通过。
 

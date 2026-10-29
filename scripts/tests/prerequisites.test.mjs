@@ -19,7 +19,7 @@ function fixture(t, config = 'debug') {
   write('ota/fingerprint.json', JSON.stringify({ valdi: ['valdi/MODULE.bazel', 'valdi/bzl/patches', 'valdi/native'] }));
   write('valdi/MODULE.bazel', 'pinned Valdi version');
   write('valdi/native/src/Module.cpp', 'original implementation');
-  write('valdi/bzl/patches/runtime.patch', 'original patch');
+  write('valdi/bzl/patches/rules_python/toolchain.patch', 'original toolchain patch');
   mkdirSync(path.join(root, 'scripts'));
   cpSync(path.join(repository, 'scripts/ota.mjs'), path.join(root, 'scripts/ota.mjs'));
   const info = JSON.parse(execFileSync(process.execPath, [path.join(root, 'scripts/ota.mjs'), 'valdi-hash', 'android', config], { encoding: 'utf8' }));
@@ -48,9 +48,15 @@ test('changed C++ requires a new export and preserves the release configuration'
   assert.throws(() => checkRuntime(root, 'android'), /out of date.*\n.*export-android\.sh release/);
 });
 
-test('changed runtime patches invalidate the export even when C++ is unchanged', t => {
+test('a changed fork pin invalidates the export even when C++ is unchanged', t => {
   const { root, write } = fixture(t);
-  write('valdi/bzl/patches/runtime.patch', 'changed patch');
+  write('valdi/MODULE.bazel', 'a different immutable fork commit');
+  assert.throws(() => checkRuntime(root, 'android'), /runtime is out of date/);
+});
+
+test('a changed local dependency-rule patch invalidates the export', t => {
+  const { root, write } = fixture(t);
+  write('valdi/bzl/patches/rules_python/toolchain.patch', 'changed toolchain patch');
   assert.throws(() => checkRuntime(root, 'android'), /runtime is out of date/);
 });
 

@@ -22,9 +22,9 @@ export function formatJsModule(source: string): string {
 
 /** Fail explicitly when an upstream upgrade changes the protocol this adapter implements. */
 export function validateRuntimeContract(directory = root): string {
-  const config = readFileSync(path.join(directory, 'valdi/third_party/hermes_v1/hermes.BUILD'), 'utf8');
+  const config = readFileSync(path.join(directory, 'valdi/bazel-valdi/external/valdi+/third-party/hermes_v1/hermes.BUILD'), 'utf8');
   const version = /HERMES_RELEASE_VERSION=.*?(\d+\.\d+\.\d+)/.exec(config)?.[1];
-  if (!version) throw new Error('Cannot read the runtime Hermes version from third_party/hermes_v1/hermes.BUILD');
+  if (!version) throw new Error('Cannot read the runtime Hermes version from the fork third-party/hermes_v1/hermes.BUILD');
   const source = readFileSync(path.join(directory, 'valdi/bazel-valdi/external/valdi+/valdi/src/valdi/runtime/JavaScript/JavaScriptUtils.cpp'), 'utf8');
   const stringValue = (name: string) => {
     const value = new RegExp(`${name}\\s*=\\s*("(?:\\\\.|[^"\\\\])*")`).exec(source)?.[1];

@@ -42,7 +42,7 @@ export function prepareSources(root) {
   const command = candidates.find(candidate => !spawnSync(candidate, ['--version'], { stdio: 'ignore' }).error);
   if (!command) throw new Error('Preparing Valdi sources requires Bazel/Bazelisk on PATH (or BAZEL_BIN).');
   const cwd = path.join(root, 'valdi');
-  // Fetch only the pinned, patched repository. No app/compiler target or native toolchain analysis is needed.
+  // Fetch only the pinned fork repository. No app/compiler target or native toolchain analysis is needed.
   run(command, ['--max_idle_secs=5', 'fetch', '--repo=@valdi'], cwd);
   const info = spawnSync(command, ['--max_idle_secs=5', 'info', 'output_base'], { cwd, encoding: 'utf8' });
   if (info.error || info.status !== 0) throw new Error(`Cannot locate fetched Valdi sources: ${info.error?.message ?? info.stderr.trim()}`);
@@ -82,7 +82,7 @@ export function checkRuntime(root, platform) {
   if (result.error || result.status !== 0) throw new Error(`Cannot check the ${platform} runtime fingerprint: ${result.error?.message ?? result.stderr.trim()}`);
   const current = JSON.parse(result.stdout);
   if (info.valdi !== current.valdi || info.native !== current.native) {
-    throw new Error(`${platform} Valdi runtime is out of date (Valdi/Hermes configuration, patches or valdi/native changed). Run:\n  ${exportCommand(platform)}${info.config === 'release' ? ' release' : ''}`);
+    throw new Error(`${platform} Valdi runtime is out of date (Valdi fork/toolchain configuration or valdi/native changed). Run:\n  ${exportCommand(platform)}${info.config === 'release' ? ' release' : ''}`);
   }
 }
 

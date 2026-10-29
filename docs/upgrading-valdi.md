@@ -1,54 +1,83 @@
 # 同步 Valdi 上游
 
-本项目通过 Bazel archive 依赖 Valdi。我们自己的应用、Node 编译管线、宿主和运行时补丁在本仓库，
-升级时切换依赖版本并适配这些改动。上游的整套 CI、Swift 应用编译入口和 npm 发布流程无需复制过来。
+框架源码维护在 [Valdi fork](https://github.com/cloud2303org/Valdi/tree/valdiroutes) 的 `valdiroutes` 分支。
+应用仓库保留页面、原生宿主、Node 编译管线和应用 C++；通过 `valdi/MODULE.bazel` 的
+`VALDI_REPOSITORY` / `VALDI_COMMIT` 获取 fork 的完整源码。同一提交的 registry 在 `valdi/.bazelrc` 中固定。
+不跟随浮动分支，也不再从应用仓库应用框架补丁。
+应用自己的 rules_python 依赖规则补丁和 npm CLI patch 仍在应用仓库，继续计入相应构建输入。
 
-## 先在 CI 试跑
+当前上游基线为 `Snapchat/Valdi` 的 `beta-0.2.1`（`f26bee4dc170b6c929f71d4dd07d44e033f47176`）。
+初次迁移对应 fork 提交 `4fb1c1af7aacc8b77d2fdb2fc0c38752ae847ef3`；11 项框架修改和 Hermes 构建输入已迁入 fork。
+补丁到提交的对应关系、后续同步要求见 fork 的 [VALDI_FORK.md](https://github.com/cloud2303org/Valdi/blob/valdiroutes/VALDI_FORK.md)。
 
-在 GitHub Actions 的 **Application CI → Run workflow** 中选择包含当前修改的分支：
+## 先在框架 fork 合并上游
 
-- `upstream_tag` 留空：验证仓库已固定的版本。
-- 填入明确的 Valdi tag：只在 runner 中切换 Valdi 和 registry，保留我们的全部补丁，跑相同的三条任务。
-- `widgets_tag` 可选，只有填写 `upstream_tag` 时使用；默认保留现有 Widgets 版本，它是独立项目。
+在 fork 的干净 checkout 中执行；应用工作区有未提交内容时，使用独立 clone / worktree：
 
-试跑不会提交、推送、改写本地版本或更新 vendored 源码。下载每条任务的 `app-<target>-<run id>` artifact：
+```sh
+git remote add upstream https://github.com/Snapchat/Valdi.git  # 首次配置
+git fetch upstream --tags
+git switch -c upgrade/valdi-TAG origin/valdiroutes
+git merge --no-ff TAG
+```
 
-- `prepare.log`：下载、模块解析和补丁应用失败的位置。
-- `upstream-pin.diff`：版本、registry 和该任务解析后的 `MODULE.bazel.lock` 变化。
-- `upstream/vendor.md` 和 `.diff`：我们使用的 companion 文件与候选上游的差异。
-- `test.log`：Kotlin、Objective-C、C++ golden 差异，以及构建前置检查测试。
-- `export.log`、`build.log`：运行时和宿主构建结果。
+解决源码冲突，逐项判断 Hermes、资源加载和导出规则的自定义修改是否仍然需要。
+上游已实现的修复可以移除对应自定义代码；需要保留的改动按新 API 适配。
+更新 fork 的 `VALDI_FORK.md` 上游基线记录，推送升级分支，取得完整的 40 位 commit SHA。
+维护分支保留提交历史；不要通过强制同步覆盖自定义提交。
 
-companion 的 TypeScript / source-map 默认导入适配会先归一化，因此当前版本应为 0 处差异。
-报告只比较我们已有的 vendored 文件；上游新增文件、代码生成语义和依赖变化仍需阅读源码。
-报告产生 warning，供升级审查使用，不自动接受变化。补丁冲突、golden 差异和构建错误会直接使任务失败。
+## 在应用 CI 试跑 fork 提交
 
-## 在升级分支落地
+GitHub Actions 的 **Application CI → Run workflow** 选择应用分支：
 
-1. 在升级分支运行 `node scripts/upstream.mjs pin <VALDI_TAG> [WIDGETS_TAG]`。
-   脚本一起修改 `valdi/MODULE.bazel` 的 `VALDI_TAG` 和 `valdi/.bazelrc` 的 registry URL；
-   内部子模块的 archive 已共用 `VALDI_URL` / `VALDI_PREFIX`，无需逐个换版本。
-2. 运行 `pnpm install --frozen-lockfile`、`node scripts/prepare-valdi.mjs`。
-   Bazel 应用 `valdi/bzl/patches/valdi/` 中的补丁并刷新 lock。补丁已被上游实现时，核对语义后从
-   `MODULE.bazel` 移除对应条目和补丁文件；仍需保留的改动则重新适配。不要为了通过 fetch 直接删掉冲突补丁。
-3. 运行 `node scripts/upstream.mjs report`，查看 `.ci/upstream/`。
-   按下表同步真正发生变化的部分，然后运行 `pnpm test`，审查 golden 差异和生成绑定。
-4. 在根目录运行 `pnpm build`；应用 Node 构建无需先编译原生 host 工具。
-   重新导出两端运行时，准备视觉依赖，运行 `pnpm build:android`、`pnpm build:ios`。
-5. 提交源代码、补丁、版本 pin 和更新后的 `valdi/MODULE.bazel.lock`；通过正常 PR CI 后，再在设备上检查
-   导航、输入、图片、SQL、原生桥接和热重载。Release / OTA 使用前另外验证匹配配置的运行时与 Hermes 字节码。
+- `valdi_commit` 留空：验证应用已固定的 fork 提交。
+- 填入完整的 fork commit SHA：只在 runner 中一起切换源码和 registry，运行相同的 npm、Android、iOS 任务。
+- `widgets_tag` 可选，填写 `valdi_commit` 时可一并指定；默认保留现有 Widgets 版本。
 
-| 我们维护的位置 | 升级时关注的上游内容 | 同步方式 |
+试跑不会提交、推送、改写本地 pin 或更新 vendored 源码。框架 fork 中的上游 Actions 保持关闭，
+验证入口在应用 CI，不执行上游整套示例构建或发布流程。
+
+每条任务的 `app-<target>-<run id>` artifact 包含：
+
+- `prepare.log`：源码获取、依赖解析失败的位置。
+- `upstream-pin.diff`：候选 fork commit、registry 和解析后 `MODULE.bazel.lock` 的变化。
+- `upstream/vendor.md` 和 `.diff`：应用使用的 companion 文件与 fork 源码的差异。
+- `test.log`：Kotlin、Objective-C、C++ golden 差异及适配测试。
+- `export.log`、`build.log`：运行时和宿主构建结果；原生任务还包含 APK 或模拟器 App。
+
+报告产生 warning 供审查，不自动接受差异。报告只比较已有 vendored 文件；上游新增文件、绑定生成语义
+仍需源码审查。绑定 golden、编译错误会使任务失败。
+
+## 在应用升级分支落地
+
+从最新 `main` 建立干净的升级分支，执行：
+
+```sh
+node scripts/upstream.mjs pin <FORK_COMMIT> [WIDGETS_TAG]
+pnpm install --frozen-lockfile
+node scripts/prepare-valdi.mjs
+node scripts/upstream.mjs report
+pnpm test
+pnpm build
+```
+
+`pin` 只接受不可变的完整 commit SHA，验证源码仓库与 registry 原 pin 一致后才同时修改两处。
+内部 Bazel 子模块共用相同 archive URL / prefix。源码准备会获取 fork，并由 Bazel 更新 lockfile。
+
+按下表适配 Node 移植部分，再重新导出 Android/iOS 运行时、准备视觉依赖，运行
+`pnpm build:android`、`pnpm build:ios`。提交应用 pin、registry、lockfile 和适配代码；CI 与设备验证通过后，
+合入 fork 的维护分支及应用 `main`。框架提交变化会触发运行时重新导出，即使迁移前后源码行为一致。
+
+| 维护位置 | 升级时关注的内容 | 验证方式 |
 | --- | --- | --- |
-| `valdi/bzl/patches/valdi/` | 补丁目标文件、Hermes VM/编译器接口、导出规则 | 保留补丁栈，逐个判断保留、改写或移除 |
-| `tools/valdi-rolldown/hermes.ts`、工具 package/lock | `JavaScriptUtils.cpp` 模块包装/文件头、Hermes 编译选项和版本 | 更新官方 hermes-compiler 固定版本，运行协议检查和 Release 装载验证 |
-| `valdi/third_party/hermes_v1/` | Hermes pin、构建参数、ABI | 与适配补丁一起审查，重新导出运行时 |
-| `tools/valdi-rolldown/vendor/companion/` | `compiler/companion/src/` 的 JSXProcessor、AST 及其依赖 | 按报告移植变化，保留 ESM 导入适配和本地声明 |
-| `valdi/modules/app_pages/src/sqlgen/`（过渡源码） | 原生 ClientSQL 连接与事务接口 | Drizzle 接入前保持数据库文件标识和现有行为，不恢复旧生成工具 |
-| `tools/valdi-rolldown/codegen/` | Swift 编译器的 parser、models、Kotlin/ObjC/C++ 生成器及模板 | 把语义变化移植到 TypeScript，再对照候选上游 golden |
-| `tools/valdi-rolldown/{pipeline,valdiTs,archive,resources}.ts` | 模块归档格式、运行时加载协议、资源约定 | 逐项适配我们自己的 Node 管线 |
-| `valdi/patches/@snap__valdi@1.2.1.patch` | npm CLI 的 Bazel 参数、export 行为 | CLI 独立升级时核对 patch，更新 pnpm lock |
-| `android/`、`ios/`、`valdi/native/` | 原生运行时 API、模块注册、生成绑定 ABI | 用匹配的新运行时编译并进行设备验证 |
+| fork 的框架源码和 `third-party/hermes_v1/` | 11 项自定义修改、Hermes 版本/API、原生导出规则 | 源码合并、运行时导出与设备验证 |
+| `tools/valdi-rolldown/hermes.ts`、工具 package/lock | fork 中的模块包装/文件头、Hermes 编译设置和版本 | 固定官方 compiler 版本，协议检查和 Release 装载验证 |
+| `tools/valdi-rolldown/vendor/companion/` | fork 的 `compiler/companion/src/` JSX 转换语义 | 差异报告、ESM 导入适配、源码审查 |
+| `tools/valdi-rolldown/codegen/` | Swift parser、models、Kotlin/ObjC/C++ 生成器和模板 | 移植语义，对比 fork 中提交的 golden |
+| `tools/valdi-rolldown/{pipeline,valdiTs,archive,resources}.ts` | 模块归档、运行时加载和资源协议 | 适配测试、Debug/Release 模块与设备检查 |
+| `valdi/modules/app_pages/src/sqlgen/`（过渡源码） | 原生 SQLite 连接和事务接口 | Drizzle 接入前保留文件标识和存储行为 |
+| `valdi/patches/@snap__valdi@1.2.1.patch` | npm CLI 的 Bazel 参数和 export 行为 | CLI 独立升级时审查 patch 和 pnpm lock |
+| `android/`、`ios/`、`valdi/native/` | 框架 API、模块注册、生成绑定 ABI | 匹配运行时编译、设备验证 |
 
-golden 使用候选上游源码中已提交的编译器输出，不运行它的 Swift 编译器。
-因此 golden 是我们代码生成器的兼容性门槛；它不覆盖所有上游功能，也不能替代运行时、UI、Release 和 OTA 验证。
+golden 使用 fork 中已提交的编译器输出，不运行 Swift 编译器。
+构建与 golden 不覆盖全部运行时行为；Release / OTA 使用前另外检查精简 Hermes、字节码、图片及原生桥接。

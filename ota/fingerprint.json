@@ -6,7 +6,6 @@
     "valdi/.bazelrc",
     "valdi/.bazelversion",
     "valdi/bzl/patches",
-    "valdi/third_party",
     "valdi/native"
   ],
   "android": [

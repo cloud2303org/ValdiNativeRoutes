@@ -4,43 +4,19 @@ module(name = "valdi_native_routes", version = "0.1")
 # version as Valdi.
 bazel_dep(name = "platforms", version = "1.1.0")
 
-# -- Valdi framework (https://github.com/Snapchat/Valdi) ---------------------
-VALDI_TAG = "beta-0.2.1"
-VALDI_URL = "https://github.com/Snapchat/Valdi/archive/" + VALDI_TAG + ".tar.gz"
-VALDI_PREFIX = "Valdi-" + VALDI_TAG
+# -- Maintained Valdi fork (upstream base: beta-0.2.1) -----------------------
+# Framework customizations and Hermes build inputs live in this fork's valdiroutes branch.
+# Pin immutable commits; scripts/upstream.mjs updates this and the matching registry together.
+VALDI_REPOSITORY = "cloud2303org/Valdi"
+VALDI_COMMIT = "4fb1c1af7aacc8b77d2fdb2fc0c38752ae847ef3"
+VALDI_URL = "https://github.com/" + VALDI_REPOSITORY + "/archive/" + VALDI_COMMIT + ".tar.gz"
+VALDI_PREFIX = "Valdi-" + VALDI_COMMIT
 
 bazel_dep(name = "valdi", version = "0.1")
 archive_override(
     module_name = "valdi",
     urls = [VALDI_URL],
     strip_prefix = VALDI_PREFIX,
-    # ClientSQL's py_binary used Bazel's native rule, which rules_python 1.9 launches without import paths
-    # ("No module named 'python'"), breaking .sq compilation and the hot reloader. Load the rules_python ones.
-    patches = [
-        "//bzl/patches/valdi:clientsql_rules_python.patch",
-        # Hermes V1 (260318099.0.4) instead of the 2024 Hermes Valdi pins; build file in //third_party/hermes_v1.
-        "//bzl/patches/valdi:hermes_v1.patch",
-        # Valdi's Hermes adapter ported to the Hermes V1 VM API.
-        "//bzl/patches/valdi:hermes_v1_adapter.patch",
-        # With modules precompiled to Hermes bytecode: Hermes in every flavor, no QuickJS, no JavaScriptCore.
-        "//bzl/patches/valdi:hermes_release.patch",
-        # terser 4.6 (Valdi's release minifier) can't parse ?. and ??; use the terser 5.44.1 already in the lockfile.
-        "//bzl/patches/valdi:terser5.patch",
-        # Hermes V1 runs async/await, ?., ?? and object spread natively (ES2016 output lowered them to helpers), and has
-        # the ES2021 library (replaceAll, Promise.allSettled).
-        "//bzl/patches/valdi:ts_target_es2020.patch",
-        # 16 KB-aligned libvaldi_runtime.so; lld's default is 4 KB on arm64/armv7.
-        "//bzl/patches/valdi:android_16kb_pages.patch",
-        # The exported xcframework misses the drawing module headers its own SCValdiDrawingModuleFactory.h imports.
-        "//bzl/patches/valdi:ios_export_drawing_hdrs.patch",
-        # Precompile Hermes bytecode for iOS release too; Valdi only does it for Android, and lean Hermes can't run source.
-        "//bzl/patches/valdi:ios_hermes_bytecode.patch",
-        # The custom module provider also resolves module images, so an over-the-air package carries its own images.
-        "//bzl/patches/valdi:custom_module_assets.patch",
-        # valdi_exported_library(native_deps): the app's C++ (@ExportModule implementations) linked into the runtime.
-        "//bzl/patches/valdi:export_native_deps.patch",
-    ],
-    patch_strip = 1,
 )
 
 # Valdi internal sub-modules: local_path_override in Valdi's own MODULE.bazel

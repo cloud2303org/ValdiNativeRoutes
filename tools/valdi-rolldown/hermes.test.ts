@@ -49,11 +49,11 @@ test('invalid JavaScript fails compilation without replacing the source entry', 
 test('upstream module protocol drift is rejected before emitting Release bytecode', t => {
   const dir = mkdtempSync(path.join(tmpdir(), 'valdi-hermes-contract-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const config = path.join(dir, 'valdi/third_party/hermes_v1/hermes.BUILD');
+  const config = path.join(dir, 'valdi/bazel-valdi/external/valdi+/third-party/hermes_v1/hermes.BUILD');
   const source = path.join(dir, 'valdi/bazel-valdi/external/valdi+/valdi/src/valdi/runtime/JavaScript/JavaScriptUtils.cpp');
   mkdirSync(path.dirname(config), { recursive: true });
   mkdirSync(path.dirname(source), { recursive: true });
-  writeFileSync(config, readFileSync(path.resolve(import.meta.dirname, '../../valdi/third_party/hermes_v1/hermes.BUILD')));
+  writeFileSync(config, readFileSync(path.resolve(import.meta.dirname, '../../valdi/bazel-valdi/external/valdi+/third-party/hermes_v1/hermes.BUILD')));
   const original = readFileSync(path.resolve(import.meta.dirname, '../../valdi/bazel-valdi/external/valdi+/valdi/src/valdi/runtime/JavaScript/JavaScriptUtils.cpp'), 'utf8');
   writeFileSync(source, original.replace('0x0100C634', '0x0100C635'));
   assert.throws(() => validateRuntimeContract(dir), /protocol changed/);

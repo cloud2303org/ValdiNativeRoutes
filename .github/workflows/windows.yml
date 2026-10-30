@@ -186,7 +186,11 @@ jobs:
           NO_PROXY: localhost,127.0.0.1,repo1.maven.org,dl.google.com,maven.google.com
         run: |
           Push-Location valdi
-          & $env:BAZEL_BIN aquery 'deps(//:valdi_runtime_android)' --config=stable_exec --repo_env=VALDI_PLATFORM_DEPENDENCIES=android --output=jsonproto --noinclude_artifacts --noinclude_commandline > ../.ci/windows-actions.json
+          # The AAR's native libraries are transitioned per client_repo_<arch> define
+          # (bzl/android/platform_transition.bzl). Analyzing without them asks for an
+          # Android cc_binary on the host platform and fails as incompatible, so use the
+          # same configuration as the export: export-android.sh's Windows branch.
+          & $env:BAZEL_BIN aquery 'deps(//:valdi_runtime_android)' --snap_flavor=platform_development --config=stable_exec --copt=-DANDROID_WITH_JNI --repo_env=VALDI_PLATFORM_DEPENDENCIES=android --define client_repo_arm32=true --define client_repo_arm64=true --define client_repo_x86_64=true "--android_platforms=@snap_platforms//os:android_arm32,@snap_platforms//os:android_arm64,@snap_platforms//os:android_x86_64" --output=jsonproto --noinclude_artifacts --noinclude_commandline > ../.ci/windows-actions.json
           $code = $LASTEXITCODE
           Pop-Location
           if ($code -ne 0) { exit $code }

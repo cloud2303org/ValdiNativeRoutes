@@ -27,7 +27,6 @@ import {
   inlineSourceMaps,
   precompile,
   sourceMapJson,
-  valdiSourceRoot,
   writeTsconfig,
   type Built,
 } from './pipeline';
@@ -62,8 +61,9 @@ for (const [name, compiled] of bazelOutputs) {
 const modules = appModules();
 // Gradle and Xcode call this file directly, without the install hook that writes the
 // modules' tsconfig.json. Rewrite them at the sources this host really has, so the
-// bundle reads the module tsconfig instead of failing every bare import.
-if (valdiSourceRoot()) for (const module of modules) writeTsconfig(module, modules);
+// bundle reads the module tsconfig instead of failing every bare import (a no-op when
+// this host has no fetched Valdi sources).
+for (const module of modules) writeTsconfig(module, modules);
 for (const module of modules) {
   const compiled = bazelOutputs.get(module.name);
   if (compiled) {

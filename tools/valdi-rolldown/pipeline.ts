@@ -65,9 +65,18 @@ const RUNTIME_MODULES = ['client_sql', 'coreutils', 'jasmine', 'source_map', 'va
  * changed. Valdi's sources are read through the bazel-valdi link the exports leave.
  */
 export function valdiSourceRoot(): string | undefined {
-  return [process.env.VALDI_SOURCE_ROOT, path.join(valdi, 'bazel-valdi/external/valdi+')]
-    .filter((candidate): candidate is string => Boolean(candidate))
-    .find(root => existsSync(path.join(root, 'modules/_configs/base.tsconfig.json')));
+  const candidates = [process.env.VALDI_SOURCE_ROOT, path.join(valdi, 'bazel-valdi/external/valdi+')].filter(
+    (candidate): candidate is string => Boolean(candidate),
+  );
+  // Bazel names each convenience link after its workspace and repoints it as it runs
+  // (prepare-valdi's output_base link, then the execroot), so take the first link that
+  // really holds the fetched sources instead of trusting one name.
+  if (existsSync(valdi)) {
+    for (const entry of readdirSync(valdi)) {
+      if (entry.startsWith('bazel-')) candidates.push(path.join(valdi, entry, 'external/valdi+'));
+    }
+  }
+  return candidates.find(root => existsSync(path.join(root, 'modules/_configs/base.tsconfig.json')));
 }
 
 export function writeTsconfig(module: ValdiModule, modules: ValdiModule[]): boolean {
@@ -75,14 +84,10 @@ export function writeTsconfig(module: ValdiModule, modules: ValdiModule[]): bool
     const value = path.relative(module.dir, to).split(path.sep).join('/');
     return value.startsWith('../') ? value : `./${value}`;
   };
-  // Prefer a source root that really holds Valdi's base config: CI can expose the
-  // bazel-valdi link before Bazel has fetched the module, and a tsconfig extending a
-  // missing file makes rolldown fail to resolve every bare import (`valibot`).
-  const sourceRoots = [process.env.VALDI_SOURCE_ROOT, path.join(valdi, 'bazel-valdi/external/valdi+')].filter(
-    (root): root is string => Boolean(root),
-  );
-  const valdiSources =
-    sourceRoots.find(root => existsSync(path.join(root, 'modules/_configs/base.tsconfig.json'))) ?? sourceRoots[sourceRoots.length - 1];
+  // Never write a config that extends a missing file: it silently drops Valdi's compiler
+  // options (JSX, lib, paths) and every import then fails to resolve.
+  const valdiSources = valdiSourceRoot();
+  if (!valdiSources) return false;
   const paths: Record<string, string[]> = {};
   for (const other of modules) {
     paths[`${other.name}/*`] = [other === module ? './*' : `${relative(other.dir)}/*`, ...other.generatedDirs.map(dir => `${relative(dir)}/*`)];

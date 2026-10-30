@@ -42,7 +42,15 @@ export async function compileNodeModule(
     if (existsSync(path.join(original.dir, 'res')))
       cpSync(path.join(original.dir, 'res'), path.join(temporary, 'res'), { recursive: true });
     const module = { ...original, dir: temporary, generatedDirs: [path.join(temporary, '.gen')] };
-    writeTsconfig(module, [module, ...dependencies]);
+    // Bazel runs this action in a sandbox with no install-hook tsconfig to fall back on,
+    // so say plainly why nothing compiles instead of emitting a config without Valdi's
+    // base compiler options.
+    if (!writeTsconfig(module, [module, ...dependencies])) {
+      throw new Error(
+        'Valdi sources are not prepared for the Node module compiler: neither VALDI_SOURCE_ROOT nor valdi/bazel-*/external/valdi+ ' +
+          'holds modules/_configs/base.tsconfig.json. Run: node scripts/prepare-valdi.mjs',
+      );
+    }
     const images = await findImages(module);
     const fonts = findFonts(module) ?? [];
     writeResTs(module, images, module.generatedDirs[0], fonts);

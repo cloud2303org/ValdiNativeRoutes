@@ -227,6 +227,13 @@ try {
         Assert-Equal $customBash (Resolve-GitBashPath $customBash) 'custom Git Bash'
     }
 
+    Test-Case 'Git Bash helper directories are derived from the executable' {
+        $defaultBash = Resolve-GitBashPath $null
+        $directories = Get-GitBashDirectories $defaultBash
+        Assert-True (Test-Path -LiteralPath $directories.UsrBin -PathType Container) "missing usr/bin: $($directories.UsrBin)"
+        Assert-True (Test-Path -LiteralPath $directories.Cmd -PathType Container) "missing cmd: $($directories.Cmd)"
+    }
+
     Test-Case 'missing explicit Git Bash is rejected' {
         Assert-Throws { Resolve-GitBashPath (Join-Path $tempRoot 'missing bash.exe') } 'was not found' 'missing Git Bash'
     }

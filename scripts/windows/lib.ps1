@@ -126,7 +126,8 @@ function Resolve-GitBashPath {
 function Get-GitBashDirectories {
     param([Parameter(Mandatory = $true)][string]$BashPath)
 
-    $gitRoot = Split-Path -LiteralPath (Split-Path -LiteralPath $BashPath -Parent) -Parent
+    # Split-Path -LiteralPath -Parent is an ambiguous parameter set in Windows PowerShell 5.1.
+    $gitRoot = [System.IO.Path]::GetDirectoryName([System.IO.Path]::GetDirectoryName($BashPath))
     return [pscustomobject]@{
         Root = $gitRoot
         UsrBin = Join-Path $gitRoot 'usr/bin'

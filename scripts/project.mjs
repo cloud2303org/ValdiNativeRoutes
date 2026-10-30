@@ -1,4 +1,5 @@
 // Root build commands only build; installing/launching an app belongs to the device workflow.
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkDependencies, checkRuntime, checkSources, checkVision, run, runPnpm } from './prerequisites.mjs';
@@ -19,7 +20,10 @@ function main() {
       runPnpm(['--dir', 'tools/valdi-rolldown', 'build', ...forwarded], root);
     } else {
       run(process.execPath, ['--test', 'scripts/tests/prerequisites.test.mjs', 'scripts/tests/upstream.test.mjs'], root);
-      const valdiSource = sourceOption >= 0 ? forwarded[sourceOption + 1] : path.join(root, 'valdi/bazel-valdi/external/valdi+');
+      const valdiSource = sourceOption >= 0 ? forwarded[sourceOption + 1] : [
+        path.join(root, 'valdi/.valdi-sources/external/valdi+'),
+        path.join(root, 'valdi/bazel-valdi/external/valdi+'),
+      ].find(dir => existsSync(path.join(dir, 'modules/_configs/base.tsconfig.json'))) ?? path.join(root, 'valdi/bazel-valdi/external/valdi+');
       // runtime-module.test.ts and the declaration fixtures read the Valdi sources from here;
       // the workspace's bazel-valdi link can point at an execroot that no longer has them.
       process.env.VALDI_SOURCE_ROOT ||= valdiSource;
@@ -29,7 +33,10 @@ function main() {
       const rolldownDir = path.join(root, 'tools/valdi-rolldown');
       const tsx = path.join(rolldownDir, 'node_modules/tsx/dist/cli.mjs');
       run(process.execPath, [tsx, '--test', 'resources.test.ts', 'hermes.test.ts', 'module-build.test.ts', 'runtime-module.test.ts'], rolldownDir);
-      run(process.execPath, [tsx, 'codegen/goldens.ts', ...forwarded], rolldownDir);
+      // The goldens compare against the same sources the tests used, whatever link holds them.
+      const goldensArgs = ['codegen/goldens.ts', ...forwarded];
+      if (sourceOption < 0) goldensArgs.push('--valdi', valdiSource);
+      run(process.execPath, [tsx, ...goldensArgs], rolldownDir);
     }
     return;
   }

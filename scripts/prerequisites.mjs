@@ -46,9 +46,14 @@ export function checkDependencies(root) {
   }
 }
 
-export function checkSources(root, sourceDir = path.join(root, 'valdi/bazel-valdi/external/valdi+')) {
-  if (!existsSync(path.join(sourceDir, 'modules/_configs/base.tsconfig.json'))) {
-    throw new Error(`Valdi sources are not prepared at ${sourceDir}. Run:\n  node scripts/prepare-valdi.mjs`);
+export function checkSources(root, sourceDir) {
+  const candidates = [
+    sourceDir,
+    path.join(root, 'valdi/.valdi-sources/external/valdi+'),
+    path.join(root, 'valdi/bazel-valdi/external/valdi+'),
+  ].filter(Boolean);
+  if (!candidates.some(dir => existsSync(path.join(dir, 'modules/_configs/base.tsconfig.json')))) {
+    throw new Error(`Valdi sources are not prepared at ${candidates.join(' or ')}. Run:\n  node scripts/prepare-valdi.mjs`);
   }
 }
 
@@ -65,6 +70,16 @@ export function prepareSources(root) {
   const fetchedConfig = path.join(outputBase, 'external/valdi+/modules/_configs/base.tsconfig.json');
   if (!existsSync(fetchedConfig)) {
     throw new Error('The fetched Valdi repository does not contain modules/_configs/base.tsconfig.json.');
+  }
+  // Bazel repoints each `bazel-*` convenience link as it runs (output base first, then the
+  // execroot), so module tsconfigs that name those links can lose their base config mid-job.
+  // Keep one link Bazel never touches for the compiler to point at.
+  const stable = path.join(cwd, '.valdi-sources');
+  const stableExisting = lstatSync(stable, { throwIfNoEntry: false });
+  if (stableExisting && !stableExisting.isSymbolicLink()) throw new Error(`${stable} is not a symlink; refusing to replace it.`);
+  if (!stableExisting || realpathSync(stable) !== realpathSync(outputBase)) {
+    if (stableExisting) unlinkSync(stable);
+    symlinkSync(outputBase, stable, 'dir');
   }
   // Before a real build there is no execroot symlink forest. Expose output_base/external at the existing TS path;
   // Bazel replaces this convenience symlink with the execroot on its first real build.

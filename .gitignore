@@ -1,5 +1,6 @@
 .DS_Store
 valdi/bazel-*
+valdi/.valdi-sources
 valdi/node_modules
 valdi/modules/*/tsconfig.json
 android/.gradle

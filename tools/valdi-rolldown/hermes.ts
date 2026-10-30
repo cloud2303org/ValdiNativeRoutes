@@ -6,6 +6,7 @@ import { availableParallelism, tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import type { ArchiveEntries } from './archive';
+import { valdiSourceRoot } from './pipeline';
 
 const run = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -22,7 +23,9 @@ export function formatJsModule(source: string): string {
 
 /** Fail explicitly when an upstream upgrade changes the protocol this adapter implements. */
 export function validateRuntimeContract(directory = root): string {
-  const sources = process.env.VALDI_SOURCE_ROOT ?? path.join(directory, 'valdi/bazel-valdi/external/valdi+');
+  const sources = process.env.VALDI_SOURCE_ROOT
+    ?? (directory === root ? valdiSourceRoot() : undefined)
+    ?? path.join(directory, 'valdi/bazel-valdi/external/valdi+');
   const config = readFileSync(path.join(sources, 'third-party/hermes_v1/hermes.BUILD'), 'utf8');
   const version = /HERMES_RELEASE_VERSION=.*?(\d+\.\d+\.\d+)/.exec(config)?.[1];
   if (!version) throw new Error('Cannot read the runtime Hermes version from the fork third-party/hermes_v1/hermes.BUILD');

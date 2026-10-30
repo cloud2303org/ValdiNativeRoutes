@@ -65,9 +65,13 @@ const RUNTIME_MODULES = ['client_sql', 'coreutils', 'jasmine', 'source_map', 'va
  * changed. Valdi's sources are read through the bazel-valdi link the exports leave.
  */
 export function valdiSourceRoot(): string | undefined {
-  const candidates = [process.env.VALDI_SOURCE_ROOT, path.join(valdi, 'bazel-valdi/external/valdi+')].filter(
-    (candidate): candidate is string => Boolean(candidate),
-  );
+  // `.valdi-sources` is prepare-valdi's link to the output base and is the only one Bazel
+  // does not repoint while it runs, so configs written from it stay valid for the job.
+  const candidates = [
+    process.env.VALDI_SOURCE_ROOT,
+    path.join(valdi, '.valdi-sources/external/valdi+'),
+    path.join(valdi, 'bazel-valdi/external/valdi+'),
+  ].filter((candidate): candidate is string => Boolean(candidate));
   // Bazel names each convenience link after its workspace and repoints it as it runs
   // (prepare-valdi's output_base link, then the execroot), so take the first link that
   // really holds the fetched sources instead of trusting one name.

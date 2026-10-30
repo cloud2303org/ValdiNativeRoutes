@@ -100,5 +100,17 @@ if (-not $SkipVisionPrepare -and ($visionLibraries | Where-Object { -not (Test-P
 }
 
 if ($BazelPath) { $env:BAZEL_BIN = (Resolve-Path -LiteralPath $BazelPath).Path }
+
+# module-build/modules is a symlink in git. A Windows checkout without symlink
+# support (a limited runner account) writes it as a text file, so the module
+# workspace has no modules/<name> packages; a junction needs no privilege.
+$modulesLink = Join-Path $root 'module-build/modules'
+if (Test-Path -LiteralPath $modulesLink -PathType Leaf) {
+    Remove-Item -LiteralPath $modulesLink -Force
+}
+if (-not (Test-Path -LiteralPath $modulesLink -PathType Container)) {
+    New-Item -ItemType Junction -Path $modulesLink -Target (Join-Path $root 'valdi/modules') | Out-Null
+}
+
 & $script:Node (Join-Path $root 'scripts/project.mjs') 'android'
 exit $LASTEXITCODE

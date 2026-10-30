@@ -105,7 +105,10 @@ maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
 
 # Use Google's artifact endpoint directly: maven.google.com adds a redirect
 # through a host that is unreachable from the WSL build environment.
+# repo1.maven.org answers 429 to the shared CI egress address, so ask a Maven
+# Central mirror first; it serves the same coordinates and checksums.
 MAVEN_REPOSITORIES = [
+    "https://maven.aliyun.com/repository/public",
     "https://repo1.maven.org/maven2",
     "https://dl.google.com/dl/android/maven2",
 ]

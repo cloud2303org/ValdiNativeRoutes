@@ -91,7 +91,10 @@ bazel_dep(name = "rules_jvm_external", version = "6.6")
 # Root install tags select the direct Google artifact endpoint for all native
 # Android namespaces. Artifact/version declarations remain in Valdi and rules_android.
 maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+# repo1.maven.org answers 429 to the shared CI egress address, so ask a Maven
+# Central mirror first; it serves the same coordinates and checksums.
 MAVEN_REPOSITORIES = [
+    "https://maven.aliyun.com/repository/public",
     "https://repo1.maven.org/maven2",
     "https://dl.google.com/dl/android/maven2",
 ]

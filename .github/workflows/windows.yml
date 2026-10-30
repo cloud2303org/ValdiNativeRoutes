@@ -105,7 +105,15 @@ jobs:
           git -C $fork -c core.autocrlf=false checkout --detach FETCH_HEAD
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "VALDI_CHECKOUT=$fork" >> $env:GITHUB_ENV
-          $bazel = (Get-Command bazelisk).Source
+          $bazelCommand = Get-Command bazel -ErrorAction SilentlyContinue
+          if (-not $bazelCommand) { $bazelCommand = Get-Command bazelisk -ErrorAction Stop }
+          $bazel = $bazelCommand.Source
+          Push-Location valdi
+          $version = & $bazel --version
+          $code = $LASTEXITCODE
+          Pop-Location
+          $expected = (Get-Content valdi/.bazelversion -Raw).Trim()
+          if ($code -ne 0 -or $version.Trim() -ne "bazel $expected") { throw "Expected Bazel $expected, got $version" }
           "BAZEL_BIN=$bazel" >> $env:GITHUB_ENV
       - name: Test Windows entry point helpers
         run: |

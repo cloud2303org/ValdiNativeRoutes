@@ -8,6 +8,10 @@ import { unpack } from './archive';
 import { compileNodeModule } from './module-build';
 import { root } from './pipeline';
 
+// libvips keeps decoded images (and their file handles) in a cache, and Windows then
+// refuses to delete the fixture directory. These fixtures are one-shot, so no cache.
+sharp.cache(false);
+
 function fixture(t: { after: (fn: () => void) => void }) {
   const dir = mkdtempSync(path.join(tmpdir(), 'node-valdi-fixture-'));
   // Windows keeps a short-lived lock on files sharp just wrote.

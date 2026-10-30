@@ -177,3 +177,7 @@ The optional repository variable `WINDOWS_GIT_PROXY_URL` routes only Git HTTPS
 requests to GitHub for the Windows CI job. The home runner uses its existing
 `http://127.0.0.1:10809` listener; this does not change global Git or system proxy
 settings. Remove the variable to use the default network path.
+
+Set the repository variable `WINDOWS_BAZEL_PATH` to the runner's preinstalled
+Bazel executable when it is not on PATH. CI verifies it against
+`valdi/.bazelversion` before building.

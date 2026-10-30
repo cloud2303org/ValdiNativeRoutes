@@ -65,11 +65,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
-        with:
-          module-root: valdi
-          bazelisk-cache: true
-          repository-cache: true
       - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
         with:
           packages: 'platforms;android-37.0 build-tools;37.0.0 ndk;27.1.12297006 cmake;3.22.1'
@@ -78,6 +73,7 @@ jobs:
         env:
           REQUESTED_VALDI_COMMIT: ${{ inputs.valdi_commit }}
           REQUESTED_WIDGETS_TAG: ${{ inputs.widgets_tag }}
+          WINDOWS_BAZEL_PATH: ${{ vars.WINDOWS_BAZEL_PATH }}
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force .ci | Out-Null
@@ -105,9 +101,14 @@ jobs:
           git -C $fork -c core.autocrlf=false checkout --detach FETCH_HEAD
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "VALDI_CHECKOUT=$fork" >> $env:GITHUB_ENV
-          $bazelCommand = Get-Command bazel -ErrorAction SilentlyContinue
-          if (-not $bazelCommand) { $bazelCommand = Get-Command bazelisk -ErrorAction Stop }
-          $bazel = $bazelCommand.Source
+          if ($env:WINDOWS_BAZEL_PATH) {
+            if (-not (Test-Path -LiteralPath $env:WINDOWS_BAZEL_PATH -PathType Leaf)) { throw 'WINDOWS_BAZEL_PATH does not exist' }
+            $bazel = (Resolve-Path -LiteralPath $env:WINDOWS_BAZEL_PATH).Path
+          } else {
+            $bazelCommand = Get-Command bazel -ErrorAction SilentlyContinue
+            if (-not $bazelCommand) { $bazelCommand = Get-Command bazelisk -ErrorAction Stop }
+            $bazel = $bazelCommand.Source
+          }
           Push-Location valdi
           $version = & $bazel --version
           $code = $LASTEXITCODE

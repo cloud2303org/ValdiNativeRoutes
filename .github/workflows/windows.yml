@@ -44,6 +44,25 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      - name: Verify the shared Bazel disk cache is writable
+        # The cache is shared with local builds. If an elevated shell creates it with a
+        # protected DACL that omits the runner account, Bazel stops with only the cache
+        # path in its message ("Error initializing RemoteModule"), so fail here instead.
+        run: |
+          $option = [regex]::Match((Get-Content valdi/.bazelrc -Raw), '(?m)^build --disk_cache=(.+)$')
+          if (-not $option.Success) { throw 'valdi/.bazelrc does not configure a Bazel disk cache' }
+          $cache = $option.Groups[1].Value.Trim()
+          if ($cache.StartsWith('~/')) { $cache = Join-Path $env:USERPROFILE $cache.Substring(2) }
+          $cache = $cache -replace '/', '\'
+          $account = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+          try {
+            New-Item -ItemType Directory -Force -Path $cache -ErrorAction Stop | Out-Null
+            $probe = Join-Path $cache "writable-$([guid]::NewGuid().ToString('N'))"
+            Set-Content -LiteralPath $probe -Value 'probe' -NoNewline -ErrorAction Stop
+            Remove-Item -LiteralPath $probe -Force -ErrorAction Stop
+          } catch {
+            throw "Bazel disk cache '$cache' is not writable by $account ($($_.Exception.Message)). Grant the runner account modify rights, for example: icacls `"$cache`" /grant `"${account}:(OI)(CI)M`""
+          }
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'

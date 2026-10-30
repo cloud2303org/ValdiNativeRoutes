@@ -96,6 +96,13 @@ quoted rc options, but Bazel warns that it can break builds; prefer `C:/b` or
 another short path without spaces.
 The wrapper reuses the default user Bazel repository cache when present; pass
 `-RepositoryCache C:\path\to\cache\repos\v1` to point at another cache.
+Bazel's disk action cache (`~/.cache/bazel-disk-cache`, from `valdi/.bazelrc`
+and `module-build/.bazelrc`) is shared with local builds. A non-elevated
+runner, such as the self-hosted GitHub Actions runner, therefore needs an ACE
+for its own account on that directory. If an elevated shell re-creates it with
+a protected DACL that omits that account, Bazel stops with only the cache path
+and `Error initializing RemoteModule`; re-grant the account, for example
+`icacls "$env:USERPROFILE\.cache" /grant "windows\user:(OI)(CI)F"`.
 For offline Go repository fetches, pass `-GoModCache C:\path\to\gomodcache`;
 the wrapper then sets `GOPROXY=off`. `-Distdir` is forwarded to Bazel, but
 pinned Valdi module archives must also be reachable or already present in the

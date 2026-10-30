@@ -149,7 +149,9 @@ jobs:
           # addresses direct.
           HTTPS_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
           HTTP_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
-          NO_PROXY: localhost,127.0.0.1
+          # Maven Central and dl.google.com reset connections through the local proxy but
+          # work direct, so keep them out of it (Bazel's coursier artifact fetches).
+          NO_PROXY: localhost,127.0.0.1,repo1.maven.org,dl.google.com,maven.google.com
         run: |
           & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-build.ps1 -Integration -BazelPath $env:BAZEL_BIN 2>&1 | Tee-Object .ci/windows-tests.log
           exit $LASTEXITCODE
@@ -159,7 +161,9 @@ jobs:
           # out with "Connect timed out" while Git fetches already succeed through the proxy.
           HTTPS_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
           HTTP_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
-          NO_PROXY: localhost,127.0.0.1
+          # Maven Central and dl.google.com reset connections through the local proxy but
+          # work direct, so keep them out of it (Bazel's coursier artifact fetches).
+          NO_PROXY: localhost,127.0.0.1,repo1.maven.org,dl.google.com,maven.google.com
         run: |
           & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/build-android.ps1 -ValdiCheckout $env:VALDI_CHECKOUT -BazelPath $env:BAZEL_BIN -JavaHome $env:JAVA_HOME -AndroidHome $env:ANDROID_HOME -BazelArgs 'build --experimental_disk_cache_gc_max_size=3G' 2>&1 | Tee-Object .ci/windows-build.log
           exit $LASTEXITCODE
@@ -174,7 +178,9 @@ jobs:
         env:
           HTTPS_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
           HTTP_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
-          NO_PROXY: localhost,127.0.0.1
+          # Maven Central and dl.google.com reset connections through the local proxy but
+          # work direct, so keep them out of it (Bazel's coursier artifact fetches).
+          NO_PROXY: localhost,127.0.0.1,repo1.maven.org,dl.google.com,maven.google.com
         run: |
           Push-Location valdi
           & $env:BAZEL_BIN aquery 'deps(//:valdi_runtime_android)' --config=stable_exec --repo_env=VALDI_PLATFORM_DEPENDENCIES=android --output=jsonproto --noinclude_artifacts --noinclude_commandline > ../.ci/windows-actions.json

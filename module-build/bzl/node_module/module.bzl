@@ -28,11 +28,12 @@ def _compiled_impl(ctx):
         for module in dep[NodeValdiModuleInfo].modules:
             dependencies[module.name] = module
     outputs = [archive, source_map, kotlin, resources, manifest] + objc + cpp
-    ctx.actions.run_shell(
+    # Run Node directly: Windows MSYS shells crash inside Bazel's exec "$@" pattern.
+    ctx.actions.run(
         inputs = depset(ctx.files._tools + [dep.resources for dep in dependencies.values()], transitive = [inputs]),
         outputs = outputs,
-        command = 'exec "$@"',
-        arguments = [NODE, TOOLS + "/node_modules/tsx/dist/cli.mjs", TOOLS + "/module-build.ts",
+        executable = NODE,
+        arguments = [TOOLS + "/node_modules/tsx/dist/cli.mjs", TOOLS + "/module-build.ts",
                      "--module", name, "--out", archive.dirname, "--ios-module-name", ios_name,
                      "--deps", json.encode([{"name": dep.name, "generatedDir": dep.resources.path + "/ts"} for dep in dependencies.values()]),
                      "--mode", "release" if ctx.attr.release else "debug"],

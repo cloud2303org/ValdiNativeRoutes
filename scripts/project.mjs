@@ -42,7 +42,9 @@ function main() {
   checkVision(root, platform);
   if (platform === 'android') {
     buildNodeModules('android', false, true);
-    run('./gradlew', [':app:assembleDebug', ...forwarded], path.join(root, 'android'));
+    // Node 24 refuses to execute Gradle's .cmd wrapper directly, so route through cmd.exe on Windows.
+    if (process.platform === 'win32') run('cmd.exe', ['/d', '/s', '/c', 'gradlew.bat', ':app:assembleDebug', ...forwarded], path.join(root, 'android'));
+    else run('./gradlew', [':app:assembleDebug', ...forwarded], path.join(root, 'android'));
     return;
   }
   const cwd = path.join(root, 'ios');

@@ -42,12 +42,12 @@ export function validateRuntimeContract(directory = root): string {
 export function compilerBytecodeVersion(info: string, expectedRelease: string, platform = process.platform): number {
   const release = /Hermes release version:\s*(\S+)/.exec(info)?.[1];
   const bytecodeVersion = Number(/HBC bytecode version:\s*(\d+)/.exec(info)?.[1]);
-  // This exact pinned npm release ships a Linux binary with the upstream banner.
+  // This exact pinned npm release ships Linux and Windows binaries with the upstream banner.
   // Package/runtime version equality is still checked by hermesCompiler(); do
   // not silently accept other mismatches when upgrading the compiler.
-  const knownLinuxBanner = platform === 'linux' && expectedRelease === '260318099.0.4'
+  const knownPinnedBanner = ['linux', 'win32'].includes(platform) && expectedRelease === '260318099.0.4'
     && release === '1.0.0' && bytecodeVersion === 99;
-  if ((release !== expectedRelease && !knownLinuxBanner)
+  if ((release !== expectedRelease && !knownPinnedBanner)
     || !Number.isSafeInteger(bytecodeVersion) || bytecodeVersion <= 0) {
     throw new Error(`Unexpected Hermes compiler version: ${info.trim()}`);
   }

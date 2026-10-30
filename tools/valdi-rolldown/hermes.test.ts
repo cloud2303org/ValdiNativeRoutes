@@ -7,16 +7,18 @@ import path from 'node:path';
 import test from 'node:test';
 import { compilerBytecodeVersion, formatJsModule, hermesCompiler, precompile, validateRuntimeContract } from './hermes';
 
-test('accepts the pinned Linux compiler banner while rejecting unknown release or bytecode mismatches', () => {
+test('accepts the pinned Linux and Windows compiler banners while rejecting unknown mismatches', () => {
   const release = '260318099.0.4';
   const banner = (version: string, bytecode = '99') =>
     `Hermes JavaScript compiler.\n  Hermes release version: ${version}\n  HBC bytecode version: ${bytecode}\n`;
   assert.equal(compilerBytecodeVersion(banner(release), release, 'darwin'), 99);
   assert.equal(compilerBytecodeVersion(banner('1.0.0'), release, 'linux'), 99);
+  assert.equal(compilerBytecodeVersion(banner('1.0.0'), release, 'win32'), 99);
   for (const [info, expected, platform] of [
     [banner('1.0.0'), release, 'darwin'],
-    [banner('1.0.0'), release, 'win32'],
     [banner('1.0.0', '100'), release, 'linux'],
+    [banner('1.0.0', '100'), release, 'win32'],
+    [banner('1.0.0'), '260318099.0.5', 'win32'],
     [banner('1.0.0'), '260318099.0.5', 'linux'],
     [banner('2.0.0'), release, 'linux'],
     [banner(release, '0'), release, 'linux'],

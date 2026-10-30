@@ -14,7 +14,9 @@ function fixture(t) {
     writeFileSync(file, value);
   };
   write('valdi/MODULE.bazel', `VALDI_REPOSITORY = "ExampleOrg/Valdi"\nVALDI_COMMIT = "${'a'.repeat(40)}"\nWIDGETS_TAG = "widgets-old"\n# application overrides stay here\n`);
-  write('valdi/.bazelrc', `common --registry=https://raw.githubusercontent.com/ExampleOrg/Valdi/${'a'.repeat(40)}/registry\nbuild --valdi_js_engine=hermes\n`);
+  write('valdi/.bazelrc', `common:macos --registry=https://raw.githubusercontent.com/ExampleOrg/Valdi/${'a'.repeat(40)}/registry\ncommon:linux --registry=https://raw.githubusercontent.com/ExampleOrg/Valdi/${'a'.repeat(40)}/registry\ncommon:windows --registry=https://raw.githubusercontent.com/ExampleOrg/Valdi/${'a'.repeat(40)}/registry\ncommon --registry=https://bcr.bazel.build\nbuild --valdi_js_engine=hermes\n`);
+  write('module-build/MODULE.bazel', `VALDI_REPOSITORY = "ExampleOrg/Valdi"\nVALDI_COMMIT = "${'a'.repeat(40)}"\n`);
+  write('module-build/.bazelrc', `common:macos --registry=https://raw.githubusercontent.com/ExampleOrg/Valdi/${'a'.repeat(40)}/registry\ncommon:linux --registry=https://raw.githubusercontent.com/ExampleOrg/Valdi/${'a'.repeat(40)}/registry\ncommon:windows --registry=https://raw.githubusercontent.com/ExampleOrg/Valdi/${'a'.repeat(40)}/registry\n`);
   return { root, write, read: name => readFileSync(path.join(root, name), 'utf8') };
 }
 
@@ -23,7 +25,9 @@ test('a fork commit update keeps source and registry together while preserving W
   const commit = 'b'.repeat(40);
   pinValdi(root, commit);
   assert.equal(read('valdi/MODULE.bazel'), `VALDI_REPOSITORY = "ExampleOrg/Valdi"\nVALDI_COMMIT = "${commit}"\nWIDGETS_TAG = "widgets-old"\n# application overrides stay here\n`);
-  assert.equal(read('valdi/.bazelrc'), `common --registry=https://raw.githubusercontent.com/ExampleOrg/Valdi/${commit}/registry\nbuild --valdi_js_engine=hermes\n`);
+  assert.equal(read('valdi/.bazelrc'), `common:macos --registry=https://raw.githubusercontent.com/ExampleOrg/Valdi/${commit}/registry\ncommon:linux --registry=https://raw.githubusercontent.com/ExampleOrg/Valdi/${commit}/registry\ncommon:windows --registry=https://raw.githubusercontent.com/ExampleOrg/Valdi/${commit}/registry\ncommon --registry=https://bcr.bazel.build\nbuild --valdi_js_engine=hermes\n`);
+  assert.equal(read('module-build/MODULE.bazel'), `VALDI_REPOSITORY = "ExampleOrg/Valdi"\nVALDI_COMMIT = "${commit}"\n`);
+  assert.equal(read('module-build/.bazelrc'), `common:macos --registry=https://raw.githubusercontent.com/ExampleOrg/Valdi/${commit}/registry\ncommon:linux --registry=https://raw.githubusercontent.com/ExampleOrg/Valdi/${commit}/registry\ncommon:windows --registry=https://raw.githubusercontent.com/ExampleOrg/Valdi/${commit}/registry\n`);
   pinValdi(root, commit, 'widgets-new');
   assert.match(read('valdi/MODULE.bazel'), /WIDGETS_TAG = "widgets-new"/);
 });
@@ -32,6 +36,7 @@ test('mutable refs, invalid inputs and mismatched registry pins cannot leave a h
   const { root, write, read } = fixture(t);
   const before = read('valdi/MODULE.bazel');
   const registry = read('valdi/.bazelrc');
+  const moduleBuildRegistry = read('module-build/.bazelrc');
   for (const ref of ['main', 'beta-0.3.0', '../../main', 'a'.repeat(39)]) {
     assert.throws(() => pinValdi(root, ref), /immutable 40-character/);
     assert.equal(read('valdi/MODULE.bazel'), before);
@@ -40,10 +45,14 @@ test('mutable refs, invalid inputs and mismatched registry pins cannot leave a h
   assert.throws(() => pinValdi(root, 'b'.repeat(40), '../../widgets'), /explicit Widgets tag/);
   for (const invalid of ['# missing registry\n', registry.replace('ExampleOrg', 'DifferentOrg'), registry.replace('a'.repeat(40), 'c'.repeat(40))]) {
     write('valdi/.bazelrc', invalid);
-    assert.throws(() => pinValdi(root, 'b'.repeat(40)), /unique matching Valdi fork commit and registry/);
+    assert.throws(() => pinValdi(root, 'b'.repeat(40)), /Valdi (?:fork|registry) pins/);
     assert.equal(read('valdi/MODULE.bazel'), before);
     assert.equal(read('valdi/.bazelrc'), invalid);
   }
+  write('valdi/.bazelrc', registry);
+  write('module-build/.bazelrc', moduleBuildRegistry.replace('ExampleOrg', 'DifferentOrg'));
+  assert.throws(() => pinValdi(root, 'b'.repeat(40)), /registry pins in module-build/);
+  assert.equal(read('valdi/MODULE.bazel'), before);
 });
 
 test('an absent Widgets declaration rejects an explicit Widgets update before either file is written', t => {

@@ -41,9 +41,10 @@ def invoke_node_compiler(ctx, name, base, outputs, module_directory, dependencie
         "compilationMode": ctx.attr.compilation_mode,
     }
     ctx.actions.write(manifest, json.encode(spec))
-    ctx.actions.run_shell(
-        command = 'exec "$@"',
-        arguments = [NODE, TOOLS + "/node_modules/tsx/dist/cli.mjs", TOOLS + "/runtime-module.ts", manifest.path],
+    # Run Node directly: Windows MSYS shells crash inside Bazel's exec "$@" pattern.
+    ctx.actions.run(
+        executable = NODE,
+        arguments = [TOOLS + "/node_modules/tsx/dist/cli.mjs", TOOLS + "/runtime-module.ts", manifest.path],
         inputs = depset(ctx.files.srcs + ctx.files.res + [manifest] + ctx.files._node_tools,
                         transitive = dependency_inputs),
         outputs = outputs,

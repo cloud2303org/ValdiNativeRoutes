@@ -42,7 +42,11 @@ for (const dependency of [lock.opencv, lock.ncnn]) {
       // A pre-extracted tree is accepted only from this just-verified archive.
       fs.rmSync(source, {recursive: true, force: true});
     }
-    if (dependency.file.endsWith('.zip')) run('unzip', ['-q', archive, '-d', path.join(vendor, 'src')]);
+    if (dependency.file.endsWith('.zip')) {
+      // Windows has bsdtar but does not ship Info-ZIP's unzip command.
+      if (process.platform === 'win32') run('tar', ['-xf', archive, '-C', path.join(vendor, 'src')]);
+      else run('unzip', ['-q', archive, '-d', path.join(vendor, 'src')]);
+    }
     else run('tar', ['-xzf', archive, '-C', path.join(vendor, 'src')]);
     fs.writeFileSync(stamp, JSON.stringify({url: dependency.url, sha256: dependency.sha256}, null, 2) + '\n');
   } else if (JSON.parse(fs.readFileSync(stamp, 'utf8')).sha256 !== dependency.sha256) {

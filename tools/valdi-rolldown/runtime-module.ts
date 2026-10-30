@@ -29,7 +29,7 @@ export interface RuntimeModuleSpec {
 
 export async function compileRuntimeModule(spec: RuntimeModuleSpec, execroot = process.cwd()): Promise<void> {
   if (!['js_bytecode', 'js'].includes(spec.compilationMode)) throw new Error(`Unsupported runtime compilation mode ${spec.compilationMode}`);
-  const original = path.resolve(execroot, spec.moduleDirectory);
+  const original = path.resolve(execroot, spec.moduleDirectory).split(path.sep).join('/');
   // Builtins are compiled from the pinned fork; app modules use module-build.ts.
   const marker = '/src/valdi_modules/src/valdi/';
   const index = original.lastIndexOf(marker);
@@ -66,7 +66,7 @@ export async function compileRuntimeModule(spec: RuntimeModuleSpec, execroot = p
     paths.tslib = [path.join(modules, 'valdi_core/src/tslib')];
     paths.Valdi = [path.join(modules, 'valdi_core/src/Valdi')];
     paths.jasmine = [path.join(modules, 'jasmine/src/jasmine.d.ts')];
-    const ownGlobals = sources.some(file => file.endsWith('/types/globals.d.ts'));
+    const ownGlobals = sources.some(file => file.split(path.sep).join('/').endsWith('/types/globals.d.ts'));
     const config = {
       extends: path.join(upstream, 'modules/_configs/base.tsconfig.json'),
       compilerOptions: {
@@ -114,7 +114,7 @@ export async function compileRuntimeModule(spec: RuntimeModuleSpec, execroot = p
     const emitted = declarationProgram.emit(undefined, (file, content, _bom, _error, sourceFiles) => {
       const source = sourceFiles?.[0];
       if (source && !path.relative(temporary, source.fileName).startsWith('..')) {
-        declarations.set(path.relative(temporary, source.fileName).replace(/\.(tsx?|js)$/, '.d.ts'), content);
+        declarations.set(path.relative(temporary, source.fileName).split(path.sep).join('/').replace(/\.(tsx?|js)$/, '.d.ts'), content);
       }
     });
     if (emitted.emitSkipped || emitted.diagnostics.length) {

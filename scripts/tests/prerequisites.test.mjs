@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { checkRuntime, checkSources, checkVision } from '../prerequisites.mjs';
+import { checkRuntime, checkSources, checkVision, runPnpm } from '../prerequisites.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -65,6 +65,21 @@ test('a changed runtime compiler invalidates the export', t => {
   const { root, write } = fixture(t);
   write('tools/valdi-rolldown/runtime-module.ts', 'changed Node compiler');
   assert.throws(() => checkRuntime(root, 'android'), /runtime is out of date/);
+});
+
+test('Windows routes pnpm through bundled Corepack without invoking a batch shim', t => {
+  const platform = process.platform;
+  const executable = process.env.npm_execpath;
+  t.after(() => {
+    if (executable === undefined) delete process.env.npm_execpath;
+    else process.env.npm_execpath = executable;
+  });
+  delete process.env.npm_execpath;
+  if (platform !== 'win32') {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    t.after(() => Object.defineProperty(process, 'platform', { value: platform }));
+  }
+  runPnpm(['--version'], repository);
 });
 
 test('the removed legacy backend environment variable cannot select a compiler or invalidate Node exports', t => {

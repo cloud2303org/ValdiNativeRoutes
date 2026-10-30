@@ -1,6 +1,7 @@
 import groovy.json.JsonSlurper
 import java.io.ByteArrayOutputStream
 import javax.inject.Inject
+import org.gradle.api.provider.ListProperty
 import org.gradle.process.ExecOperations
 
 plugins {
@@ -144,12 +145,12 @@ abstract class ValdiOtaInfo : DefaultTask() {
  * The Valdi modules tools/valdi-rolldown builds (app_pages, and the npm packages it bundles) as assets: JavaScript with
  * inline source maps in debug builds, Hermes bytecode and <module>.map.json in release builds, as Valdi ships them;
  * and app_pages' res/ images as drawables. scripts/export-android.sh leaves the modules out of the aar. Runs `pnpm`
- * from the PATH Gradle was started with, or -PvaldiPnpm=<path>; node must be on that PATH too.
+ * through scripts/pnpm.mjs on Windows, or pnpm from the PATH elsewhere.
  */
 abstract class ValdiModules : DefaultTask() {
     @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE) abstract val sources: ConfigurableFileCollection
     @get:Input abstract val release: Property<Boolean>
-    @get:Input abstract val pnpm: Property<String>
+    @get:Input abstract val pnpm: ListProperty<String>
     @get:Internal abstract val toolDir: DirectoryProperty
     @get:OutputDirectory abstract val outputDir: DirectoryProperty
     @get:OutputDirectory abstract val resDir: DirectoryProperty
@@ -162,7 +163,7 @@ abstract class ValdiModules : DefaultTask() {
         val mode = if (release.get()) listOf("--release") else emptyList()
         execOperations.exec {
             workingDir = toolDir.get().asFile
-            commandLine(listOf(pnpm.get(), "exec", "tsx", "build.ts", "--out", out.path, "--res", resDir.get().asFile.path) + mode)
+            commandLine(pnpm.get() + listOf("exec", "tsx", "build.ts", "--out", out.path, "--res", resDir.get().asFile.path) + mode)
         }
     }
 }
@@ -175,7 +176,7 @@ abstract class ValdiModules : DefaultTask() {
  */
 abstract class ValdiCodegenCheck : DefaultTask() {
     @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE) abstract val sources: ConfigurableFileCollection
-    @get:Input abstract val pnpm: Property<String>
+    @get:Input abstract val pnpm: ListProperty<String>
     @get:Internal abstract val repoDir: DirectoryProperty
     @get:Internal abstract val generatedDir: DirectoryProperty
     @get:Internal abstract val exportInfo: RegularFileProperty
@@ -189,8 +190,10 @@ abstract class ValdiCodegenCheck : DefaultTask() {
         val result = execOperations.exec {
             workingDir = repo.resolve("tools/valdi-rolldown")
             commandLine(
-                pnpm.get(), "exec", "tsx", "codegen.ts",
-                "--kotlin-out", generatedDir.get().asFile.path, "--cpp-out", cppDir.path, "--check",
+                pnpm.get() + listOf(
+                    "exec", "tsx", "codegen.ts",
+                    "--kotlin-out", generatedDir.get().asFile.path, "--cpp-out", cppDir.path, "--check",
+                ),
             )
             isIgnoreExitValue = true
         }
@@ -220,7 +223,13 @@ val valdiCodegenCheck = tasks.register<ValdiCodegenCheck>("valdiCodegenCheck") {
         fileTree(repo.resolve("valdi/native")),
         file("libs/valdi_ota.json"),
     )
-    pnpm = providers.gradleProperty("valdiPnpm").orElse("pnpm")
+    pnpm = providers.gradleProperty("valdiPnpm").map { listOf(it) }.orElse(
+        if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
+            listOf("node", repo.resolve("scripts/pnpm.mjs").path)
+        } else {
+            listOf("pnpm")
+        },
+    )
     repoDir = repo
     generatedDir = file("generated/valdi")
     exportInfo = file("libs/valdi_ota.json")
@@ -269,7 +278,13 @@ androidComponents {
                 repo.resolve("valdi/pnpm-lock.yaml"),
             )
             release = variant.buildType == "release"
-            pnpm = providers.gradleProperty("valdiPnpm").orElse("pnpm")
+            pnpm = providers.gradleProperty("valdiPnpm").map { listOf(it) }.orElse(
+                if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
+                    listOf("node", repo.resolve("scripts/pnpm.mjs").path)
+                } else {
+                    listOf("pnpm")
+                },
+            )
             toolDir = tool
         }
         variant.sources.assets?.addGeneratedSourceDirectory(modules, ValdiModules::outputDir)

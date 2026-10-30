@@ -8,11 +8,26 @@ export function run(command, args, cwd) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
-export function runPnpm(args, root) {
+export function pnpmInvocation(args, options = {}) {
+  const platform = options.platform ?? process.platform;
+  const execPath = options.execPath ?? process.execPath;
+  const npmExecpath = 'npmExecpath' in options ? options.npmExecpath : process.env.npm_execpath;
   // Use the exact pnpm that started the root command, including Corepack / pnpm version management.
-  const executable = process.env.npm_execpath;
-  if (executable && /pnpm\.(?:c?js|mjs)$/.test(executable)) run(process.execPath, [executable, ...args], root);
-  else run('pnpm', args, root);
+  if (npmExecpath && /pnpm\.(?:c?js|mjs)$/.test(npmExecpath)) {
+    return { command: execPath, args: [npmExecpath, ...args] };
+  }
+  if (platform === 'win32') {
+    // Windows cannot spawn pnpm's .cmd shim directly from Node 24, so ask the
+    // bundled Corepack launcher to honor packageManager instead of guessing a global version.
+    const corepack = path.join(path.dirname(execPath), 'node_modules/corepack/dist/corepack.js');
+    if (existsSync(corepack)) return { command: execPath, args: [corepack, 'pnpm', ...args] };
+  }
+  return { command: 'pnpm', args };
+}
+
+export function runPnpm(args, root) {
+  const invocation = pnpmInvocation(args);
+  run(invocation.command, invocation.args, root);
 }
 
 const exportCommand = platform => `sh scripts/export-${platform}.sh`;

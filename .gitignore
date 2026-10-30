@@ -23,5 +23,8 @@ ota/dist/
 
 # CI logs, upstream comparison reports and simulator archives.
 /.ci/
+/.tools/
+/module-build/win.local.bazelrc
+/valdi/win.local.bazelrc
 /module-build/bazel-*
 /module-build/out/

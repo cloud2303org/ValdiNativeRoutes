@@ -44,6 +44,7 @@ pnpm test:e2e:ios              # 已安装 iOS App 的 UI 测试
 GitHub Actions 运行 golden、TS 构建、Android Debug APK 和 iOS 模拟器 App 构建。
 CI 的范围和缓存规则见 [构建与 CI 边界](docs/build-and-ci.md)，
 框架 fork 同步、版本试跑及 vendored 代码的维护步骤见 [同步 Valdi 上游](docs/upgrading-valdi.md)。
+Windows 原生 Android 构建入口见 [Native Windows Android builds](docs/windows-native-build.md)。
 
 首次准备依赖和原生运行时仍需下面的步骤；改 TS、图片后直接使用上面的根目录命令：
 

@@ -8,7 +8,9 @@
 
 当前上游基线为 `Snapchat/Valdi` 的 `beta-0.2.1`（`f26bee4dc170b6c929f71d4dd07d44e033f47176`）。
 初次迁移对应 fork 提交 `4fb1c1af7aacc8b77d2fdb2fc0c38752ae847ef3`；11 项框架修改和 Hermes 构建输入已迁入 fork。
-当前固定提交 `67e02521ce5bcf88aa0690e300a3135cb84379a4` 已删除旧 Swift Valdi 编译器及回退实现、C++ toolbox；模块规则固定调用应用的 Node 后端，导出头文件也改用 Node。
+当前固定提交 `02dbebc2969c32607de6aaeac888d28435ec669c` 已删除旧 Swift Valdi 编译器及回退实现、C++ toolbox；
+模块规则固定调用应用的 Node 后端，导出头文件也改用 Node。该提交同时补全了原生 Windows 的
+hermetic Android SDK/NDK、宿主 C++/Java 工具、归档路径和 `_virtual_includes` 去重支持。
 补丁到提交的对应关系、后续同步要求见 fork 的 [VALDI_FORK.md](https://github.com/cloud2303org/Valdi/blob/valdiroutes/VALDI_FORK.md)。
 
 ## 先在框架 fork 合并上游

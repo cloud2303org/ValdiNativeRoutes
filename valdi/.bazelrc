@@ -1,5 +1,9 @@
+try-import %workspace%/win.local.bazelrc
+
 # Registry from the same immutable Valdi fork commit as MODULE.bazel
-common --registry=https://raw.githubusercontent.com/cloud2303org/Valdi/67e02521ce5bcf88aa0690e300a3135cb84379a4/registry
+common:macos --registry=https://raw.githubusercontent.com/cloud2303org/Valdi/02dbebc2969c32607de6aaeac888d28435ec669c/registry
+common:linux --registry=https://raw.githubusercontent.com/cloud2303org/Valdi/02dbebc2969c32607de6aaeac888d28435ec669c/registry
+common:windows --registry=https://raw.githubusercontent.com/cloud2303org/Valdi/02dbebc2969c32607de6aaeac888d28435ec669c/registry
 common --registry=https://bcr.bazel.build
 
 common --enable_platform_specific_config
@@ -36,7 +40,9 @@ build --cxxopt=-Wno-ambiguous-reversed-operator
 build --cxxopt=-Wno-nullability-extension
 build --cxxopt=-D_LIBCPP_ENABLE_CXX20_REMOVED_TYPE_TRAITS
 build --host_cxxopt=-std=c++20
-build --host_cxxopt=-Wno-nullability-extension
+## MSVC does not accept Clang's -Wno-nullability-extension.
+build:macos --host_cxxopt=-Wno-nullability-extension
+build:linux --host_cxxopt=-Wno-nullability-extension
 
 ## we need to disable this due to a bug in bazel
 ## see https://github.com/bazelbuild/bazel/issues/12381
@@ -63,7 +69,7 @@ build --javacopt=-XepDisableAllChecks
 build --java_runtime_version=11
 build --tool_java_runtime_version=17
 
-build --flag_alias=snap_flavor=@snap_platforms//flavors:snap_flavor
+common --flag_alias=snap_flavor=@snap_platforms//flavors:snap_flavor
 build --snap_flavor=platform_development
 
 build --android_crosstool_top=@androidndk//:toolchain

@@ -182,7 +182,8 @@ export async function compileRuntimeModule(spec: RuntimeModuleSpec, execroot = p
     }
     console.log(`${spec.name}: Node runtime compiler, ${spec.outputs.length} outputs`);
   } finally {
-    rmSync(temporary, { recursive: true, force: true });
+    // Windows can keep a short-lived lock on the freshly written outputs.
+    rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 }
 

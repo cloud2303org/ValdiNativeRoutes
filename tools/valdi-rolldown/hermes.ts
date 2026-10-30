@@ -99,6 +99,7 @@ export async function precompile(entries: ArchiveEntries): Promise<void> {
     }));
     for (const result of results) if (result.status === 'rejected') throw result.reason;
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    // Windows can keep a short-lived lock on the bytecode the compiler just wrote.
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 }

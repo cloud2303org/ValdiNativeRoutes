@@ -231,7 +231,8 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext):
         if ((/\.tsx?$/.test(file) || (module.includeJavaScript && file.endsWith('.js'))) && locate(file)) return file;
       }
       // Not a TypeScript source of the module: left to Valdi's loader at run time.
-      return { id: `${module.name}/${relative}`, external: true };
+      // The loader's names are Valdi's, forward-slashed, on every host.
+      return { id: `${module.name}/${relative.split(path.sep).join('/')}`, external: true };
     },
 
     load(id) {

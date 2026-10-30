@@ -31,7 +31,7 @@ test('accepts the pinned Linux and Windows compiler banners while rejecting unkn
 
 test('official compiler emits a Valdi-wrapped factory and leaves other archive entries intact', async t => {
   const dir = mkdtempSync(path.join(tmpdir(), 'valdi-hermes-test-'));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));
   const source = '"use strict";\nexports.answer = 6 * 7;';
   const resource = Buffer.from('resource bytes');
   const entries = new Map([['sample/index.js', Buffer.from(source)], ['res/catalog', resource]]);
@@ -70,13 +70,23 @@ test('invalid JavaScript fails compilation without replacing the source entry', 
 
 test('upstream module protocol drift is rejected before emitting Release bytecode', t => {
   const dir = mkdtempSync(path.join(tmpdir(), 'valdi-hermes-contract-'));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));
+  // The workspace's bazel-valdi link points into an execroot, so CI names the fork checkout.
+  const upstream = process.env.VALDI_SOURCE_ROOT ?? path.resolve(import.meta.dirname, '../../valdi/bazel-valdi/external/valdi+');
   const config = path.join(dir, 'valdi/bazel-valdi/external/valdi+/third-party/hermes_v1/hermes.BUILD');
   const source = path.join(dir, 'valdi/bazel-valdi/external/valdi+/valdi/src/valdi/runtime/JavaScript/JavaScriptUtils.cpp');
   mkdirSync(path.dirname(config), { recursive: true });
   mkdirSync(path.dirname(source), { recursive: true });
-  writeFileSync(config, readFileSync(path.resolve(import.meta.dirname, '../../valdi/bazel-valdi/external/valdi+/third-party/hermes_v1/hermes.BUILD')));
-  const original = readFileSync(path.resolve(import.meta.dirname, '../../valdi/bazel-valdi/external/valdi+/valdi/src/valdi/runtime/JavaScript/JavaScriptUtils.cpp'), 'utf8');
+  writeFileSync(config, readFileSync(path.join(upstream, 'third-party/hermes_v1/hermes.BUILD')));
+  const original = readFileSync(path.join(upstream, 'valdi/src/valdi/runtime/JavaScript/JavaScriptUtils.cpp'), 'utf8');
   writeFileSync(source, original.replace('0x0100C634', '0x0100C635'));
-  assert.throws(() => validateRuntimeContract(dir), /protocol changed/);
+  // The fixture's own Valdi sources must win here; CI exports VALDI_SOURCE_ROOT for the
+  // other tests, and it otherwise takes precedence over the directory argument.
+  const previous = process.env.VALDI_SOURCE_ROOT;
+  delete process.env.VALDI_SOURCE_ROOT;
+  try {
+    assert.throws(() => validateRuntimeContract(dir), /protocol changed/);
+  } finally {
+    if (previous !== undefined) process.env.VALDI_SOURCE_ROOT = previous;
+  }
 });

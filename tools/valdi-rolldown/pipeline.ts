@@ -197,7 +197,11 @@ const eagerSideEffectRequires: Plugin = {
  * what several import goes into a shared chunk (`npm/dayjs.js`) they require.
  */
 export async function buildModule(module: ValdiModule, plugin: ValdiTsPlugin, minify: boolean): Promise<Built> {
-  const input = Object.fromEntries(sourceFiles(module).map(file => [path.relative(module.dir, file).replace(/\.(tsx?|js)$/, ''), file]));
+  // Archive and require names are Valdi's (`src/routes`), so they stay forward-slashed on
+  // Windows: rolldown writes every file name and inter-file require from this entry name.
+  const input = Object.fromEntries(
+    sourceFiles(module).map(file => [path.relative(module.dir, file).split(path.sep).join('/').replace(/\.(tsx?|js)$/, ''), file]),
+  );
   // A native-only bridge (the official calculator template) has just .d.ts.
   if (!Object.keys(input).length) return { entries: new Map(), maps: new Map() };
   const bundle = await rolldown({

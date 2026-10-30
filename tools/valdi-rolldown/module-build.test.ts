@@ -10,7 +10,8 @@ import { root } from './pipeline';
 
 function fixture(t: { after: (fn: () => void) => void }) {
   const dir = mkdtempSync(path.join(tmpdir(), 'node-valdi-fixture-'));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  // Windows keeps a short-lived lock on files sharp just wrote.
+  t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));
   mkdirSync(path.join(dir, 'src'));
   const module = { name: 'fixture', dir, generatedDirs: [], nodeModules: path.join(root, 'valdi/node_modules') };
   writeFileSync(

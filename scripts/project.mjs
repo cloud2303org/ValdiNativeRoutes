@@ -20,9 +20,16 @@ function main() {
     } else {
       run(process.execPath, ['--test', 'scripts/tests/prerequisites.test.mjs', 'scripts/tests/upstream.test.mjs'], root);
       const valdiSource = sourceOption >= 0 ? forwarded[sourceOption + 1] : path.join(root, 'valdi/bazel-valdi/external/valdi+');
+      // runtime-module.test.ts and the declaration fixtures read the Valdi sources from here;
+      // the workspace's bazel-valdi link can point at an execroot that no longer has them.
+      process.env.VALDI_SOURCE_ROOT ||= valdiSource;
       run(process.execPath, ['--test', path.join(valdiSource, 'bzl/valdi/node_tools/rewrite_header.test.mjs')], root);
-      runPnpm(['--dir', 'tools/valdi-rolldown', 'exec', 'tsx', '--test', 'resources.test.ts', 'hermes.test.ts', 'module-build.test.ts', 'runtime-module.test.ts'], root);
-      runPnpm(['--dir', 'tools/valdi-rolldown', 'exec', 'tsx', 'codegen/goldens.ts', ...forwarded], root);
+      // Run tsx's launcher with Node directly: `pnpm exec` resolves the binary differently on
+      // Windows and can report `Command "tsx" not found` for the same install.
+      const rolldownDir = path.join(root, 'tools/valdi-rolldown');
+      const tsx = path.join(rolldownDir, 'node_modules/tsx/dist/cli.mjs');
+      run(process.execPath, [tsx, '--test', 'resources.test.ts', 'hermes.test.ts', 'module-build.test.ts', 'runtime-module.test.ts'], rolldownDir);
+      run(process.execPath, [tsx, 'codegen/goldens.ts', ...forwarded], rolldownDir);
     }
     return;
   }

@@ -101,7 +101,8 @@ export async function compileNodeModule(
     );
     console.log(`${name}: ${mode}, ${built.entries.size} entries; Node TS, resources and native bindings`);
   } finally {
-    rmSync(temporary, { recursive: true, force: true });
+    // Windows can keep a short-lived lock on the freshly written native/resource files.
+    rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 }
 

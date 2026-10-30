@@ -117,7 +117,11 @@ if (-not (Test-Path -LiteralPath $modulesLink -PathType Container)) {
 if ($resolvedValdi) { $env:VALDI_SOURCE_ROOT = $resolvedValdi }
 
 try {
-    & $script:Node (Join-Path $root 'scripts/project.mjs') 'android'
+    # CI pipes this step through Tee-Object; a Gradle daemon started here inherits
+    # stdout and keeps that pipe open after the build, so the step never finishes.
+    $projectArgs = @((Join-Path $root 'scripts/project.mjs'), 'android')
+    if ($env:CI) { $projectArgs += '--no-daemon' }
+    & $script:Node @projectArgs
     $exitCode = $LASTEXITCODE
 } finally {
     # Put the tracked git symlink back: leaving a junction where git expects a file

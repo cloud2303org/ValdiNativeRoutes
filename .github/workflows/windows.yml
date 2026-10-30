@@ -32,6 +32,15 @@ jobs:
       run:
         shell: pwsh
     steps:
+      - name: Configure optional GitHub Git proxy for this job
+        env:
+          WINDOWS_GIT_PROXY_URL: ${{ vars.WINDOWS_GIT_PROXY_URL }}
+        run: |
+          if ($env:WINDOWS_GIT_PROXY_URL) {
+            'GIT_CONFIG_COUNT=1' >> $env:GITHUB_ENV
+            'GIT_CONFIG_KEY_0=http.https://github.com/.proxy' >> $env:GITHUB_ENV
+            "GIT_CONFIG_VALUE_0=$env:WINDOWS_GIT_PROXY_URL" >> $env:GITHUB_ENV
+          }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false

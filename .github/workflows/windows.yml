@@ -136,10 +136,23 @@ jobs:
           if ($code -ne 0 -or $version.Trim() -ne "bazel $expected") { throw "Expected Bazel $expected, got $version" }
           "BAZEL_BIN=$bazel" >> $env:GITHUB_ENV
       - name: Test Windows entry point helpers
+        env:
+          # Bazel's repository downloader reads these instead of Git's http.proxy; the
+          # runner has no direct egress, so reuse the same local proxy and keep local
+          # addresses direct.
+          HTTPS_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
+          HTTP_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
+          NO_PROXY: localhost,127.0.0.1
         run: |
           & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-build.ps1 -Integration -BazelPath $env:BAZEL_BIN 2>&1 | Tee-Object .ci/windows-tests.log
           exit $LASTEXITCODE
       - name: Export runtime, build native modules and package APK
+        env:
+          # See the helper step: repository downloads such as rules_license otherwise time
+          # out with "Connect timed out" while Git fetches already succeed through the proxy.
+          HTTPS_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
+          HTTP_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
+          NO_PROXY: localhost,127.0.0.1
         run: |
           & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/build-android.ps1 -ValdiCheckout $env:VALDI_CHECKOUT -BazelPath $env:BAZEL_BIN -JavaHome $env:JAVA_HOME -AndroidHome $env:ANDROID_HOME -BazelArgs 'build --experimental_disk_cache_gc_max_size=3G' 2>&1 | Tee-Object .ci/windows-build.log
           exit $LASTEXITCODE
@@ -151,6 +164,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-FileHash android/app/libs/valdi_runtime.aar, module-build/out/android/calculator/calculator_android.jar, android/app/build/outputs/apk/debug/app-debug.apk | Format-List | Out-File .ci/windows-artifacts.txt
       - name: Audit runtime compilation actions
+        env:
+          HTTPS_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
+          HTTP_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
+          NO_PROXY: localhost,127.0.0.1
         run: |
           Push-Location valdi
           & $env:BAZEL_BIN aquery 'deps(//:valdi_runtime_android)' --config=stable_exec --repo_env=VALDI_PLATFORM_DEPENDENCIES=android --output=jsonproto --noinclude_artifacts --noinclude_commandline > ../.ci/windows-actions.json

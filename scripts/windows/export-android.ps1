@@ -16,107 +16,87 @@ param(
     [string]$BazelArgs
 )
 
-$root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
-$localBazelRc = @()
+. (Join-Path $PSScriptRoot 'lib.ps1')
+
+$root = Get-AppRoot $PSScriptRoot
 
 if ($BazelPath) {
-    $bazel = (Resolve-Path $BazelPath).Path
-    $env:BAZEL_BIN = $bazel
+    if (-not (Test-Path -LiteralPath $BazelPath -PathType Leaf)) {
+        throw "Bazel executable not found: $BazelPath"
+    }
+    $env:BAZEL_BIN = (Resolve-Path -LiteralPath $BazelPath).Path
 }
 
 if ($JavaHome) {
-    $env:JAVA_HOME = (Resolve-Path $JavaHome).Path
-}
-if ($env:JAVA_HOME) {
-    $localBazelRc += 'common --action_env=JAVA_HOME'
+    if (-not (Test-Path -LiteralPath $JavaHome -PathType Container)) {
+        throw "JDK not found: $JavaHome"
+    }
+    $env:JAVA_HOME = (Resolve-Path -LiteralPath $JavaHome).Path
 }
 
 if ($AndroidHome) {
-    $env:ANDROID_HOME = (Resolve-Path $AndroidHome).Path
-}
-
-if ($Distdir) {
-    $distdir = (Resolve-Path $Distdir).Path -replace '\\', '/'
-    $localBazelRc += "common --distdir=$distdir"
-}
-
-if ($ValdiCheckout) {
-    $fork = (Resolve-Path $ValdiCheckout).Path -replace '\\', '/'
-    $modulePaths = @(
-        @{ name = 'valdi'; path = $fork },
-        @{ name = 'android_macros'; path = "$fork/bzl/macros" },
-        @{ name = 'snap_macros'; path = "$fork/bzl/valdi/snap_macros" },
-        @{ name = 'snap_client_toolchains'; path = "$fork/bzl/toolchains" },
-        @{ name = 'snap_platforms'; path = "$fork/bzl/platforms" },
-        @{ name = 'skia_user_config'; path = "$fork/third-party/skia_user_config" },
-        @{ name = 'rules_hdrs'; path = "$fork/third-party/rules_hdrs" },
-        @{ name = 'valdi_toolchain'; path = "$fork/bin" }
-    )
-    foreach ($module in $modulePaths) {
-        if (-not (Test-Path -LiteralPath $module.path)) {
-            throw "Valdi override path does not exist: $($module.path)"
-        }
-        $localBazelRc += "common --override_module=$($module.name)=$($module.path)"
+    if (-not (Test-Path -LiteralPath $AndroidHome -PathType Container)) {
+        throw "Android SDK not found: $AndroidHome"
     }
-    $localBazelRc += "common --registry=file:///$fork/registry"
+    $env:ANDROID_HOME = (Resolve-Path -LiteralPath $AndroidHome).Path
 }
 
-if ($OutputBase) {
-    New-Item -ItemType Directory -Path $OutputBase -Force | Out-Null
-    $resolvedOutputBase = (Resolve-Path -LiteralPath $OutputBase).Path -replace '\\', '/'
-    $localBazelRc = @("startup --output_user_root=$resolvedOutputBase") + $localBazelRc
-} else {
-    # Short output paths keep AAPT2 below the legacy Windows MAX_PATH limit.
-    $localBazelRc = @('startup --output_user_root=C:/b') + $localBazelRc
+$resolvedDistdir = $null
+if ($Distdir) {
+    if (-not (Test-Path -LiteralPath $Distdir -PathType Container)) {
+        throw "Bazel distdir not found: $Distdir"
+    }
+    $resolvedDistdir = (Resolve-Path -LiteralPath $Distdir).Path
 }
+
+$resolvedValdi = Resolve-ValdiCheckout -AppRoot $root -ValdiCheckout $ValdiCheckout
+if ($resolvedValdi) {
+    $pin = Get-PinnedValdiCommit $root
+    Write-Host "Valdi checkout: $resolvedValdi @ $pin (clean)"
+}
+
+$resolvedOutputBase = Resolve-BazelOutputBase $OutputBase
 
 if (-not $RepositoryCache) {
     $defaultRepositoryCache = Join-Path $env:USERPROFILE ("_bazel_$env:USERNAME/cache/repos/v1")
     if (Test-Path -LiteralPath $defaultRepositoryCache) { $RepositoryCache = $defaultRepositoryCache }
 }
+$resolvedRepositoryCache = $null
 if ($RepositoryCache) {
-    $resolvedRepositoryCache = (Resolve-Path -LiteralPath $RepositoryCache).Path -replace '\\', '/'
-    $localBazelRc += "common --repository_cache=$resolvedRepositoryCache"
+    if (-not (Test-Path -LiteralPath $RepositoryCache -PathType Container)) {
+        throw "Bazel repository cache not found: $RepositoryCache"
+    }
+    $resolvedRepositoryCache = (Resolve-Path -LiteralPath $RepositoryCache).Path
 }
 
 if ($GoModCache) {
+    if (-not (Test-Path -LiteralPath $GoModCache -PathType Container)) {
+        throw "Go module cache not found: $GoModCache"
+    }
     $env:GOMODCACHE = (Resolve-Path -LiteralPath $GoModCache).Path
     $env:GOPROXY = 'off'
 }
 
-foreach ($argument in $BazelArg) {
-    if ($argument) { $localBazelRc += "common $argument" }
-}
-foreach ($argument in ($BazelArgs -split '\|')) {
-    if ($argument) { $localBazelRc += "common $argument" }
-}
-
-$localRc = Join-Path $root 'valdi/win.local.bazelrc'
-$moduleLocalRc = Join-Path $root 'module-build/win.local.bazelrc'
-Set-Content -LiteralPath $localRc -Value $localBazelRc -Encoding ASCII
-Set-Content -LiteralPath $moduleLocalRc -Value $localBazelRc -Encoding ASCII
+$localBazelRc = New-BazelRcOptions -OutputBase $resolvedOutputBase -ValdiCheckout $resolvedValdi `
+    -Distdir $resolvedDistdir -RepositoryCache $resolvedRepositoryCache -JavaHome $env:JAVA_HOME `
+    -BazelArg $BazelArg -BazelArgs $BazelArgs
+Write-BazelRcFiles -AppRoot $root -Lines $localBazelRc
 $env:VALDI_BAZEL_ARGS = ''
 
-$bashCandidates = @()
-if ($GitBash) { $bashCandidates += $GitBash }
-$bashCandidates += (Join-Path $env:ProgramFiles 'Git/bin/bash.exe')
-$bashCandidates += (Join-Path ${env:ProgramFiles(x86)} 'Git/bin/bash.exe')
-$bash = $bashCandidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
-if (-not $bash) {
-    throw 'Git Bash is required on Windows for the portable shell entry point. Pass -GitBash <path> if it is not installed in Program Files.'
-}
+$bash = Resolve-GitBashPath $GitBash
 $env:BAZEL_SH = $bash
+Write-Host "Git Bash: $bash"
+Write-Host "Bazel output root: $resolvedOutputBase"
 
-$bashRoot = $root -replace '\\', '/'
 $bashOutput = ''
 if ($OutputDir) {
     New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
     $resolvedOutput = (Resolve-Path -LiteralPath $OutputDir).Path
-    $bashOutput = $resolvedOutput -replace '\\', '/'
+    $bashOutput = $resolvedOutput
 }
 
-$command = "cd `"$bashRoot`" && ./scripts/export-android.sh $Config"
-if ($bashOutput) { $command += " `"$bashOutput`"" }
+$exportArguments = @($Config)
+if ($bashOutput) { $exportArguments += $bashOutput }
 
-& $bash -c $command
-exit $LASTEXITCODE
+$exitCode = Invoke-GitBash -BashPath $bash -ScriptPath (Join-Path $root 'scripts/export-android.sh') -Arguments $exportArguments
+exit $exitCode

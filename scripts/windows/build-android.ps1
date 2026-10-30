@@ -13,7 +13,9 @@ param(
     [string]$GitBash
 )
 
-$root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
+. (Join-Path $PSScriptRoot 'lib.ps1')
+
+$root = Get-AppRoot $PSScriptRoot
 $script:Node = 'node'
 
 if (-not $AndroidHome) {
@@ -50,26 +52,33 @@ if (-not (Test-Path -LiteralPath $sdkCmake)) {
 $env:VISION_CMAKE = $sdkCmake
 
 # Bazel's Windows launcher can otherwise pick the system WSL bash.
-$gitBash = Join-Path $env:ProgramFiles 'Git/bin/bash.exe'
-if (Test-Path -LiteralPath $gitBash) {
-    $gitUsrBin = Join-Path $env:ProgramFiles 'Git/usr/bin'
-    $gitCmd = Join-Path $env:ProgramFiles 'Git/cmd'
-    $env:BAZEL_SH = $gitBash
-    $env:PATH = "$gitUsrBin;$gitCmd;$env:PATH"
+$gitBashPath = Resolve-GitBashPath $GitBash
+$gitBashDirectories = Get-GitBashDirectories $gitBashPath
+$env:BAZEL_SH = $gitBashPath
+$gitBashPathEntries = @($gitBashDirectories.UsrBin, $gitBashDirectories.Cmd) |
+    Where-Object { Test-Path -LiteralPath $_ -PathType Container }
+if ($gitBashPathEntries) {
+    $env:PATH = (($gitBashPathEntries -join ';') + ';' + $env:PATH)
+}
+Write-Host "Git Bash: $gitBashPath"
+
+$resolvedValdi = Resolve-ValdiCheckout -AppRoot $root -ValdiCheckout $ValdiCheckout
+if ($resolvedValdi) {
+    Write-Host "Valdi checkout: $resolvedValdi @ $(Get-PinnedValdiCommit $root) (clean)"
 }
 
 if (-not $SkipRuntimeExport) {
     $exportArguments = @{
         Config = 'debug'
         BazelPath = $BazelPath
-        ValdiCheckout = $ValdiCheckout
+        ValdiCheckout = $resolvedValdi
         Distdir = $Distdir
         OutputBase = $OutputBase
         RepositoryCache = $RepositoryCache
         GoModCache = $GoModCache
         JavaHome = $env:JAVA_HOME
         AndroidHome = $AndroidHome
-        GitBash = $GitBash
+        GitBash = $gitBashPath
     }
     & (Join-Path $PSScriptRoot 'export-android.ps1') @exportArguments
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -86,6 +95,6 @@ if (-not $SkipVisionPrepare -and ($visionLibraries | Where-Object { -not (Test-P
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
-$env:BAZEL_BIN = if ($BazelPath) { (Resolve-Path $BazelPath).Path } else { $env:BAZEL_BIN }
+if ($BazelPath) { $env:BAZEL_BIN = (Resolve-Path -LiteralPath $BazelPath).Path }
 & $script:Node (Join-Path $root 'scripts/project.mjs') 'android'
 exit $LASTEXITCODE

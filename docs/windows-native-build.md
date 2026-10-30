@@ -15,6 +15,8 @@ macOS.
 - A JDK that can run Gradle and Bazel. The project's Bazel toolchain remains
   pinned to Java 17; the host JDK is discovered from `JAVA_HOME` or `javac.exe`,
   or can be supplied explicitly with `-JavaHome`.
+- Git for Windows. Bazel uses its `bash.exe` (`-GitBash` overrides the
+  Program Files default, and paths with spaces are supported).
 
 No Administrator-level system change is needed. The scripts only write to the
 repository, Gradle/Bazel caches, and the Android SDK build directories.
@@ -38,6 +40,11 @@ Release runtime export remains available through `export-android.ps1 -Config rel
 Use `-SkipRuntimeExport` when the runtime and its fingerprint are already
 current. Use `-SkipVisionPrepare` to reuse an existing vision build.
 
+The full flow passes the validated Valdi checkout to the runtime export and runs
+`scripts/export-android.sh`, the vision preparation, and `gradlew.bat` directly.
+The checked-in scripts print the resolved `Git Bash`, `Valdi checkout` commit,
+and `Bazel output root` before building.
+
 The APK is written to:
 
 ```text
@@ -56,22 +63,64 @@ powershell -ExecutionPolicy Bypass -File scripts/windows/export-android.ps1 `
 The output defaults to `android/app/libs/valdi_runtime.aar`.
 
 For staged validation against an unpushed Valdi feature checkout, pass
-`-ValdiCheckout C:\path\to\Valdi`. The wrapper writes ignored
-`valdi/win.local.bazelrc` and `module-build/win.local.bazelrc` files with the
-feature registry and explicit Bazel `--override_module` flags for Valdi and its
-internal modules. It is a validation-only option; committed builds use the
-immutable commit and registry URL pinned in `valdi/MODULE.bazel` and
-`module-build/MODULE.bazel`.
+`-ValdiCheckout C:\path\to\Valdi`. The wrapper first verifies that the path is
+the root of a git work tree whose `HEAD` is exactly the `VALDI_COMMIT` pinned in
+`valdi/MODULE.bazel` and whose `git status --porcelain` is empty. A different
+commit or a modified/untracked file is rejected with a message naming the
+expected and actual state: the OTA fingerprint names the pinned commit, so a
+checkout of another commit (or local edits) would make the fingerprint lie.
+
+After that check the wrapper writes ignored `valdi/win.local.bazelrc` and
+`module-build/win.local.bazelrc` files with the checkout's file registry and
+explicit Bazel `--override_module` flags for Valdi and its internal modules.
+Paths are quoted for Bazel's rc parser and both files are written as UTF-8
+without a BOM, so directories with spaces or non-ASCII characters survive.
+The files are imported at the top of each `.bazelrc`, before the pinned fork
+registry and BCR, so the local file registry is tried first. Platform-specific
+`common:<platform>` options expand after `common` options, which is why the
+checked-in registries are `common` entries.
+The option is validation-only; committed builds use the immutable commit and
+registry URL pinned in `valdi/MODULE.bazel` and `module-build/MODULE.bazel`.
+
+The shell entry point is invoked with argument arrays rather than a constructed
+`bash -c` string, so checkout, output, and configuration paths are never
+re-parsed as shell syntax.
 
 The default Bazel output root is `C:/b` to keep Android AAPT2
 resource paths below the legacy Windows `MAX_PATH` limit. Use
-`-OutputBase C:\short-path` to choose another short directory.
+`-OutputBase C:\short-path` to choose another short directory. The wrapper
+checks that the default (or explicit) output root can be created and written
+before starting Bazel, and otherwise fails with the underlying error and the
+`-OutputBase` remedy. A custom output root containing a space still works with
+quoted rc options, but Bazel warns that it can break builds; prefer `C:/b` or
+another short path without spaces.
 The wrapper reuses the default user Bazel repository cache when present; pass
 `-RepositoryCache C:\path\to\cache\repos\v1` to point at another cache.
 For offline Go repository fetches, pass `-GoModCache C:\path\to\gomodcache`;
 the wrapper then sets `GOPROXY=off`. `-Distdir` is forwarded to Bazel, but
 pinned Valdi module archives must also be reachable or already present in the
 repository cache when the URL has no fixed checksum.
+
+## Helper tests
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/windows/test-windows-build.ps1
+```
+
+The tests create temporary git repositories and directories to check:
+
+- clean checkout at the pinned commit accepted; wrong commit, dirty tracked
+  file, untracked file, a subdirectory, and a non-git directory rejected;
+- generated Bazel rc options quoted for spaces and non-ASCII paths, with a
+  UTF-8 (no BOM) rc file;
+- a writable short output base, including a path with spaces, and a helpful
+  rejection when the path is a file;
+- explicit Git Bash resolution through a path containing spaces;
+- bash argument passing for paths with spaces and shell metacharacters, and
+  exit-code propagation.
+
+Add `-Integration -BazelPath C:\path\to\bazel.exe` to also start a real Bazel
+server with a quoted, spaced, non-ASCII `--output_user_root` and shut it down.
 
 ## Verification
 

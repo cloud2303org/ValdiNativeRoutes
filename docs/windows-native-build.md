@@ -103,10 +103,19 @@ repository cache when the URL has no fixed checksum.
 `-BazelArg` (repeatable) and `-BazelArgs` (pipe-separated) forward extra rc
 lines to both Bazel workspaces. An entry beginning with `startup`, `common`,
 `build`, `test`, or `fetch` is used as-is; anything else is added under
-`common`. Use them for an environment-local mirror, for example
-`-BazelArgs "build override_repository=<canonical name>=<local path>"` when a
-pre-populated dependency mirror is required and `bazel fetch --repo=@valdi`
-must not receive that flag.
+`common`. They cannot carry `--override_repository`: the export first runs
+`bazel fetch --repo=@valdi`, and Bazel 8 rejects that option together with
+`--repo`. When a dependency mirror is required, pre-populate the Bazel external
+repository (by default `C:\b\<workspace-hash>\external`) or the repository
+cache; the build then reuses it without extra flags.
+
+The wrapper points Bazel at the checkout's registry through a local `file://`
+URL. Bazel's lockfile records registry-file hashes by URL, so a Windows build
+drops the fork-registry URL entries from `valdi/MODULE.bazel.lock` and
+`module-build/MODULE.bazel.lock`; the BCR entries and every module version stay
+unchanged. The committed lockfiles remain canonical: after a local Windows
+validation restore them with
+`git checkout -- valdi/MODULE.bazel.lock module-build/MODULE.bazel.lock`.
 
 ## Helper tests
 

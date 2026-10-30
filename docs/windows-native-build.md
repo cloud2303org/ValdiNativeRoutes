@@ -100,6 +100,10 @@ For offline Go repository fetches, pass `-GoModCache C:\path\to\gomodcache`;
 the wrapper then sets `GOPROXY=off`. `-Distdir` is forwarded to Bazel, but
 pinned Valdi module archives must also be reachable or already present in the
 repository cache when the URL has no fixed checksum.
+`-BazelArg` (repeatable) and `-BazelArgs` (pipe-separated) forward extra rc
+lines to both Bazel workspaces; use them for an environment-local mirror, for
+example `-BazelArgs "override_repository=<canonical name>=<local path>"` when a
+pre-populated dependency mirror is required.
 
 ## Helper tests
 

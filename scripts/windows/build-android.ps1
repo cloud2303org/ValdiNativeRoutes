@@ -10,7 +10,9 @@ param(
     [string]$BazelPath,
     [string]$JavaHome,
     [string]$AndroidHome,
-    [string]$GitBash
+    [string]$GitBash,
+    [string[]]$BazelArg,
+    [string]$BazelArgs
 )
 
 . (Join-Path $PSScriptRoot 'lib.ps1')
@@ -79,6 +81,8 @@ if (-not $SkipRuntimeExport) {
         JavaHome = $env:JAVA_HOME
         AndroidHome = $AndroidHome
         GitBash = $gitBashPath
+        BazelArg = $BazelArg
+        BazelArgs = $BazelArgs
     }
     & (Join-Path $PSScriptRoot 'export-android.ps1') @exportArguments
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

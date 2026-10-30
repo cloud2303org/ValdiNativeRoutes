@@ -158,3 +158,14 @@ bazel aquery "deps(//:valdi_runtime_android)" `
 cd ..
 node scripts/verify-runtime-actions.mjs runtime-actions.json
 ```
+
+## GitHub Actions
+
+`Application CI` includes a `Windows native Android` job on `windows-2025`.
+It installs the pinned JS dependencies and Android SDK/NDK, fetches the exact
+`VALDI_COMMIT` as a clean Git checkout, and runs `build-android.ps1` without skip
+flags. The job also runs the Windows helper tests, pipeline tests, runtime
+fingerprint check and compiler action audit, and uploads logs and the Debug APK.
+The explicit checkout uses the same supported `-ValdiCheckout` path as local
+builds; it does not require a manually populated external repository directory.
+A successful local run is separate from the result of this hosted CI job.

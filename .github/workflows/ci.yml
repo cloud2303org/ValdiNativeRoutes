@@ -166,3 +166,106 @@ jobs:
         run: |
           echo '::warning::Build evidence upload failed. See the upload step for the storage/quota error; test and build results remain independent.'
           echo 'Artifact upload failed. Logs remain available in the workflow; downloadable APK/App/report artifacts are unavailable for this job. Check the upload step and account storage quota.' >> "$GITHUB_STEP_SUMMARY"
+
+  windows-android:
+    name: Windows native Android
+    runs-on: windows-2025
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          run_install: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: bazel-contrib/setup-bazel@104e3eea9447cdaa4b00d0fb46191a3985d26ab3 # 0.19.1
+        with:
+          module-root: valdi
+          bazelisk-cache: true
+          repository-cache: true
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        with:
+          packages: 'platforms;android-37.0 build-tools;37.0.0 ndk;27.1.12297006 cmake;3.22.1'
+          log-accepted-android-sdk-licenses: false
+      - name: Install dependencies and fetch the exact fork checkout
+        env:
+          REQUESTED_VALDI_COMMIT: ${{ inputs.valdi_commit }}
+          REQUESTED_WIDGETS_TAG: ${{ inputs.widgets_tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force .ci | Out-Null
+          if ($env:REQUESTED_VALDI_COMMIT) {
+            $pinArgs = @('scripts/upstream.mjs', 'pin', $env:REQUESTED_VALDI_COMMIT)
+            if ($env:REQUESTED_WIDGETS_TAG) { $pinArgs += $env:REQUESTED_WIDGETS_TAG }
+            & node @pinArgs
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          pnpm install --frozen-lockfile
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $module = Get-Content valdi/MODULE.bazel -Raw
+          $commit = [regex]::Match($module, '(?m)^VALDI_COMMIT = "([0-9a-f]{40})"').Groups[1].Value
+          $repo = [regex]::Match($module, '(?m)^VALDI_REPOSITORY = "([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)"').Groups[1].Value
+          if (-not $commit -or -not $repo) { throw 'Missing immutable fork pin' }
+          # Use the supported clean-checkout path, without machine-specific archive caches.
+          $fork = Join-Path $env:RUNNER_TEMP 'valdi-fork'
+          git init $fork
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $fork remote add origin "https://github.com/$repo.git"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $fork -c core.autocrlf=false fetch --depth=1 origin $commit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $fork -c core.autocrlf=false checkout --detach FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "VALDI_CHECKOUT=$fork" >> $env:GITHUB_ENV
+          $bazel = (Get-Command bazelisk).Source
+          "BAZEL_BIN=$bazel" >> $env:GITHUB_ENV
+          # Direct Node children need pnpm's JS launcher, rather than its .cmd shim.
+          $pnpmLauncher = pnpm exec node -p 'process.env.npm_execpath'
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $pnpmLauncher)) { throw 'Cannot resolve pnpm JS launcher' }
+          "npm_execpath=$pnpmLauncher" >> $env:GITHUB_ENV
+      - name: Test Windows entry point helpers
+        run: |
+          & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-build.ps1 -Integration -BazelPath $env:BAZEL_BIN 2>&1 | Tee-Object .ci/windows-tests.log
+          exit $LASTEXITCODE
+      - name: Export runtime, build native modules and package APK
+        run: |
+          & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/build-android.ps1 -ValdiCheckout $env:VALDI_CHECKOUT -BazelPath $env:BAZEL_BIN -JavaHome $env:JAVA_HOME -AndroidHome $env:ANDROID_HOME -BazelArgs 'build --experimental_disk_cache_gc_max_size=3G' 2>&1 | Tee-Object .ci/windows-build.log
+          exit $LASTEXITCODE
+      - name: Test pipeline and validate runtime fingerprint
+        run: |
+          pnpm test 2>&1 | Tee-Object .ci/test.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/ota.mjs check-export android android/app/libs/valdi_ota.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-FileHash android/app/libs/valdi_runtime.aar, module-build/out/android/calculator/calculator_android.jar, android/app/build/outputs/apk/debug/app-debug.apk | Format-List | Out-File .ci/windows-artifacts.txt
+      - name: Audit runtime compilation actions
+        run: |
+          Push-Location valdi
+          & $env:BAZEL_BIN aquery 'deps(//:valdi_runtime_android)' --config=stable_exec --repo_env=VALDI_PLATFORM_DEPENDENCIES=android --output=jsonproto --noinclude_artifacts --noinclude_commandline > ../.ci/windows-actions.json
+          $code = $LASTEXITCODE
+          Pop-Location
+          if ($code -ne 0) { exit $code }
+          node scripts/verify-runtime-actions.mjs .ci/windows-actions.json
+          exit $LASTEXITCODE
+      - name: Upload Windows build evidence and APK
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: app-windows-android-${{ github.run_id }}
+          retention-days: 7
+          include-hidden-files: true
+          if-no-files-found: warn
+          path: |
+            .ci/
+            android/app/build/outputs/apk/debug/*.apk

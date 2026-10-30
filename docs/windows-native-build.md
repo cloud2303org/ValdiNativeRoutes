@@ -101,9 +101,12 @@ the wrapper then sets `GOPROXY=off`. `-Distdir` is forwarded to Bazel, but
 pinned Valdi module archives must also be reachable or already present in the
 repository cache when the URL has no fixed checksum.
 `-BazelArg` (repeatable) and `-BazelArgs` (pipe-separated) forward extra rc
-lines to both Bazel workspaces; use them for an environment-local mirror, for
-example `-BazelArgs "override_repository=<canonical name>=<local path>"` when a
-pre-populated dependency mirror is required.
+lines to both Bazel workspaces. An entry beginning with `startup`, `common`,
+`build`, `test`, or `fetch` is used as-is; anything else is added under
+`common`. Use them for an environment-local mirror, for example
+`-BazelArgs "build override_repository=<canonical name>=<local path>"` when a
+pre-populated dependency mirror is required and `bazel fetch --repo=@valdi`
+must not receive that flag.
 
 ## Helper tests
 

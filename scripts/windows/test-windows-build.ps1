@@ -200,6 +200,15 @@ try {
         Assert-Equal ('file:///C:/Temp/valdi%20na%C3%AFve') (ConvertTo-FileUrl ('C:\Temp\valdi ' + $unicodeWord)) 'file URL'
     }
 
+    Test-Case 'extra Bazel arguments can target a single command' {
+        $lines = New-BazelRcOptions -OutputBase 'C:/b' -BazelArg @('build override_repository=a=C:/mirror', 'plain_option=1') `
+            -BazelArgs 'test test_arg=1|common common_arg=1'
+        Assert-True ($lines -contains 'build override_repository=a=C:/mirror') 'build-scoped argument must stay build-only'
+        Assert-True ($lines -contains 'common plain_option=1') 'unscoped argument must default to common'
+        Assert-True ($lines -contains 'test test_arg=1') 'test-scoped argument must stay test-only'
+        Assert-True ($lines -contains 'common common_arg=1') 'common-scoped argument must be kept'
+    }
+
     Test-Case 'rc file is UTF-8 without BOM and round-trips non-ASCII' {
         $rcFile = Join-Path $tempRoot 'win.local.bazelrc'
         Write-Utf8NoBomLines -Path $rcFile -Lines @('startup "--output_user_root=C:/b"', ('common "--distdir=C:/dist ' + $unicodeWord + '"'))

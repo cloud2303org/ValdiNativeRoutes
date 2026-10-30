@@ -291,12 +291,21 @@ function New-BazelRcOptions {
         $lines += 'common ' + (ConvertTo-BazelRcOptionValue ('--repository_cache=' + ($RepositoryCache -replace '\\', '/')))
     }
     foreach ($argument in $BazelArg) {
-        if ($argument) { $lines += "common $argument" }
+        if ($argument) { $lines += (ConvertTo-BazelRcLine $argument) }
     }
     foreach ($argument in ($BazelArgs -split '\|')) {
-        if ($argument) { $lines += "common $argument" }
+        if ($argument) { $lines += (ConvertTo-BazelRcLine $argument) }
     }
     return $lines
+}
+
+function ConvertTo-BazelRcLine {
+    param([Parameter(Mandatory = $true)][string]$Argument)
+
+    # A caller can target one command ("build ...") instead of the default "common ...":
+    # fetch-only runs such as `bazel fetch --repo=@valdi` reject build-only flags.
+    if ($Argument -match '^(startup|common|build|test|fetch)\s') { return $Argument }
+    return "common $Argument"
 }
 
 function Write-BazelRcFiles {

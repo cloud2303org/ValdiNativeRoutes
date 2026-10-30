@@ -169,7 +169,9 @@ jobs:
           exit $LASTEXITCODE
       - name: Test pipeline and validate runtime fingerprint
         run: |
-          pnpm test 2>&1 | Tee-Object .ci/test.log
+          # The fork checkout is the Valdi source root here: the workspace's
+          # bazel-valdi link points at the execroot of an overridden module.
+          node scripts/project.mjs test --valdi $env:VALDI_CHECKOUT 2>&1 | Tee-Object .ci/test.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/ota.mjs check-export android android/app/libs/valdi_ota.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

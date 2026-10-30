@@ -115,8 +115,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git -C $fork remote add origin "https://github.com/$repo.git"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git -C $fork -c core.autocrlf=false fetch --depth=1 origin $commit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The local proxy occasionally resets a connection; retry the fetch a few times
+          # instead of failing the whole build on one reset.
+          $fetched = $false
+          foreach ($attempt in 1..3) {
+            git -C $fork -c core.autocrlf=false fetch --depth=1 origin $commit
+            if ($LASTEXITCODE -eq 0) { $fetched = $true; break }
+            if ($attempt -lt 3) { Start-Sleep -Seconds (10 * $attempt) }
+          }
+          if (-not $fetched) { throw "Failed to fetch $repo at $commit after 3 attempts" }
           git -C $fork -c core.autocrlf=false checkout --detach FETCH_HEAD
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "VALDI_CHECKOUT=$fork" >> $env:GITHUB_ENV

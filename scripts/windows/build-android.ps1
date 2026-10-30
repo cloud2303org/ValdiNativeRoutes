@@ -112,5 +112,19 @@ if (-not (Test-Path -LiteralPath $modulesLink -PathType Container)) {
     New-Item -ItemType Junction -Path $modulesLink -Target (Join-Path $root 'valdi/modules') | Out-Null
 }
 
-& $script:Node (Join-Path $root 'scripts/project.mjs') 'android'
-exit $LASTEXITCODE
+# The app bundle's tsconfigs must extend the Valdi sources that exist on this host;
+# the workspace's bazel-valdi link may not be readable from the Gradle process.
+if ($resolvedValdi) { $env:VALDI_SOURCE_ROOT = $resolvedValdi }
+
+try {
+    & $script:Node (Join-Path $root 'scripts/project.mjs') 'android'
+    $exitCode = $LASTEXITCODE
+} finally {
+    # Put the tracked git symlink back: leaving a junction where git expects a file
+    # makes the next checkout delete through it.
+    if (Test-Path -LiteralPath $modulesLink -PathType Container) {
+        cmd /c rmdir "$modulesLink" 2>$null | Out-Null
+        Set-Content -LiteralPath $modulesLink -Value '..\valdi\modules' -NoNewline
+    }
+}
+exit $exitCode

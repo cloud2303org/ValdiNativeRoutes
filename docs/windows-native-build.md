@@ -161,7 +161,10 @@ node scripts/verify-runtime-actions.mjs runtime-actions.json
 
 ## GitHub Actions
 
-`Application CI` includes a `Windows native Android` job on `windows-2025`.
+`Windows Android CI` includes a `Windows native Android` job on the repository-specific self-hosted runner labeled `valdi-windows`.
+It only accepts pushes/manual runs for `hermes-v1`; pull-request events do not
+run on the personal Windows computer. The runner starts when its Windows user
+logs in, so that computer must be online with the user session available.
 It installs the pinned JS dependencies and Android SDK/NDK, fetches the exact
 `VALDI_COMMIT` as a clean Git checkout, and runs `build-android.ps1` without skip
 flags. The job also runs the Windows helper tests, pipeline tests, runtime

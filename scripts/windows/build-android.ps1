@@ -62,11 +62,11 @@ $gitBashPathEntries = @($gitBashDirectories.UsrBin, $gitBashDirectories.Cmd) |
 if ($gitBashPathEntries) {
     $env:PATH = (($gitBashPathEntries -join ';') + ';' + $env:PATH)
 }
-Write-Host "Git Bash: $gitBashPath"
+Write-Output "Git Bash: $gitBashPath"
 
 $resolvedValdi = Resolve-ValdiCheckout -AppRoot $root -ValdiCheckout $ValdiCheckout
 if ($resolvedValdi) {
-    Write-Host "Valdi checkout: $resolvedValdi @ $(Get-PinnedValdiCommit $root) (clean)"
+    Write-Output "Valdi checkout: $resolvedValdi @ $(Get-PinnedValdiCommit $root) (clean)"
 }
 
 if (-not $SkipRuntimeExport) {

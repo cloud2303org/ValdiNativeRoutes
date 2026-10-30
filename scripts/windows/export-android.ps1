@@ -52,7 +52,7 @@ if ($Distdir) {
 $resolvedValdi = Resolve-ValdiCheckout -AppRoot $root -ValdiCheckout $ValdiCheckout
 if ($resolvedValdi) {
     $pin = Get-PinnedValdiCommit $root
-    Write-Host "Valdi checkout: $resolvedValdi @ $pin (clean)"
+    Write-Output "Valdi checkout: $resolvedValdi @ $pin (clean)"
 }
 
 $resolvedOutputBase = Resolve-BazelOutputBase $OutputBase
@@ -85,8 +85,8 @@ $env:VALDI_BAZEL_ARGS = ''
 
 $bash = Resolve-GitBashPath $GitBash
 $env:BAZEL_SH = $bash
-Write-Host "Git Bash: $bash"
-Write-Host "Bazel output root: $resolvedOutputBase"
+Write-Output "Git Bash: $bash"
+Write-Output "Bazel output root: $resolvedOutputBase"
 
 $bashOutput = ''
 if ($OutputDir) {

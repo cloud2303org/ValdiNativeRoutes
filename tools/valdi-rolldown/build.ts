@@ -27,6 +27,8 @@ import {
   inlineSourceMaps,
   precompile,
   sourceMapJson,
+  valdiSourceRoot,
+  writeTsconfig,
   type Built,
 } from './pipeline';
 import { addFontEntries, assetCatalog, findFonts, findImages, writeAndroidResources, writeIosResources, writeResTs } from './resources';
@@ -57,7 +59,12 @@ for (const [name, compiled] of bazelOutputs) {
   rmSync(genDir(name), { recursive: true, force: true });
   copyModuleTree(path.join(compiled, 'resources/ts'), genDir(name));
 }
-for (const module of appModules()) {
+const modules = appModules();
+// Gradle and Xcode call this file directly, without the install hook that writes the
+// modules' tsconfig.json. Rewrite them at the sources this host really has, so the
+// bundle reads the module tsconfig instead of failing every bare import.
+if (valdiSourceRoot()) for (const module of modules) writeTsconfig(module, modules);
+for (const module of modules) {
   const compiled = bazelOutputs.get(module.name);
   if (compiled) {
     cpSync(path.join(compiled, `${module.name}.valdimodule`), path.join(out, `${module.name}.valdimodule`));

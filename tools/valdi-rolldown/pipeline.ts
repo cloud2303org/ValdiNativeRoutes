@@ -1,5 +1,6 @@
 // What build.ts (one build) and dev.ts (the dev server) share: the modules, and building them with rolldown.
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { rolldown, RolldownMagicString, type Plugin, type PreRenderedChunk } from 'rolldown';
 import type { ArchiveEntries } from './archive';
@@ -63,12 +64,25 @@ const RUNTIME_MODULES = ['client_sql', 'coreutils', 'jasmine', 'source_map', 'va
  * which rootDirs merges into the module's own tree for imports. Returns whether it
  * changed. Valdi's sources are read through the bazel-valdi link the exports leave.
  */
+export function valdiSourceRoot(): string | undefined {
+  return [process.env.VALDI_SOURCE_ROOT, path.join(valdi, 'bazel-valdi/external/valdi+')]
+    .filter((candidate): candidate is string => Boolean(candidate))
+    .find(root => existsSync(path.join(root, 'modules/_configs/base.tsconfig.json')));
+}
+
 export function writeTsconfig(module: ValdiModule, modules: ValdiModule[]): boolean {
   const relative = (to: string) => {
     const value = path.relative(module.dir, to).split(path.sep).join('/');
     return value.startsWith('../') ? value : `./${value}`;
   };
-  const valdiSources = process.env.VALDI_SOURCE_ROOT ?? path.join(valdi, 'bazel-valdi/external/valdi+');
+  // Prefer a source root that really holds Valdi's base config: CI can expose the
+  // bazel-valdi link before Bazel has fetched the module, and a tsconfig extending a
+  // missing file makes rolldown fail to resolve every bare import (`valibot`).
+  const sourceRoots = [process.env.VALDI_SOURCE_ROOT, path.join(valdi, 'bazel-valdi/external/valdi+')].filter(
+    (root): root is string => Boolean(root),
+  );
+  const valdiSources =
+    sourceRoots.find(root => existsSync(path.join(root, 'modules/_configs/base.tsconfig.json'))) ?? sourceRoots[sourceRoots.length - 1];
   const paths: Record<string, string[]> = {};
   for (const other of modules) {
     paths[`${other.name}/*`] = [other === module ? './*' : `${relative(other.dir)}/*`, ...other.generatedDirs.map(dir => `${relative(dir)}/*`)];
@@ -135,6 +149,27 @@ function chunkName(module: ValdiModule) {
 }
 
 /**
+ * Resolves bare package imports with Node's resolver. Rolldown's own resolver needs the
+ * module tsconfig for that and fails with "Tsconfig not found: Could not resolve 'valibot'"
+ * when the tsconfig's `extends` target is not reachable from the bundling process; Node
+ * finds the same pnpm-linked package, and the resolved paths keep their `npm/<pkg>`
+ * archive names (sourcePath/chunkName). Valdi's own `valdi_core/…` imports are not
+ * resolvable here, so they still go through the plugin and the tsconfig paths.
+ */
+const nodePackageResolver = (): Plugin => ({
+  name: 'valdi-node-package-resolver',
+  resolveId(source, importer) {
+    if (!importer || !/^[A-Za-z@]/.test(source) || source.startsWith('node:')) return null;
+    if (source.startsWith('.') || source.startsWith('/')) return null;
+    try {
+      return createRequire(importer).resolve(source);
+    } catch {
+      return null;
+    }
+  },
+});
+
+/**
  * Valdi's require() returns a lazy proxy that loads the module on its first property read, so a bare `require("x");`
  * (an `import 'x'` for its side effects, or one rolldown keeps to run a chunk's side effects in order) would never
  * load it: these become `require("x", true)`, which loads it at once.
@@ -167,7 +202,7 @@ export async function buildModule(module: ValdiModule, plugin: ValdiTsPlugin, mi
   if (!Object.keys(input).length) return { entries: new Map(), maps: new Map() };
   const bundle = await rolldown({
     input,
-    plugins: [plugin],
+    plugins: [nodePackageResolver(), plugin],
     // Pages are required by path at run time, so every file keeps its exports.
     preserveEntrySignatures: 'strict',
   });

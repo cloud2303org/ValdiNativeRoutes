@@ -160,6 +160,19 @@ try {
         }
     }
 
+    Test-Case 'checkout reached through a junction with spaces is accepted' {
+        $link = Join-Path $tempRoot 'Valdi link with spaces'
+        & cmd.exe /d /c ('mklink /J "' + $link + '" "' + $repo + '"') | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'could not create a directory junction for the test' }
+        try {
+            $resolved = Resolve-ValdiCheckout -AppRoot $appRoot -ValdiCheckout $link
+            Assert-True ($resolved.Contains(' ')) "junction path must keep its space: $resolved"
+            Assert-Equal (Get-CanonicalPath $repo) (Get-CanonicalPath $resolved) 'junction must resolve to the checkout'
+        } finally {
+            & cmd.exe /d /c ('rmdir "' + $link + '"') 2>&1 | Out-Null
+        }
+    }
+
     # Windows PowerShell 5.1 parses BOM-less scripts as ANSI, so build non-ASCII strings from code points.
     $unicodeWord = 'na' + [char]0xEF + 've'
     $fakeFork = New-FakeValdiTree (Join-Path $tempRoot ('Valdi ' + $unicodeWord + ' fork'))
@@ -304,6 +317,11 @@ try {
         }
     }
 } finally {
+    foreach ($entry in @(Get-ChildItem -LiteralPath $tempRoot -Directory -ErrorAction SilentlyContinue)) {
+        if ($entry.Attributes.ToString().Contains('ReparsePoint')) {
+            & cmd.exe /d /c ('rmdir "' + $entry.FullName + '"') 2>&1 | Out-Null
+        }
+    }
     Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 

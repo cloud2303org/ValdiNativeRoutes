@@ -65,6 +65,26 @@ function ConvertTo-NativePath {
     return ($Path -replace '/', '\')
 }
 
+function Get-CanonicalPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    # Resolve directory junctions/symlinks so a checkout reached through a link compares
+    # equal to the work tree path git reports. (PowerShell 5.1 has no ResolveLinkTarget.)
+    $current = [System.IO.Path]::GetFullPath($Path).TrimEnd('\', '/')
+    for ($depth = 0; $depth -lt 16; $depth++) {
+        $item = Get-Item -LiteralPath $current -Force
+        if (-not ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) { break }
+        $target = $item.Target
+        if ($target -is [array]) { $target = $target[0] }
+        if (-not $target) { break }
+        if (-not [System.IO.Path]::IsPathRooted($target)) {
+            $target = Join-Path $item.DirectoryName $target
+        }
+        $current = [System.IO.Path]::GetFullPath($target).TrimEnd('\', '/')
+    }
+    return $current
+}
+
 function Resolve-ValdiCheckout {
     param(
         [Parameter(Mandatory = $true)][string]$AppRoot,
@@ -82,7 +102,7 @@ function Resolve-ValdiCheckout {
     $topPath = $top.Lines | Select-Object -First 1
     if (-not $topPath) { throw "Valdi checkout is not a git work tree: $checkout" }
     $topPath = (ConvertTo-NativePath $topPath).TrimEnd('\', '/')
-    if (-not [string]::Equals($topPath, $checkout, [System.StringComparison]::OrdinalIgnoreCase)) {
+    if (-not [string]::Equals((Get-CanonicalPath $topPath), (Get-CanonicalPath $checkout), [System.StringComparison]::OrdinalIgnoreCase)) {
         throw ("Valdi checkout must be the git work tree root, not a subdirectory: {0} (work tree: {1})" -f $checkout, $topPath)
     }
 

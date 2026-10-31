@@ -8,7 +8,7 @@ bazel_dep(name = "platforms", version = "1.1.0")
 # Framework customizations and Hermes build inputs live in this fork's valdiroutes branch.
 # Pin immutable commits; scripts/upstream.mjs updates this and the matching registry together.
 VALDI_REPOSITORY = "cloud2303org/Valdi"
-VALDI_COMMIT = "02dbebc2969c32607de6aaeac888d28435ec669c"
+VALDI_COMMIT = "c81b842be61dfbb5b8859fb5f45d811323167168"
 VALDI_URL = "https://github.com/" + VALDI_REPOSITORY + "/archive/" + VALDI_COMMIT + ".tar.gz"
 VALDI_PREFIX = "Valdi-" + VALDI_COMMIT
 

@@ -172,6 +172,12 @@ $env:BAZELISK_HOME = $cachePaths.bazelisk
 # Explicit flags beat any host rc file, so every child build (and the checks below) stays inside the root.
 $env:VALDI_BAZEL_STARTUP_ARGS = '--output_user_root=' + ($outputBase -replace '\\', '/')
 $env:VALDI_BAZEL_ARGS = '--repository_cache=' + ($cachePaths.bazelRepos -replace '\\', '/')
+# A cold install downloads everything at once; ride out proxy resets instead of failing the proof.
+$env:npm_config_fetch_retries = '6'
+$env:npm_config_fetch_retry_mintimeout = '10000'
+$env:npm_config_fetch_retry_maxtimeout = '120000'
+$env:npm_config_fetch_timeout = '180000'
+$env:npm_config_network_concurrency = '4'
 $env:CI = 'true'
 Remove-Item Env:\GOPROXY -ErrorAction SilentlyContinue
 

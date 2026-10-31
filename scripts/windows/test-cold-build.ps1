@@ -191,7 +191,9 @@ $env:GOCACHE = $cachePaths.goBuild
 $env:COURSIER_CACHE = $cachePaths.coursier
 $env:BAZELISK_HOME = $cachePaths.bazelisk
 # Explicit flags beat any host rc file, so every child build (and the checks below) stays inside the root.
-$env:VALDI_BAZEL_STARTUP_ARGS = '--output_user_root=' + ($outputBase -replace '\\', '/')
+# --output_base is repeated because a host rc that sets it also beats --output_user_root.
+$isolatedRoot = $outputBase -replace '\\', '/'
+$env:VALDI_BAZEL_STARTUP_ARGS = "--output_user_root=$isolatedRoot --output_base=$isolatedRoot/base"
 $env:VALDI_BAZEL_ARGS = '--repository_cache=' + ($cachePaths.bazelRepos -replace '\\', '/')
 # A cold install downloads everything at once; ride out proxy resets instead of failing the proof.
 $env:npm_config_fetch_retries = '6'

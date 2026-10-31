@@ -36,7 +36,8 @@ if ($PnpmStore) { $env:npm_config_store_dir = $PnpmStore }
 if ($OutputBase) {
     # The export already wrote the workspaces' rc files; pass the same root as a command-line flag so a
     # host-level ~/.bazelrc cannot redirect these builds to a shared output base.
-    $env:VALDI_BAZEL_STARTUP_ARGS = '--output_user_root=' + ($OutputBase -replace '\\', '/')
+    $root = $OutputBase -replace '\\', '/'
+    $env:VALDI_BAZEL_STARTUP_ARGS = "--output_user_root=$root --output_base=$root/base"
 }
 if ($RepositoryCache) { $env:VALDI_BAZEL_ARGS = '--repository_cache=' + ($RepositoryCache -replace '\\', '/') }
 

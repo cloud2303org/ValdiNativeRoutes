@@ -126,7 +126,9 @@ function applyCaches(options) {
   // command-line startup/build flag is the only thing that beats a user-level ~/.bazelrc. An isolated build
   // must not inherit the host's output base or repository cache.
   if (options.outputBase) {
-    process.env.VALDI_BAZEL_STARTUP_ARGS = `--output_user_root=${path.resolve(options.outputBase).replace(/\\/g, '/')}`;
+    const root = path.resolve(options.outputBase).replace(/\\/g, '/');
+    // A host rc that sets `startup --output_base` also beats `--output_user_root`, so name both.
+    process.env.VALDI_BAZEL_STARTUP_ARGS = `--output_user_root=${root} --output_base=${root}/base`;
   }
   if (options.repositoryCache) {
     process.env.VALDI_BAZEL_ARGS = `--repository_cache=${path.resolve(options.repositoryCache).replace(/\\/g, '/')}`;

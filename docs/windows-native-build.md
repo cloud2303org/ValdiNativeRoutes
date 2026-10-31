@@ -128,6 +128,28 @@ An isolated Gradle home still has to download the wrapper distribution and the A
 `HTTPS_PROXY`, so when `-ProxyUrl` is given the script also passes the proxy as JVM settings (`GRADLE_OPTS`) and as
 `gradle.properties` entries inside that isolated home; the npm fetches get the documented retry/timeout settings.
 
+### Which fetches use the proxy
+
+They do not all follow the same path, and treating "GitHub works" as proof for the rest is wrong:
+
+| fetcher | transport | proxy behaviour |
+| --- | --- | --- |
+| `git` (checkout, fork fetch) | `GIT_CONFIG_COUNT`/`KEY`/`VALUE` | server-specific `http.https://github.com/.proxy`; `git config --get` returns the configured URL |
+| Bazel's downloader (module registry, `http_archive`, the `http_file` jars that `rules_jvm_external` creates) | Bazel's own HTTP client | honours `HTTPS_PROXY`/`NO_PROXY`; hosts listed in `NO_PROXY` are fetched **directly** |
+| coursier resolution inside `rules_jvm_external` | JVM started by Bazel | Java ignores `HTTPS_PROXY`; it is direct unless `-Dhttps.proxyHost` reaches that JVM |
+| Gradle (wrapper distribution, AGP, app dependencies) | JVM | direct by default; the cold script passes `GRADLE_OPTS` and `gradle.properties` so an isolated run is proxied |
+
+One consequence observed in CI: `dl.google.com` sits in the workflow's `NO_PROXY`, so the Google Maven jars are
+fetched directly, and the CDN answered `429` for a burst of parallel `http_file` downloads
+(`databinding-common`, `desugar_jdk_libs_minimal`, `espresso-idling-resource` at 12:36 UTC on 2026-10-31). Bazel
+already retries such downloads (`--experimental_repository_downloader_retries` defaults to 5 in 8.2.1), and both the
+direct and the proxied path returned `200` for the same jar minutes later, so this is rate limiting on the direct
+path rather than a configuration error. Routing that host through the proxy is a deliberate decision, not a default.
+
+`--output_base` also needs naming explicitly: a host-level `~/.bazelrc` with `startup --output_base=C:/_bazel`
+overrides `--output_user_root`, so the isolated entry points pass both flags and the cold proof fails if
+`bazel info output_base` is outside the run's root.
+
 The `Windows Android CI` workflow exposes the same proof as a manual `cold_build` input: it skips the normal job,
 runs `test-cold-build.ps1` in `C:\vc-<run id>` with the repository's optional proxy variables, uploads
 `windows-cold-<run id>` (logs, report JSON, APK) and removes only that isolation root.

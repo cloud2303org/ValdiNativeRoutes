@@ -13,6 +13,7 @@ param(
     [string]$Cmake,
     [int]$MinFreeGB = 25,
     [switch]$SkipInvalidation,
+    [switch]$SkipNewModule,
     [switch]$SkipNetworkCheck,
     [switch]$RemoveOnSuccess
 )
@@ -72,23 +73,38 @@ Write-Output "Cold build of $Repository @ $commit"
 Write-Output "Isolation root: $rootPath"
 
 $cloneLog = Join-Path $logDir 'clone.log'
-$previous = $ErrorActionPreference
-$ErrorActionPreference = 'Continue'
-try {
-    & $git clone --filter=blob:none --no-checkout $Repository $app *> $cloneLog
-    $code = $LASTEXITCODE
-    if ($code -eq 0) {
-        & $git -C $app fetch --depth=1 origin $commit *>> $cloneLog
-        $code = $LASTEXITCODE
+# A fresh network clone is the point of this check, so a proxy reset must not fail the proof:
+# retry the whole clone/detch/fetch/checkout sequence a bounded number of times.
+function Invoke-FreshClone([string]$Target, [string]$Commit) {
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & $git clone --filter=blob:none --no-checkout $Repository $Target *> $cloneLog
+        $exit = $LASTEXITCODE
+        if ($exit -eq 0) {
+            & $git -C $Target fetch --depth=1 origin $Commit *>> $cloneLog
+            $exit = $LASTEXITCODE
+        }
+        if ($exit -eq 0) {
+            & $git -C $Target checkout --detach $Commit *>> $cloneLog
+            $exit = $LASTEXITCODE
+        }
+    } finally {
+        $ErrorActionPreference = $previous
     }
-    if ($code -eq 0) {
-        & $git -C $app checkout --detach $commit *>> $cloneLog
-        $code = $LASTEXITCODE
-    }
-} finally {
-    $ErrorActionPreference = $previous
+    return $exit
 }
-if ($code -ne 0) { throw "Cloning $commit failed (exit $code). See $cloneLog" }
+$code = 1
+for ($attempt = 1; $attempt -le 3; $attempt++) {
+    if (Test-Path -LiteralPath $app) { Remove-Item -LiteralPath $app -Recurse -Force -ErrorAction SilentlyContinue }
+    $code = Invoke-FreshClone -Target $app -Commit $commit
+    if ($code -eq 0) { break }
+    if ($attempt -lt 3) {
+        Write-Output "Clone attempt $attempt failed (exit $code); retrying the clone..."
+        Start-Sleep -Seconds (5 * $attempt)
+    }
+}
+if ($code -ne 0) { throw "Cloning $commit failed (exit $code) after 3 attempts. See $cloneLog" }
 $head = (& $git -C $app rev-parse HEAD).Trim()
 if ($head -ne $commit) { throw "Checked-out HEAD $head is not the requested commit $commit" }
 $dirty = @(& $git -C $app status --porcelain=v1 --untracked-files=normal)
@@ -216,6 +232,47 @@ if (-not $SkipInvalidation) {
     $invalidation = ($invalidationOutput | Where-Object { $_ -and "$_".Trim().StartsWith('{') } | Select-Object -Last 1) | ConvertFrom-Json
 }
 
+# A module added through the documented scaffold must reach the module bundles without touching
+# the exported runtime. This runs last because the scaffold writes generated bindings.
+$newModule = $null
+if (-not $SkipNewModule) {
+    $moduleName = 'cold_probe'
+    $moduleLog = Join-Path $logDir 'cold-new-module.log'
+    $bundle = Join-Path $app "tools/valdi-rolldown/out/$moduleName.valdimodule"
+    $tsx = Join-Path $app 'tools/valdi-rolldown/node_modules/tsx/dist/cli.mjs'
+    Push-Location $app
+    try {
+        & node $tsx (Join-Path $app 'tools/valdi-rolldown/new-module.ts') $moduleName 2>&1 | Tee-Object -FilePath $moduleLog
+        $scaffoldExit = $LASTEXITCODE
+        if ($scaffoldExit -eq 0) {
+            & node (Join-Path $app 'scripts/project.mjs') modules 2>&1 | Tee-Object -FilePath $moduleLog -Append
+            $bundleExit = $LASTEXITCODE
+        } else { $bundleExit = $scaffoldExit }
+    } finally { Pop-Location }
+    if ($scaffoldExit -ne 0) { Write-Output "New module scaffold FAILED (exit $scaffoldExit): $moduleLog"; exit $scaffoldExit }
+    if ($bundleExit -ne 0) { Write-Output "Module bundle build FAILED after adding a module (exit $bundleExit): $moduleLog"; exit $bundleExit }
+    if (-not (Test-Path -LiteralPath $bundle -PathType Leaf)) { throw "The new module has no bundle: $bundle" }
+    if ((Get-HashOf $runtimeAar) -ne $hashes.runtimeAar) { throw 'Adding a module re-exported or changed the runtime AAR.' }
+    # Record what the fingerprints say about a later preparation of this tree (no export here).
+    Push-Location $app
+    try {
+        $planText = (& node (Join-Path $app 'scripts/cli.mjs') prebuild --platform android --dry-run --json) -join "`n"
+        $planExit = $LASTEXITCODE
+    } finally { Pop-Location }
+    $plan = if ($planExit -eq 0) { $planText | ConvertFrom-Json } else { $null }
+    Remove-Item -LiteralPath (Join-Path $app "valdi/modules/$moduleName") -Recurse -Force
+    $newModule = [ordered]@{
+        name             = $moduleName
+        scaffoldExit     = $scaffoldExit
+        bundleExit       = $bundleExit
+        bundleBytes      = (Get-Item -LiteralPath $bundle).Length
+        runtimeUnchanged = $true
+        planExit         = $planExit
+        plan             = @($plan.steps | ForEach-Object { "$($_.step): $($_.action)" })
+    }
+    Write-Output "New module: $moduleName scaffolded and bundled into $([System.IO.Path]::GetFileName($bundle))."
+}
+
 # Evidence that the caches were populated by this run, not by the host.
 $sizes = [ordered]@{}
 foreach ($entry in $cachePaths.GetEnumerator()) {
@@ -242,6 +299,7 @@ $report = [ordered]@{
     hashes        = $hashes
     tests         = @{ exitCode = $testCode; log = $testLog }
     invalidation  = $invalidation
+    newModule     = $newModule
     logs          = @{ clone = $cloneLog; build = $buildLog }
 }
 $reportPath = Join-Path $logDir 'cold-build-report.json'

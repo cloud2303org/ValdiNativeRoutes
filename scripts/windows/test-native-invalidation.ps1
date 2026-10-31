@@ -102,6 +102,26 @@ try {
     if ($runtimeAfterModuleApp -ne $InitialRuntimeHar) { throw 'The daily app build re-exported or changed the runtime AAR.' }
     Write-Output 'Module change: module library and APK rebuilt; runtime AAR untouched.'
 
+    # --- TypeScript only: the runtime and the native module libraries must stay put -
+    $tsSource = Join-Path $app 'valdi/modules/calculator/src/CalculatorComponent.tsx'
+    if (-not (Test-Path -LiteralPath $tsSource -PathType Leaf)) { throw "Fixture file missing: $tsSource" }
+    $tsBackup = Join-Path $env:TEMP ("calculator-ts-" + [guid]::NewGuid().ToString('N') + '.tsx')
+    Copy-Item -LiteralPath $tsSource -Destination $tsBackup
+    try {
+        $tsText = [System.IO.File]::ReadAllText($tsSource)
+        [System.IO.File]::WriteAllText($tsSource, $tsText + "`n// cold-typescript-fixture $fixture`n")
+        $tsExit = Invoke-Prebuild -LogName 'invalidation-typescript-prebuild.log'
+        if ($tsExit -ne 0) { throw "Prebuild failed after a TypeScript-only change (exit $tsExit)." }
+        $tsLog = Get-Content -LiteralPath (Join-Path $logs 'invalidation-typescript-prebuild.log') -Raw
+        if ($tsLog -match 'Exporting the runtime') { throw 'A TypeScript-only change re-exported the runtime.' }
+        if ((Get-HashOf $runtimeAar) -ne $InitialRuntimeHar) { throw 'A TypeScript-only change changed the runtime AAR.' }
+        if ((Get-HashOf $moduleJar) -ne $moduleJarAfter) { throw 'A TypeScript-only change rebuilt a native module library.' }
+        Write-Output 'TypeScript change: no runtime export, no native module rebuild.'
+    } finally {
+        Copy-Item -LiteralPath $tsBackup -Destination $tsSource -Force
+        Remove-Item -LiteralPath $tsBackup -Force -ErrorAction SilentlyContinue
+    }
+
     # --- valdi/native, which is linked into the runtime ---------------------------
     $nativeText = [System.IO.File]::ReadAllText($nativeSource)
     [System.IO.File]::WriteAllText($nativeSource, $nativeText + "`n// cold-invalidation-fixture $fixture`n")
@@ -133,6 +153,7 @@ $result = [ordered]@{
         runtimeUnchanged     = $true
         dailyBuildExit       = 0
         apkChanged           = $true
+        typescriptSkippedRuntime = $true
     }
     runtimeChange       = [ordered]@{
         dailyBuildExit          = $staleExit

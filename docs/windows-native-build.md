@@ -116,9 +116,17 @@ It requires an empty `-Root` on a short path, clones the repository over the net
 clone is clean and holds no AAR/APK/vendor directories, and gives the build an empty, isolated directory for every
 cache above (`caches\…`, `bazel-out`). It then runs the unified `pnpm android --no-install --no-launch` (prebuild
 plus the Gradle build), the pipeline tests against the fetched
-Valdi sources, and `scripts/windows/test-native-invalidation.ps1`, writes `logs\cold-build-report.json` with the
-cache sizes after the run, output hashes and test results, and prints the artifact hashes. Preinstalled tools are
-reused explicitly; this validates an isolated cold build on existing hardware, not a pristine Windows installation.
+Valdi sources, and `scripts/windows/test-native-invalidation.ps1` (standalone module change rebuilds the module
+library and APK without re-exporting; a TypeScript-only change does not rebuild either native artifact; a
+`valdi/native` change fails the daily build with the export instruction). It then scaffolds a module through
+`pnpm new-module` and rebuilds the module bundles (`-SkipNewModule` opts out), writes
+`logs\cold-build-report.json` with the cache sizes after the run, output hashes, test results, invalidation and
+new-module evidence, and prints the artifact hashes. Preinstalled tools are reused explicitly; this validates an
+isolated cold build on existing hardware, not a pristine Windows installation.
+
+The `Windows Android CI` workflow exposes the same proof as a manual `cold_build` input: it skips the normal job,
+runs `test-cold-build.ps1` in `C:\vc-<run id>` with the repository's optional proxy variables, uploads
+`windows-cold-<run id>` (logs, report JSON, APK) and removes only that isolation root.
 
 The full flow passes the validated Valdi checkout to the runtime export and runs
 `scripts/export-android.sh`, the vision preparation, and `gradlew.bat` directly.

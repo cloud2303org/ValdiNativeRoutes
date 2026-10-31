@@ -37,8 +37,26 @@ const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).d
 for (const name of ['cache', 'src', 'build', 'install']) fs.mkdirSync(path.join(vendor, name), {recursive: true});
 for (const dependency of [lock.opencv, lock.ncnn]) {
   const archive = path.join(vendor, 'cache', dependency.file);
-  if (!fs.existsSync(archive)) run('curl', ['--fail', '--location', '--retry', '2', dependency.url, '--output', archive]);
-  if (hash(archive) !== dependency.sha256) throw new Error(`Vendor archive checksum mismatch: ${archive}. Remove the invalid cache before retrying.`);
+  // A fresh machine downloads these over the network, where connections can reset.
+  // Download beside the archive and only publish the verified bytes.
+  const download = () => {
+    const partial = archive + '.partial';
+    fs.rmSync(partial, {force: true});
+    run('curl', ['--fail', '--location', '--retry', '5', '--retry-all-errors', '--retry-delay', '3',
+      '--connect-timeout', '30', dependency.url, '--output', partial]);
+    if (hash(partial) !== dependency.sha256) {
+      fs.rmSync(partial, {force: true});
+      throw new Error(`Vendor archive checksum mismatch after download: ${dependency.url}`);
+    }
+    fs.renameSync(partial, archive);
+  };
+  if (!fs.existsSync(archive)) download();
+  else if (hash(archive) !== dependency.sha256) {
+    // A partial or corrupted cache entry is re-fetched instead of failing the build forever.
+    console.warn(`Discarding a cache entry whose checksum does not match: ${archive}`);
+    fs.rmSync(archive, {force: true});
+    download();
+  }
   const source = path.join(vendor, 'src', dependency.directory);
   const stamp = path.join(source, '.native-routes-source.json');
   if (!fs.existsSync(stamp)) {

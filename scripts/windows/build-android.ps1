@@ -135,7 +135,12 @@ $visionLibraries = @(
 ) | ForEach-Object { Join-Path $root "vision/vendor/install/android-arm64/lib/lib$_.a" }
 $visionStale = -not (Test-VisionInstallCurrent -AppRoot $root -Target 'android-arm64')
 if (-not $SkipVisionPrepare -and (($visionLibraries | Where-Object { -not (Test-Path -LiteralPath $_) }) -or $visionStale)) {
-    if ($visionStale) { Write-Output 'Vision dependencies were built from another vendor lock; preparing them again.' }
+    $visionStamp = Join-Path $root 'vision/vendor/install/android-arm64/native-routes-vision.json'
+    if ($visionStale -and (Test-Path -LiteralPath $visionStamp -PathType Leaf)) {
+        Write-Output 'Vision dependencies were built from another vendor lock; preparing them again.'
+    } elseif ($visionStale) {
+        Write-Output 'Vision dependencies are not prepared in this checkout; building them from vision/vendor-lock.json.'
+    }
     & $script:Node (Join-Path $root 'vision/scripts/prepare-native.cjs') '--target' 'android-arm64'
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }

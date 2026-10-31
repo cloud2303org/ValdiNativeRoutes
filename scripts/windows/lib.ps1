@@ -376,6 +376,32 @@ function Get-RequiredCommandPath {
     return $command.Source
 }
 
+function Invoke-LoggedCommand {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [string[]]$Arguments = @(),
+        [string]$LogPath,
+        [switch]$Append
+    )
+
+    # Windows PowerShell 5.1 raises a terminating NativeCommandError for any stderr line while
+    # $ErrorActionPreference is Stop, and Bazel/Node print ordinary progress to stderr. Keep the
+    # preference at Continue for the child and report its own exit code instead.
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        if ($LogPath) {
+            & $FilePath @Arguments 2>&1 | Tee-Object -FilePath $LogPath -Append:$Append | Out-Host
+        } else {
+            & $FilePath @Arguments 2>&1 | Out-Host
+        }
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+    return [int]$code
+}
+
 function Get-CommandVersion {
     param(
         [Parameter(Mandatory = $true)][string]$Executable,

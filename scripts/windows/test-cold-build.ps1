@@ -141,10 +141,14 @@ foreach ($artifact in @('android/app/libs/valdi_runtime.aar', 'android/app/libs/
 $bazel = Assert-BazelRuntime -AppRoot $app -BazelPath $BazelPath
 $JavaHome = Assert-JdkRuntime -AppRoot $app -JavaHome $JavaHome
 $AndroidHome = Assert-AndroidSdkRuntime -AndroidHome $AndroidHome
+$nativeTools = Assert-NativeToolRuntime -Cmake $Cmake -AndroidHome $AndroidHome
 $env:BAZEL_BIN = $bazel.Path
+$env:VISION_CMAKE = $nativeTools.Cmake
 $initial.preinstalled.bazel = $bazel.Version
 $initial.preinstalled.java = $JavaHome
 $initial.preinstalled.sdk = $AndroidHome
+$initial.preinstalled.cmake = $nativeTools.Cmake
+$initial.preinstalled.ninja = $nativeTools.Ninja
 
 $nodeExe = Get-RequiredCommandPath -Name 'node'
 $nodeLauncher = Join-Path (Split-Path $nodeExe) 'node_modules/corepack/dist/pnpm.js'
@@ -185,10 +189,8 @@ Write-Output "Running pnpm android (unified prebuild + build) with isolated cach
 $started = Get-Date
 Push-Location $app
 try {
-    & node @arguments 2>&1 | Tee-Object -FilePath $buildLog
-    $buildCode = $LASTEXITCODE
+    $buildCode = Invoke-LoggedCommand -FilePath 'node' -Arguments $arguments -LogPath $buildLog
 } finally { Pop-Location }
-$buildCode = $LASTEXITCODE
 $elapsed = [math]::Round(((Get-Date) - $started).TotalMinutes, 1)
 if ($buildCode -ne 0) {
     Write-Output "Cold build FAILED after $elapsed min (exit $buildCode): $buildLog"
@@ -209,8 +211,8 @@ $hashes = [ordered]@{ runtimeAar = Get-HashOf $runtimeAar; moduleJar = Get-HashO
 $testLog = Join-Path $logDir 'cold-test.log'
 Push-Location $app
 try {
-    & node scripts/project.mjs test --valdi (Join-Path $app 'valdi/.valdi-sources/external/valdi+') 2>&1 | Tee-Object -FilePath $testLog
-    $testCode = $LASTEXITCODE
+    $testCode = Invoke-LoggedCommand -FilePath 'node' -LogPath $testLog `
+        -Arguments @('scripts/project.mjs', 'test', '--valdi', (Join-Path $app 'valdi/.valdi-sources/external/valdi+'))
 } finally {
     Pop-Location
 }
@@ -242,11 +244,11 @@ if (-not $SkipNewModule) {
     $tsx = Join-Path $app 'tools/valdi-rolldown/node_modules/tsx/dist/cli.mjs'
     Push-Location $app
     try {
-        & node $tsx (Join-Path $app 'tools/valdi-rolldown/new-module.ts') $moduleName 2>&1 | Tee-Object -FilePath $moduleLog
-        $scaffoldExit = $LASTEXITCODE
+        $scaffoldExit = Invoke-LoggedCommand -FilePath 'node' -LogPath $moduleLog `
+            -Arguments @($tsx, (Join-Path $app 'tools/valdi-rolldown/new-module.ts'), $moduleName)
         if ($scaffoldExit -eq 0) {
-            & node (Join-Path $app 'scripts/project.mjs') modules 2>&1 | Tee-Object -FilePath $moduleLog -Append
-            $bundleExit = $LASTEXITCODE
+            $bundleExit = Invoke-LoggedCommand -FilePath 'node' -LogPath $moduleLog -Append `
+                -Arguments @((Join-Path $app 'scripts/project.mjs'), 'modules')
         } else { $bundleExit = $scaffoldExit }
     } finally { Pop-Location }
     if ($scaffoldExit -ne 0) { Write-Output "New module scaffold FAILED (exit $scaffoldExit): $moduleLog"; exit $scaffoldExit }
@@ -256,8 +258,12 @@ if (-not $SkipNewModule) {
     # Record what the fingerprints say about a later preparation of this tree (no export here).
     Push-Location $app
     try {
-        $planText = (& node (Join-Path $app 'scripts/cli.mjs') prebuild --platform android --dry-run --json) -join "`n"
-        $planExit = $LASTEXITCODE
+        $previous = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $planText = (& node (Join-Path $app 'scripts/cli.mjs') prebuild --platform android --dry-run --json 2>&1) -join "`n"
+            $planExit = $LASTEXITCODE
+        } finally { $ErrorActionPreference = $previous }
     } finally { Pop-Location }
     $plan = if ($planExit -eq 0) { $planText | ConvertFrom-Json } else { $null }
     Remove-Item -LiteralPath (Join-Path $app "valdi/modules/$moduleName") -Recurse -Force
@@ -283,7 +289,10 @@ foreach ($entry in $cachePaths.GetEnumerator()) {
 $bazelState = @()
 Push-Location (Join-Path $app 'valdi')
 try {
-    $bazelState = @(& $bazel.Path info output_base 2>&1 | ForEach-Object { "$_".Trim() })
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $bazelState = @(& $bazel.Path info output_base 2>&1 | ForEach-Object { "$_".Trim() }) }
+    finally { $ErrorActionPreference = $previous }
 } finally { Pop-Location }
 
 $report = [ordered]@{

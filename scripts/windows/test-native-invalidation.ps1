@@ -47,8 +47,7 @@ function Invoke-Node([string[]]$Arguments, [string]$LogName) {
     $log = Join-Path $logs $LogName
     Push-Location $app
     try {
-        & node @Arguments 2>&1 | Tee-Object -FilePath $log | Out-Host
-        return [int]$LASTEXITCODE
+        return Invoke-LoggedCommand -FilePath 'node' -Arguments $Arguments -LogPath $log
     } finally { Pop-Location }
 }
 function Invoke-Prebuild([string]$LogName) {

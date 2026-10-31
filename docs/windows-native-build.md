@@ -140,15 +140,20 @@ They do not all follow the same path, and treating "GitHub works" as proof for t
 | Gradle (wrapper distribution, AGP, app dependencies) | JVM | direct by default; the cold script passes `GRADLE_OPTS` and `gradle.properties` so an isolated run is proxied |
 
 One consequence observed in CI: `dl.google.com` sits in the workflow's `NO_PROXY`, so the Google Maven jars are
-fetched directly, and the CDN answered `429` for a burst of parallel `http_file` downloads
-(`databinding-common`, `desugar_jdk_libs_minimal`, `espresso-idling-resource` at 12:36 UTC on 2026-10-31). Bazel
-already retries such downloads (`--experimental_repository_downloader_retries` defaults to 5 in 8.2.1), and both the
-direct and the proxied path returned `200` for the same jar minutes later, so this is rate limiting on the direct
-path rather than a configuration error. Routing that host through the proxy is a deliberate decision, not a default.
+fetched directly. Run `41201533819` failed there with `429` on three artifacts
+(`databinding-common` 8.7.0, `desugar_jdk_libs_minimal` 2.1.5, `espresso-idling-resource` 3.6.1 at 12:36 UTC on
+2026-10-31). What the logs prove is the response code and the direct route; that a parallel burst caused the CDN to
+rate-limit this address is an inference - there is no server-side log or request timeline for it. Bazel already
+retries such downloads (`--experimental_repository_downloader_retries` defaults to 5 in 8.2.1), and the same jar
+returned `200` over both the direct and the proxied route minutes later. Routing that host through the proxy is a
+deliberate decision, not a default.
 
 `--output_base` also needs naming explicitly: a host-level `~/.bazelrc` with `startup --output_base=C:/_bazel`
-overrides `--output_user_root`, so the isolated entry points pass both flags and the cold proof fails if
-`bazel info output_base` is outside the run's root.
+overrides `--output_user_root`, so the isolated entry points pass both flags. `valdi` and `module-build` are
+different Bazel workspaces and must not share one base, so the run root travels as
+`VALDI_BAZEL_OUTPUT_BASE_ROOT` and each workspace appends its own name (`<root>/base/valdi`,
+`<root>/base/module-build`). The cold proof fails if either `bazel info output_base` is outside the run root or if
+the two are the same path.
 
 The `Windows Android CI` workflow exposes the same proof as a manual `cold_build` input: it skips the normal job,
 runs `test-cold-build.ps1` in `C:\vc-<run id>` with the repository's optional proxy variables, uploads

@@ -191,9 +191,11 @@ $env:GOCACHE = $cachePaths.goBuild
 $env:COURSIER_CACHE = $cachePaths.coursier
 $env:BAZELISK_HOME = $cachePaths.bazelisk
 # Explicit flags beat any host rc file, so every child build (and the checks below) stays inside the root.
-# --output_base is repeated because a host rc that sets it also beats --output_user_root.
+# valdi and module-build are different Bazel workspaces and must not share an output base, so only the
+# root travels here; each workspace appends its own name.
 $isolatedRoot = $outputBase -replace '\\', '/'
-$env:VALDI_BAZEL_STARTUP_ARGS = "--output_user_root=$isolatedRoot --output_base=$isolatedRoot/base"
+$env:VALDI_BAZEL_OUTPUT_BASE_ROOT = "$isolatedRoot/base"
+$env:VALDI_BAZEL_STARTUP_ARGS = "--output_user_root=$isolatedRoot"
 $env:VALDI_BAZEL_ARGS = '--repository_cache=' + ($cachePaths.bazelRepos -replace '\\', '/')
 # A cold install downloads everything at once; ride out proxy resets instead of failing the proof.
 $env:npm_config_fetch_retries = '6'
@@ -353,7 +355,10 @@ Push-Location (Join-Path $app 'valdi')
 try {
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    try { $bazelState = @(& $bazel.Path info output_base 2>&1 | ForEach-Object { "$_".Trim() }) }
+    try {
+        $bazelState = @(& $bazel.Path "--output_user_root=$isolatedRoot" "--output_base=$isolatedRoot/base/valdi" info output_base 2>&1 |
+            ForEach-Object { "$_".Trim() })
+    }
     finally { $ErrorActionPreference = $previous }
 } finally { Pop-Location }
 $bazelOutputBase = @($bazelState | Where-Object { $_ })[-1]
@@ -361,6 +366,26 @@ $isolatedPrefix = $rootPath -replace '\\', '/'
 if (-not $bazelOutputBase -or -not $bazelOutputBase.StartsWith($isolatedPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
     # A host-level ~/.bazelrc wins over the workspace files; only explicit flags keep the proof isolated.
     throw "Bazel output base '$bazelOutputBase' is outside the isolation root '$rootPath'."
+}
+
+# The module-build workspace is a different Bazel workspace; it must have its own base inside the root.
+$moduleBazelState = @()
+Push-Location (Join-Path $app 'module-build')
+try {
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $moduleBazelState = @(& $bazel.Path "--output_user_root=$isolatedRoot" "--output_base=$isolatedRoot/base/module-build" info output_base 2>&1 |
+            ForEach-Object { "$_".Trim() })
+    }
+    finally { $ErrorActionPreference = $previous }
+} finally { Pop-Location }
+$bazelModuleOutputBase = @($moduleBazelState | Where-Object { $_ })[-1]
+if (-not $bazelModuleOutputBase -or -not $bazelModuleOutputBase.StartsWith($isolatedPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "The module-build output base '$bazelModuleOutputBase' is outside the isolation root '$rootPath'."
+}
+if ($bazelModuleOutputBase -eq $bazelOutputBase) {
+    throw "valdi and module-build share the output base '$bazelOutputBase'; they are different workspaces."
 }
 
 $report = [ordered]@{
@@ -372,7 +397,8 @@ $report = [ordered]@{
     finishedAt    = (Get-Date).ToUniversalTime().ToString('o')
     isolation     = $initial.emptyAtStart
     cacheMegabytesAfter = $sizes
-    bazelOutputBase = $bazelOutputBase
+    bazelOutputBase       = $bazelOutputBase
+    bazelModuleOutputBase = $bazelModuleOutputBase
     hashes        = $hashes
     tests         = @{ exitCode = $testCode; log = $testLog }
     invalidation  = $invalidation

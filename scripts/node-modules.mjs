@@ -106,6 +106,11 @@ function buildWithJunction(platform, release, native, names) {
   // --max_idle_secs bounds the server's lifetime: a server that outlives this process inherits its
   // stdout, which keeps a caller's pipe (Tee-Object, the CI runner) open after the build is done.
   const startup = [...extraBazelFlags(process.env.VALDI_BAZEL_STARTUP_ARGS), '--max_idle_secs=60'];
+  const isolatedBaseRoot = process.env.VALDI_BAZEL_OUTPUT_BASE_ROOT;
+  if (isolatedBaseRoot) {
+    // valdi and module-build are different workspaces; they must not share one output base.
+    startup.push(`--output_base=${isolatedBaseRoot.replace(/\\/g, '/')}/module-build`);
+  }
   const extra = extraBazelFlags(process.env.VALDI_BAZEL_ARGS);
   const flags =
     platform === 'ios' ? ['--platforms=//:ios_sim_arm64'] : ['--android_platforms=@snap_platforms//os:android_arm64'];

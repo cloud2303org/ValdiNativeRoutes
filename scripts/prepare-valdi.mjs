@@ -27,9 +27,16 @@ try {
   const envBazel = (process.env.VALDI_BAZEL_ARGS ?? '').split(/\s+/).filter(Boolean);
   // Both options keep an isolated build from touching a shared Bazel server or cache.
   const isolatedRoot = outputBase ? path.resolve(outputBase).replace(/\\/g, '/') : undefined;
+  const baseRoot = isolatedRoot
+    ? `${isolatedRoot}/base`
+    : (process.env.VALDI_BAZEL_OUTPUT_BASE_ROOT ?? '').replace(/\\/g, '/');
+  const startupArgs = [];
+  if (isolatedRoot) startupArgs.push(`--output_user_root=${isolatedRoot}`);
+  startupArgs.push(...(baseRoot ? [`--output_base=${baseRoot}/valdi`] : envStartup));
   prepareSources(root, {
-    // A host-level `startup --output_base` in ~/.bazelrc overrides --output_user_root, so pass both.
-    startupArgs: isolatedRoot ? [`--output_user_root=${isolatedRoot}`, `--output_base=${isolatedRoot}/base`] : envStartup,
+    // A host-level `startup --output_base` in ~/.bazelrc overrides --output_user_root, so the valdi
+    // workspace names its own base under the shared isolated root.
+    startupArgs,
     bazelArgs: repositoryCache ? [`--repository_cache=${path.resolve(repositoryCache).replace(/\\/g, '/')}`] : envBazel,
   });
   runPnpm(['--dir', 'tools/valdi-rolldown', 'tsconfig'], root);

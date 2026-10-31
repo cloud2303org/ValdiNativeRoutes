@@ -127,8 +127,11 @@ function applyCaches(options) {
   // must not inherit the host's output base or repository cache.
   if (options.outputBase) {
     const root = path.resolve(options.outputBase).replace(/\\/g, '/');
-    // A host rc that sets `startup --output_base` also beats `--output_user_root`, so name both.
-    process.env.VALDI_BAZEL_STARTUP_ARGS = `--output_user_root=${root} --output_base=${root}/base`;
+    // A host rc that sets `startup --output_base` beats `--output_user_root`, so every workspace must name
+    // its own base. Two workspaces (valdi, module-build) cannot share one base, so only the root travels in
+    // the environment and each workspace appends its own suffix.
+    process.env.VALDI_BAZEL_OUTPUT_BASE_ROOT = `${root}/base`;
+    process.env.VALDI_BAZEL_STARTUP_ARGS = `--output_user_root=${root}`;
   }
   if (options.repositoryCache) {
     process.env.VALDI_BAZEL_ARGS = `--repository_cache=${path.resolve(options.repositoryCache).replace(/\\/g, '/')}`;

@@ -99,8 +99,10 @@ Write-BazelRcFiles -AppRoot $root -Lines $localBazelRc -CacheLines $cacheBazelRc
 # isolated root also becomes an environment flag for the export and the module-build workspace.
 $env:VALDI_BAZEL_STARTUP_ARGS = if ($OutputBase) {
     $root = $resolvedOutputBase -replace '\\', '/'
-    # A host rc that sets `startup --output_base` beats --output_user_root, so name both.
-    "--output_user_root=$root --output_base=$root/base"
+    # A host rc that sets `startup --output_base` beats --output_user_root, so name both. valdi and
+    # module-build are different workspaces and each gets its own base under this run's root.
+    $env:VALDI_BAZEL_OUTPUT_BASE_ROOT = "$root/base"
+    "--output_user_root=$root --output_base=$root/base/valdi"
 } else { '' }
 $env:VALDI_BAZEL_ARGS = if ($RepositoryCache) { '--repository_cache=' + ($resolvedRepositoryCache -replace '\\', '/') } else { '' }
 

@@ -113,3 +113,7 @@ build --@valdi//bzl/valdi:js_bytecode_format=hermes
 
 # Valdi Open Source Flags
 build --define=open_source_build=true
+
+# The Windows entry points (scripts/windows/lib.ps1) write win.cache.bazelrc to redirect shared caches for an
+# isolated build. Imported last so its options win over the defaults above.
+try-import %workspace%/win.cache.bazelrc

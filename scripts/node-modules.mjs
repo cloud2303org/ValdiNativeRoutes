@@ -1,6 +1,6 @@
 // Module-only Bazel workspace. App packaging remains Gradle/Xcode.
 import { spawnSync } from 'node:child_process';
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -44,6 +44,29 @@ export function buildNodeModules(platform = 'ios', release = false, native = fal
       'module-build and valdi must pin the same Valdi commit; synchronize module-build before building modules',
     );
   }
+  // module-build/modules is a tracked symlink. A Windows checkout without symlink support (a limited
+  // runner account) writes it as a text file, and Bazel cannot follow that; a junction needs no
+  // privilege. Restore the tracked content afterwards so the checkout stays as git expects.
+  const modulesLink = path.join(workspace, 'modules');
+  const modulesTarget = path.join(root, 'valdi/modules');
+  let restoreText;
+  const linkState = lstatSync(modulesLink, { throwIfNoEntry: false });
+  if (linkState && !linkState.isSymbolicLink() && linkState.isFile()) {
+    restoreText = readFileSync(modulesLink);
+    rmSync(modulesLink, { force: true });
+  }
+  if (!existsSync(modulesLink)) symlinkSync(modulesTarget, modulesLink, 'junction');
+  try {
+    return buildWithJunction(platform, release, native, names);
+  } finally {
+    if (restoreText !== undefined) {
+      rmSync(modulesLink, { recursive: true, force: true });
+      writeFileSync(modulesLink, restoreText);
+    }
+  }
+}
+
+function buildWithJunction(platform, release, native, names) {
   const command = process.env.BAZEL_BIN ?? 'bazel';
   const flags =
     platform === 'ios' ? ['--platforms=//:ios_sim_arm64'] : ['--android_platforms=@snap_platforms//os:android_arm64'];

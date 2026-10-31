@@ -8,7 +8,10 @@ param(
     [string]$BazelPath,
     [string]$OutputBase,
     [string]$RepositoryCache,
+    [string]$DiskCache,
     [string]$GoModCache,
+    [string]$GoProxy,
+    [switch]$Offline,
     [string]$JavaHome,
     [string]$AndroidHome,
     [string]$GitBash,
@@ -70,23 +73,34 @@ if ($RepositoryCache) {
 }
 
 if ($GoModCache) {
-    if (-not (Test-Path -LiteralPath $GoModCache -PathType Container)) {
-        throw "Go module cache not found: $GoModCache"
-    }
+    # A fresh build supplies an empty directory; Bazel's Go rules fill it over the network.
+    New-Item -ItemType Directory -Path $GoModCache -Force | Out-Null
     $env:GOMODCACHE = (Resolve-Path -LiteralPath $GoModCache).Path
+}
+if ($GoProxy) {
+    $env:GOPROXY = $GoProxy
+}
+if ($Offline) {
     $env:GOPROXY = 'off'
 }
 
 $localBazelRc = New-BazelRcOptions -OutputBase $resolvedOutputBase -ValdiCheckout $resolvedValdi `
     -Distdir $resolvedDistdir -RepositoryCache $resolvedRepositoryCache -JavaHome $env:JAVA_HOME `
     -BazelArg $BazelArg -BazelArgs $BazelArgs
-Write-BazelRcFiles -AppRoot $root -Lines $localBazelRc
+$resolvedDiskCache = $null
+if ($DiskCache) {
+    New-Item -ItemType Directory -Path $DiskCache -Force | Out-Null
+    $resolvedDiskCache = (Resolve-Path -LiteralPath $DiskCache).Path
+}
+$cacheBazelRc = New-BazelCacheRcOptions -DiskCache $resolvedDiskCache
+Write-BazelRcFiles -AppRoot $root -Lines $localBazelRc -CacheLines $cacheBazelRc
 $env:VALDI_BAZEL_ARGS = ''
 
 $bash = Resolve-GitBashPath $GitBash
 $env:BAZEL_SH = $bash
 Write-Output "Git Bash: $bash"
 Write-Output "Bazel output root: $resolvedOutputBase"
+if ($resolvedDiskCache) { Write-Output "Bazel disk action cache: $resolvedDiskCache" }
 
 $bashOutput = ''
 if ($OutputDir) {

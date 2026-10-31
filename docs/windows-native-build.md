@@ -34,11 +34,84 @@ modules, and assembles the Debug APK with `gradlew.bat`. The Gradle pipeline's
 TypeScript tasks invoke pnpm through `scripts/pnpm.mjs`, which uses Node and the
 bundled Corepack launcher instead of spawning a `.cmd` shim.
 
+`build-android.ps1` is the full entry point: it verifies every prerequisite, runs
+`pnpm install --frozen-lockfile` itself when the three dependency trees are missing,
+exports the runtime, prepares Vision, builds the Bazel-backed modules and assembles
+the APK. A new computer needs this one command plus the preinstalled tools; it does
+not need a previous export, APK or Maven seed. `pnpm build:android` is the daily
+entry point: it checks an existing export and fails with the
+`sh scripts/export-android.sh` instruction when the Valdi pin/toolchain or
+`valdi/native` changed, instead of exporting silently.
+
 The complete Windows entry point is Debug-only, matching `pnpm build:android`.
 Release runtime export remains available through `export-android.ps1 -Config release`.
 
 Use `-SkipRuntimeExport` when the runtime and its fingerprint are already
 current. Use `-SkipVisionPrepare` to reuse an existing vision build.
+
+## What is preinstalled and what is downloaded
+
+Preinstalled tools are prerequisites and are never downloaded by these scripts:
+
+- Windows 10+ with PowerShell 5.1, Git for Windows (Git Bash) and `System32\tar.exe`.
+- Node 24 with the pinned pnpm launcher (`package.json` `packageManager`, the Corepack `pnpm.js` or `pnpm.cjs`).
+- Bazel 8.2.1, verified against `valdi/.bazelversion`.
+- JDK 17 or newer (CI uses Temurin 17; `-JavaHome` selects it explicitly).
+- Android SDK with `platforms;android-37.0`, `build-tools;37.0.0`, `ndk;27.1.12297006`, `cmake;3.22.1`.
+- CMake and Ninja for the Vision preparation (`-Cmake` selects a CMake; the SDK's 3.22.1 is the default) and
+  `curl.exe`.
+
+Everything else is fetched online from committed pins and lockfiles: pnpm packages (`pnpm-lock.yaml`), Valdi fork
+sources/registry (`valdi/MODULE.bazel` + `MODULE.bazel.lock`), Bazel modules (BCR and the fork registry), Maven
+artifacts (Aliyun Central mirror first, then `dl.google.com`), Gradle plugins/dependencies (`GRADLE_USER_HOME`),
+the Gradle distribution, the Go modules used by Bazel, and the OpenCV/ncnn archives (`vision/vendor-lock.json`,
+checksum-verified) that are compiled from source.
+
+Nearly all of this goes through HTTP(S). When the host needs a proxy, pass it explicitly; nothing assumes a
+particular local listener:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/windows/build-android.ps1 `
+  -ProxyUrl http://proxy.example:8080 -NoProxy "repo1.maven.org,dl.google.com,maven.google.com"
+```
+
+`-ProxyUrl` sets `HTTPS_PROXY`/`HTTP_PROXY` and Git's `http.https://github.com/.proxy` for the build processes
+only; `-SkipNetworkCheck` skips the one-request reachability probe. `-Offline` (with `-GoModCache`) keeps
+`GOPROXY=off` for a fully seeded Go cache.
+
+## Caches and isolated builds
+
+The build writes only these caches:
+
+| cache | default | isolated override |
+| --- | --- | --- |
+| Bazel output/user root | `C:/b` | `-OutputBase` |
+| Bazel repository cache | `~/_bazel_<user>/cache/repos/v1` | `-RepositoryCache` |
+| Bazel disk action cache | `~/.cache/bazel-disk-cache` (from `.bazelrc`) | `-DiskCache` |
+| pnpm store / npm cache | pnpm's user store | `-PnpmStore`, `npm_config_cache` |
+| Gradle user home | `~/.gradle` | `-GradleUserHome` |
+| Go module/build cache | Go's user cache | `-GoModCache`, `GOMODCACHE`/`GOCACHE` |
+| Valdi sources for the compiler | Bazel output base | `VALDI_SOURCE_ROOT`, `valdi/.valdi-sources` |
+
+`-DiskCache` is written to `valdi/win.cache.bazelrc` and `module-build/win.cache.bazelrc`, which the checked-in
+`.bazelrc` files import last, so the override wins over the shared default. Both files are ignored by git and are
+rewritten by every run (an empty file means "use the defaults"), so a previous isolated run cannot keep redirecting
+caches.
+
+`scripts/windows/test-cold-build.ps1` proves the fresh-computer path on one machine:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/windows/test-cold-build.ps1 `
+  -Root C:\vc -Commit <sha> -ProxyUrl http://proxy.example:8080 `
+  -BazelPath C:\tools\bazel.exe -JavaHome C:\jdk17 -AndroidHome C:\Android\Sdk
+```
+
+It requires an empty `-Root` on a short path, clones the repository over the network at one commit, verifies the
+clone is clean and holds no AAR/APK/vendor directories, and gives the build an empty, isolated directory for every
+cache above (`caches\…`, `bazel-out`). It then runs the full entry point, the pipeline tests against the fetched
+Valdi sources, and `scripts/windows/test-native-invalidation.ps1`, writes `logs\cold-build-report.json` with the
+cache sizes after the run, output hashes and test results, and prints the artifact hashes. Preinstalled tools are
+reused explicitly; this validates an isolated cold build on existing hardware, not a pristine Windows installation.
 
 The full flow passes the validated Valdi checkout to the runtime export and runs
 `scripts/export-android.sh`, the vision preparation, and `gradlew.bat` directly.
@@ -165,6 +238,38 @@ bazel aquery "deps(//:valdi_runtime_android)" `
 cd ..
 node scripts/verify-runtime-actions.mjs runtime-actions.json
 ```
+
+## Native changes and invalidation
+
+`ota/fingerprint.json` splits the inputs into a Valdi half and a per-platform native half:
+
+- **`valdi`**: the Valdi fork pin/registry, `valdi/.bazelrc`, the runtime Node compiler
+  (`tools/valdi-rolldown/{runtime-module,valdiTs,pipeline,archive,hermes}.ts`, `codegen`, `vendor`), and
+  `valdi/native` (the app C++ linked into `libvaldi_runtime.so`). Changing any of these makes
+  `scripts/ota.mjs check-export` fail with the `sh scripts/export-android.sh` instruction; the full Windows
+  entry point re-exports first, so it is the supported way to rebuild.
+- **`android`**: host sources, the standalone module's native implementation (`valdi/modules/calculator/android`,
+  `module.json`, `Calculator.d.ts`), `module-build/`, Gradle files, `vision/`, and `ota/public.pem`. Changing these
+  rebuilds the module library (`module-build` Bazel workspace) and the APK; the runtime AAR is not re-exported.
+
+Generated bindings follow the same split: `tools/valdi-rolldown/codegen.ts` writes Kotlin to
+`android/app/generated/valdi` and C++ to `valdi/native/generated` for app modules, but **excludes**
+`nativeBuild: "bazel"` modules because they compile their bindings in their own native libraries. So:
+
+- adding or changing a standalone native module (`module.json` `nativeBuild: "bazel"` plus native sources in the
+  module) rebuilds that module's library and the app; no runtime export is needed;
+- changing an app-level `@Export` declaration (a non-Bazel module), `valdi/native`, or the Valdi pin/toolchain
+  changes `valdi/native/generated` or the runtime inputs, so the runtime must be exported again.
+
+`scripts/windows/test-native-invalidation.ps1` checks this against a real build: it changes the calculator
+implementation and asserts the module JAR and APK change while the AAR hash stays identical; then it changes
+`valdi/native/src/Cpp.cpp` and asserts the daily `pnpm build:android` exits non-zero with the `runtime is out of
+date` instruction and leaves the old AAR untouched, after which the full entry point exports a new AAR. Finally it
+restores both files and rebuilds, so the reported artifacts match the committed tree. A failing export never
+silently produces a new APK: the wrapper exits before Gradle runs, and `check-export` rejects a stale AAR.
+
+The Vision preparation stamps its source pins; a changed `vision/vendor-lock.json` makes both the daily check and
+the full wrapper demand a fresh `prepare-native.cjs` instead of reusing old archives.
 
 ## GitHub Actions
 

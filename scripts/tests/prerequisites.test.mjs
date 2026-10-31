@@ -115,10 +115,22 @@ test('a clean checkout reports missing sources with a preparation command', t =>
 
 test('vision dependencies must include all linked Android archives', t => {
   const { root, write } = fixture(t);
+  const lock = { opencv: { version: '4.12.0', sha256: 'opencv-sha' }, ncnn: { version: '20250503', sha256: 'ncnn-sha' } };
+  write('vision/vendor-lock.json', JSON.stringify(lock));
+  const stamp = (opencv = lock.opencv, ncnn = lock.ncnn) => JSON.stringify({
+    target: 'android-arm64', opencv: opencv.version, ncnn: ncnn.version,
+    sourcePins: { opencv: opencv.sha256, ncnn: ncnn.sha256 },
+  });
   for (const name of ['opencv_core', 'opencv_imgproc', 'opencv_highgui']) {
     write(`vision/vendor/install/android-arm64/lib/lib${name}.a`, 'archive');
   }
   assert.throws(() => checkVision(root, 'android'), /prepare-native\.cjs --target android-arm64/);
   write('vision/vendor/install/android-arm64/lib/libncnn.a', 'archive');
+  // Archives without the preparation stamp are not proof of what they were built from.
+  assert.throws(() => checkVision(root, 'android'), /another vision\/vendor-lock\.json/);
+  write('vision/vendor/install/android-arm64/native-routes-vision.json', stamp());
   assert.doesNotThrow(() => checkVision(root, 'android'));
+  // A changed lock invalidates the existing build.
+  write('vision/vendor-lock.json', JSON.stringify({ ...lock, ncnn: { version: '20250504', sha256: 'other-ncnn-sha' } }));
+  assert.throws(() => checkVision(root, 'android'), /another vision\/vendor-lock\.json/);
 });

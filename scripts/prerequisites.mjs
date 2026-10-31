@@ -123,4 +123,17 @@ export function checkVision(root, platform) {
   if (targets.some(file => !existsSync(path.join(root, file)))) {
     throw new Error(`${platform} OpenCV/ncnn dependencies are missing. Run:\n  node vision/scripts/prepare-native.cjs --target ${platform === 'android' ? 'android-arm64' : 'ios'}`);
   }
+  // The app fingerprint names vision/vendor-lock.json: libraries built from another lock
+  // would silently mix inputs, so compare the stamps the preparation writes.
+  const lock = JSON.parse(readFileSync(path.join(root, 'vision/vendor-lock.json'), 'utf8'));
+  const prepared = platform === 'android' ? ['android-arm64'] : ['ios-arm64', 'ios-simulator-arm64'];
+  for (const target of prepared) {
+    const stamp = path.join(root, 'vision/vendor/install', target, 'native-routes-vision.json');
+    let info;
+    try { info = JSON.parse(readFileSync(stamp, 'utf8')); } catch { info = undefined; }
+    if (!info || info.opencv !== lock.opencv.version || info.ncnn !== lock.ncnn.version
+      || info.sourcePins?.opencv !== lock.opencv.sha256 || info.sourcePins?.ncnn !== lock.ncnn.sha256) {
+      throw new Error(`${platform} OpenCV/ncnn dependencies were built from another vision/vendor-lock.json. Run:\n  node vision/scripts/prepare-native.cjs --target ${platform === 'android' ? 'android-arm64' : 'ios'}`);
+    }
+  }
 }

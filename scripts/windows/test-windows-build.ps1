@@ -209,6 +209,14 @@ try {
         Assert-True ($lines -contains 'common common_arg=1') 'common-scoped argument must be kept'
     }
 
+    Test-Case 'an isolated Bazel disk cache is a quoted, last-imported build option' {
+        $cacheLines = New-BazelCacheRcOptions -DiskCache $spacedCache
+        Assert-Equal 1 @($cacheLines).Count 'one cache override line'
+        Assert-True ($cacheLines[0].StartsWith('build --disk_cache="')) 'disk cache must be a build option with a quoted path'
+        Assert-True ($cacheLines[0].Contains(($spacedCache -replace '\\', '/'))) 'disk cache path must be forward-slashed'
+        Assert-Equal 0 @(New-BazelCacheRcOptions).Count 'no override means the checked-in default stays in effect'
+    }
+
     Test-Case 'rc file is UTF-8 without BOM and round-trips non-ASCII' {
         $rcFile = Join-Path $tempRoot 'win.local.bazelrc'
         Write-Utf8NoBomLines -Path $rcFile -Lines @('startup "--output_user_root=C:/b"', ('common "--distdir=C:/dist ' + $unicodeWord + '"'))

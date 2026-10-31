@@ -65,6 +65,20 @@ artifact 上传是可选步骤：账号存储额度不足时会在日志和任�
 helloworld / Widgets / Web 示例构建、Snap 发布和 GCP 缓存认证。这些是上游项目自己的职责，
 并非都已经获得本项目的等价覆盖；特别是新 Node 热重载路径还没有专门的自动 delivery smoke。
 
+## Windows 冷启动与失效验证
+
+`scripts/windows/build-android.ps1` 是完整入口：缺依赖时会先跑 `pnpm install --frozen-lockfile`，再导出
+运行时、准备 Vision、构建 module-build 模块并打包 APK；新机器只需要预装工具（Node 24、pnpm 启动器、
+Bazel 8.2.1、JDK 17、Android SDK/NDK/CMake、Git Bash、CMake/Ninja/curl）。`pnpm build:android` 是日常入口：
+运行时缺失或 `valdi` 指纹过期时只报错并给出 `sh scripts/export-android.sh` 指令，不会静默复用旧 AAR。
+
+`scripts/windows/test-cold-build.ps1` 在空目录里从网络克隆一个提交，并使用空的 pnpm store、Bazel
+output/user root/repository/disk cache、Gradle user home、Go/Coursier 缓存和 Vision 目录跑完整入口，
+然后跑管线测试和 `scripts/windows/test-native-invalidation.ps1`（独立模块改动只重建模块库+APK；
+`valdi/native` 改动会让日常构建拒绝旧 AAR，完整入口重新导出）。CI 的 `Windows Android CI` 增加手动的
+`cold_build` 输入，用同一脚本在隔离路径运行，上传 `logs/cold-build-report.json` 与 APK；workflow 并发组与
+常规 Windows 任务共用，避免同一台机器上并发大构建。详见 [Windows 原生构建](windows-native-build.md)。
+
 ## 仍然需要的原生工具与产物
 
 - **Valdi + Hermes + 应用 C++ 运行时**：由 `scripts/export-android.sh` / `export-ios.sh` 导出

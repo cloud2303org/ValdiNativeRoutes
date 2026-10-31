@@ -13,6 +13,10 @@ on:
         description: Optional Widgets tag when overriding Valdi
         type: string
         default: ''
+      cold_build:
+        description: Also prove an isolated cold bootstrap (fresh clone, empty caches)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -25,7 +29,7 @@ jobs:
   windows-android:
     name: Windows native Android
     # A public repository must not run untrusted PR code on the personal PC.
-    if: github.repository == 'cloud2303org/ValdiNativeRoutes' && github.ref == 'refs/heads/hermes-v1' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.repository == 'cloud2303org/ValdiNativeRoutes' && github.ref == 'refs/heads/hermes-v1' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.cold_build))
     runs-on: [self-hosted, Windows, X64, valdi-windows]
     timeout-minutes: 180
     defaults:
@@ -207,3 +211,81 @@ jobs:
           path: |
             .ci/
             android/app/build/outputs/apk/debug/*.apk
+
+  windows-cold-bootstrap:
+    name: Windows isolated cold bootstrap
+    # Manual only: a fresh network clone and empty caches on the same personal PC.
+    # The workflow concurrency group serializes it with the normal Windows job.
+    if: github.repository == 'cloud2303org/ValdiNativeRoutes' && github.ref == 'refs/heads/hermes-v1' && github.event_name == 'workflow_dispatch' && inputs.cold_build
+    runs-on: [self-hosted, Windows, X64, valdi-windows]
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        with:
+          packages: 'platforms;android-37.0 build-tools;37.0.0 ndk;27.1.12297006 cmake;3.22.1'
+          log-accepted-android-sdk-licenses: false
+      - name: Run the isolated cold bootstrap
+        env:
+          WINDOWS_GIT_PROXY_URL: ${{ vars.WINDOWS_GIT_PROXY_URL }}
+          WINDOWS_BAZEL_PATH: ${{ vars.WINDOWS_BAZEL_PATH }}
+          TESTED_COMMIT: ${{ github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = "C:/vc-$env:GITHUB_RUN_ID"
+          $console = Join-Path $env:RUNNER_TEMP "cold-$env:GITHUB_RUN_ID.log"
+          $arguments = @(
+            '-NoProfile', '-ExecutionPolicy', 'Bypass',
+            '-File', 'scripts/windows/test-cold-build.ps1',
+            '-Root', $root,
+            '-Commit', $env:TESTED_COMMIT,
+            '-MinFreeGB', '25'
+          )
+          if (-not $env:WINDOWS_BAZEL_PATH) { throw 'WINDOWS_BAZEL_PATH must name the runner''s Bazel 8.2.1 executable for the cold job.' }
+          $arguments += @('-BazelPath', $env:WINDOWS_BAZEL_PATH)
+          if ($env:WINDOWS_GIT_PROXY_URL) {
+            $arguments += @('-ProxyUrl', $env:WINDOWS_GIT_PROXY_URL,
+              '-NoProxy', 'repo1.maven.org,dl.google.com,maven.google.com')
+          }
+          & powershell @arguments 2>&1 | Tee-Object -FilePath $console
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Collect cold bootstrap evidence
+        if: always()
+        run: |
+          $root = "C:/vc-$env:GITHUB_RUN_ID"
+          New-Item -ItemType Directory -Force .ci/cold | Out-Null
+          if (Test-Path "$root/logs") { Copy-Item "$root/logs/*" .ci/cold -Recurse -Force }
+          $apk = "$root/app/android/app/build/outputs/apk/debug/app-debug.apk"
+          if (Test-Path $apk) { Copy-Item $apk .ci/cold/app-debug.apk }
+          $console = Join-Path $env:RUNNER_TEMP "cold-$env:GITHUB_RUN_ID.log"
+          if (Test-Path $console) { Copy-Item $console .ci/cold/console.log }
+      - name: Upload cold bootstrap evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: windows-cold-${{ github.run_id }}
+          retention-days: 7
+          include-hidden-files: true
+          if-no-files-found: warn
+          path: .ci/cold/
+      - name: Remove the isolation root
+        if: always()
+        run: |
+          # Only this run's isolated root; shared caches and the runner workspace are untouched.
+          $root = "C:/vc-$env:GITHUB_RUN_ID"
+          if (Test-Path $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+          $console = Join-Path $env:RUNNER_TEMP "cold-$env:GITHUB_RUN_ID.log"
+          if (Test-Path $console) { Remove-Item -LiteralPath $console -Force }

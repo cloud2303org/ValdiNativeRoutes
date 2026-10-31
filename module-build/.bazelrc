@@ -15,3 +15,7 @@ common --experimental_enable_android_migration_apis=true
 common --incompatible_java_common_parameters=false
 build --ios_minimum_os=16.0
 build --disk_cache=~/.cache/bazel-disk-cache
+
+# The Windows entry points (scripts/windows/lib.ps1) write win.cache.bazelrc to redirect shared caches for an
+# isolated build. Imported last so its options win over the defaults above.
+try-import %workspace%/win.cache.bazelrc

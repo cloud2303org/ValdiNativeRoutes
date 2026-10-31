@@ -299,6 +299,15 @@ function New-BazelRcOptions {
     return $lines
 }
 
+function New-BazelCacheRcOptions {
+    param([string]$DiskCache)
+
+    # Imported after the checked-in defaults (last try-import in each .bazelrc) so an
+    # isolated build can point the action cache at its own directory.
+    if (-not $DiskCache) { return @() }
+    return @('build ' + (ConvertTo-BazelRcOptionValue ('--disk_cache=' + ($DiskCache -replace '\\', '/'))))
+}
+
 function ConvertTo-BazelRcLine {
     param([Parameter(Mandatory = $true)][string]$Argument)
 
@@ -311,11 +320,17 @@ function ConvertTo-BazelRcLine {
 function Write-BazelRcFiles {
     param(
         [Parameter(Mandatory = $true)][string]$AppRoot,
-        [string[]]$Lines
+        [string[]]$Lines,
+        [string[]]$CacheLines
     )
 
     Write-Utf8NoBomLines -Path (Join-Path $AppRoot 'valdi/win.local.bazelrc') -Lines $Lines
     Write-Utf8NoBomLines -Path (Join-Path $AppRoot 'module-build/win.local.bazelrc') -Lines $Lines
+    # Always rewrite this file: a previous isolated run must not keep redirecting the caches.
+    $cacheComment = @('# Written by scripts/windows/lib.ps1. Empty means the checked-in cache defaults apply.')
+    if (-not $CacheLines) { $CacheLines = $cacheComment }
+    Write-Utf8NoBomLines -Path (Join-Path $AppRoot 'valdi/win.cache.bazelrc') -Lines $CacheLines
+    Write-Utf8NoBomLines -Path (Join-Path $AppRoot 'module-build/win.cache.bazelrc') -Lines $CacheLines
 }
 
 function Invoke-GitBash {
@@ -340,4 +355,301 @@ function Invoke-GitBash {
         $ErrorActionPreference = $previous
     }
     return $code
+}
+
+function Get-RequiredCommandPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [string]$Hint
+    )
+
+    $command = Get-Command $Name -ErrorAction SilentlyContinue
+    if (-not $command) {
+        $message = "$Name was not found on PATH."
+        if ($Hint) { $message += " $Hint" }
+        throw $message
+    }
+    return $command.Source
+}
+
+function Get-CommandVersion {
+    param(
+        [Parameter(Mandatory = $true)][string]$Executable,
+        [string[]]$Arguments = @('--version')
+    )
+
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = & $Executable @Arguments 2>&1
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+    return [pscustomobject]@{
+        ExitCode = $code
+        Text = (($output | ForEach-Object { "$_".Trim() }) -join "`n").Trim()
+    }
+}
+
+function Assert-NodeRuntime {
+    param([Parameter(Mandatory = $true)][string]$AppRoot)
+
+    $node = Get-RequiredCommandPath -Name 'node' -Hint 'Install Node 24 (the repository pins the pnpm 10 launcher).'
+    $version = Get-CommandVersion -Executable $node
+    if ($version.ExitCode -ne 0) { throw "node --version failed: $($version.Text)" }
+    $major = [int](($version.Text -replace '^v', '').Split('.')[0])
+    if ($major -lt 24) {
+        throw "Node 24 or newer is required; found $($version.Text) at $node."
+    }
+    return $node
+}
+
+function Assert-PnpmLauncher {
+    param([Parameter(Mandatory = $true)][string]$AppRoot)
+
+    $package = Get-Content -LiteralPath (Join-Path $AppRoot 'package.json') -Raw | ConvertFrom-Json
+    $expected = $package.packageManager -replace '^pnpm@', ''
+    if (-not $expected) { throw "package.json does not pin packageManager." }
+    $script = Join-Path $AppRoot 'scripts/pnpm.mjs'
+    if (-not (Test-Path -LiteralPath $script -PathType Leaf)) { throw "Missing pnpm launcher: $script" }
+
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        Push-Location $AppRoot
+        $actual = & node $script '--version' 2>&1
+        $code = $LASTEXITCODE
+        Pop-Location
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+    $text = (($actual | ForEach-Object { "$_".Trim() }) -join ' ').Trim()
+    if ($code -ne 0) {
+        throw ("Cannot run the pinned pnpm launcher through node (exit {0}): {1}`n" -f $code, $text) +
+            'Install Corepack or pnpm so node_modules/corepack/dist/pnpm.js (or pnpm/bin/pnpm.cjs) exists next to node.'
+    }
+    if ($text -ne $expected) { throw "Expected pnpm $expected (package.json packageManager), got '$text'." }
+    return $expected
+}
+
+function Assert-BazelRuntime {
+    param(
+        [Parameter(Mandatory = $true)][string]$AppRoot,
+        [string]$BazelPath
+    )
+
+    $bazel = $BazelPath
+    if (-not $bazel) { $bazel = $env:BAZEL_BIN }
+    if (-not $bazel) {
+        $command = Get-Command bazel.exe -ErrorAction SilentlyContinue
+        if (-not $command) { $command = Get-Command bazel -ErrorAction SilentlyContinue }
+        if (-not $command) { $command = Get-Command bazelisk.exe -ErrorAction SilentlyContinue }
+        if ($command) { $bazel = $command.Source }
+    }
+    if (-not $bazel) {
+        throw 'Bazel 8.2.1 was not found. Pass -BazelPath <path to bazel.exe> or set BAZEL_BIN.'
+    }
+    if (-not (Test-Path -LiteralPath $bazel -PathType Leaf)) { throw "Bazel executable not found: $bazel" }
+    $bazel = (Resolve-Path -LiteralPath $bazel).Path
+
+    $versionFile = Join-Path $AppRoot 'valdi/.bazelversion'
+    if (-not (Test-Path -LiteralPath $versionFile -PathType Leaf)) { throw "Missing pin: $versionFile" }
+    $expected = (Get-Content -LiteralPath $versionFile -Raw).Trim()
+    $actual = Get-CommandVersion -Executable $bazel
+    if ($actual.ExitCode -ne 0 -or $actual.Text -ne "bazel $expected") {
+        throw "Expected Bazel $expected (valdi/.bazelversion), got '$($actual.Text)' from $bazel."
+    }
+    return [pscustomobject]@{ Path = $bazel; Version = $expected }
+}
+
+function Assert-JdkRuntime {
+    param(
+        [Parameter(Mandatory = $true)][string]$AppRoot,
+        [string]$JavaHome
+    )
+
+    if (-not $JavaHome) { $JavaHome = $env:JAVA_HOME }
+    if (-not $JavaHome) {
+        $javac = Get-Command javac.exe -ErrorAction SilentlyContinue
+        if (-not $javac) { $javac = Get-Command javac -ErrorAction SilentlyContinue }
+        if ($javac) { $JavaHome = Split-Path (Split-Path $javac.Source) -Parent }
+    }
+    if (-not $JavaHome) { throw 'No JDK found. Pass -JavaHome <JDK 17 directory> or set JAVA_HOME.' }
+    if (-not (Test-Path -LiteralPath $JavaHome -PathType Container)) { throw "JDK directory not found: $JavaHome" }
+    $JavaHome = (Resolve-Path -LiteralPath $JavaHome).Path
+    $java = Join-Path $JavaHome 'bin/java.exe'
+    if (-not (Test-Path -LiteralPath $java -PathType Leaf)) { throw "JDK has no bin/java.exe: $JavaHome" }
+    $version = Get-CommandVersion -Executable $java -Arguments @('-version')
+    $match = [regex]::Match($version.Text, 'version "(\d+)')
+    if (-not $match.Success) { throw "Cannot read the JDK version from '$($version.Text)' ($JavaHome)." }
+    $major = [int]$match.Groups[1].Value
+    if ($major -lt 17) { throw "JDK 17 or newer is required; $JavaHome is Java $major." }
+    if ($major -ne 17) {
+        Write-Warning "The project builds with JDK 17 (CI installs Temurin 17); this host uses Java $major from $JavaHome."
+    }
+    return $JavaHome
+}
+
+function Assert-AndroidSdkRuntime {
+    param([string]$AndroidHome)
+
+    if (-not $AndroidHome) {
+        if ($env:ANDROID_HOME) { $AndroidHome = $env:ANDROID_HOME }
+        elseif ($env:ANDROID_SDK_ROOT) { $AndroidHome = $env:ANDROID_SDK_ROOT }
+        elseif ($env:LOCALAPPDATA) { $AndroidHome = Join-Path $env:LOCALAPPDATA 'Android/Sdk' }
+    }
+    if (-not $AndroidHome) { throw 'Android SDK not found. Pass -AndroidHome <sdk directory> or set ANDROID_HOME.' }
+    if (-not (Test-Path -LiteralPath $AndroidHome -PathType Container)) { throw "Android SDK not found: $AndroidHome" }
+    $AndroidHome = (Resolve-Path -LiteralPath $AndroidHome).Path
+
+    $required = @(
+        @{ Path = 'ndk/27.1.12297006'; Hint = 'Install it: sdkmanager "ndk;27.1.12297006"' },
+        @{ Path = 'cmake/3.22.1'; Hint = 'Install it: sdkmanager "cmake;3.22.1"' },
+        @{ Path = 'build-tools/37.0.0'; Hint = 'Install it: sdkmanager "build-tools;37.0.0"' }
+    )
+    foreach ($entry in $required) {
+        $path = Join-Path $AndroidHome $entry.Path
+        if (-not (Test-Path -LiteralPath $path -PathType Container)) {
+            throw "Android SDK component missing: $path. $($entry.Hint)"
+        }
+    }
+    $platform = @('platforms/android-37.0', 'platforms/android-37') |
+        ForEach-Object { Join-Path $AndroidHome $_ } |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Container } |
+        Select-Object -First 1
+    if (-not $platform) {
+        throw "Android SDK platform missing: $AndroidHome/platforms/android-37(.0). Install it: sdkmanager `"platforms;android-37.0`""
+    }
+    return $AndroidHome
+}
+
+function Assert-NativeToolRuntime {
+    param(
+        [string]$Cmake,
+        [string]$AndroidHome
+    )
+
+    $resolved = [ordered]@{}
+    if ($Cmake) {
+        if (-not (Test-Path -LiteralPath $Cmake -PathType Leaf)) { throw "CMake not found: $Cmake" }
+        $resolved.Cmake = (Resolve-Path -LiteralPath $Cmake).Path
+    } elseif ($env:VISION_CMAKE) {
+        if (-not (Test-Path -LiteralPath $env:VISION_CMAKE -PathType Leaf)) { throw "VISION_CMAKE does not exist: $($env:VISION_CMAKE)" }
+        $resolved.Cmake = (Resolve-Path -LiteralPath $env:VISION_CMAKE).Path
+    } else {
+        $resolved.Cmake = Get-RequiredCommandPath -Name 'cmake' -Hint 'Install CMake 3.22 or pass -Cmake <cmake.exe>.'
+    }
+    $ninja = Get-Command ninja -ErrorAction SilentlyContinue
+    if ($ninja) {
+        $resolved.Ninja = $ninja.Source
+    } else {
+        # The Android SDK's cmake package ships ninja next to cmake; expose it to the vision build.
+        $sdkNinja = if ($AndroidHome) { Join-Path $AndroidHome 'cmake/3.22.1/bin/ninja.exe' } else { $null }
+        if (-not $sdkNinja -or -not (Test-Path -LiteralPath $sdkNinja -PathType Leaf)) {
+            throw 'ninja was not found on PATH or in the Android SDK cmake package. Install Ninja (the vision build uses the Ninja generator).'
+        }
+        $resolved.Ninja = $sdkNinja
+        $env:PATH = (Split-Path $sdkNinja) + ';' + $env:PATH
+    }
+    $resolved.Curl = Get-RequiredCommandPath -Name 'curl' -Hint 'Windows ships curl.exe in System32; add it to PATH.'
+    $tar = Join-Path $env:SystemRoot 'System32/tar.exe'
+    if (-not (Test-Path -LiteralPath $tar -PathType Leaf)) { throw "Windows tar.exe not found: $tar" }
+    $resolved.Tar = $tar
+    return [pscustomobject]$resolved
+}
+
+function Assert-FreeDiskSpace {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [int]$MinimumGB = 15
+    )
+
+    $full = [System.IO.Path]::GetFullPath($Path)
+    $root = [System.IO.Path]::GetPathRoot($full)
+    $drive = $root.TrimEnd('\', '/').TrimEnd(':')
+    if (-not $drive) { return }
+    $disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($drive):'" -ErrorAction SilentlyContinue
+    if (-not $disk) { return }
+    $freeGB = [math]::Round($disk.FreeSpace / 1GB, 1)
+    if ($freeGB -lt $MinimumGB) {
+        throw "Only $freeGB GB free on $($drive):; a cold native build needs at least $MinimumGB GB. Free space or choose a different drive."
+    }
+    return $freeGB
+}
+
+function Merge-NoProxyList {
+    param([string[]]$Entries)
+
+    $values = @('localhost', '127.0.0.1', '::1')
+    if ($env:NO_PROXY) { $values += ($env:NO_PROXY -split ',' | ForEach-Object { $_.Trim() }) }
+    if ($env:no_proxy) { $values += ($env:no_proxy -split ',' | ForEach-Object { $_.Trim() }) }
+    if ($Entries) { $values += ($Entries -split ',') }
+    return (($values | Where-Object { $_ } | Select-Object -Unique) -join ',')
+}
+
+function Set-BuildProxyEnvironment {
+    param(
+        [string]$ProxyUrl,
+        [string[]]$NoProxy
+    )
+
+    if (-not $ProxyUrl) { return }
+    if ($ProxyUrl -notmatch '^https?://') { throw "Proxy URL must start with http:// or https://: $ProxyUrl" }
+    $list = Merge-NoProxyList -Entries $NoProxy
+    foreach ($name in @('HTTPS_PROXY', 'HTTP_PROXY', 'https_proxy', 'http_proxy')) {
+        Set-Item -Path "env:$name" -Value $ProxyUrl
+    }
+    foreach ($name in @('NO_PROXY', 'no_proxy')) {
+        Set-Item -Path "env:$name" -Value $list
+    }
+    # Git's http.proxy covers the GitHub fetches even when a tool ignores the environment.
+    $env:GIT_CONFIG_COUNT = '1'
+    $env:GIT_CONFIG_KEY_0 = 'http.https://github.com/.proxy'
+    $env:GIT_CONFIG_VALUE_0 = $ProxyUrl
+    Write-Output "Proxy for build processes: $ProxyUrl (NO_PROXY=$list)"
+}
+
+function Test-ProxyConnectivity {
+    param(
+        [string]$ProxyUrl,
+        [string]$Url = 'https://github.com',
+        [int]$TimeoutSeconds = 20
+    )
+
+    if (-not $ProxyUrl) { return }
+    $curl = Get-RequiredCommandPath -Name 'curl'
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $result = & $curl '--silent' '--show-error' '--head' '--max-time' "$TimeoutSeconds" '--output' 'NUL' '--write-out' '%{http_code}' $Url 2>&1
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+    if ($code -ne 0) { throw "Cannot reach $Url through the configured proxy: $($result -join ' ')" }
+    Write-Output "Network check: $Url via proxy returned HTTP $($result -join '')."
+}
+
+function Test-VisionInstallCurrent {
+    param(
+        [Parameter(Mandatory = $true)][string]$AppRoot,
+        [string]$Target = 'android-arm64'
+    )
+
+    # A warm tree can hold vision libraries built from an older vendor-lock; the app
+    # fingerprint names the lock, so reusing them would silently mix inputs.
+    $lockPath = Join-Path $AppRoot 'vision/vendor-lock.json'
+    $stampPath = Join-Path $AppRoot "vision/vendor/install/$Target/native-routes-vision.json"
+    if (-not (Test-Path -LiteralPath $stampPath -PathType Leaf)) { return $false }
+    try {
+        $lock = Get-Content -LiteralPath $lockPath -Raw | ConvertFrom-Json
+        $stamp = Get-Content -LiteralPath $stampPath -Raw | ConvertFrom-Json
+    } catch { return $false }
+    return (
+        $stamp.opencv -eq $lock.opencv.version -and
+        $stamp.ncnn -eq $lock.ncnn.version -and
+        $stamp.sourcePins.opencv -eq $lock.opencv.sha256 -and
+        $stamp.sourcePins.ncnn -eq $lock.ncnn.sha256
+    )
 }

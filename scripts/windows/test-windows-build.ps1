@@ -210,9 +210,9 @@ try {
     }
 
     Test-Case 'an isolated Bazel disk cache is a quoted, last-imported build option' {
-        $cacheLines = New-BazelCacheRcOptions -DiskCache $spacedCache
-        Assert-Equal 1 @($cacheLines).Count 'one cache override line'
-        Assert-True ($cacheLines[0].StartsWith('build --disk_cache="')) 'disk cache must be a build option with a quoted path'
+        $cacheLines = @(New-BazelCacheRcOptions -DiskCache $spacedCache)
+        Assert-Equal 1 $cacheLines.Count 'one cache override line'
+        Assert-True ($cacheLines[0].StartsWith('build "--disk_cache=')) 'disk cache must be a quoted build option'
         Assert-True ($cacheLines[0].Contains(($spacedCache -replace '\\', '/'))) 'disk cache path must be forward-slashed'
         Assert-Equal 0 @(New-BazelCacheRcOptions).Count 'no override means the checked-in default stays in effect'
     }

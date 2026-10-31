@@ -73,14 +73,19 @@ Write-Output "Cold build of $Repository @ $commit"
 Write-Output "Isolation root: $rootPath"
 
 $cloneLog = Join-Path $logDir 'clone.log'
-# A fresh network clone is the point of this check, so a proxy reset must not fail the proof:
-# retry the whole clone/detch/fetch/checkout sequence a bounded number of times.
+# A fresh network clone is the point of this check, so a proxy reset must not fail the proof. Fetch only
+# the requested commit (the same shape the CI checkout uses) and retry with a longer backoff.
 function Invoke-FreshClone([string]$Target, [string]$Commit) {
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        & $git clone --filter=blob:none --no-checkout $Repository $Target *> $cloneLog
+        New-Item -ItemType Directory -Path $Target -Force | Out-Null
+        & $git -C $Target init *> $cloneLog
         $exit = $LASTEXITCODE
+        if ($exit -eq 0) {
+            & $git -C $Target remote add origin $Repository *>> $cloneLog
+            $exit = $LASTEXITCODE
+        }
         if ($exit -eq 0) {
             & $git -C $Target fetch --depth=1 origin $Commit *>> $cloneLog
             $exit = $LASTEXITCODE
@@ -95,16 +100,18 @@ function Invoke-FreshClone([string]$Target, [string]$Commit) {
     return $exit
 }
 $code = 1
-for ($attempt = 1; $attempt -le 3; $attempt++) {
+$attempts = 4
+for ($attempt = 1; $attempt -le $attempts; $attempt++) {
     if (Test-Path -LiteralPath $app) { Remove-Item -LiteralPath $app -Recurse -Force -ErrorAction SilentlyContinue }
+    if ($attempt -gt 1 -and -not $SkipNetworkCheck) { Test-ProxyConnectivity -ProxyUrl $ProxyUrl }
     $code = Invoke-FreshClone -Target $app -Commit $commit
     if ($code -eq 0) { break }
-    if ($attempt -lt 3) {
+    if ($attempt -lt $attempts) {
         Write-Output "Clone attempt $attempt failed (exit $code); retrying the clone..."
-        Start-Sleep -Seconds (5 * $attempt)
+        Start-Sleep -Seconds (10 * $attempt)
     }
 }
-if ($code -ne 0) { throw "Cloning $commit failed (exit $code) after 3 attempts. See $cloneLog" }
+if ($code -ne 0) { throw "Cloning $commit failed (exit $code) after $attempts attempts. See $cloneLog" }
 $head = (& $git -C $app rev-parse HEAD).Trim()
 if ($head -ne $commit) { throw "Checked-out HEAD $head is not the requested commit $commit" }
 $dirty = @(& $git -C $app status --porcelain=v1 --untracked-files=normal)
@@ -162,6 +169,9 @@ $env:GOMODCACHE = $cachePaths.goMod
 $env:GOCACHE = $cachePaths.goBuild
 $env:COURSIER_CACHE = $cachePaths.coursier
 $env:BAZELISK_HOME = $cachePaths.bazelisk
+# Explicit flags beat any host rc file, so every child build (and the checks below) stays inside the root.
+$env:VALDI_BAZEL_STARTUP_ARGS = '--output_user_root=' + ($outputBase -replace '\\', '/')
+$env:VALDI_BAZEL_ARGS = '--repository_cache=' + ($cachePaths.bazelRepos -replace '\\', '/')
 $env:CI = 'true'
 Remove-Item Env:\GOPROXY -ErrorAction SilentlyContinue
 

@@ -34,9 +34,11 @@ if ($AndroidHome) { $env:ANDROID_HOME = (Resolve-Path -LiteralPath $AndroidHome)
 if ($GradleUserHome) { $env:GRADLE_USER_HOME = $GradleUserHome }
 if ($PnpmStore) { $env:npm_config_store_dir = $PnpmStore }
 if ($OutputBase) {
-    # The export already wrote the workspaces' rc files; keep the same output root for these builds.
-    $env:VALDI_BAZEL_ARGS = ''
+    # The export already wrote the workspaces' rc files; pass the same root as a command-line flag so a
+    # host-level ~/.bazelrc cannot redirect these builds to a shared output base.
+    $env:VALDI_BAZEL_STARTUP_ARGS = '--output_user_root=' + ($OutputBase -replace '\\', '/')
 }
+if ($RepositoryCache) { $env:VALDI_BAZEL_ARGS = '--repository_cache=' + ($RepositoryCache -replace '\\', '/') }
 
 function Get-HashOf([string]$Relative) {
     $file = Join-Path $app $Relative

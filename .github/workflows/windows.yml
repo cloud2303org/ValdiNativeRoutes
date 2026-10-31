@@ -165,7 +165,7 @@ jobs:
         with:
           # Only the prepared libraries: the archives are checksum-pinned and cheap to fetch.
           path: vision/vendor/install
-          key: vision-v1-${{ runner.os }}-${{ runner.arch }}-ndk27.1.12297006-${{ hashFiles('vision/vendor-lock.json', 'vision/scripts/prepare-native.cjs') }}
+          key: vision-v2-${{ runner.os }}-${{ runner.arch }}-ndk27.1.12297006-${{ hashFiles('vision/vendor-lock.json', 'vision/scripts/prepare-native.cjs') }}
       - name: Export runtime, build native modules and package APK
         env:
           # See the helper step: repository downloads such as rules_license otherwise time
@@ -180,11 +180,11 @@ jobs:
           exit $LASTEXITCODE
       - name: Save prepared vision dependencies
         # The Vision preparation runs inside the build step; keep its output even if the APK step then fails.
-        if: always() && steps.vision.outputs.cache-hit != 'true'
+        if: always() && steps.vision.outputs.cache-hit != 'true' && hashFiles('vision/vendor/install/**') != ''
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: vision/vendor/install
-          key: vision-v1-${{ runner.os }}-${{ runner.arch }}-ndk27.1.12297006-${{ hashFiles('vision/vendor-lock.json', 'vision/scripts/prepare-native.cjs') }}
+          key: vision-v2-${{ runner.os }}-${{ runner.arch }}-ndk27.1.12297006-${{ hashFiles('vision/vendor-lock.json', 'vision/scripts/prepare-native.cjs') }}
       - name: Test pipeline and validate runtime fingerprint
         run: |
           # The fork checkout is the Valdi source root here: the workspace's

@@ -47,7 +47,8 @@ case "$(uname -s)" in
       config_flags="--snap_flavor=platform_development"
     fi
     # shellcheck disable=SC2086
-    "$bazel_bin" ${VALDI_BAZEL_STARTUP_ARGS:-} build //:valdi_runtime_android \
+    # --max_idle_secs keeps the server from outliving this script with an inherited stdout.
+    "$bazel_bin" ${VALDI_BAZEL_STARTUP_ARGS:-} --max_idle_secs=60 build //:valdi_runtime_android \
       $config_flags \
       --config=stable_exec \
       --copt=-DANDROID_WITH_JNI \

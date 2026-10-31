@@ -387,15 +387,35 @@ function Invoke-LoggedCommand {
     # Windows PowerShell 5.1 raises a terminating NativeCommandError for any stderr line while
     # $ErrorActionPreference is Stop, and Bazel/Node print ordinary progress to stderr. Keep the
     # preference at Continue for the child and report its own exit code instead.
+    #
+    # Output goes to files rather than a pipeline: a long-lived grandchild (a Bazel server) inherits
+    # the handle, and a pipeline keeps waiting for it after this process has finished, which is what
+    # stalled the CI step. -RedirectStandardOutput only waits for this process itself.
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
         if ($LogPath) {
-            & $FilePath @Arguments 2>&1 | Tee-Object -FilePath $LogPath -Append:$Append | Out-Host
+            $stdout = "$LogPath.stdout.tmp"
+            $stderr = "$LogPath.stderr.tmp"
+            Remove-Item -LiteralPath $stdout, $stderr -Force -ErrorAction SilentlyContinue
+            $quoted = @($Arguments | ForEach-Object { if ($_ -match '\s') { '"{0}"' -f $_ } else { $_ } })
+            $process = Start-Process -FilePath $FilePath -ArgumentList $quoted -NoNewWindow -PassThru `
+                -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+            $process.WaitForExit()
+            $code = $process.ExitCode
+            $lines = @()
+            if (Test-Path -LiteralPath $stdout) { $lines += Get-Content -LiteralPath $stdout }
+            if (Test-Path -LiteralPath $stderr) { $lines += Get-Content -LiteralPath $stderr }
+            if ($lines.Count) {
+                if ($Append) { $lines | Add-Content -LiteralPath $LogPath -Encoding UTF8 }
+                else { $lines | Set-Content -LiteralPath $LogPath -Encoding UTF8 }
+                $lines | Out-Host
+            }
+            Remove-Item -LiteralPath $stdout, $stderr -Force -ErrorAction SilentlyContinue
         } else {
             & $FilePath @Arguments 2>&1 | Out-Host
+            $code = $LASTEXITCODE
         }
-        $code = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previous
     }

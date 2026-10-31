@@ -103,7 +103,9 @@ function buildWithJunction(platform, release, native, names) {
   ensureBazelShell();
   // Startup flags must precede the command, and explicit ones beat every rc file (a user-level
   // ~/.bazelrc can otherwise redirect the output base or repository cache of an isolated build).
-  const startup = extraBazelFlags(process.env.VALDI_BAZEL_STARTUP_ARGS);
+  // --max_idle_secs bounds the server's lifetime: a server that outlives this process inherits its
+  // stdout, which keeps a caller's pipe (Tee-Object, the CI runner) open after the build is done.
+  const startup = [...extraBazelFlags(process.env.VALDI_BAZEL_STARTUP_ARGS), '--max_idle_secs=60'];
   const extra = extraBazelFlags(process.env.VALDI_BAZEL_ARGS);
   const flags =
     platform === 'ios' ? ['--platforms=//:ios_sim_arm64'] : ['--android_platforms=@snap_platforms//os:android_arm64'];

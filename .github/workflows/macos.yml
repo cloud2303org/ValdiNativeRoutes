@@ -1,0 +1,36 @@
+name: macOS self-hosted smoke
+
+# Manual-only: this personal Mac runner must never be selected by pushes, PRs,
+# or scheduled work. The guard also rejects dispatches from any other ref.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mac-mini-smoke
+  cancel-in-progress: false
+
+jobs:
+  runner-smoke:
+    name: Mac mini iOS runner smoke
+    if: github.repository == 'cloud2303org/ValdiNativeRoutes' && github.ref == 'refs/heads/hermes-v1' && github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, macOS, ARM64, valdi-macos]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Report runner and Apple toolchain identity
+        run: |
+          echo "runner=${RUNNER_NAME}"
+          echo "os=${RUNNER_OS} arch=${RUNNER_ARCH}"
+          echo "workspace=${GITHUB_WORKSPACE}"
+          git rev-parse HEAD
+          sw_vers
+          uname -m
+          xcodebuild -version
+          xcrun simctl list runtimes | sed -n '1,20p'
+          node --version
+          pnpm --version

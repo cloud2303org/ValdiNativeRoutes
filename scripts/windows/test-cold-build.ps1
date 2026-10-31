@@ -62,6 +62,27 @@ foreach ($path in $cachePaths.Values) { New-Item -ItemType Directory -Path $path
 
 Set-BuildProxyEnvironment -ProxyUrl $ProxyUrl -NoProxy $NoProxy
 if (-not $SkipNetworkCheck) { Test-ProxyConnectivity -ProxyUrl $ProxyUrl }
+if ($ProxyUrl) {
+    # An empty Gradle home has to download the wrapper distribution and the Android Gradle Plugin.
+    # Java ignores HTTPS_PROXY, and direct HTTPS from this host times out, so give the wrapper and the
+    # build explicit JVM proxy settings (isolated to this run's Gradle home).
+    $proxy = [Uri]$ProxyUrl
+    $proxyJvm = @(
+        "-Dhttp.proxyHost=$($proxy.Host)", "-Dhttp.proxyPort=$($proxy.Port)",
+        "-Dhttps.proxyHost=$($proxy.Host)", "-Dhttps.proxyPort=$($proxy.Port)",
+        '-Dorg.gradle.wrapper.networkTimeout=120000'
+    ) -join ' '
+    $env:GRADLE_OPTS = $proxyJvm
+    $gradleProperties = Join-Path $cachePaths.gradle 'gradle.properties'
+    Set-Content -LiteralPath $gradleProperties -Encoding ASCII -Value @(
+        "systemProp.http.proxyHost=$($proxy.Host)",
+        "systemProp.http.proxyPort=$($proxy.Port)",
+        "systemProp.https.proxyHost=$($proxy.Host)",
+        "systemProp.https.proxyPort=$($proxy.Port)",
+        'systemProp.org.gradle.internal.http.connectionTimeout=120000',
+        'systemProp.org.gradle.internal.http.socketTimeout=120000'
+    )
+}
 
 $commit = $Commit
 $git = Get-RequiredCommandPath -Name 'git'

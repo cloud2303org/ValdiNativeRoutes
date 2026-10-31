@@ -124,6 +124,10 @@ library and APK without re-exporting; a TypeScript-only change does not rebuild 
 new-module evidence, and prints the artifact hashes. Preinstalled tools are reused explicitly; this validates an
 isolated cold build on existing hardware, not a pristine Windows installation.
 
+An isolated Gradle home still has to download the wrapper distribution and the Android Gradle Plugin. Java ignores
+`HTTPS_PROXY`, so when `-ProxyUrl` is given the script also passes the proxy as JVM settings (`GRADLE_OPTS`) and as
+`gradle.properties` entries inside that isolated home; the npm fetches get the documented retry/timeout settings.
+
 The `Windows Android CI` workflow exposes the same proof as a manual `cold_build` input: it skips the normal job,
 runs `test-cold-build.ps1` in `C:\vc-<run id>` with the repository's optional proxy variables, uploads
 `windows-cold-<run id>` (logs, report JSON, APK) and removes only that isolation root.

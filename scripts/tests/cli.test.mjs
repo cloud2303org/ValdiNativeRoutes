@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { parseAdbDevices, parseIosSimulators, selectAndroidDevice, selectIosSimulator } from '../device.mjs';
+import { ensureBazelShell, extraBazelFlags } from '../node-modules.mjs';
 import { planPrebuild } from '../cli.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -128,4 +129,19 @@ test('pnpm does not run the prebuild script as an implicit build hook', () => {
   assert.match(npmrc, /^enable-pre-post-scripts=false$/m);
   const scripts = JSON.parse(readFileSync(path.join(repository, 'package.json'), 'utf8')).scripts;
   assert.equal(scripts.prebuild, 'node scripts/cli.mjs prebuild');
+});
+
+test('Bazel startup/build flags from the environment are split and may be empty', () => {
+  assert.deepEqual(extraBazelFlags(undefined), []);
+  assert.deepEqual(extraBazelFlags('  '), []);
+  assert.deepEqual(extraBazelFlags('--output_user_root=C:/vc/bazel-out'), ['--output_user_root=C:/vc/bazel-out']);
+  assert.deepEqual(extraBazelFlags('--repository_cache=C:/vc/repos  --noshow_progress'), [
+    '--repository_cache=C:/vc/repos',
+    '--noshow_progress',
+  ]);
+});
+
+test('an explicit BAZEL_SH is never replaced', () => {
+  const env = { BAZEL_SH: 'C:/Program Files/Git/bin/bash.exe' };
+  assert.equal(ensureBazelShell(env), env.BAZEL_SH);
 });

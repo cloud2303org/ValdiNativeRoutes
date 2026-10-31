@@ -122,6 +122,15 @@ function applyCaches(options) {
   if (options.bazelPath) process.env.BAZEL_BIN = path.resolve(options.bazelPath);
   if (options.pnpmStore) process.env.npm_config_store_dir = path.resolve(options.pnpmStore);
   if (options.gradleUserHome) process.env.GRADLE_USER_HOME = path.resolve(options.gradleUserHome);
+  // Every child (the PowerShell export, prepare-valdi, the module-build Bazel workspace) reads these, and a
+  // command-line startup/build flag is the only thing that beats a user-level ~/.bazelrc. An isolated build
+  // must not inherit the host's output base or repository cache.
+  if (options.outputBase) {
+    process.env.VALDI_BAZEL_STARTUP_ARGS = `--output_user_root=${path.resolve(options.outputBase).replace(/\\/g, '/')}`;
+  }
+  if (options.repositoryCache) {
+    process.env.VALDI_BAZEL_ARGS = `--repository_cache=${path.resolve(options.repositoryCache).replace(/\\/g, '/')}`;
+  }
   if (options.goModCache) {
     process.env.GOMODCACHE = path.resolve(options.goModCache);
     if (options.offline) process.env.GOPROXY = 'off';
@@ -326,6 +335,8 @@ function deviceCommand(platform, options) {
     throw new Error('pnpm android/ios build Debug only. Release OTA builds are manual (release export + signed build); see docs.');
   }
   if (platform === 'ios' && process.platform !== 'darwin') throw new Error('pnpm ios requires macOS with Xcode.');
+  applyProxy(options);
+  applyCaches(options);
   if (options.dryRun) {
     // Dry-run only reports the plan: no Gradle/xcodebuild, no install, no device change.
     const plan = options.noPrebuild ? undefined : inspectPrebuild(platform);

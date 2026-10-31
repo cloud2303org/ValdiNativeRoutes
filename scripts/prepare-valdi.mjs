@@ -21,10 +21,14 @@ try {
     if (!path.isAbsolute(bazel)) throw new Error('--bazel needs an absolute path');
     process.env.BAZEL_BIN = bazel;
   }
+  // Explicit flags beat every rc file, including a user-level ~/.bazelrc that could redirect an
+  // isolated fetch to a shared output base or repository cache.
+  const envStartup = (process.env.VALDI_BAZEL_STARTUP_ARGS ?? '').split(/\s+/).filter(Boolean);
+  const envBazel = (process.env.VALDI_BAZEL_ARGS ?? '').split(/\s+/).filter(Boolean);
   // Both options keep an isolated build from touching a shared Bazel server or cache.
   prepareSources(root, {
-    startupArgs: outputBase ? [`--output_user_root=${path.resolve(outputBase).replace(/\\/g, '/')}`] : [],
-    bazelArgs: repositoryCache ? [`--repository_cache=${path.resolve(repositoryCache).replace(/\\/g, '/')}`] : [],
+    startupArgs: outputBase ? [`--output_user_root=${path.resolve(outputBase).replace(/\\/g, '/')}`] : envStartup,
+    bazelArgs: repositoryCache ? [`--repository_cache=${path.resolve(repositoryCache).replace(/\\/g, '/')}`] : envBazel,
   });
   runPnpm(['--dir', 'tools/valdi-rolldown', 'tsconfig'], root);
 } catch (error) {

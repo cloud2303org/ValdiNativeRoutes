@@ -294,6 +294,12 @@ try {
     try { $bazelState = @(& $bazel.Path info output_base 2>&1 | ForEach-Object { "$_".Trim() }) }
     finally { $ErrorActionPreference = $previous }
 } finally { Pop-Location }
+$bazelOutputBase = @($bazelState | Where-Object { $_ })[-1]
+$isolatedPrefix = $rootPath -replace '\\', '/'
+if (-not $bazelOutputBase -or -not $bazelOutputBase.StartsWith($isolatedPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+    # A host-level ~/.bazelrc wins over the workspace files; only explicit flags keep the proof isolated.
+    throw "Bazel output base '$bazelOutputBase' is outside the isolation root '$rootPath'."
+}
 
 $report = [ordered]@{
     result        = 'success'
@@ -304,7 +310,7 @@ $report = [ordered]@{
     finishedAt    = (Get-Date).ToUniversalTime().ToString('o')
     isolation     = $initial.emptyAtStart
     cacheMegabytesAfter = $sizes
-    bazelOutputBase = $bazelState
+    bazelOutputBase = $bazelOutputBase
     hashes        = $hashes
     tests         = @{ exitCode = $testCode; log = $testLog }
     invalidation  = $invalidation

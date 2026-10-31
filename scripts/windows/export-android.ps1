@@ -94,7 +94,11 @@ if ($DiskCache) {
 }
 $cacheBazelRc = New-BazelCacheRcOptions -DiskCache $resolvedDiskCache
 Write-BazelRcFiles -AppRoot $root -Lines $localBazelRc -CacheLines $cacheBazelRc
-$env:VALDI_BAZEL_ARGS = ''
+# A user-level ~/.bazelrc is loaded after the workspace files and can therefore redirect the output base or
+# the repository cache. Command-line startup/build flags are the only thing that beats it, so an explicit
+# isolated root also becomes an environment flag for the export and the module-build workspace.
+$env:VALDI_BAZEL_STARTUP_ARGS = if ($OutputBase) { '--output_user_root=' + ($resolvedOutputBase -replace '\\', '/') } else { '' }
+$env:VALDI_BAZEL_ARGS = if ($RepositoryCache) { '--repository_cache=' + ($resolvedRepositoryCache -replace '\\', '/') } else { '' }
 
 $bash = Resolve-GitBashPath $GitBash
 $env:BAZEL_SH = $bash

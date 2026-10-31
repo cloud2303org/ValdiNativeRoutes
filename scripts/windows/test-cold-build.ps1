@@ -224,6 +224,29 @@ if ($Cmake) { $env:VISION_CMAKE = $Cmake }
 
 Write-Output "Running pnpm android (unified prebuild + build) with isolated caches (log: $buildLog)"
 $started = Get-Date
+
+# An empty Gradle home has to fetch the pinned wrapper distribution, and the wrapper does not retry a
+# reset itself. Install it first (still a network download) so the build is not lost to one bad connection.
+$wrapperLog = Join-Path $logDir 'gradle-wrapper.log'
+Write-Output "Installing the Gradle wrapper distribution (retried)..."
+$wrapperCode = 1
+Push-Location (Join-Path $app 'android')
+try {
+    for ($wrapperAttempt = 1; $wrapperAttempt -le 4; $wrapperAttempt++) {
+        $wrapperCode = Invoke-LoggedCommand -FilePath 'cmd.exe' -LogPath $wrapperLog -Append:($wrapperAttempt -gt 1) `
+            -Arguments @('/d', '/s', '/c', 'gradlew.bat', '--version')
+        if ($wrapperCode -eq 0) { break }
+        if ($wrapperAttempt -lt 4) {
+            Write-Output "Gradle wrapper download attempt $wrapperAttempt failed (exit $wrapperCode); retrying..."
+            Start-Sleep -Seconds (10 * $wrapperAttempt)
+        }
+    }
+} finally { Pop-Location }
+if ($wrapperCode -ne 0) {
+    Write-Output "The Gradle wrapper distribution could not be downloaded (exit $wrapperCode): $wrapperLog"
+    exit $wrapperCode
+}
+
 Push-Location $app
 try {
     $buildCode = Invoke-LoggedCommand -FilePath 'node' -Arguments $arguments -LogPath $buildLog

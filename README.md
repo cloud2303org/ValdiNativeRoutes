@@ -48,6 +48,9 @@ pnpm test:e2e:ios              # 已安装 iOS App 的 UI 测试
 见 [构建与 CI 边界](docs/build-and-ci.md)。iOS 的 prebuild/构建/安装只在 macOS + Xcode 下可用；Linux 支持
 `prebuild --platform android` 与 `android`（需要 adb/模拟器）。
 
+仓库根目录的 `.npmrc` 关闭了 pnpm 的 pre/post 脚本自动执行（`enable-pre-post-scripts=false`），否则
+`pnpm build` 会先自动跑同名的 `prebuild` 脚本；`pnpm prebuild --platform android` 是显式命令，不受影响。
+
 直接构建时 Android 的 Gradle 参数、iOS 的 `xcodebuild` 参数可跟在命令后面，例如 `pnpm build:android --stacktrace`。
 UI 测试沿用现有设备配置（可用
 `ANDROID_DEVICE` / `IOS_DEVICE` 覆盖），默认跑全部用例；也可指定一个用例，例如

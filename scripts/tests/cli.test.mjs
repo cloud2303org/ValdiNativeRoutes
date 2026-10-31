@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -100,4 +101,31 @@ test('prebuild --dry-run reports a platform plan from the real repository state'
   const plan = JSON.parse(result.stdout);
   assert.equal(plan.platform, 'android');
   assert.deepEqual(plan.steps.map(step => step.step), ['sources', 'bindings', 'runtime', 'vision', 'modules']);
+});
+
+test('android --dry-run stops after the plan instead of building or installing', () => {
+  const result = cliRun(['android', '--dry-run', '--json', '--', '--stacktrace']);
+  assert.equal(result.status, 0, result.stderr);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.platform, 'android');
+  // Passed-through Gradle flags must not be executed by a dry run.
+  assert.doesNotMatch(result.stdout, /assembleDebug/);
+  assert.ok(plan.device?.actions, 'the device plan is reported');
+});
+
+test('dev --dry-run never starts the hot reload loop', () => {
+  const result = cliRun(['dev', '--dry-run']);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Hot reload plan: .*hotreload\.sh/);
+});
+
+/*
+ * pnpm runs a `prebuild` script before `build` unless pre/post scripts are disabled. The unified UX
+ * needs both `pnpm prebuild --platform android` and `pnpm build`, so the repository pins the setting.
+ */
+test('pnpm does not run the prebuild script as an implicit build hook', () => {
+  const npmrc = readFileSync(path.join(repository, '.npmrc'), 'utf8');
+  assert.match(npmrc, /^enable-pre-post-scripts=false$/m);
+  const scripts = JSON.parse(readFileSync(path.join(repository, 'package.json'), 'utf8')).scripts;
+  assert.equal(scripts.prebuild, 'node scripts/cli.mjs prebuild');
 });

@@ -246,13 +246,7 @@ function prebuild(options) {
   applyCaches(options);
 
   if (options.dryRun) {
-    let runtimeCurrent = false;
-    let visionCurrent = false;
-    try { checkRuntime(root, platform); runtimeCurrent = true; } catch {}
-    try { checkVision(root, platform); visionCurrent = true; } catch {}
-    const bindingsStale = !runQuiet(process.execPath, [tsx, 'codegen.ts', ...bindingsArguments(platform), '--check'], rolldown);
-    const plan = planPrebuild({ platform, runtimeCurrent, visionCurrent, bindingsStale });
-    console.log(options.json ? JSON.stringify(plan, null, 2) : `Prebuild plan (${platform}):\n` + plan.steps.map(entry => `  ${entry.step}: ${entry.action}`).join('\n'));
+    printPlan(inspectPrebuild(platform), options.json);
     return 0;
   }
 
@@ -266,6 +260,24 @@ function prebuild(options) {
   actions.push('built module libraries');
   console.log(actions.length ? `Prebuild done: ${actions.join('; ')}.` : 'Prebuild done: everything was current.');
   return 0;
+}
+
+/** Inspect the current fingerprints without any side effects; `--dry-run` and tests use this. */
+function inspectPrebuild(platform) {
+  let runtimeCurrent = false;
+  let visionCurrent = false;
+  try { checkRuntime(root, platform); runtimeCurrent = true; } catch {}
+  try { checkVision(root, platform); visionCurrent = true; } catch {}
+  const bindingsStale = !runQuiet(process.execPath, [tsx, 'codegen.ts', ...bindingsArguments(platform), '--check'], rolldown);
+  return planPrebuild({ platform, runtimeCurrent, visionCurrent, bindingsStale });
+}
+
+function printPlan(plan, json) {
+  if (json) {
+    console.log(JSON.stringify(plan, null, 2));
+    return;
+  }
+  console.log(`Prebuild plan (${plan.platform}):\n` + plan.steps.map(entry => `  ${entry.step}: ${entry.action}`).join('\n'));
 }
 
 function androidApplicationId() {
@@ -314,6 +326,17 @@ function deviceCommand(platform, options) {
     throw new Error('pnpm android/ios build Debug only. Release OTA builds are manual (release export + signed build); see docs.');
   }
   if (platform === 'ios' && process.platform !== 'darwin') throw new Error('pnpm ios requires macOS with Xcode.');
+  if (options.dryRun) {
+    // Dry-run only reports the plan: no Gradle/xcodebuild, no install, no device change.
+    const plan = options.noPrebuild ? undefined : inspectPrebuild(platform);
+    const device = devicePlan(platform, options);
+    if (options.json) console.log(JSON.stringify({ ...(plan ?? { platform }), device: device.data }, null, 2));
+    else {
+      if (plan) printPlan(plan, false);
+      console.log(device.text);
+    }
+    return 0;
+  }
   if (!options.noPrebuild) {
     const code = prebuild({ ...options, platform });
     if (code !== 0) return code;
@@ -329,11 +352,35 @@ function deviceCommand(platform, options) {
   return 0;
 }
 
+/** Dry-run only: say which device the real run would use, without failing when none is up. */
+function devicePlan(platform, options) {
+  const actions = options.noInstall
+    ? 'build only (--no-install)'
+    : options.noLaunch ? 'build and install (--no-launch)' : 'build, install and launch';
+  try {
+    if (platform === 'android') {
+      const { device } = chooseAndroidDevice(options.device);
+      return { text: `Device plan: ${actions} the Debug APK on ${device.serial}.`, data: { actions, serial: device.serial } };
+    }
+    const simulator = chooseIosSimulator(options.device);
+    return {
+      text: `Device plan: ${actions} the Debug app on ${simulator.name} (${simulator.udid}).`,
+      data: { actions, udid: simulator.udid, name: simulator.name },
+    };
+  } catch (error) {
+    return { text: `Device plan: ${actions} — ${error.message}`, data: { actions, error: error.message } };
+  }
+}
+
 function dev(options) {
   const bash = process.platform === 'win32'
     ? [path.join(process.env.ProgramFiles ?? 'C:/Program Files', 'Git/bin/bash.exe'), 'bash'].find(candidate => existsSync(candidate))
     : 'bash';
   if (!bash) throw new Error('pnpm dev needs Git Bash on Windows (install Git for Windows) or bash on macOS/Linux.');
+  if (options.dryRun) {
+    console.log(`Hot reload plan: ${bash} ${path.join(root, 'scripts/hotreload.sh')} ${options.passthrough.join(' ')}`.trim());
+    return 0;
+  }
   run(bash, [path.join(root, 'scripts/hotreload.sh'), ...options.passthrough], root);
   return 0;
 }

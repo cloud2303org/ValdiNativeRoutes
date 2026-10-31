@@ -30,7 +30,7 @@ scripts/
 pnpm prebuild --platform android   # 准备 Valdi 源码/绑定/运行时/原生模块/Vision（未变化时走快速路径）
 pnpm android                       # prebuild + 构建 + 安装 + 启动（唯一模拟器，或 --device 指定）
 pnpm ios                           # 同上，iOS 模拟器（仅 macOS）
-pnpm dev                           # 热重载到已运行的 Debug App（现有 hotreload.sh）
+pnpm dev                           # Node 热重载；按 a / i 选择设备并构建、安装、启动 App
 pnpm build:android                 # 只构建 Android Debug APK，不安装/启动
 pnpm build:ios                     # 只构建 iOS Simulator Debug App（自动 XcodeGen）
 pnpm build                         # TS 模块、图片和字体；输出 tools/valdi-rolldown/out/
@@ -38,6 +38,13 @@ pnpm test                          # 构建前置检查测试 + Kotlin / Objecti
 pnpm test:e2e:android          # 已安装 Android App 的 UI 测试
 pnpm test:e2e:ios              # 已安装 iOS App 的 UI 测试
 ```
+
+也可以先只运行 `pnpm dev`，在同一个终端按 **a**（Android）或 **i**（iOS 模拟器，仅 Mac），
+输入设备编号后按回车启动。支持大写 A/I；Esc 取消选择，Ctrl+C 退出并停止从这里启动的构建。
+Android 列出已启动的模拟器和已授权的连接设备；尚未启动的 Android 模拟器需先在 Android Studio 打开。
+iOS 列出可用 iPhone 模拟器，选中后由 `pnpm ios --device` 自动启动。选择 Android 后热重载也定向到该设备。
+原生构建在子进程执行，Node 热重载继续运行；构建期间不会重复启动第二个构建，失败后可以再次按 a/i 重试。
+输出重定向或非交互终端不启用快捷键，仍可另开终端执行 `pnpm android` / `pnpm ios`。
 
 统一入口都是 Node 分发，Windows / macOS / Linux 用法一致；`android`/`ios` 先按指纹准备（源码、绑定、运行时、
 原生模块、Vision），指纹未变化时不会重新导出运行时，只改 TS 不会触发导出。设备选择是显式的：唯一运行中的

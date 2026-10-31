@@ -21,7 +21,8 @@ Commands
                                       Android emulator (or an explicit --device serial).
   ios [options]                       prebuild, build, install and launch the Debug app on an
                                       iOS simulator (macOS only).
-  dev                                 Hot reload into running debug apps (scripts/hotreload.sh).
+  dev                                 Hot reload; press a/i in the terminal to select a device,
+                                      then build, install and launch the app.
   build:android | build:ios           Pure Debug build, no preparation or device work.
   build                               Build the Valdi module bundles only.
   test                                Pipeline, golden and prerequisite tests.

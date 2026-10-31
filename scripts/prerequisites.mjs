@@ -57,14 +57,18 @@ export function checkSources(root, sourceDir) {
   }
 }
 
-export function prepareSources(root) {
+export function prepareSources(root, options = {}) {
   const candidates = process.env.BAZEL_BIN ? [process.env.BAZEL_BIN] : ['bzl', 'bazel', 'bazelisk'];
   const command = candidates.find(candidate => !spawnSync(candidate, ['--version'], { stdio: 'ignore' }).error);
   if (!command) throw new Error('Preparing Valdi sources requires Bazel/Bazelisk on PATH (or BAZEL_BIN).');
   const cwd = path.join(root, 'valdi');
+  // An isolated build passes its own output root / repository cache here so the fetch-only
+  // step neither starts a shared Bazel server nor fills a shared cache.
+  const startup = options.startupArgs ?? [];
+  const common = options.bazelArgs ?? [];
   // Fetch only the pinned fork repository. No app/compiler target or native toolchain analysis is needed.
-  run(command, ['--max_idle_secs=5', 'fetch', '--repo=@valdi'], cwd);
-  const info = spawnSync(command, ['--max_idle_secs=5', 'info', 'output_base'], { cwd, encoding: 'utf8' });
+  run(command, [...startup, '--max_idle_secs=5', 'fetch', '--repo=@valdi', ...common], cwd);
+  const info = spawnSync(command, [...startup, '--max_idle_secs=5', 'info', 'output_base', ...common], { cwd, encoding: 'utf8' });
   if (info.error || info.status !== 0) throw new Error(`Cannot locate fetched Valdi sources: ${info.error?.message ?? info.stderr.trim()}`);
   const outputBase = info.stdout.trim();
   const fetchedConfig = path.join(outputBase, 'external/valdi+/modules/_configs/base.tsconfig.json');

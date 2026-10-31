@@ -4,6 +4,14 @@
 `pnpm build:android` 调用宿主 Gradle；`pnpm build:ios` 生成 Xcode 工程并构建模拟器 Debug App。
 平台构建已内含 TS 模块构建，无需先手动运行 `pnpm build`。
 
+统一开发入口由 `scripts/cli.mjs` 用 Node 分发（Windows / macOS / Linux 一致）：
+`pnpm prebuild --platform android|ios` 按指纹准备 Valdi 源码、绑定、运行时、原生模块和 Vision（未变化时走快速
+路径）；`pnpm android` / `pnpm ios` 依次执行 prebuild、构建、安装并在唯一模拟器（或显式 `--device`）上启动；
+`pnpm dev` 仍是现有热重载；`pnpm build:android` / `pnpm build:ios` 保持纯构建；`pnpm test` 不变。
+物理 Android 设备永远不会被自动选中，多个模拟器会要求 `--device`；iOS 安装/启动只在 macOS 模拟器上支持
+（不驱动物理 iPhone）。`pnpm android`/`pnpm ios` 只支持 Debug，Release OTA（导出 release、签名、记录）仍按
+下文的手动流程执行。
+
 `nativeBuild: "bazel"` 的自定义模块（目前为 calculator）由独立 `module-build/` workspace 构建。
 它调用同一套 Node TS / 绑定 / 资源管线，再编译模块原生库并接入 Gradle / Xcode；不通过主 App 的旧模块规则。
 见 [自定义模块实验](custom-modules.md)。模块 native targets 依赖现有导出的 runtime，CI 原生任务会自动准备模块库。

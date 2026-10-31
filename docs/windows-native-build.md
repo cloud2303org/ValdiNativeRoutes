@@ -28,6 +28,12 @@ pnpm install
 powershell -ExecutionPolicy Bypass -File scripts/windows/build-android.ps1
 ```
 
+The cross-platform unified entry points work here too: `pnpm prebuild --platform android` prepares the
+fingerprint-selected artifacts, and `pnpm android [--device <serial>] [--no-install] [--no-launch]` runs prebuild,
+the Gradle build, and installs/launches on an emulator (a physical phone only when named with `--device`). The
+PowerShell script remains the Windows-specific implementation the Node dispatcher and CI call; it is the full
+bootstrap path described below.
+
 This exports the three-ABI Valdi runtime AAR, prepares the Android arm64
 OpenCV/ncnn libraries when they are missing, builds the custom Bazel-backed
 modules, and assembles the Debug APK with `gradlew.bat`. The Gradle pipeline's
@@ -108,7 +114,8 @@ powershell -ExecutionPolicy Bypass -File scripts/windows/test-cold-build.ps1 `
 
 It requires an empty `-Root` on a short path, clones the repository over the network at one commit, verifies the
 clone is clean and holds no AAR/APK/vendor directories, and gives the build an empty, isolated directory for every
-cache above (`caches\…`, `bazel-out`). It then runs the full entry point, the pipeline tests against the fetched
+cache above (`caches\…`, `bazel-out`). It then runs the unified `pnpm android --no-install --no-launch` (prebuild
+plus the Gradle build), the pipeline tests against the fetched
 Valdi sources, and `scripts/windows/test-native-invalidation.ps1`, writes `logs\cold-build-report.json` with the
 cache sizes after the run, output hashes and test results, and prints the artifact hashes. Preinstalled tools are
 reused explicitly; this validates an isolated cold build on existing hardware, not a pristine Windows installation.

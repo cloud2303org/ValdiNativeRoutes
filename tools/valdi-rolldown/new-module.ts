@@ -59,10 +59,13 @@ const styles = {
 
 const modules = appModules();
 for (const each of modules) writeTsconfig(each, modules);
+// Spawning `npx` fails on Windows (a .cmd shim) and would bypass the pinned tsx; run the
+// installed tsx launcher with Node on every host.
+const tsx = path.join(import.meta.dirname, 'node_modules/tsx/dist/cli.mjs');
 execFileSync(
-  'npx',
+  process.execPath,
   [
-    'tsx', 'codegen.ts', name,
+    tsx, 'codegen.ts', name,
     '--kotlin-out', path.join(root, 'android/app/generated/valdi'),
     '--objc-out', path.join(root, 'ios/Generated/valdi'), '--objc-framework', 'ValdiRuntime',
     '--cpp-out', path.join(root, 'valdi/native/generated'),

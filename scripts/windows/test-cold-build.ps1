@@ -125,6 +125,7 @@ foreach ($artifact in @('android/app/libs/valdi_runtime.aar', 'android/app/libs/
 $bazel = Assert-BazelRuntime -AppRoot $app -BazelPath $BazelPath
 $JavaHome = Assert-JdkRuntime -AppRoot $app -JavaHome $JavaHome
 $AndroidHome = Assert-AndroidSdkRuntime -AndroidHome $AndroidHome
+$env:BAZEL_BIN = $bazel.Path
 $initial.preinstalled.bazel = $bazel.Version
 $initial.preinstalled.java = $JavaHome
 $initial.preinstalled.sdk = $AndroidHome
@@ -145,30 +146,32 @@ $env:CI = 'true'
 Remove-Item Env:\GOPROXY -ErrorAction SilentlyContinue
 
 $buildLog = Join-Path $logDir 'cold-build.log'
+# The unified entry point: prebuild (sources/bindings/runtime/vision/module libraries) then the
+# Gradle build, with the isolated caches and the explicit tool paths.
+$env:JAVA_HOME = $JavaHome
+$env:ANDROID_HOME = $AndroidHome
 $arguments = @(
-    '-NoProfile', '-ExecutionPolicy', 'Bypass',
-    '-File', (Join-Path $app 'scripts/windows/build-android.ps1'),
-    '-BazelPath', $bazel.Path,
-    '-JavaHome', $JavaHome,
-    '-AndroidHome', $AndroidHome,
-    '-OutputBase', $outputBase,
-    '-RepositoryCache', $cachePaths.bazelRepos,
-    '-DiskCache', $cachePaths.bazelDisk,
-    '-GoModCache', $cachePaths.goMod,
-    '-PnpmStore', $cachePaths.pnpmStore,
-    '-GradleUserHome', $cachePaths.gradle,
-    '-MinFreeGB', "$MinFreeGB",
-    '-BazelArg', 'build --experimental_disk_cache_gc_max_size=3G'
+    (Join-Path $app 'scripts/cli.mjs'), 'android', '--no-install', '--no-launch',
+    '--bazel-path', $bazel.Path,
+    '--output-base', $outputBase,
+    '--repository-cache', $cachePaths.bazelRepos,
+    '--disk-cache', $cachePaths.bazelDisk,
+    '--go-mod-cache', $cachePaths.goMod,
+    '--pnpm-store', $cachePaths.pnpmStore,
+    '--gradle-user-home', $cachePaths.gradle
 )
-if ($GitBash) { $arguments += @('-GitBash', $GitBash) }
-if ($Cmake) { $arguments += @('-Cmake', $Cmake) }
-if ($ProxyUrl) { $arguments += @('-ProxyUrl', $ProxyUrl) }
-if ($NoProxy) { $arguments += @('-NoProxy', ($NoProxy -join ',')); $arguments += @('-SkipNetworkCheck') }
-if ($SkipNetworkCheck) { $arguments += '-SkipNetworkCheck' }
+if ($ProxyUrl) { $arguments += @('--proxy-url', $ProxyUrl) }
+if ($NoProxy) { $arguments += @('--no-proxy', ($NoProxy -join ',')) }
+if ($GitBash) { $env:BAZEL_SH = $GitBash }
+if ($Cmake) { $env:VISION_CMAKE = $Cmake }
 
-Write-Output "Running the complete Windows entry point with isolated caches (log: $buildLog)"
+Write-Output "Running pnpm android (unified prebuild + build) with isolated caches (log: $buildLog)"
 $started = Get-Date
-& powershell @arguments 2>&1 | Tee-Object -FilePath $buildLog
+Push-Location $app
+try {
+    & node @arguments 2>&1 | Tee-Object -FilePath $buildLog
+    $buildCode = $LASTEXITCODE
+} finally { Pop-Location }
 $buildCode = $LASTEXITCODE
 $elapsed = [math]::Round(((Get-Date) - $started).TotalMinutes, 1)
 if ($buildCode -ne 0) {

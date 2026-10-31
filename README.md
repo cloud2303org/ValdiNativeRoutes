@@ -27,16 +27,29 @@ scripts/
 日常构建和测试从仓库根目录运行：
 
 ```sh
-pnpm build                    # TS 模块、图片和字体；输出 tools/valdi-rolldown/out/
-pnpm build:android            # Android Debug APK；输出 android/app/build/outputs/apk/debug/
-pnpm build:ios                # iOS Simulator Debug App；输出 ios/build/Build/Products/Debug-iphonesimulator/
-pnpm test                     # 构建前置检查测试 + Kotlin / Objective-C / C++ golden 对比
+pnpm prebuild --platform android   # 准备 Valdi 源码/绑定/运行时/原生模块/Vision（未变化时走快速路径）
+pnpm android                       # prebuild + 构建 + 安装 + 启动（唯一模拟器，或 --device 指定）
+pnpm ios                           # 同上，iOS 模拟器（仅 macOS）
+pnpm dev                           # 热重载到已运行的 Debug App（现有 hotreload.sh）
+pnpm build:android                 # 只构建 Android Debug APK，不安装/启动
+pnpm build:ios                     # 只构建 iOS Simulator Debug App（自动 XcodeGen）
+pnpm build                         # TS 模块、图片和字体；输出 tools/valdi-rolldown/out/
+pnpm test                          # 构建前置检查测试 + Kotlin / Objective-C / C++ golden 对比
 pnpm test:e2e:android          # 已安装 Android App 的 UI 测试
 pnpm test:e2e:ios              # 已安装 iOS App 的 UI 测试
 ```
 
-`build:ios` 自动运行 XcodeGen；两个原生构建命令只构建，不安装或启动 App。Android 的 Gradle 参数、iOS 的
-`xcodebuild` 参数可跟在命令后面，例如 `pnpm build:android --stacktrace`。UI 测试沿用现有设备配置（可用
+统一入口都是 Node 分发，Windows / macOS / Linux 用法一致；`android`/`ios` 先按指纹准备（源码、绑定、运行时、
+原生模块、Vision），指纹未变化时不会重新导出运行时，只改 TS 不会触发导出。设备选择是显式的：唯一运行中的
+模拟器会被使用，多个模拟器或只有物理设备时必须 `--device <adb serial | simulator udid|name>`，永远不会自动挑
+物理设备（物理设备只在使用 `--device` 时安装）。常用选项：`--no-install`（只构建）、`--no-launch`（安装不启动）、
+`--no-prebuild`（跳过准备，交给构建自己的指纹检查）；`--` 之后的参数原样传给 Gradle / `xcodebuild`，例如
+`pnpm android -- --stacktrace`。`pnpm android`/`pnpm ios` 目前只做 Debug，Release OTA 构建仍需手动导出与签名，
+见 [构建与 CI 边界](docs/build-and-ci.md)。iOS 的 prebuild/构建/安装只在 macOS + Xcode 下可用；Linux 支持
+`prebuild --platform android` 与 `android`（需要 adb/模拟器）。
+
+直接构建时 Android 的 Gradle 参数、iOS 的 `xcodebuild` 参数可跟在命令后面，例如 `pnpm build:android --stacktrace`。
+UI 测试沿用现有设备配置（可用
 `ANDROID_DEVICE` / `IOS_DEVICE` 覆盖），默认跑全部用例；也可指定一个用例，例如
 `pnpm test:e2e:android detail-scroll`。UI 测试不隐式构建或覆盖已安装的 App。
 
@@ -46,12 +59,11 @@ CI 的范围和缓存规则见 [构建与 CI 边界](docs/build-and-ci.md)，
 框架 fork 同步、版本试跑及 vendored 代码的维护步骤见 [同步 Valdi 上游](docs/upgrading-valdi.md)。
 Windows 原生 Android 构建入口见 [Native Windows Android builds](docs/windows-native-build.md)。
 
-首次准备依赖和原生运行时仍需下面的步骤；改 TS、图片后直接使用上面的根目录命令：
+准备依赖和原生运行时可以显式执行（`pnpm android`/`pnpm prebuild` 会自动完成同样的步骤）：
 
 ```sh
 pnpm install                               # 一次安装根目录、页面和构建工具的锁定依赖，生成 tsconfig
-scripts/export-android.sh                   # 只在第一次和 Valdi 本身变了时跑；release 包加参数 release
-cd android && ./gradlew :app:installDebug
+pnpm prebuild --platform android           # 首次/Valdi 或 valdi/native 变化时导出运行时并准备其余产物
 ```
 
 需要 JDK 17、Android SDK、Node、pnpm。Valdi 命令行工具不用全局安装：它是 `valdi/package.json` 里的开发依赖（`@snap/valdi` 1.2.1），导出脚本用 `pnpm exec valdi` 调它。导出只编 Valdi 运行时（`libvaldi_runtime.so`、Valdi 的 Kotlin 和它自带的模块）以及构建要用的 Valdi 工具，第一次从头编译约 17 分钟。aar 里有三种 CPU 架构，APK 只打包 arm64（`abiFilters`）。

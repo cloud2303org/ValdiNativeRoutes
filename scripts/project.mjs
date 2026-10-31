@@ -19,7 +19,7 @@ function main() {
     if (platform === 'modules') {
       runPnpm(['--dir', 'tools/valdi-rolldown', 'build', ...forwarded], root);
     } else {
-      run(process.execPath, ['--test', 'scripts/tests/prerequisites.test.mjs', 'scripts/tests/upstream.test.mjs'], root);
+      run(process.execPath, ['--test', 'scripts/tests/prerequisites.test.mjs', 'scripts/tests/upstream.test.mjs', 'scripts/tests/cli.test.mjs'], root);
       const valdiSource = sourceOption >= 0 ? forwarded[sourceOption + 1] : [
         path.join(root, 'valdi/.valdi-sources/external/valdi+'),
         path.join(root, 'valdi/bazel-valdi/external/valdi+'),

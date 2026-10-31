@@ -51,24 +51,16 @@ function Invoke-Node([string[]]$Arguments, [string]$LogName) {
         return [int]$LASTEXITCODE
     } finally { Pop-Location }
 }
-function Invoke-FullBuild([string]$LogName) {
-    $log = Join-Path $logs $LogName
-    $arguments = @(
-        '-NoProfile', '-ExecutionPolicy', 'Bypass',
-        '-File', (Join-Path $app 'scripts/windows/build-android.ps1'),
-        '-SkipVisionPrepare',
-        '-BazelPath', $env:BAZEL_BIN
-    )
-    if ($env:JAVA_HOME) { $arguments += @('-JavaHome', $env:JAVA_HOME) }
-    if ($env:ANDROID_HOME) { $arguments += @('-AndroidHome', $env:ANDROID_HOME) }
-    if ($OutputBase) { $arguments += @('-OutputBase', $OutputBase) }
-    if ($RepositoryCache) { $arguments += @('-RepositoryCache', $RepositoryCache) }
-    if ($DiskCache) { $arguments += @('-DiskCache', $DiskCache) }
-    if ($GoModCache) { $arguments += @('-GoModCache', $GoModCache) }
-    if ($PnpmStore) { $arguments += @('-PnpmStore', $PnpmStore) }
-    if ($GradleUserHome) { $arguments += @('-GradleUserHome', $GradleUserHome) }
-    & powershell @arguments 2>&1 | Tee-Object -FilePath $log | Out-Host
-    return [int]$LASTEXITCODE
+function Invoke-Prebuild([string]$LogName) {
+    # The unified entry point decides export/vision/module work from the fingerprints.
+    $arguments = @('scripts/cli.mjs', 'prebuild', '--platform', 'android', '--bazel-path', $env:BAZEL_BIN)
+    if ($OutputBase) { $arguments += @('--output-base', $OutputBase) }
+    if ($RepositoryCache) { $arguments += @('--repository-cache', $RepositoryCache) }
+    if ($DiskCache) { $arguments += @('--disk-cache', $DiskCache) }
+    if ($GoModCache) { $arguments += @('--go-mod-cache', $GoModCache) }
+    if ($PnpmStore) { $arguments += @('--pnpm-store', $PnpmStore) }
+    if ($GradleUserHome) { $arguments += @('--gradle-user-home', $GradleUserHome) }
+    return Invoke-Node -Arguments $arguments -LogName $LogName
 }
 
 $runtimeAar = 'android/app/libs/valdi_runtime.aar'
@@ -91,13 +83,12 @@ try {
     $moduleText = [System.IO.File]::ReadAllText($moduleSource)
     if ($moduleText -notmatch 'left \* right') { throw 'Fixture assumption broke: calculator source changed.' }
     [System.IO.File]::WriteAllText($moduleSource, $moduleText.Replace('left * right', "left * right + 0.0 /* $fixture */"))
-    $moduleBuildLog = Join-Path $logs 'invalidation-module-build.log'
-    Push-Location $app
-    try {
-        & node scripts/node-modules.mjs android 2>&1 | Tee-Object -FilePath $moduleBuildLog
-        $moduleExit = $LASTEXITCODE
-    } finally { Pop-Location }
-    if ($moduleExit -ne 0) { throw "Module-only rebuild failed (exit $moduleExit): $moduleBuildLog" }
+    $modulePrebuild = Invoke-Prebuild -LogName 'invalidation-module-prebuild.log'
+    if ($modulePrebuild -ne 0) { throw "Prebuild failed after a module change (exit $modulePrebuild)." }
+    $modulePrebuildLog = Get-Content -LiteralPath (Join-Path $logs 'invalidation-module-prebuild.log') -Raw
+    if ($modulePrebuildLog -match 'Exporting the runtime') {
+        throw 'Prebuild re-exported the runtime for a standalone module change; it must only rebuild the module library.'
+    }
     $moduleJarAfter = Get-HashOf $moduleJar
     $runtimeAfterModule = Get-HashOf $runtimeAar
     if ($moduleJarAfter -eq $InitialModuleHar) { throw 'The module library did not change after its native implementation changed.' }
@@ -122,11 +113,13 @@ try {
     if ($runtimeAfterStale -ne $InitialRuntimeHar) { throw 'The stale runtime AAR changed before a successful export.' }
     Write-Output 'Runtime change: daily build refused the stale AAR with the export instruction.'
 
-    $fullExit = Invoke-FullBuild -LogName 'invalidation-runtime-export.log'
-    if ($fullExit -ne 0) { throw "The full entry point failed after a valdi/native change (exit $fullExit)." }
+    $prebuildExit = Invoke-Prebuild -LogName 'invalidation-runtime-prebuild.log'
+    if ($prebuildExit -ne 0) { throw "Prebuild failed after a valdi/native change (exit $prebuildExit)." }
     $runtimeAfterExport = Get-HashOf $runtimeAar
-    if ($runtimeAfterExport -eq $InitialRuntimeHar) { throw 'The full entry point did not re-export the runtime after valdi/native changed.' }
-    Write-Output 'Runtime change: the full entry point exported a new AAR.'
+    if ($runtimeAfterExport -eq $InitialRuntimeHar) { throw 'Prebuild did not re-export the runtime after valdi/native changed.' }
+    $rebuildExit = Invoke-Node -Arguments @('scripts/project.mjs', 'android', '--no-daemon') -LogName 'invalidation-runtime-app.log'
+    if ($rebuildExit -ne 0) { throw "The daily build failed after prebuild exported the new runtime (exit $rebuildExit)." }
+    Write-Output 'Runtime change: prebuild exported a new AAR and the daily build then accepted it.'
 } finally {
     Copy-Item -LiteralPath $moduleBackup -Destination $moduleSource -Force
     Copy-Item -LiteralPath $nativeBackup -Destination $nativeSource -Force
@@ -145,7 +138,8 @@ $result = [ordered]@{
         dailyBuildExit          = $staleExit
         refusedStaleRuntime     = $true
         runtimeUnchangedOnFail  = $true
-        fullBuildExit           = $fullExit
+        prebuildExit            = $prebuildExit
+        rebuildExit             = $rebuildExit
         runtimeAarChanged       = $true
     }
     restoredSources     = $true
@@ -156,8 +150,10 @@ $result = [ordered]@{
 
 if ($RestoreCleanArtifacts) {
     # Rebuild from the restored sources so the last artifacts match the committed tree.
-    $cleanExit = Invoke-FullBuild -LogName 'invalidation-restore.log'
-    if ($cleanExit -ne 0) { throw "Rebuilding the restored tree failed (exit $cleanExit)." }
+    $cleanExit = Invoke-Prebuild -LogName 'invalidation-restore-prebuild.log'
+    if ($cleanExit -ne 0) { throw "Prebuild of the restored tree failed (exit $cleanExit)." }
+    $cleanBuildExit = Invoke-Node -Arguments @('scripts/project.mjs', 'android', '--no-daemon') -LogName 'invalidation-restore-build.log'
+    if ($cleanBuildExit -ne 0) { throw "Rebuilding the restored tree failed (exit $cleanBuildExit)." }
     $result.cleanRuntimeHash = Get-HashOf $runtimeAar
     $result.cleanModuleHash = Get-HashOf $moduleJar
     $result.cleanApkHash = Get-HashOf $apk

@@ -129,7 +129,8 @@ $initial.preinstalled.bazel = $bazel.Version
 $initial.preinstalled.java = $JavaHome
 $initial.preinstalled.sdk = $AndroidHome
 
-$nodeLauncher = Join-Path (Split-Path (Get-Command node).Source) 'node_modules/corepack/dist/pnpm.js'
+$nodeExe = Get-RequiredCommandPath -Name 'node'
+$nodeLauncher = Join-Path (Split-Path $nodeExe) 'node_modules/corepack/dist/pnpm.js'
 if (Test-Path -LiteralPath $nodeLauncher -PathType Leaf) { $env:npm_execpath = $nodeLauncher }
 
 # Every cache the build can write lives in the isolation root.

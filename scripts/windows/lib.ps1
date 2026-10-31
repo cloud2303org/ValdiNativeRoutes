@@ -365,7 +365,9 @@ function Get-RequiredCommandPath {
 
     # Application only: Windows PowerShell aliases `curl` to Invoke-WebRequest, which cannot
     # be executed with curl's arguments.
-    $command = Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue
+    $commands = @(Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue)
+    $command = $commands | Where-Object { $_.Source -match '\.exe$' } | Select-Object -First 1
+    if (-not $command) { $command = $commands | Select-Object -First 1 }
     if (-not $command) {
         $message = "$Name was not found on PATH."
         if ($Hint) { $message += " $Hint" }
@@ -542,7 +544,9 @@ function Assert-NativeToolRuntime {
     } else {
         $resolved.Cmake = Get-RequiredCommandPath -Name 'cmake' -Hint 'Install CMake 3.22 or pass -Cmake <cmake.exe>.'
     }
-    $ninja = Get-Command ninja -CommandType Application -ErrorAction SilentlyContinue
+    $ninjaCommands = @(Get-Command ninja -CommandType Application -ErrorAction SilentlyContinue)
+    $ninja = $ninjaCommands | Where-Object { $_.Source -match '\.exe$' } | Select-Object -First 1
+    if (-not $ninja) { $ninja = $ninjaCommands | Select-Object -First 1 }
     if ($ninja) {
         $resolved.Ninja = $ninja.Source
     } else {

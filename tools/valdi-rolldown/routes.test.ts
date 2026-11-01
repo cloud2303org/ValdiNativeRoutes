@@ -5,10 +5,11 @@ import path from 'node:path';
 import test, { type TestContext } from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
-import { appModule } from './pipeline';
+import { appModule, appModules, writeTsconfig } from './pipeline';
+import { findFonts, findImages, writeResTs } from './resources';
 import { valdiTs } from './valdiTs';
 
-function fixture(t: TestContext, dev = false) {
+async function fixture(t: TestContext, dev = false) {
   const temporary = mkdtempSync(path.join(tmpdir(), 'valdi-routes-'));
   t.after(() => rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
   const original = appModule('app_pages');
@@ -17,19 +18,17 @@ function fixture(t: TestContext, dev = false) {
   cpSync(path.join(original.dir, 'src'), path.join(dir, 'src'), { recursive: true });
   cpSync(path.join(original.dir, 'res'), path.join(dir, 'res'), { recursive: true });
   const generated = path.join(temporary, 'generated');
-  cpSync(original.generatedDirs[0], generated, { recursive: true });
-  const config = JSON.parse(readFileSync(path.join(original.dir, 'tsconfig.json'), 'utf8'));
-  config.extends = path.resolve(original.dir, config.extends);
+  const module = { ...original, dir, generatedDirs: [generated] };
+  // A fresh checkout has no .gen output. Generate declarations from this fixture's
+  // resources, just as the pipeline does, instead of depending on a previous build.
+  writeResTs(module, await findImages(module), generated, findFonts(module));
+  assert.ok(writeTsconfig(module, [module, ...appModules().filter(other => other.name !== module.name)]));
+  const config = JSON.parse(readFileSync(path.join(dir, 'tsconfig.json'), 'utf8'));
   config.compilerOptions.baseUrl = dir;
-  for (const [name, paths] of Object.entries(config.compilerOptions.paths)) {
-    config.compilerOptions.paths[name] = (paths as string[]).map(file => path.resolve(original.dir, file));
-  }
-  config.compilerOptions.types = config.compilerOptions.types.map((file: string) => path.resolve(original.dir, file));
   config.compilerOptions.rootDirs = [path.dirname(dir), generated];
   config.compilerOptions.paths['app_pages/*'] = [path.join(dir, '*'), path.join(generated, '*')];
   symlinkSync(original.nodeModules!, path.join(dir, 'node_modules'), 'junction');
   writeFileSync(path.join(dir, 'tsconfig.json'), JSON.stringify(config));
-  const module = { ...original, dir, generatedDirs: [generated] };
   const plugin = valdiTs(module, ts.ModuleKind.CommonJS, dev);
   const routeFile = path.join(dir, 'src/routes.ts');
   const change = (file: string, transform: (text: string) => string) => {
@@ -40,7 +39,7 @@ function fixture(t: TestContext, dev = false) {
 }
 
 /** Execute the actual emitted declaration/helpers; page implementations must never be required here. */
-function execute(f: ReturnType<typeof fixture>) {
+function execute(f: Awaited<ReturnType<typeof fixture>>) {
   const context = vm.createContext({});
   const cache = new Map<string, any>();
   const loaded: string[] = [];
@@ -61,8 +60,8 @@ function execute(f: ReturnType<typeof fixture>) {
   return { routes: load(f.routeFile).routes, load, loaded };
 }
 
-test('routes compile direct components/res to metadata, execute without loading any page, and preserve native aliases', t => {
-  const f = fixture(t);
+test('routes compile direct components/res to metadata, execute without loading any page, and preserve native aliases', async t => {
+  const f = await fixture(t);
   assert.equal(f.plugin.diagnostics(), '');
   f.change(f.routeFile, text => text.replace("name: 'picker'", "name: 'app/device-picker'"));
   const { routes, loaded } = execute(f);
@@ -85,8 +84,8 @@ test('routes compile direct components/res to metadata, execute without loading 
   assert.equal(execute(f).routes.toHost().routes.home.component, 'default@app_pages/src/HomePage');
 });
 
-test('editor types reject unknown native/Valdi routes, wrong params/results, and non-tab names', t => {
-  const f = fixture(t);
+test('editor types reject unknown native/Valdi routes, wrong params/results, and non-tab names', async t => {
+  const f = await fixture(t);
   const file = path.join(f.module.dir, 'src/navigation-types.ts');
   writeFileSync(file, `
 import { router } from './navigation';
@@ -114,15 +113,15 @@ router.pushForResult('picker').then(result => {
   assert.equal(f.plugin.diagnostics(), '', 'every expect-error must be consumed and valid calls must type-check');
 });
 
-test('tabs.initial is independently typed from items and must not widen the accepted Tab names', t => {
-  const f = fixture(t);
+test('tabs.initial is independently typed from items and must not widen the accepted Tab names', async t => {
+  const f = await fixture(t);
   f.change(f.routeFile, text => text.replace("initial: 'home'", "initial: 'detail'"));
   assert.match(f.plugin.diagnostics(), /detail.*not assignable|not assignable.*detail/);
   assert.throws(() => f.plugin.emit(f.routeFile), /tabs.initial must name a route in tabs.items/);
 });
 
-test('default selection uses first item; duplicate and unknown Tab references fail before publishing', t => {
-  const f = fixture(t);
+test('default selection uses first item; duplicate and unknown Tab references fail before publishing', async t => {
+  const f = await fixture(t);
   f.change(f.routeFile, text => text.replace("    initial: 'home',\n", ''));
   assert.equal(execute(f).routes.toHost().tabBar.initial, 'home');
   f.change(f.routeFile, text => text.replace("route: 'wheels'", "route: 'home'"));
@@ -131,8 +130,8 @@ test('default selection uses first item; duplicate and unknown Tab references fa
   assert.match(f.plugin.diagnostics(), /absent/);
 });
 
-test('old JSON declarations, non-components and unresolved image references are rejected with source positions', t => {
-  const f = fixture(t);
+test('old JSON declarations, non-components and unresolved image references are rejected with source positions', async t => {
+  const f = await fixture(t);
   const original = readFileSync(f.routeFile, 'utf8');
   for (const [source, error] of [
     [original.replace("valdiPage({ component: HomePage, title: '首页' })", "{ kind: 'valdi', title: '首页', component: 'HomePage@app_pages/src/HomePage' }"), /legacy route JSON/],
@@ -145,8 +144,8 @@ test('old JSON declarations, non-components and unresolved image references are 
   }
 });
 
-test('dev icon bytes change emitted routes and refresh the host; production references stay compact', t => {
-  const f = fixture(t, true);
+test('dev icon bytes change emitted routes and refresh the host; production references stay compact', async t => {
+  const f = await fixture(t, true);
   const { routes, load } = execute(f);
   const host = routes.toHost();
   const data = host.tabBar.tabs[0].iconData;
@@ -164,6 +163,6 @@ test('dev icon bytes change emitted routes and refresh the host; production refe
   config.defineRoutes({ pages: routes.pages, tabs: { items: [{ route: 'home', text: 'Changed', icon: { name: 'tab_home', data } }] } });
   assert.equal(updates.length, 1);
   assert.equal(JSON.parse(updates[0]).tabBar.tabs[0].text, 'Changed');
-  const prod = fixture(t);
+  const prod = await fixture(t);
   assert.equal(execute(prod).routes.toHost().tabBar.tabs[0].iconData, undefined);
 });

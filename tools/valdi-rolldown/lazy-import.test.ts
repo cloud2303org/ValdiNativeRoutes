@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test, { type TestContext } from 'node:test';
@@ -23,7 +23,9 @@ function write(root: string, file: string, content: string) {
 function fixture(t: TestContext) {
   assert.ok(existsSync(path.join(upstreamModules, 'valdi_core/src/LazyImport.ts')),
     'set VALDI_SOURCE_ROOT to the upgraded framework checkout');
-  const temporary = mkdtempSync(path.join(tmpdir(), 'valdi-lazy-import-'));
+  // Match Node's canonical package paths on every host (/var -> /private/var
+  // on macOS), so dependency classification is tested with Linux's layout too.
+  const temporary = realpathSync(mkdtempSync(path.join(tmpdir(), 'valdi-lazy-import-')));
   t.after(() => rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));
   const dir = path.join(temporary, 'app');
   const runtimeDir = path.join(temporary, 'valdi_core');

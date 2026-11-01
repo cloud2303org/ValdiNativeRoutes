@@ -174,7 +174,10 @@ function sourcePath(module: ValdiModule) {
  */
 function chunkName(module: ValdiModule) {
   return (chunk: PreRenderedChunk): string => {
-    const own = chunk.moduleIds.map(id => path.relative(module.dir, id)).find(file => !file.startsWith('..'));
+    // Packages may physically live inside the module (not only in an external
+    // pnpm store). They still belong to npm/, rather than local source chunks.
+    const own = chunk.moduleIds.map(id => path.relative(module.dir, id))
+      .find(file => !file.startsWith('..') && !file.split(path.sep).includes('node_modules'));
     if (own) return `chunks/${own.replace(/\.tsx?$/, '').split(path.sep).join('/')}`;
     const packages = new Set<string>();
     for (const id of chunk.moduleIds) {

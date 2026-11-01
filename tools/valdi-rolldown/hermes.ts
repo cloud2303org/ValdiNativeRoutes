@@ -73,11 +73,22 @@ export function hermesCompiler(directory = root): { executable: string; bytecode
   return { executable, bytecodeVersion };
 }
 
+function validateBytecode(bytecode: Buffer, bytecodeVersion: number, name: string): void {
+  if (bytecode.length < 12 || bytecode.readBigUInt64LE(0) !== HBC_MAGIC || bytecode.readUInt32LE(8) !== bytecodeVersion) {
+    throw new Error(`Unexpected Hermes bytecode format for ${name} (expected HBC version ${bytecodeVersion})`);
+  }
+}
+
 export async function precompile(entries: ArchiveEntries): Promise<void> {
-  const pending = [...entries].filter(([name, data]) => name.endsWith('.js')
-    && !(data.length >= 4 && data.readUInt32LE(0) === MODULE_MAGIC));
-  if (!pending.length) return;
+  const modules = [...entries].filter(([name]) => name.endsWith('.js'));
+  if (!modules.length) return;
   const { executable, bytecodeVersion } = hermesCompiler();
+  const pending = modules.filter(([name, data]) => {
+    if (data.length < 4 || data.readUInt32LE(0) !== MODULE_MAGIC) return true;
+    validateBytecode(data.subarray(4), bytecodeVersion, name);
+    return false;
+  });
+  if (!pending.length) return;
   const dir = mkdtempSync(path.join(tmpdir(), 'valdi-hermes-'));
   try {
     let next = 0;
@@ -89,12 +100,14 @@ export async function precompile(entries: ArchiveEntries): Promise<void> {
         const output = path.join(dir, `${index}.hbc`);
         writeFileSync(input, formatJsModule(source.toString('utf8')));
         // Same strict/block-scoping/optimization and stripping settings as HermesJavaScriptCompiler.cpp.
-        await run(executable, ['-emit-binary', '-O', '-strict', '-Xes6-block-scoping', '-fno-static-builtins',
-          '-fstrip-function-names', '-g0', '-emit-async-break-check', '-out', output, input]);
-        const bytecode = readFileSync(output);
-        if (bytecode.length < 12 || bytecode.readBigUInt64LE(0) !== HBC_MAGIC || bytecode.readUInt32LE(8) !== bytecodeVersion) {
-          throw new Error(`Unexpected Hermes bytecode format for ${name}`);
+        try {
+          await run(executable, ['-emit-binary', '-O', '-strict', '-Xes6-block-scoping', '-fno-static-builtins',
+            '-fstrip-function-names', '-g0', '-emit-async-break-check', '-out', output, input]);
+        } catch (cause) {
+          throw new Error(`Hermes compilation failed for ${name}: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
         }
+        const bytecode = readFileSync(output);
+        validateBytecode(bytecode, bytecodeVersion, name);
         const header = Buffer.alloc(4);
         header.writeUInt32LE(MODULE_MAGIC);
         entries.set(name, Buffer.concat([header, bytecode]));

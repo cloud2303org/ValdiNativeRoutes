@@ -33,12 +33,13 @@ Release 字节码由官方 hermes-compiler 生成，应用 Node 管线不再依�
 
 | 任务 | 验证内容 | 产物 |
 | --- | --- | --- |
-| npm | `pnpm test`、`pnpm build` | golden / 构建日志 |
-| android | `pnpm test`、匹配运行时与视觉依赖、`pnpm build:android` | Debug APK、日志 |
-| ios | `pnpm test`、匹配运行时与视觉依赖、`pnpm build:ios` | 模拟器 App 压缩包、日志 |
+| macos-android | `pnpm test`、`pnpm build`、匹配运行时与视觉依赖、`pnpm build:android` | Debug APK、日志 |
+| macos-ios | `pnpm test`、`pnpm build`、匹配运行时与视觉依赖、`pnpm build:ios` | 模拟器 App 压缩包、日志 |
+| linux-android | `pnpm test`、`pnpm build`、匹配运行时与视觉依赖、`pnpm build:android` | Debug APK、日志 |
 
 共用 `prepare` composite action 安装 Node 24、根目录固定的 pnpm、JDK 17，安装三个 frozen lockfile，
-并获取固定 commit 的 Valdi fork 源码。使用 `macos-26` arm64 runner，匹配当前只有 arm64 的视觉库模拟器 slice；
+并获取固定 commit 的 Valdi fork 源码。macOS 使用 `macos-26` arm64 runner，匹配当前只有 arm64 的视觉库模拟器 slice；
+Linux Android 使用 GitHub 托管的 `ubuntu-24.04` x64 runner，与本地 WSL runner 分开；
 runner 的架构见 [GitHub 官方列表](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
 Xcode / SDK / CMake / Ninja 的实际版本写入日志和缓存键。Actions 固定到 commit SHA。
 CI 不额外指定 Bazel / Gradle / Xcode / Ninja 的构建并发或 Bazel 调度内存，使用各工具默认值。

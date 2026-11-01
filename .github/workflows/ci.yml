@@ -27,14 +27,23 @@ concurrency:
 
 jobs:
   build:
-    name: ${{ matrix.target }}
-    # The iOS vision simulator slice is arm64. Keep host tools on the same supported macOS image.
-    runs-on: macos-26
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
-        target: [npm, android, ios]
+        include:
+          - name: macos-android
+            target: android
+            runner: macos-26
+          # The iOS Vision simulator slice requires an arm64 macOS host.
+          - name: macos-ios
+            target: ios
+            runner: macos-26
+          - name: linux-android
+            target: android
+            runner: ubuntu-24.04
     defaults:
       run:
         shell: bash
@@ -114,7 +123,6 @@ jobs:
           path: ~/.cache/bazel-disk-cache
           key: ${{ steps.bazel-cache.outputs.cache-primary-key }}
       - name: Build application modules
-        if: matrix.target == 'npm'
         run: pnpm build 2>&1 | tee .ci/build.log
       - name: Restore vision dependencies
         if: matrix.target != 'npm'
@@ -154,7 +162,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: app-${{ matrix.target }}-${{ github.run_id }}
+          name: app-${{ matrix.name }}-${{ github.run_id }}
           retention-days: 7
           include-hidden-files: true
           if-no-files-found: warn

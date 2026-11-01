@@ -27,7 +27,7 @@ final class ValdiHost {
         waiting.append(completion)
         guard waiting.count == 1 else { return }
         let runtime = self.runtime
-        runtime.registerNativeModuleFactory(CalculatorCreateModuleFactory())
+        VRRegisterNativeModules(runtime)
         VRInstallAppUI.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: appUIHost) {}
         VRInstallBleHost.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: bleHost) {}
         VRInstallPermissionHost.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: permissionHost, androidSdk: 0) {}

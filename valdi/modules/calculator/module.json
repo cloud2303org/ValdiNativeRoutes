@@ -1,4 +1,6 @@
 {
   "nativeBuild": "bazel",
-  "iosModuleName": "Calculator"
+  "iosModuleName": "Calculator",
+  "androidModuleFactory": "com.snap.modules.calculator.CalculatorModuleFactoryImpl",
+  "iosModuleFactory": "CalculatorCreateModuleFactory"
 }

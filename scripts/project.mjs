@@ -19,7 +19,7 @@ function main() {
     if (platform === 'modules') {
       runPnpm(['--dir', 'tools/valdi-rolldown', 'build', ...forwarded], root);
     } else {
-      run(process.execPath, ['--test', 'scripts/tests/prerequisites.test.mjs', 'scripts/tests/upstream.test.mjs', 'scripts/tests/cli.test.mjs', 'scripts/tests/dev-controls.test.mjs'], root);
+      run(process.execPath, ['--test', 'scripts/tests/prerequisites.test.mjs', 'scripts/tests/upstream.test.mjs', 'scripts/tests/cli.test.mjs', 'scripts/tests/dev-controls.test.mjs', 'scripts/tests/native-modules.test.mjs'], root);
       const valdiSource = sourceOption >= 0 ? forwarded[sourceOption + 1] : [
         path.join(root, 'valdi/.valdi-sources/external/valdi+'),
         path.join(root, 'valdi/bazel-valdi/external/valdi+'),
@@ -32,7 +32,7 @@ function main() {
       // Windows and can report `Command "tsx" not found` for the same install.
       const rolldownDir = path.join(root, 'tools/valdi-rolldown');
       const tsx = path.join(rolldownDir, 'node_modules/tsx/dist/cli.mjs');
-      run(process.execPath, [tsx, '--test', 'resources.test.ts', 'hermes.test.ts', 'module-build.test.ts', 'runtime-module.test.ts'], rolldownDir);
+      run(process.execPath, [tsx, '--test', 'resources.test.ts', 'hermes.test.ts', 'module-build.test.ts', 'runtime-module.test.ts', 'scaffold.test.ts'], rolldownDir);
       // The goldens compare against the same sources the tests used, whatever link holds them.
       const goldensArgs = ['codegen/goldens.ts', ...forwarded];
       if (sourceOption < 0) goldensArgs.push('--valdi', valdiSource);

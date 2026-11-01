@@ -22,6 +22,10 @@ export const modulesDir = path.join(valdi, 'modules');
 export interface ModuleConfig {
   nativeBuild?: 'bazel';
   iosModuleName?: string;
+  androidModuleFactory?: string;
+  androidViewBinder?: string;
+  iosModuleFactory?: string;
+  template?: string;
 }
 
 export function moduleConfig(name: string): ModuleConfig {

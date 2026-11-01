@@ -20,6 +20,8 @@
   ],
   "android": [
     "android/app/src",
+    "scripts/native-modules.mjs",
+    "scripts/node-modules.mjs",
     "valdi/modules/calculator/android",
     "valdi/modules/calculator/src/Calculator.d.ts",
     "valdi/modules/calculator/module.json",
@@ -40,6 +42,8 @@
   ],
   "ios": [
     "ios/ValdiRoutes",
+    "scripts/native-modules.mjs",
+    "scripts/node-modules.mjs",
     "valdi/modules/calculator/ios",
     "valdi/modules/calculator/src/Calculator.d.ts",
     "valdi/modules/calculator/module.json",

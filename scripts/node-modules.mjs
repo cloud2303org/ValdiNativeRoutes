@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { syncNativeModuleRegistration } from './native-modules.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const workspace = path.join(root, 'module-build');
@@ -69,6 +70,7 @@ export function bazelModules() {
 export function buildNodeModules(platform = 'ios', release = false, native = false) {
   if (!['ios', 'android'].includes(platform)) throw new Error('Module platform must be ios or android');
   const names = bazelModules();
+  syncNativeModuleRegistration(root);
   if (!names.length) return new Map();
   const commit = file => /VALDI_COMMIT\s*=\s*"([a-f0-9]+)"/.exec(readFileSync(file, 'utf8'))?.[1];
   if (commit(path.join(root, 'valdi/MODULE.bazel')) !== commit(path.join(workspace, 'MODULE.bazel'))) {
@@ -144,9 +146,20 @@ function buildWithJunction(platform, release, native, names) {
       // objc_library(alwayslink=True) emits an ar archive with Bazel's .lo suffix.
       const source = platform === 'ios' ? `lib${name}_ios.lo` : `lib${name}_android.jar`;
       cpSync(path.join(directory, source), path.join(destination, filename));
-      if (platform === 'ios')
+      if (platform === 'ios') {
+        rmSync(path.join(destination, 'include'), { recursive: true, force: true });
         copyModuleTree(path.join(directory, `${name}_compiled/ios`), path.join(destination, 'include'));
+      }
     }
+  }
+  if (native && platform === 'ios') {
+    const destination = path.join(workspace, 'out/ios');
+    const aggregate = path.join(destination, 'libvaldi_modules_ios.a');
+    const archives = names.map(name => path.join(destination, name, `lib${name}_ios.a`));
+    const combined = spawnSync('xcrun', ['libtool', '-static', '-o', aggregate, ...archives], { stdio: 'inherit' });
+    if (combined.error || combined.status !== 0) throw new Error(`Cannot combine native module libraries: ${combined.error?.message ?? combined.status}`);
+    rmSync(path.join(destination, 'include'), { recursive: true, force: true });
+    for (const name of names) copyModuleTree(path.join(destination, name, 'include'), path.join(destination, 'include'));
   }
   return outputs;
 }

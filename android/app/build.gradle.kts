@@ -71,7 +71,13 @@ dependencies {
     // The Valdi runtime and Valdi's own modules, produced by scripts/export-android.sh; app_pages and the npm packages
     // come from valdiModules below, their Kotlin bindings from generated/valdi.
     implementation(files("libs/valdi_runtime.aar"))
-    implementation(files("../../module-build/out/android/calculator/calculator_android.jar"))
+    val moduleRoots = rootProject.projectDir.parentFile.resolve("valdi/modules")
+    moduleRoots.listFiles()?.filter { directory ->
+        val config = directory.resolve("module.json")
+        config.isFile && (JsonSlurper().parse(config) as Map<*, *>)["nativeBuild"] == "bazel"
+    }?.forEach { directory ->
+        implementation(files("../../module-build/out/android/${directory.name}/${directory.name}_android.jar"))
+    }
 
     implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.compose.ui:ui")
@@ -249,7 +255,7 @@ androidComponents {
                 repo.resolve("ota/fingerprint.json"),
                 nativeInputs.map(repo::resolve),
                 fileTree("generated/valdi"),
-                fileTree(repo.resolve("valdi/modules")) { include("*/src/**", "*/module.json") },
+                fileTree(repo.resolve("valdi/modules")) { include("*/src/**", "*/module.json", "*/BUILD.bazel", "*/android/**") },
                 fileTree(repo.resolve("tools/valdi-rolldown")) {
                     include("module-bindings.ts", "codegen/**", "pipeline.ts", "valdiTs.ts")
                 },

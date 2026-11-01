@@ -23,6 +23,7 @@ function fixture(t, config = 'debug') {
   write('tools/valdi-rolldown/runtime-module.ts', 'original Node compiler');
   mkdirSync(path.join(root, 'scripts'));
   cpSync(path.join(repository, 'scripts/ota.mjs'), path.join(root, 'scripts/ota.mjs'));
+  cpSync(path.join(repository, 'scripts/native-modules.mjs'), path.join(root, 'scripts/native-modules.mjs'));
   const info = JSON.parse(execFileSync(process.execPath, [path.join(root, 'scripts/ota.mjs'), 'valdi-hash', 'android', config], { encoding: 'utf8' }));
   write('android/app/libs/valdi_runtime.aar', 'runtime artifact');
   write('android/app/libs/valdi_ota.json', JSON.stringify(info));

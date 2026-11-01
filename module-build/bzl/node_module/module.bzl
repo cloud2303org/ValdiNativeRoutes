@@ -86,7 +86,11 @@ def node_valdi_module(name, srcs, config, ios_module_name = None, res = [], deps
     kt_android_library(
         name = name + "_android",
         srcs = [":" + name + "_kotlin"] + android_srcs,
-        deps = ["@node_valdi_local//:android_runtime"] + android_deps,
+        deps = [
+            "@node_valdi_local//:android_runtime",
+            # Native views are resolved by class name; @Keep preserves that name under R8.
+            "@android_mvn//:androidx_annotation_annotation",
+        ] + android_deps,
         visibility = visibility,
     )
     native.objc_library(
@@ -96,6 +100,7 @@ def node_valdi_module(name, srcs, config, ios_module_name = None, res = [], deps
         includes = [name + "_compiled/ios", name + "_compiled/ios/" + ios_name,
                     name + "_compiled/ios/" + ios_name + "Types"],
         enable_modules = True,
+        sdk_frameworks = ["Foundation", "UIKit"],
         alwayslink = True,
         deps = ["@node_valdi_local//:ios_runtime"] + ios_deps,
         visibility = visibility,

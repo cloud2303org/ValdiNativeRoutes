@@ -43,7 +43,7 @@ targets:
         link: true
       - sdk: libc++.tbd
       # Built by our module-only workspace, against the unchanged ValdiRuntime.
-      - framework: ../module-build/out/ios/calculator/libcalculator_ios.a
+      - framework: ../module-build/out/ios/libvaldi_modules_ios.a
         embed: false
       - package: SDWebImage
       - package: MMKV
@@ -140,21 +140,21 @@ targets:
         # VisionCore, as in ExpoNativeRoutes' NativeRoutesVision.podspec.
         CLANG_CXX_LANGUAGE_STANDARD: c++20
         OTHER_LDFLAGS: ["$(inherited)", "-ObjC"]
-        LIBRARY_SEARCH_PATHS: ["$(inherited)", "$(SRCROOT)/../module-build/out/ios/calculator"]
+        LIBRARY_SEARCH_PATHS: ["$(inherited)", "$(SRCROOT)/../module-build/out/ios"]
         GCC_ENABLE_CPP_EXCEPTIONS: YES
         GCC_ENABLE_CPP_RTTI: YES
         HEADER_SEARCH_PATHS:
           - $(inherited)
           # <app_pages/app_pages.h>, <app_pagesTypes/app_pagesTypes.h>
           - $(SRCROOT)/Generated/valdi
-          - $(SRCROOT)/../module-build/out/ios/calculator/include
+          - $(SRCROOT)/../module-build/out/ios/include
           - $(SRCROOT)/../vision/cpp
           - $(SRCROOT)/../vision/vendor/install/ios/VisionDependencies.xcframework/ios-arm64/Headers/opencv4
           - $(SRCROOT)/../vision/vendor/install/ios/VisionDependencies.xcframework/ios-arm64/Headers/ncnn
         "HEADER_SEARCH_PATHS[sdk=iphonesimulator*]":
           - $(inherited)
           - $(SRCROOT)/Generated/valdi
-          - $(SRCROOT)/../module-build/out/ios/calculator/include
+          - $(SRCROOT)/../module-build/out/ios/include
           - $(SRCROOT)/../vision/cpp
           - $(SRCROOT)/../vision/vendor/install/ios/VisionDependencies.xcframework/ios-arm64-simulator/Headers/opencv4
           - $(SRCROOT)/../vision/vendor/install/ios/VisionDependencies.xcframework/ios-arm64-simulator/Headers/ncnn

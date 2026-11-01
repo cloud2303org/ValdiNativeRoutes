@@ -3,13 +3,14 @@ module(name = "node_valdi_modules", version = "0.1")
 bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "rules_apple", version = "4.0.0")
 bazel_dep(name = "apple_support", version = "1.22.1")
+bazel_dep(name = "rules_swift", version = "3.1.2", repo_name = "build_bazel_rules_swift")
 single_version_override(module_name = "rules_apple", version = "4.0.0")
 
-# -- Maintained Valdi fork (upstream base: beta-0.2.1) -----------------------
+# -- Maintained Valdi fork (upstream main: 4aa98f01) -----------------------
 # Framework customizations and Hermes build inputs live in this fork's valdiroutes branch.
 # Pin immutable commits; scripts/upstream.mjs updates this and the matching registry together.
 VALDI_REPOSITORY = "cloud2303org/Valdi"
-VALDI_COMMIT = "387568f9f333e21ca504354aa96dbd507843e455"
+VALDI_COMMIT = "15feb6530ceecb971f4c8519ea8ab77474b959db"
 VALDI_URL = "https://github.com/" + VALDI_REPOSITORY + "/archive/" + VALDI_COMMIT + ".tar.gz"
 VALDI_PREFIX = "Valdi-" + VALDI_COMMIT
 
@@ -110,7 +111,15 @@ maven.install(
     name = "rules_android_maven",
     repositories = MAVEN_REPOSITORIES,
 )
-use_repo(maven, "android_mvn", "android_ide_common_30_1_3", "rules_android_maven")
+maven.install(
+    name = "bluetooth_mvn",
+    artifacts = [
+        "androidx.core:core-ktx:1.17.0",
+        "com.github.weliem:blessed-kotlin:3.0.12",
+    ],
+    repositories = MAVEN_REPOSITORIES + ["https://jitpack.io"],
+)
+use_repo(maven, "android_mvn", "android_ide_common_30_1_3", "rules_android_maven", "bluetooth_mvn")
 
 node_valdi_environment = use_repo_rule("//bzl/node_module:repositories.bzl", "node_valdi_environment")
 node_valdi_environment(name = "node_valdi_local", project = "//:MODULE.bazel")

@@ -33,6 +33,7 @@ import {
 import { addFontEntries, assetCatalog, findFonts, findImages, writeAndroidResources, writeIosResources, writeResTs } from './resources';
 import { sourceFiles, valdiTs } from './valdiTs';
 import { buildNodeModules, copyModuleTree } from '../../scripts/node-modules.mjs';
+import { availableModuleNames, pruneDisabledModuleOutputs } from './modules.mjs';
 
 const option = (name: string) => {
   const index = process.argv.indexOf(name);
@@ -44,6 +45,12 @@ const androidRes = option('--res');
 const iosRes = option('--ios-res');
 const release = process.argv.includes('--release');
 const minify = release || process.argv.includes('--minify');
+// Validate references before starting native module actions.
+const modules = appModules();
+if (!modules.length) throw new Error('No enabled App modules. Set package.json valdi.modules before building.');
+const available = availableModuleNames(path.resolve(import.meta.dirname, '../..'));
+pruneDisabledModuleOutputs(out, available, modules.map(module => module.name));
+if (iosRes) pruneDisabledModuleOutputs(iosRes, available, modules.map(module => module.name));
 
 if (archivesOnly) {
   mkdirSync(out, { recursive: true });
@@ -58,7 +65,6 @@ for (const [name, compiled] of bazelOutputs) {
   rmSync(genDir(name), { recursive: true, force: true });
   copyModuleTree(path.join(compiled, 'resources/ts'), genDir(name));
 }
-const modules = appModules();
 // Gradle and Xcode call this file directly, without the install hook that writes the
 // modules' tsconfig.json. Rewrite them at the sources this host really has, so the
 // bundle reads the module tsconfig instead of failing every bare import (a no-op when

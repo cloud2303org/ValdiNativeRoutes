@@ -29,7 +29,6 @@ final class ValdiHost {
         let runtime = self.runtime
         VRRegisterNativeModules(runtime)
         VRInstallAppUI.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: appUIHost) {}
-        VRInstallBleHost.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: bleHost) {}
         VRInstallPermissionHost.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: permissionHost, androidSdk: 0) {}
         VRInstallWifiHost.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: wifiHost) {}
         // No NfcHost: nfc/native.ts answers NOT_SUPPORTED on iOS before it looks one up.
@@ -100,9 +99,6 @@ final class ValdiHost {
     /// `api` in TS lands here; requests are already validated and defaulted there. Called on the JS thread. Held here
     /// for the app's lifetime: JS only references native functions weakly, so a host nobody holds gets released.
     private lazy var appUIHost: VRAppUIHost = makeAppUIHost()
-
-    /// `api`'s Bluetooth methods, on the shared BleCore.
-    private let bleHost = BleHostImpl()
 
     /// `runDemo` of vision/VisionHost.ts, on the C++ VisionCore.
     private let visionHost = VisionHostImpl()
@@ -253,6 +249,8 @@ final class ValdiHost {
         let rootView: SCValdiRootView = switch entry.definition.component {
         case "LoginPage@app_pages/src/LoginPage":
             VRLoginPage(viewModel: viewModel, componentContext: context, runtime: runtime)
+        case "InputCheckPage@app_pages/src/InputCheckPage":
+            VRInputCheckPage(viewModel: viewModel, componentContext: context, runtime: runtime)
         case "HomePage@app_pages/src/HomePage":
             VRHomePage(viewModel: viewModel, componentContext: context, runtime: runtime)
         case "DetailPage@app_pages/src/DetailPage":

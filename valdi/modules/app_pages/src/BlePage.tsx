@@ -3,7 +3,7 @@ import { systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
 import { Label, ScrollView, TextField, View } from 'valdi_tsx/src/NativeTemplateElements';
 import { api } from './api';
 import { Button } from './Button';
-import type { BLEPeripheralServer, BluetoothDevice } from './ble/wechat';
+import type { BLEPeripheralServer, BluetoothDevice } from 'bluetooth/src/index';
 import { PageContext, PageViewModel } from './Page';
 import { Page } from './PageComponent';
 import { PageHeader } from './PageHeader';

@@ -6,7 +6,8 @@ import com.snap.valdi.ValdiRuntimeManager
 import com.snap.valdi.modules.ModuleFactoryRegistry
 
 object ValdiNativeModules {
-    fun registerFactories() {
+    fun registerFactories(context: Context) {
+        ModuleFactoryRegistry.registerModuleFactory { io.valdiroutes.bluetooth.BluetoothModuleFactoryImpl(context.applicationContext) }
         ModuleFactoryRegistry.registerModuleFactory { com.snap.modules.calculator.CalculatorModuleFactoryImpl() }
     }
 

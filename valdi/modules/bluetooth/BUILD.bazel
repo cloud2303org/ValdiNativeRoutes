@@ -1,0 +1,18 @@
+load("//bzl/node_module:module.bzl", "node_valdi_module")
+
+node_valdi_module(
+    name = "bluetooth",
+    srcs = glob(["src/**/*.ts", "src/**/*.tsx"]),
+    config = "module.json",
+    ios_module_name = "Bluetooth",
+    ios_language = "swift",
+    res = glob(["res/**"]),
+    android_srcs = glob(["android/**/*.kt"]),
+    android_deps = [
+        "@bluetooth_mvn//:androidx_core_core_ktx",
+        "@bluetooth_mvn//:com_github_weliem_blessed_kotlin",
+    ],
+    ios_srcs = glob(["ios/**/*.m"]),
+    ios_hdrs = glob(["ios/**/*.h"]),
+    swift_srcs = glob(["ios/**/*.swift"]),
+)

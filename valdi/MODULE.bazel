@@ -4,11 +4,11 @@ module(name = "valdi_native_routes", version = "0.1")
 # version as Valdi.
 bazel_dep(name = "platforms", version = "1.1.0")
 
-# -- Maintained Valdi fork (upstream base: beta-0.2.1) -----------------------
+# -- Maintained Valdi fork (upstream main: 4aa98f01) -----------------------
 # Framework customizations and Hermes build inputs live in this fork's valdiroutes branch.
 # Pin immutable commits; scripts/upstream.mjs updates this and the matching registry together.
 VALDI_REPOSITORY = "cloud2303org/Valdi"
-VALDI_COMMIT = "387568f9f333e21ca504354aa96dbd507843e455"
+VALDI_COMMIT = "15feb6530ceecb971f4c8519ea8ab77474b959db"
 VALDI_URL = "https://github.com/" + VALDI_REPOSITORY + "/archive/" + VALDI_COMMIT + ".tar.gz"
 VALDI_PREFIX = "Valdi-" + VALDI_COMMIT
 

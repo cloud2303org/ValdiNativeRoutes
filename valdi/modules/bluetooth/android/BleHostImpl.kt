@@ -1,4 +1,4 @@
-package io.valdiroutes.app
+package io.valdiroutes.bluetooth
 
 import android.content.Context
 import android.os.SystemClock
@@ -16,30 +16,30 @@ import io.nativeroutes.ble.BlePeripheralServiceParams
 import io.nativeroutes.ble.BleScanWithAddressesParams
 import io.nativeroutes.ble.BleScanWithNameParams
 import io.nativeroutes.ble.BleSession
-import io.valdiroutes.pages.BleAdapterState
-import io.valdiroutes.pages.BleCharacteristic
-import io.valdiroutes.pages.BleCharacteristicProperties
-import io.valdiroutes.pages.BleCharacteristicValue
-import io.valdiroutes.pages.BleConnectStateChange
-import io.valdiroutes.pages.BleConnectedDevice
-import io.valdiroutes.pages.BleDevice
-import io.valdiroutes.pages.BleHost
-import io.valdiroutes.pages.BleHostEvents
-import io.valdiroutes.pages.BleMTUChange
-import io.valdiroutes.pages.BleNotifyParams
-import io.valdiroutes.pages.BlePairParams
-import io.valdiroutes.pages.BlePeripheralAdvertisingParams
-import io.valdiroutes.pages.BlePeripheralConnectionState
-import io.valdiroutes.pages.BlePeripheralReadRequest
-import io.valdiroutes.pages.BlePeripheralService
-import io.valdiroutes.pages.BlePeripheralSubscriptionEvent
-import io.valdiroutes.pages.BlePeripheralWriteParams
-import io.valdiroutes.pages.BlePeripheralWriteRequest
-import io.valdiroutes.pages.BleReadParams
-import io.valdiroutes.pages.BleScanParams
-import io.valdiroutes.pages.BleService
-import io.valdiroutes.pages.BleServiceData
-import io.valdiroutes.pages.BleWriteParams
+import io.valdiroutes.bluetooth.BleAdapterState
+import io.valdiroutes.bluetooth.BleCharacteristic
+import io.valdiroutes.bluetooth.BleCharacteristicProperties
+import io.valdiroutes.bluetooth.BleCharacteristicValue
+import io.valdiroutes.bluetooth.BleConnectStateChange
+import io.valdiroutes.bluetooth.BleConnectedDevice
+import io.valdiroutes.bluetooth.BleDevice
+import io.valdiroutes.bluetooth.BleHost
+import io.valdiroutes.bluetooth.BleHostEvents
+import io.valdiroutes.bluetooth.BleMTUChange
+import io.valdiroutes.bluetooth.BleNotifyParams
+import io.valdiroutes.bluetooth.BlePairParams
+import io.valdiroutes.bluetooth.BlePeripheralAdvertisingParams
+import io.valdiroutes.bluetooth.BlePeripheralConnectionState
+import io.valdiroutes.bluetooth.BlePeripheralReadRequest
+import io.valdiroutes.bluetooth.BlePeripheralService
+import io.valdiroutes.bluetooth.BlePeripheralSubscriptionEvent
+import io.valdiroutes.bluetooth.BlePeripheralWriteParams
+import io.valdiroutes.bluetooth.BlePeripheralWriteRequest
+import io.valdiroutes.bluetooth.BleReadParams
+import io.valdiroutes.bluetooth.BleScanParams
+import io.valdiroutes.bluetooth.BleService
+import io.valdiroutes.bluetooth.BleServiceData
+import io.valdiroutes.bluetooth.BleWriteParams
 import io.nativeroutes.ble.BleAdapterState as CoreAdapterState
 import io.nativeroutes.ble.BleDevice as CoreDevice
 import io.nativeroutes.ble.BleNotifyParams as CoreNotifyParams

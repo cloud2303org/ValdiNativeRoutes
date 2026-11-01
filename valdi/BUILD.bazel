@@ -22,6 +22,8 @@ valdi_exported_library(
     ],
     ios_bundle_id = "io.valdiroutes.runtime",
     ios_bundle_name = "ValdiRuntime",
+    # Official Swift marshaller + C++ interop, exported once by the shared runtime.
+    ios_swift = True,
     # Linked into the runtime on both platforms, so it uses the runtime's own C++ library (libc++ is static in
     # libvaldi_runtime.so); bzl/patches/valdi/export_native_deps.patch adds the parameter.
     native_deps = ["//native:app_pages_native"],

@@ -14,7 +14,7 @@ export interface ButtonViewModel {
 export class Button extends Component<ButtonViewModel> {
   onRender(): void {
     const { id, title, secondary } = this.viewModel;
-    <view key={id} style={secondary ? styles.secondary : styles.primary} onTap={this.handleTap}>
+    <view key={id} accessibilityId={id} style={secondary ? styles.secondary : styles.primary} onTap={this.handleTap}>
       <label style={secondary ? styles.secondaryLabel : styles.primaryLabel} value={title} />
     </view>;
   }

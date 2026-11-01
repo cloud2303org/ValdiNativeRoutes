@@ -1,18 +1,18 @@
 /**
- * The Valdi bridge to the native BLE core, implemented by each host and installed at startup. It is capability only:
+ * The Valdi bridge to the native BLE core, owned by the bluetooth module and initialized at App startup. It is capability only:
  * wechat.ts and peripheral.ts own every mini-program rule (validation, UUIDs, queues, sessions, errCodes) for both
  * platforms. Calls return a native Promise, rejected with the core's `E_BLE_…:message`: a callback created by a page
  * would be disposed with that page and leave the shared queues waiting forever. Events go to the one BleHostEvents
  * given at install time; native.ts fans them out to listeners.
  */
 
-/** @ExportModel({ios: 'VRBleServiceData', android: 'io.valdiroutes.pages.BleServiceData'}) */
+/** @ExportModel({ios: 'VRBleServiceData', android: 'io.valdiroutes.bluetooth.BleServiceData'}) */
 export interface BleServiceData {
   uuid: string;
   data: Uint8Array;
 }
 
-/** @ExportModel({ios: 'VRBleDevice', android: 'io.valdiroutes.pages.BleDevice'}) */
+/** @ExportModel({ios: 'VRBleDevice', android: 'io.valdiroutes.bluetooth.BleDevice'}) */
 export interface BleDevice {
   RSSI: number;
   advertisData: Uint8Array;
@@ -24,13 +24,13 @@ export interface BleDevice {
   connectable?: boolean;
 }
 
-/** @ExportModel({ios: 'VRBleService', android: 'io.valdiroutes.pages.BleService'}) */
+/** @ExportModel({ios: 'VRBleService', android: 'io.valdiroutes.bluetooth.BleService'}) */
 export interface BleService {
   uuid: string;
   isPrimary: boolean;
 }
 
-/** @ExportModel({ios: 'VRBleCharacteristicProperties', android: 'io.valdiroutes.pages.BleCharacteristicProperties'}) */
+/** @ExportModel({ios: 'VRBleCharacteristicProperties', android: 'io.valdiroutes.bluetooth.BleCharacteristicProperties'}) */
 export interface BleCharacteristicProperties {
   read: boolean;
   write: boolean;
@@ -40,26 +40,26 @@ export interface BleCharacteristicProperties {
   indicate: boolean;
 }
 
-/** @ExportModel({ios: 'VRBleCharacteristic', android: 'io.valdiroutes.pages.BleCharacteristic'}) */
+/** @ExportModel({ios: 'VRBleCharacteristic', android: 'io.valdiroutes.bluetooth.BleCharacteristic'}) */
 export interface BleCharacteristic {
   uuid: string;
   properties: BleCharacteristicProperties;
 }
 
-/** @ExportModel({ios: 'VRBleAdapterState', android: 'io.valdiroutes.pages.BleAdapterState'}) */
+/** @ExportModel({ios: 'VRBleAdapterState', android: 'io.valdiroutes.bluetooth.BleAdapterState'}) */
 export interface BleAdapterState {
   available: boolean;
   discovering: boolean;
   peripheralAvailable?: boolean;
 }
 
-/** @ExportModel({ios: 'VRBleConnectStateChange', android: 'io.valdiroutes.pages.BleConnectStateChange'}) */
+/** @ExportModel({ios: 'VRBleConnectStateChange', android: 'io.valdiroutes.bluetooth.BleConnectStateChange'}) */
 export interface BleConnectStateChange {
   deviceId: string;
   connected: boolean;
 }
 
-/** @ExportModel({ios: 'VRBleCharacteristicValue', android: 'io.valdiroutes.pages.BleCharacteristicValue'}) */
+/** @ExportModel({ios: 'VRBleCharacteristicValue', android: 'io.valdiroutes.bluetooth.BleCharacteristicValue'}) */
 export interface BleCharacteristicValue {
   deviceId: string;
   serviceId: string;
@@ -67,19 +67,19 @@ export interface BleCharacteristicValue {
   value: Uint8Array;
 }
 
-/** @ExportModel({ios: 'VRBleMTUChange', android: 'io.valdiroutes.pages.BleMTUChange'}) */
+/** @ExportModel({ios: 'VRBleMTUChange', android: 'io.valdiroutes.bluetooth.BleMTUChange'}) */
 export interface BleMTUChange {
   deviceId: string;
   mtu: number;
 }
 
-/** @ExportModel({ios: 'VRBleConnectedDevice', android: 'io.valdiroutes.pages.BleConnectedDevice'}) */
+/** @ExportModel({ios: 'VRBleConnectedDevice', android: 'io.valdiroutes.bluetooth.BleConnectedDevice'}) */
 export interface BleConnectedDevice {
   deviceId: string;
   name: string;
 }
 
-/** @ExportModel({ios: 'VRBleScanParams', android: 'io.valdiroutes.pages.BleScanParams'}) */
+/** @ExportModel({ios: 'VRBleScanParams', android: 'io.valdiroutes.bluetooth.BleScanParams'}) */
 export interface BleScanParams {
   services?: string[];
   allowDuplicatesKey?: boolean;
@@ -87,7 +87,7 @@ export interface BleScanParams {
   powerLevel?: string;
 }
 
-/** @ExportModel({ios: 'VRBleNotifyParams', android: 'io.valdiroutes.pages.BleNotifyParams'}) */
+/** @ExportModel({ios: 'VRBleNotifyParams', android: 'io.valdiroutes.bluetooth.BleNotifyParams'}) */
 export interface BleNotifyParams {
   deviceId: string;
   serviceId: string;
@@ -96,7 +96,7 @@ export interface BleNotifyParams {
   type?: string;
 }
 
-/** @ExportModel({ios: 'VRBleWriteParams', android: 'io.valdiroutes.pages.BleWriteParams'}) */
+/** @ExportModel({ios: 'VRBleWriteParams', android: 'io.valdiroutes.bluetooth.BleWriteParams'}) */
 export interface BleWriteParams {
   deviceId: string;
   serviceId: string;
@@ -105,21 +105,21 @@ export interface BleWriteParams {
   writeType?: string;
 }
 
-/** @ExportModel({ios: 'VRBleReadParams', android: 'io.valdiroutes.pages.BleReadParams'}) */
+/** @ExportModel({ios: 'VRBleReadParams', android: 'io.valdiroutes.bluetooth.BleReadParams'}) */
 export interface BleReadParams {
   deviceId: string;
   serviceId: string;
   characteristicId: string;
 }
 
-/** @ExportModel({ios: 'VRBlePairParams', android: 'io.valdiroutes.pages.BlePairParams'}) */
+/** @ExportModel({ios: 'VRBlePairParams', android: 'io.valdiroutes.bluetooth.BlePairParams'}) */
 export interface BlePairParams {
   deviceId: string;
   pin: string;
   timeout: number;
 }
 
-/** @ExportModel({ios: 'VRBlePeripheralProperties', android: 'io.valdiroutes.pages.BlePeripheralProperties'}) */
+/** @ExportModel({ios: 'VRBlePeripheralProperties', android: 'io.valdiroutes.bluetooth.BlePeripheralProperties'}) */
 export interface BlePeripheralProperties {
   read: boolean;
   write: boolean;
@@ -128,7 +128,7 @@ export interface BlePeripheralProperties {
   indicate: boolean;
 }
 
-/** @ExportModel({ios: 'VRBlePeripheralPermissions', android: 'io.valdiroutes.pages.BlePeripheralPermissions'}) */
+/** @ExportModel({ios: 'VRBlePeripheralPermissions', android: 'io.valdiroutes.bluetooth.BlePeripheralPermissions'}) */
 export interface BlePeripheralPermissions {
   readable: boolean;
   writeable: boolean;
@@ -136,7 +136,7 @@ export interface BlePeripheralPermissions {
   writeEncryptionRequired: boolean;
 }
 
-/** @ExportModel({ios: 'VRBlePeripheralDescriptor', android: 'io.valdiroutes.pages.BlePeripheralDescriptor'}) */
+/** @ExportModel({ios: 'VRBlePeripheralDescriptor', android: 'io.valdiroutes.bluetooth.BlePeripheralDescriptor'}) */
 export interface BlePeripheralDescriptor {
   uuid: string;
   read: boolean;
@@ -144,7 +144,7 @@ export interface BlePeripheralDescriptor {
   value: Uint8Array;
 }
 
-/** @ExportModel({ios: 'VRBlePeripheralCharacteristic', android: 'io.valdiroutes.pages.BlePeripheralCharacteristic'}) */
+/** @ExportModel({ios: 'VRBlePeripheralCharacteristic', android: 'io.valdiroutes.bluetooth.BlePeripheralCharacteristic'}) */
 export interface BlePeripheralCharacteristic {
   uuid: string;
   properties: BlePeripheralProperties;
@@ -153,19 +153,19 @@ export interface BlePeripheralCharacteristic {
   descriptors: BlePeripheralDescriptor[];
 }
 
-/** @ExportModel({ios: 'VRBlePeripheralService', android: 'io.valdiroutes.pages.BlePeripheralService'}) */
+/** @ExportModel({ios: 'VRBlePeripheralService', android: 'io.valdiroutes.bluetooth.BlePeripheralService'}) */
 export interface BlePeripheralService {
   uuid: string;
   characteristics: BlePeripheralCharacteristic[];
 }
 
-/** @ExportModel({ios: 'VRBlePeripheralManufacturerData', android: 'io.valdiroutes.pages.BlePeripheralManufacturerData'}) */
+/** @ExportModel({ios: 'VRBlePeripheralManufacturerData', android: 'io.valdiroutes.bluetooth.BlePeripheralManufacturerData'}) */
 export interface BlePeripheralManufacturerData {
   manufacturerId: number;
   manufacturerSpecificData: Uint8Array;
 }
 
-/** @ExportModel({ios: 'VRBlePeripheralBeacon', android: 'io.valdiroutes.pages.BlePeripheralBeacon'}) */
+/** @ExportModel({ios: 'VRBlePeripheralBeacon', android: 'io.valdiroutes.bluetooth.BlePeripheralBeacon'}) */
 export interface BlePeripheralBeacon {
   uuid: string;
   major: number;
@@ -173,7 +173,7 @@ export interface BlePeripheralBeacon {
   measuredPower: number;
 }
 
-/** @ExportModel({ios: 'VRBlePeripheralAdvertisingParams', android: 'io.valdiroutes.pages.BlePeripheralAdvertisingParams'}) */
+/** @ExportModel({ios: 'VRBlePeripheralAdvertisingParams', android: 'io.valdiroutes.bluetooth.BlePeripheralAdvertisingParams'}) */
 export interface BlePeripheralAdvertisingParams {
   serverId: string;
   connectable: boolean;
@@ -184,7 +184,7 @@ export interface BlePeripheralAdvertisingParams {
   beacon?: BlePeripheralBeacon;
 }
 
-/** @ExportModel({ios: 'VRBlePeripheralWriteParams', android: 'io.valdiroutes.pages.BlePeripheralWriteParams'}) */
+/** @ExportModel({ios: 'VRBlePeripheralWriteParams', android: 'io.valdiroutes.bluetooth.BlePeripheralWriteParams'}) */
 export interface BlePeripheralWriteParams {
   serverId: string;
   serviceId: string;
@@ -194,7 +194,7 @@ export interface BlePeripheralWriteParams {
   callbackId?: number;
 }
 
-/** @ExportModel({ios: 'VRBlePeripheralReadRequest', android: 'io.valdiroutes.pages.BlePeripheralReadRequest'}) */
+/** @ExportModel({ios: 'VRBlePeripheralReadRequest', android: 'io.valdiroutes.bluetooth.BlePeripheralReadRequest'}) */
 export interface BlePeripheralReadRequest {
   serverId: string;
   serviceId: string;
@@ -204,7 +204,7 @@ export interface BlePeripheralReadRequest {
   offset: number;
 }
 
-/** @ExportModel({ios: 'VRBlePeripheralWriteRequest', android: 'io.valdiroutes.pages.BlePeripheralWriteRequest'}) */
+/** @ExportModel({ios: 'VRBlePeripheralWriteRequest', android: 'io.valdiroutes.bluetooth.BlePeripheralWriteRequest'}) */
 export interface BlePeripheralWriteRequest {
   serverId: string;
   serviceId: string;
@@ -216,7 +216,7 @@ export interface BlePeripheralWriteRequest {
   needResponse: boolean;
 }
 
-/** @ExportModel({ios: 'VRBlePeripheralSubscriptionEvent', android: 'io.valdiroutes.pages.BlePeripheralSubscriptionEvent'}) */
+/** @ExportModel({ios: 'VRBlePeripheralSubscriptionEvent', android: 'io.valdiroutes.bluetooth.BlePeripheralSubscriptionEvent'}) */
 export interface BlePeripheralSubscriptionEvent {
   serverId: string;
   serviceId: string;
@@ -224,7 +224,7 @@ export interface BlePeripheralSubscriptionEvent {
   deviceId: string;
 }
 
-/** @ExportModel({ios: 'VRBlePeripheralConnectionState', android: 'io.valdiroutes.pages.BlePeripheralConnectionState'}) */
+/** @ExportModel({ios: 'VRBlePeripheralConnectionState', android: 'io.valdiroutes.bluetooth.BlePeripheralConnectionState'}) */
 export interface BlePeripheralConnectionState {
   serverId: string;
   deviceId: string;
@@ -235,7 +235,7 @@ export interface BlePeripheralConnectionState {
  * Everything the core reports, for the app's lifetime. Native only drops repeat advertisements the scan would filter
  * anyway (allowDuplicatesKey false, or inside `interval`), to keep them off the bridge; wechat.ts still decides.
  *
- * @ExportModel({ios: 'VRBleHostEvents', android: 'io.valdiroutes.pages.BleHostEvents'})
+ * @ExportModel({ios: 'VRBleHostEvents', android: 'io.valdiroutes.bluetooth.BleHostEvents'})
  */
 export interface BleHostEvents {
   deviceFound: (device: BleDevice) => void;
@@ -253,7 +253,7 @@ export interface BleHostEvents {
 /**
  * One app-wide BleCore session.
  *
- * @ExportProxy({ios: 'VRBleHost', android: 'io.valdiroutes.pages.BleHost'})
+ * @ExportProxy({ios: 'VRBleHost', android: 'io.valdiroutes.bluetooth.BleHost'})
  */
 export interface BleHost {
   setEvents(events: BleHostEvents): void;
@@ -292,24 +292,17 @@ export interface BleHost {
   closeBLEPeripheralServer(serverId: string): Promise<void>;
 }
 
+import { getHost } from './Bluetooth';
 import { bleEvents } from './events';
 
-const HOST_KEY = '__valdiRoutesBleHost';
+let host: BleHost | undefined;
 
-/**
- * Called by the host at startup, from a JS scope it keeps for the app's lifetime.
- *
- * @ExportFunction({ios: 'VRInstallBleHost', android: 'io.valdiroutes.pages.InstallBleHost'})
- */
-export function installBleHost(host: BleHost): void {
-  (globalThis as any)[HOST_KEY] = host;
-  host.setEvents(bleEvents);
-}
-
+/** Initialized from the App's retained startup scope, never from a page. */
 export function bleHost(): BleHost {
-  const host: BleHost | undefined = (globalThis as any)[HOST_KEY];
   if (!host) {
-    throw new Error('E_BLE_NOT_AVAILABLE:native Bluetooth is not installed');
+    const instance = getHost();
+    instance.setEvents(bleEvents);
+    host = instance;
   }
   return host;
 }

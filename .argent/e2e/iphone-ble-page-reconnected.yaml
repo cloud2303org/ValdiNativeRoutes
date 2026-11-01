@@ -1,0 +1,231 @@
+steps:
+  - launch: io.valdiroutes.app
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: sign-in
+      timeoutMs: 20000
+  - tap:
+      role: AXTextField
+  - tool: keyboard
+    args:
+      text: demo-account-1
+  - tap:
+      x: 0.5
+      y: 0.4635
+  - tool: keyboard
+    args:
+      text: "{{secret:DEMO_LOGIN_PASSWORD}}"
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: sign-in
+      timeoutMs: 10000
+  - tap:
+      text: 登录
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: input-check
+      timeoutMs: 20000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Valdi + Compose Nav3
+      timeoutMs: 15000
+  - tap:
+      text: 输入自检
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: input-check-field
+      timeoutMs: 15000
+  - tap:
+      text: 返回
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: calculator
+      timeoutMs: 15000
+  - tool: await-ui-element
+    args:
+      condition: hidden
+      selector:
+        identifier: input-check-field
+      timeoutMs: 10000
+  - tap:
+      text: 打开蓝牙 api 页
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: open
+      timeoutMs: 20000
+  - tool: gesture-swipe
+    args:
+      fromX: 0.5
+      fromY: 0.75
+      toX: 0.5
+      toY: 0.45
+      momentum: false
+  - tap:
+      text: 打开蓝牙 api 页
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: open
+      timeoutMs: 20000
+  - tap:
+      text: openBluetoothAdapter
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: open
+      expectedText: openBluetoothAdapter:ok
+      timeoutMs: 20000
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        text: openBluetoothAdapter
+      expectedText: openBluetoothAdapter:ok
+      timeoutMs: 20000
+  - tap:
+      text: getBluetoothAdapterState
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        text: available
+      expectedText: available true
+      timeoutMs: 15000
+  - tap:
+      text: startBluetoothDevicesDiscovery
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        text: available
+      expectedText: discovering true
+      timeoutMs: 20000
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: scan
+      expectedText: stop
+      timeoutMs: 15000
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        text: RSSI -
+      expectedText: RSSI -
+      timeoutMs: 15000
+  - tap:
+      text: stopBluetoothDevicesDiscovery
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        text: available
+      expectedText: discovering false
+      timeoutMs: 20000
+  - tap:
+      text: getBluetoothAdapterState
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        text: stopBluetoothDevicesDiscovery
+      expectedText: stopBluetoothDevicesDiscovery:ok
+      timeoutMs: 15000
+  - tap:
+      text: 开始从机广播（服务 FEED）
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        text: 正在广播服务 FEED
+      expectedText: 正在广播服务 FEED
+      timeoutMs: 20000
+  - tap:
+      text: 关闭从机 server
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        text: 从机 server 已关闭
+      expectedText: 从机 server 已关闭
+      timeoutMs: 20000
+  - tap:
+      text: 4E23F390-C2EB-6A48-D9A3-629103B759F7 · RSSI -73
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: calculator
+      timeoutMs: 15000
+  - tool: await-ui-element
+    args:
+      condition: hidden
+      selector:
+        identifier: open
+      timeoutMs: 10000
+  - tap:
+      text: ‹ 返回
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: calculator
+      timeoutMs: 15000
+  - tool: await-ui-element
+    args:
+      condition: hidden
+      selector:
+        identifier: open
+      timeoutMs: 10000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: ble
+      timeoutMs: 15000
+  - tap:
+      text: 打开蓝牙 api 页
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: open
+      timeoutMs: 20000
+  - tool: await-ui-element
+    args:
+      condition: hidden
+      selector:
+        text: 正在广播服务 FEED
+      timeoutMs: 10000
+  - tool: await-ui-element
+    args:
+      condition: hidden
+      selector:
+        text: RSSI -
+      timeoutMs: 10000
+  - tap:
+      text: getBluetoothAdapterState
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        text: available
+      expectedText: available true
+      timeoutMs: 15000

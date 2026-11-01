@@ -24,6 +24,7 @@ pnpm exec valdi export ios \
   --build_config "$config" \
   --bazel_args="${VALDI_BAZEL_ARGS:-}" \
   --output_path "$out/ValdiRuntime.xcframework"
+node "$root/scripts/package-swift-runtime.mjs" "$out/ValdiRuntime.xcframework"
 # What earlier versions of this script exported: the framework with app_pages in it.
 rm -rf "$out/ValdiPages.xcframework"
 

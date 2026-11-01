@@ -3,7 +3,8 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { syncNativeModuleRegistration } from './native-modules.mjs';
+import { nativeModules, syncNativeModuleRegistration } from './native-modules.mjs';
+import { availableModuleNames, pruneDisabledModuleOutputs } from '../tools/valdi-rolldown/modules.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const workspace = path.join(root, 'module-build');
@@ -58,19 +59,24 @@ export function copyModuleTree(source, destination) {
 }
 
 export function bazelModules() {
-  const directory = path.join(root, 'valdi/modules');
-  return readdirSync(directory)
-    .filter(name => {
-      const file = path.join(directory, name, 'module.json');
-      return existsSync(file) && JSON.parse(readFileSync(file, 'utf8')).nativeBuild === 'bazel';
-    })
-    .sort();
+  return nativeModules(root).map(module => module.name);
 }
 
 export function buildNodeModules(platform = 'ios', release = false, native = false) {
   if (!['ios', 'android'].includes(platform)) throw new Error('Module platform must be ios or android');
   const names = bazelModules();
   syncNativeModuleRegistration(root);
+  const stage = path.join(workspace, 'out', platform);
+  pruneDisabledModuleOutputs(stage, availableModuleNames(root), names);
+  if (native && platform === 'ios') {
+    rmSync(path.join(stage, 'swift'), { recursive: true, force: true });
+    rmSync(path.join(stage, 'include'), { recursive: true, force: true });
+  }
+  if (!names.length && native && platform === 'ios') {
+    mkdirSync(stage, { recursive: true });
+    // A valid empty ar archive keeps the host's single force_load input valid.
+    writeFileSync(path.join(stage, 'libvaldi_modules_ios.a'), '!<arch>\n');
+  }
   if (!names.length) return new Map();
   const commit = file => /VALDI_COMMIT\s*=\s*"([a-f0-9]+)"/.exec(readFileSync(file, 'utf8'))?.[1];
   if (commit(path.join(root, 'valdi/MODULE.bazel')) !== commit(path.join(workspace, 'MODULE.bazel'))) {
@@ -101,6 +107,7 @@ export function buildNodeModules(platform = 'ios', release = false, native = fal
 }
 
 function buildWithJunction(platform, release, native, names) {
+  const configs = new Map(nativeModules(root).map(config => [config.name, config]));
   const command = process.env.BAZEL_BIN ?? 'bazel';
   ensureBazelShell();
   // Startup flags must precede the command, and explicit ones beat every rc file (a user-level
@@ -114,8 +121,12 @@ function buildWithJunction(platform, release, native, names) {
     startup.push(`--output_base=${isolatedBaseRoot.replace(/\\/g, '/')}/module-build`);
   }
   const extra = extraBazelFlags(process.env.VALDI_BAZEL_ARGS);
-  const flags =
-    platform === 'ios' ? ['--platforms=//:ios_sim_arm64'] : ['--android_platforms=@snap_platforms//os:android_arm64'];
+  const iosDevice = process.env.VALDI_IOS_PLATFORM === 'device' ||
+    process.env.PLATFORM_NAME === 'iphoneos' || process.env.SDK_NAME?.startsWith('iphoneos');
+  const flags = [
+    ...(platform === 'ios' ? [`--platforms=//:${iosDevice ? 'ios_arm64' : 'ios_sim_arm64'}`] : ['--android_platforms=@snap_platforms//os:android_arm64']),
+    ...(release ? ['-c', 'opt'] : []),
+  ];
   const env = { ...process.env };
   if (process.platform === 'darwin' && !env.JAVA_HOME) {
     const java = spawnSync('/usr/libexec/java_home', ['-v', '17'], { encoding: 'utf8' });
@@ -135,6 +146,8 @@ function buildWithJunction(platform, release, native, names) {
   const info = spawnSync(command, [...startup, 'info', 'bazel-bin', ...flags, ...extra], { cwd: workspace, env, encoding: 'utf8' });
   if (info.status !== 0 || !info.stdout.trim()) throw new Error(`Cannot locate module Bazel outputs: ${info.stderr}`);
   const bin = info.stdout.trim();
+  if (native && platform === 'ios')
+    rmSync(path.join(workspace, 'out/ios/swift'), { recursive: true, force: true });
   const outputs = new Map();
   for (const name of names) {
     const directory = path.join(bin, 'modules', name);
@@ -144,11 +157,29 @@ function buildWithJunction(platform, release, native, names) {
       mkdirSync(destination, { recursive: true });
       const filename = platform === 'ios' ? `lib${name}_ios.a` : `${name}_android.jar`;
       // objc_library(alwayslink=True) emits an ar archive with Bazel's .lo suffix.
-      const source = platform === 'ios' ? `lib${name}_ios.lo` : `lib${name}_android.jar`;
-      cpSync(path.join(directory, source), path.join(destination, filename));
+      const hasSwift = platform === 'ios' && configs.get(name).iosLanguage && configs.get(name).iosLanguage !== 'objc';
+      const source = platform === 'ios' ? `lib${name}_ios.${hasSwift ? 'a' : 'lo'}` : `lib${name}_android.jar`;
+      if (hasSwift) {
+        const combined = spawnSync('xcrun', ['libtool', '-static', '-o', path.join(destination, filename),
+          path.join(directory, source), path.join(directory, `lib${name}_ios_objc.lo`)], { stdio: 'inherit' });
+        if (combined.status !== 0) throw new Error(`Cannot combine Swift/ObjC library for ${name}`);
+      } else cpSync(path.join(directory, source), path.join(destination, filename));
       if (platform === 'ios') {
         rmSync(path.join(destination, 'include'), { recursive: true, force: true });
         copyModuleTree(path.join(directory, `${name}_compiled/ios`), path.join(destination, 'include'));
+        if (hasSwift) {
+          // Swift modules may be imported by other modules or by the App.
+          const files = spawnSync(command, [...startup, 'cquery', `//modules/${name}:${name}_ios`,
+            ...flags, ...extra, '--output=files'], { cwd: workspace, env, encoding: 'utf8' });
+          if (files.status !== 0) throw new Error(`Cannot locate Swift outputs for ${name}: ${files.stderr}`);
+          const outputRoot = path.join(workspace, 'out/ios/swift');
+          mkdirSync(outputRoot, { recursive: true });
+          for (const file of files.stdout.trim().split(/\r?\n/)) {
+            if (!/\.(swiftmodule|swiftdoc|swiftsourceinfo|swiftinterface)$/.test(file)) continue;
+            const absolute = path.isAbsolute(file) ? file : path.join(workspace, file);
+            cpSync(absolute, path.join(outputRoot, path.basename(file)));
+          }
+        }
       }
     }
   }

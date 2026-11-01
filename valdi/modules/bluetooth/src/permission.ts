@@ -4,7 +4,7 @@ import {
   androidSdk,
   isAndroid,
   requestAndroidPermissions,
-} from '../permissions/index';
+} from './permissions';
 
 /** Android requests are serialized with other device APIs. iOS prompts on native adapter open. */
 export async function requestBlePermissions(

@@ -32,9 +32,14 @@ import { ObjCModelGenerator } from './objc/ObjCModelGenerator';
 import { ObjCModuleGenerator } from './objc/ObjCModuleGenerator';
 import type { CompilationItem } from './TypeScriptAnnotation';
 import { deletingPathExtension, type ComponentPath, type GeneratedSourceFilename } from './Utils';
+import { swiftEnum, swiftFunction, swiftModel, swiftModule } from './swift/SwiftGenerators';
 
 class ValdiModelGenerator implements NativeSourceGenerator {
   constructor(private readonly model: ValdiModel) {}
+
+  generateSwiftSources(parameters: NativeSourceParameters, type: IOSType): NativeSource[] {
+    return swiftModel(this.model, parameters.bundleInfo, type, parameters.sourceFileName);
+  }
 
   generateCppSources(parameters: NativeSourceParameters, type: CppType): NativeSource[] {
     const { model } = this;
@@ -85,6 +90,10 @@ class ExportedFunctionGenerator implements NativeSourceGenerator {
     private readonly modulePath: string,
   ) {}
 
+  generateSwiftSources(parameters: NativeSourceParameters, type: IOSType): NativeSource[] {
+    return swiftFunction(this.exportedFunction, parameters.bundleInfo, type, parameters.sourceFileName, this.modulePath);
+  }
+
   generateCppSources(parameters: NativeSourceParameters, type: CppType): NativeSource[] {
     return new CppFunctionGenerator(
       type,
@@ -120,6 +129,10 @@ class ExportedFunctionGenerator implements NativeSourceGenerator {
 class ExportedEnumGenerator implements NativeSourceGenerator {
   constructor(private readonly exportedEnum: ExportedEnum) {}
 
+  generateSwiftSources(parameters: NativeSourceParameters, type: IOSType): NativeSource[] {
+    return swiftEnum(this.exportedEnum, parameters.bundleInfo, type, parameters.sourceFileName);
+  }
+
   generateObjCSources(parameters: NativeSourceParameters, type: IOSType): NativeSource[] {
     return new ObjCEnumGenerator(type, this.exportedEnum, parameters.sourceFileName, parameters.bundleInfo).write();
   }
@@ -140,6 +153,10 @@ class ExportedEnumGenerator implements NativeSourceGenerator {
 
 class ExportedModuleGenerator implements NativeSourceGenerator {
   constructor(private readonly exportedModule: ExportedModule) {}
+
+  generateSwiftSources(parameters: NativeSourceParameters, type: IOSType): NativeSource[] {
+    return swiftModule(this.exportedModule, parameters.bundleInfo, type, parameters.sourceFileName);
+  }
 
   generateObjCSources(parameters: NativeSourceParameters, type: IOSType): NativeSource[] {
     return new ObjCModuleGenerator(type, this.exportedModule, parameters.bundleInfo, parameters.sourceFileName).write();

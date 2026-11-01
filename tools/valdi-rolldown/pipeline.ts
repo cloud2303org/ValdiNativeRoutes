@@ -5,6 +5,8 @@ import path from 'node:path';
 import { rolldown, RolldownMagicString, type Plugin, type PreRenderedChunk } from 'rolldown';
 import type { ArchiveEntries } from './archive';
 import { sourceFiles, type ValdiModule, type ValdiTsPlugin } from './valdiTs';
+import { availableModuleNames, enabledModuleNames } from './modules.mjs';
+import { assertEnabledImports } from './module-selection';
 
 
 export const root = path.resolve(import.meta.dirname, '../..');
@@ -22,9 +24,16 @@ export const modulesDir = path.join(valdi, 'modules');
 export interface ModuleConfig {
   nativeBuild?: 'bazel';
   iosModuleName?: string;
+  iosLanguage?: 'objc' | 'swift' | 'both';
   androidModuleFactory?: string;
+  androidModuleFactoryContext?: boolean;
+  androidDependencies?: string[];
+  androidPermissions?: { name: string; maxSdkVersion?: number; usesPermissionFlags?: 'neverForLocation' }[];
+  androidFeatures?: { name: string; required?: boolean }[];
+  iosInfoPlist?: Record<string, string>;
   androidViewBinder?: string;
   iosModuleFactory?: string;
+  iosModuleFactoryClass?: string;
   template?: string;
 }
 
@@ -36,6 +45,8 @@ export function moduleConfig(name: string): ModuleConfig {
   if (config.iosModuleName !== undefined && !/^[A-Za-z][A-Za-z0-9_]*$/.test(config.iosModuleName)) {
     throw new Error(`${file}: invalid iosModuleName`);
   }
+  if (config.iosLanguage !== undefined && !['objc', 'swift', 'both'].includes(config.iosLanguage))
+    throw new Error(`${file}: invalid iosLanguage`);
   return config;
 }
 
@@ -50,10 +61,25 @@ export function appModule(name: string): ValdiModule {
 }
 
 export function appModules(): ValdiModule[] {
-  return readdirSync(modulesDir)
-    .filter(name => existsSync(path.join(modulesDir, name, 'src')))
-    .sort()
-    .map(appModule);
+  const modules = enabledModuleNames(root).map(appModule);
+  for (const module of modules) {
+    assertEnabledImports(tsSourceFiles(module), modulesDir, availableModuleNames(root), modules.map(value => value.name));
+  }
+  return modules;
+}
+
+function tsSourceFiles(module: ValdiModule): string[] {
+  // Include .d.ts: a type-only dependency is still part of the module contract.
+  const files: string[] = [];
+  const visit = (directory: string) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const file = path.join(directory, entry.name);
+      if (entry.isDirectory()) visit(file);
+      else if (/\.tsx?$/.test(entry.name)) files.push(file);
+    }
+  };
+  visit(path.join(module.dir, 'src'));
+  return files;
 }
 
 /**

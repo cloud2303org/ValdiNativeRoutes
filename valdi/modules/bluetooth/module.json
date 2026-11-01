@@ -1,0 +1,26 @@
+{
+  "nativeBuild": "bazel",
+  "iosModuleName": "Bluetooth",
+  "iosLanguage": "swift",
+  "androidModuleFactory": "io.valdiroutes.bluetooth.BluetoothModuleFactoryImpl",
+  "androidModuleFactoryContext": true,
+  "androidDependencies": [
+    "androidx.core:core-ktx:1.17.0",
+    "com.github.weliem:blessed-kotlin:3.0.12"
+  ],
+  "iosModuleFactoryClass": "VRBluetoothModuleFactory",
+  "androidFeatures": [
+    { "name": "android.hardware.bluetooth_le", "required": false }
+  ],
+  "androidPermissions": [
+    { "name": "android.permission.BLUETOOTH", "maxSdkVersion": 30 },
+    { "name": "android.permission.BLUETOOTH_ADMIN", "maxSdkVersion": 30 },
+    { "name": "android.permission.BLUETOOTH_SCAN", "usesPermissionFlags": "neverForLocation" },
+    { "name": "android.permission.BLUETOOTH_CONNECT" },
+    { "name": "android.permission.BLUETOOTH_ADVERTISE" }
+  ],
+  "iosInfoPlist": {
+    "NSBluetoothAlwaysUsageDescription": "用蓝牙连接和配置附近的设备"
+  },
+  "template": "polyglot_bridge_module"
+}

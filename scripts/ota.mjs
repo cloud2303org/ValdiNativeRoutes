@@ -66,7 +66,7 @@ const stripComments = (text) =>
 /** Where tools/valdi-rolldown/codegen.ts writes each platform's native bindings, and what they are. */
 const bindingSources = {
   android: { dir: 'android/app/generated/valdi', extensions: ['.kt'] },
-  ios: { dir: 'ios/Generated/valdi', extensions: ['.h', '.m'] },
+  ios: { dir: 'ios/Generated/valdi', extensions: ['.h', '.m', '.swift'] },
 };
 
 /** The Valdi side of the fingerprint, as exported: the toolchain (Valdi fork, Hermes) and valdi/native. */

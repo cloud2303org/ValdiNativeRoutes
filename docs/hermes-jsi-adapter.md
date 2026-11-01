@@ -5,8 +5,9 @@
 `experiment/hermes-jsi` 分支，worktree 为
 `/Users/cloud/.config/superpowers/worktrees/Valdi/hermes-jsi`。
 实现和复现命令见该 worktree 的 `docs/hermes-jsi-experiment.md`。
-应用源码现固定到维护分支的 `387568f9f333e21ca504354aa96dbd507843e455`，
-其中包含原 Hermes 适配器修复；JSI 仍未启用。设备性能和包体尚未对比。
+应用源码现固定到维护提交 `15feb6530ceecb971f4c8519ea8ab77474b959db`，
+其中合入官方上游 `4aa98f01` 并保留原 Hermes 适配器修复；JSI 仍未启用。
+设备性能和包体尚未对比。
 
 实验实现现已补上原生 Promise 接管及采用链传递、tracker 记录清理、所属 JS 队列的
 主动释放唤醒，以及构建时的 HBC 源码/版本/校验和检查。Promise 的完整接管需要一小处

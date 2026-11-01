@@ -35,267 +35,6 @@
 
 
 //
-// VRBleAdapterState.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBleCharacteristic.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBleCharacteristicProperties.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBleCharacteristicValue.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBleConnectStateChange.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBleConnectedDevice.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBleDevice.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBleHostEvents.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBleMTUChange.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBleNotifyParams.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBlePairParams.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBlePeripheralAdvertisingParams.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBlePeripheralBeacon.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBlePeripheralCharacteristic.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBlePeripheralConnectionState.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBlePeripheralDescriptor.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBlePeripheralManufacturerData.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBlePeripheralPermissions.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBlePeripheralProperties.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBlePeripheralReadRequest.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBlePeripheralService.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBlePeripheralSubscriptionEvent.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBlePeripheralWriteParams.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBlePeripheralWriteRequest.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBleReadParams.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBleScanParams.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBleService.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBleServiceData.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRBleWriteParams.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
 // VRBottomSheetRequest.m
 //
 
@@ -418,58 +157,6 @@ NSInteger VRCppMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRCpp> _No
     };
     static const char *const kIdentifiers[] = {
         "VRAppUIHost",
-        nil
-    };
-    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeFunction);
-}
-
-@end
-
-
-//
-// VRInstallBleHost.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-#import <ValdiRuntime/SCValdiMarshallableObjectRegistry.h>
-
-#import "app_pages.h"
-
-@implementation VRInstallBleHost
-
-+ (NSString *)modulePath
-{
-    return @"app_pages/src/ble/BleHost";
-}
-
-+ (BOOL)asyncStrictMode
-{
-    return NO;
-}
-- (void)installBleHostWithHost:(id<VRBleHost> _Nonnull)host{
-    VRInstallBleHostBlock callBlock = (VRInstallBleHostBlock)self.callBlock;
-    callBlock(host);
-}
-
-+ (void)invokeWithJSRuntimeProvider:(id<SCValdiJSRuntime> _Nonnull (^ _Nonnull)(void))jsRuntimeProvider host:(id<VRBleHost> _Nonnull)host completionHandler:(void (^ _Nonnull)(void))completionHandler
-{
-    id<SCValdiJSRuntime> runtime = jsRuntimeProvider();
-    [runtime dispatchInJsThread:^{
-        VRInstallBleHost *function = [VRInstallBleHost functionWithJSRuntime:runtime];
-        VRInstallBleHostBlock callBlock = (VRInstallBleHostBlock)function.callBlock;
-        callBlock(host);
-        completionHandler();
-    } attribution:@"generated.invokeWithJSRuntime:app_pages/src/ble/BleHost#installBleHost"];
-}
-
-+ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
-{
-    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
-        {.name = "installBleHost", .selName = nil, .type = "f(r:'[0]')"},
-        {.name = nil},
-    };
-    static const char *const kIdentifiers[] = {
-        "VRBleHost",
         nil
     };
     return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeFunction);
@@ -1065,7 +752,7 @@ static id SCValdiBlockCreateOBOO_o(SCValdiBlockTrampoline trampoline) {
 
 
 //
-// VRBleHost.m
+// VRNfcHost.m
 //
 
 #import <ValdiRuntime/SCValdiJSConversionUtils.h>
@@ -1082,87 +769,6 @@ static id SCValdiBlockCreateOOOD_o(SCValdiBlockTrampoline trampoline) {
         return SCValdiFieldValueGetPtr(trampoline(nil, SCValdiFieldValueMakePtr(p0), SCValdiFieldValueMakePtr(p1), SCValdiFieldValueMakeDouble(p2)));
     };
 }
-
-@interface VRBleHost: SCValdiProxyMarshallableObject
-
-@end
-
-@implementation VRBleHost
-
-+ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
-{
-    static const SCValdiMarshallableObjectBlockSupport kBlocks[] = {
-        { .typeEncoding = "oood:o", .invoker = &SCValdiFunctionInvokeOOOD_o, .factory = &SCValdiBlockCreateOOOD_o },
-        { .typeEncoding = nil },
-    };
-    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
-        {.name = "setEvents", .selName = "setEventsWithEvents:", .type = "f|m|(r:'[0]')"},
-        {.name = "openBluetoothAdapter", .selName = "openBluetoothAdapterWithMode:", .type = "f|m|(s?): p<v>"},
-        {.name = "closeBluetoothAdapter", .selName = "closeBluetoothAdapter", .type = "f|m|(): p<v>"},
-        {.name = "getBluetoothAdapterState", .selName = "getBluetoothAdapterState", .type = "f|m|(): p<r:'[1]'>"},
-        {.name = "startBluetoothDevicesDiscovery", .selName = "startBluetoothDevicesDiscoveryWithParams:", .type = "f|m|(r:'[2]'): p<v>"},
-        {.name = "startBluetoothDevicesDiscoveryWithNames", .selName = "startBluetoothDevicesDiscoveryWithNamesWithNames:", .type = "f|m|(a<s>): p<v>"},
-        {.name = "startBluetoothDevicesDiscoveryWithAddresses", .selName = "startBluetoothDevicesDiscoveryWithAddressesWithAddresses:", .type = "f|m|(a<s>): p<v>"},
-        {.name = "stopBluetoothDevicesDiscovery", .selName = "stopBluetoothDevicesDiscovery", .type = "f|m|(): p<v>"},
-        {.name = "getBluetoothDevices", .selName = "getBluetoothDevices", .type = "f|m|(): p<a<r:'[3]'>>"},
-        {.name = "createBLEConnection", .selName = "createBLEConnectionWithDeviceId:timeout:", .type = "f|m|(s, d@?): p<v>"},
-        {.name = "closeBLEConnection", .selName = "closeBLEConnectionWithDeviceId:", .type = "f|m|(s): p<v>"},
-        {.name = "makeBluetoothPair", .selName = "makeBluetoothPairWithParams:", .type = "f|m|(r:'[4]'): p<v>"},
-        {.name = "isBluetoothDevicePaired", .selName = "isBluetoothDevicePairedWithDeviceId:", .type = "f|m|(s): p<v>"},
-        {.name = "getBLEDeviceServices", .selName = "getBLEDeviceServicesWithDeviceId:", .type = "f|m|(s): p<a<r:'[5]'>>"},
-        {.name = "getBLEDeviceRSSI", .selName = "getBLEDeviceRSSIWithDeviceId:", .type = "f|m|(s): p<d@>"},
-        {.name = "getBLEDeviceCharacteristics", .selName = "getBLEDeviceCharacteristicsWithDeviceId:serviceId:", .type = "f|m|(s, s): p<a<r:'[6]'>>"},
-        {.name = "notifyBLECharacteristicValueChange", .selName = "notifyBLECharacteristicValueChangeWithParams:", .type = "f|m|(r:'[7]'): p<v>"},
-        {.name = "writeBLECharacteristicValue", .selName = "writeBLECharacteristicValueWithParams:", .type = "f|m|(r:'[8]'): p<v>"},
-        {.name = "readBLECharacteristicValue", .selName = "readBLECharacteristicValueWithParams:", .type = "f|m|(r:'[9]'): p<v>"},
-        {.name = "setBLEMTU", .selName = "setBLEMTUWithDeviceId:mtu:", .type = "f|m|(s, d): p<d@>"},
-        {.name = "getBLEMTU", .selName = "getBLEMTUWithDeviceId:writeType:", .type = "f|m|(s, s?): p<d@>"},
-        {.name = "getConnectedBluetoothDevices", .selName = "getConnectedBluetoothDevicesWithServices:", .type = "f|m|(a<s>): p<a<r:'[10]'>>"},
-        {.name = "createBLEPeripheralServer", .selName = "createBLEPeripheralServer", .type = "f|m|(): p<s>"},
-        {.name = "addPeripheralService", .selName = "addPeripheralServiceWithServerId:service:", .type = "f|m|(s, r:'[11]'): p<v>"},
-        {.name = "removePeripheralService", .selName = "removePeripheralServiceWithServerId:serviceId:", .type = "f|m|(s, s): p<v>"},
-        {.name = "startPeripheralAdvertising", .selName = "startPeripheralAdvertisingWithParams:", .type = "f|m|(r:'[12]'): p<v>"},
-        {.name = "stopPeripheralAdvertising", .selName = "stopPeripheralAdvertisingWithServerId:", .type = "f|m|(s): p<v>"},
-        {.name = "writePeripheralCharacteristicValue", .selName = "writePeripheralCharacteristicValueWithParams:", .type = "f|m|(r:'[13]'): p<v>"},
-        {.name = "closeBLEPeripheralServer", .selName = "closeBLEPeripheralServerWithServerId:", .type = "f|m|(s): p<v>"},
-        {.name = nil},
-    };
-    static const char *const kIdentifiers[] = {
-        "VRBleHostEvents",
-        "VRBleAdapterState",
-        "VRBleScanParams",
-        "VRBleDevice",
-        "VRBlePairParams",
-        "VRBleService",
-        "VRBleCharacteristic",
-        "VRBleNotifyParams",
-        "VRBleWriteParams",
-        "VRBleReadParams",
-        "VRBleConnectedDevice",
-        "VRBlePeripheralService",
-        "VRBlePeripheralAdvertisingParams",
-        "VRBlePeripheralWriteParams",
-        nil
-    };
-    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, kBlocks, SCValdiMarshallableObjectTypeProtocol);
-}
-
-@end
-
-NSInteger VRBleHostMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRBleHost> _Nonnull instance) {
-    return SCValdiMarshallableObjectMarshallInterface(marshaller, instance, [VRBleHost class]);
-}
-
-
-//
-// VRNfcHost.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
 
 static SCValdiFieldValue SCValdiFunctionInvokeOOOOOO_o(const void *function, SCValdiFieldValue* fields) {
     const void * result = ((const void * (*) (const void *, const void *, const void *, const void *, const void *, const void * ))function)(SCValdiFieldValueGetPtr(fields[0]), SCValdiFieldValueGetPtr(fields[1]), SCValdiFieldValueGetPtr(fields[2]), SCValdiFieldValueGetPtr(fields[3]), SCValdiFieldValueGetPtr(fields[4]), SCValdiFieldValueGetPtr(fields[5]));
@@ -1493,6 +1099,38 @@ NSInteger VRWifiHostMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRWif
 + (NSString *)componentPath
 {
     return @"HomePage@app_pages/src/HomePage";
+}
+
+- (instancetype)initWithViewModel:(VRPageViewModel *)viewModel componentContext:(VRPageContext *)componentContext runtime:(id<SCValdiRuntimeProtocol>)runtime
+{
+    return [super initWithViewModelUntyped:viewModel componentContextUntyped:componentContext runtime:runtime];
+}
+
+- (void)setViewModel:(VRPageViewModel *)viewModel
+{
+    self.valdiContext.viewModel = viewModel;
+}
+
+- (VRPageViewModel *)viewModel
+{
+    return self.valdiContext.viewModel;
+}
+
+@end
+
+
+//
+// VRInputCheckPage.m
+//
+
+#import <app_pages/app_pages.h>
+#import <ValdiRuntime/SCValdiRuntimeProtocol.h>
+#import <ValdiRuntime/SCValdiContextProtocol.h>
+@implementation VRInputCheckPage
+
++ (NSString *)componentPath
+{
+    return @"InputCheckPage@app_pages/src/InputCheckPage";
 }
 
 - (instancetype)initWithViewModel:(VRPageViewModel *)viewModel componentContext:(VRPageContext *)componentContext runtime:(id<SCValdiRuntimeProtocol>)runtime

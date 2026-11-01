@@ -1,7 +1,7 @@
 // Bazel's module action. It invokes only our Node compiler/codegen, stages its
 // inputs in a temporary module, and writes only declared Bazel outputs.
 import { createHash } from 'node:crypto';
-import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pack } from './archive';
@@ -33,6 +33,7 @@ export async function compileNodeModule(
   iosName: string,
   mode: 'debug' | 'release',
   dependencies: ValdiModule[] = [],
+  iosLanguage: 'objc' | 'swift' | 'both' = 'objc',
 ): Promise<void> {
   const name = original.name;
   const temporary = mkdtempSync(path.join(tmpdir(), `node-valdi-${name}-`));
@@ -72,11 +73,18 @@ export async function compileNodeModule(
     const target = {
       module,
       program: () => plugin.program(),
+      nativeDependencies: dependencies.map(module => {
+        const config = moduleConfig(module.name);
+        return { module, bundleInfo: {
+          ...VALDI_PROJECT_CONFIG, name: module.name, iosModuleName: config.iosModuleName ?? module.name,
+          iosLanguage: config.iosLanguage ?? 'objc', asyncStrictMode: false,
+        } };
+      }),
       bundleInfo: {
         ...VALDI_PROJECT_CONFIG,
         name,
         iosModuleName: iosName,
-        iosLanguage: 'objc' as const,
+        iosLanguage,
         asyncStrictMode: false,
       },
     };
@@ -89,10 +97,19 @@ export async function compileNodeModule(
           platform === 'ios'
             ? source
                 .replaceAll('#import <valdi_core/', '#import <ValdiRuntime/')
+                .replaceAll('import ValdiCoreSwift', 'import ValdiRuntime')
                 .replaceAll(`#import "${iosName}Types.h"`, `#import <${iosName}Types/${iosName}Types.h>`)
                 .replaceAll(`#import "${iosName}.h"`, `#import <${iosName}/${iosName}.h>`)
             : source;
         writeFileSync(output, content);
+      }
+    }
+    // Fixed Bazel outputs exist even when that language emits no declarations.
+    for (const directory of [iosName, iosName + 'Types']) {
+      mkdirSync(path.join(out, 'ios', directory), { recursive: true });
+      for (const extension of ['swift', 'h', 'm']) {
+        const file = path.join(out, 'ios', directory, directory + '.' + extension);
+        if (!existsSync(file)) writeFileSync(file, '');
       }
     }
     const resources = path.join(out, 'resources');
@@ -105,7 +122,7 @@ export async function compileNodeModule(
     await writeIosResources(module, images ?? [], path.join(resources, 'ios'));
     writeFileSync(
       path.join(out, 'build.json'),
-      JSON.stringify({ name, mode, compiler: 'node-valdi-rolldown', iosModuleName: iosName }, null, 2) + '\n',
+      JSON.stringify({ name, mode, compiler: 'node-valdi-rolldown', iosModuleName: iosName, iosLanguage }, null, 2) + '\n',
     );
     console.log(`${name}: ${mode}, ${built.entries.size} entries; Node TS, resources and native bindings`);
   } finally {
@@ -128,6 +145,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const out = path.resolve(option('--out'));
   const iosName = option('--ios-module-name');
   const mode = option('--mode');
+  const iosLanguage = args.includes('--ios-language') ? option('--ios-language') : 'objc';
+  if (!['objc', 'swift', 'both'].includes(iosLanguage)) throw new Error('Invalid iOS binding language');
   const dependencies = args.includes('--deps')
     ? (JSON.parse(option('--deps')) as { name: string; generatedDir: string }[]).map(dep => ({
         ...appModule(dep.name),
@@ -137,8 +156,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   process.chdir(import.meta.dirname);
   if (args.length || !['debug', 'release'].includes(mode)) throw new Error('Unexpected module build arguments');
   const config = moduleConfig(name);
+  if ((config.iosLanguage ?? 'objc') !== iosLanguage) throw new Error('BUILD ios_language must match module.json iosLanguage');
   if (config.nativeBuild !== 'bazel' || (config.iosModuleName ?? name) !== iosName) {
     throw new Error(`${name}: BUILD.bazel and module.json must agree on nativeBuild and iosModuleName`);
   }
-  await compileNodeModule(appModule(name), out, iosName, mode as 'debug' | 'release', dependencies);
+  await compileNodeModule(appModule(name), out, iosName, mode as 'debug' | 'release', dependencies, iosLanguage as 'objc' | 'swift' | 'both');
 }

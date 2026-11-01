@@ -35,7 +35,6 @@ import io.valdiroutes.pages.InstallPermissionHost
 import io.valdiroutes.pages.InstallWifiHost
 import io.valdiroutes.pages.ScanCodeReply
 import io.valdiroutes.pages.InstallAppUI
-import io.valdiroutes.pages.InstallBleHost
 import io.valdiroutes.pages.NavigationHost
 import io.valdiroutes.pages.StartApp
 import io.valdiroutes.pages.InstallVisionHost
@@ -57,7 +56,7 @@ object ValdiHost {
         // Named after the valdi_exported_library() target.
         System.loadLibrary("valdi_runtime")
         // Module library is built by our Node/Bazel rules; no upstream annotation processor is needed.
-        io.valdiroutes.generated.ValdiNativeModules.registerFactories()
+        io.valdiroutes.generated.ValdiNativeModules.registerFactories(app)
         // SupportValdiRuntimeManager.createWithSupportLibs, with the over-the-air module provider (ValdiOta.kt).
         ModuleFactoryRegistry.registerModuleFactoriesFromContext(app)
         runtimeManager = ValdiRuntimeManager(app, tweaks = ValdiTweaks(), customModuleProvider = ValdiOta.start(app))
@@ -72,7 +71,6 @@ object ValdiHost {
         runtimeManager.registerGlobalAttributesBinder(ValdiWheelBinder(TreeWheelView::class.java))
         appContext = app
         permissionHost = PermissionHostImpl(app)
-        val bleHost = BleHostImpl(app)
         val visionHost = VisionHostImpl(app)
         // Both cores are app-owned and installed now: NFC must see the first activity resume to know the foreground.
         val wifiHost = WifiHostImpl(app)
@@ -83,7 +81,6 @@ object ValdiHost {
             hostScope = js
             InstallAppUI.create(js).invoke(appUIHost)
             InstallPermissionHost.create(js).invoke(permissionHost, Build.VERSION.SDK_INT.toDouble())
-            InstallBleHost.create(js).invoke(bleHost)
             InstallWifiHost.create(js).invoke(wifiHost)
             InstallNfcHost.create(js).invoke(nfcHost)
             InstallVisionHost.create(js).invoke(visionHost)

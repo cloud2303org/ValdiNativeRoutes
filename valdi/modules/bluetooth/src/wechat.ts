@@ -1,4 +1,4 @@
-import { serializePermissionRequest } from '../permissions/index';
+import { serializePermissionRequest } from './permissions';
 import type {
   BleAdapterState as AdapterState,
   BleCharacteristic as Characteristic,

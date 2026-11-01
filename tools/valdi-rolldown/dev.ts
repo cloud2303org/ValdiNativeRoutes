@@ -26,6 +26,10 @@ import { appModules, buildModule, genDir, inlineSourceMaps, modulesDir } from '.
 import { addFontEntries, assetCatalog, findFonts, findImages, writeResTs, type Font, type Image } from './resources';
 import { valdiTs, type ValdiModule } from './valdiTs';
 import { startDevControls } from '../../scripts/dev-controls.mjs';
+import { assertEnabledImports } from './module-selection';
+import { availableModuleNames } from './modules.mjs';
+import { root } from './pipeline';
+import { sourceFiles } from './valdiTs';
 
 const DEVICE_PORT = 13592;
 /** The name the booted iOS simulator goes by here; it is reached at 127.0.0.1:DEVICE_PORT, without a forward. */
@@ -69,6 +73,7 @@ class ModuleBuild {
   }
 
   async build(): Promise<ArchiveEntries> {
+    assertEnabledImports(sourceFiles(this.module), modulesDir, availableModuleNames(root), [...modules.keys()]);
     const { images, fonts } = this;
     const built = await buildModule(this.module, this.plugin, false);
     inlineSourceMaps(built);

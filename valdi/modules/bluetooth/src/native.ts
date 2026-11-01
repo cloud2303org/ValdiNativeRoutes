@@ -1,4 +1,4 @@
-import { nativeCall } from '../nativeCall';
+import { nativeCall } from './nativeCall';
 import {
   type BleAdapterState,
   type BleCharacteristicValue,

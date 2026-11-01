@@ -1,6 +1,8 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { enabledModuleNames } from '../tools/valdi-rolldown/modules.mjs';
+import { syncModulePlatformConfig, validatePlatformConfig } from './module-platform-config.mjs';
 
 const defaultRoot = path.resolve(import.meta.dirname, '..');
 const qualifiedName = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/;
@@ -8,18 +10,30 @@ const identifier = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 export function nativeModules(root = defaultRoot) {
   const directory = path.join(root, 'valdi/modules');
-  return readdirSync(directory).sort().flatMap(name => {
+  return enabledModuleNames(root).flatMap(name => {
     const file = path.join(directory, name, 'module.json');
     if (!existsSync(file)) return [];
     const config = JSON.parse(readFileSync(file, 'utf8'));
     if (config.nativeBuild !== 'bazel') return [];
+    validatePlatformConfig(config, file);
     if (!/^[a-z][a-z0-9_]*$/.test(name)) throw new Error(`Invalid native module name: ${name}`);
     for (const field of ['androidModuleFactory', 'androidViewBinder']) {
       if (config[field] !== undefined && (typeof config[field] !== 'string' || !qualifiedName.test(config[field]))) throw new Error(`${file}: invalid ${field}`);
     }
-    for (const field of ['iosModuleName', 'iosModuleFactory']) {
+    for (const field of ['iosModuleName', 'iosModuleFactory', 'iosModuleFactoryClass']) {
       if (config[field] !== undefined && (typeof config[field] !== 'string' || !identifier.test(config[field]))) throw new Error(`${file}: invalid ${field}`);
     }
+    if (config.iosModuleFactory && config.iosModuleFactoryClass) throw new Error(`${file}: choose one iOS module factory`);
+    if (config.iosLanguage !== undefined && !['objc', 'swift', 'both'].includes(config.iosLanguage))
+      throw new Error(`${file}: invalid iosLanguage`);
+    if (config.androidModuleFactoryContext !== undefined && typeof config.androidModuleFactoryContext !== 'boolean')
+      throw new Error(`${file}: invalid androidModuleFactoryContext`);
+    if (config.androidModuleFactoryContext && !config.androidModuleFactory)
+      throw new Error(`${file}: androidModuleFactoryContext requires androidModuleFactory`);
+    if (config.androidDependencies !== undefined &&
+        (!Array.isArray(config.androidDependencies) || config.androidDependencies.some(value =>
+          typeof value !== 'string' || !/^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+$/.test(value))))
+      throw new Error(`${file}: invalid androidDependencies`);
     return [{ ...config, name }];
   });
 }
@@ -50,8 +64,8 @@ import com.snap.valdi.ValdiRuntimeManager
 import com.snap.valdi.modules.ModuleFactoryRegistry
 
 object ValdiNativeModules {
-    fun registerFactories() {
-${modules.filter(m => m.androidModuleFactory).map(m => `        ModuleFactoryRegistry.registerModuleFactory { ${m.androidModuleFactory}() }`).join('\n')}
+    fun registerFactories(context: Context) {
+${modules.filter(m => m.androidModuleFactory).map(m => `        ModuleFactoryRegistry.registerModuleFactory { ${m.androidModuleFactory}(${m.androidModuleFactoryContext ? 'context.applicationContext' : ''}) }`).join('\n')}
     }
 
     fun registerViewBinders(context: Context, runtime: ValdiRuntimeManager) {
@@ -70,14 +84,22 @@ ${modules.filter(m => m.iosModuleFactory).map(m => `extern id<SCNValdiCoreModule
 
 void VRRegisterNativeModules(SCValdiRuntime *runtime) {
 ${modules.filter(m => m.iosModuleFactory).map(m => `    [runtime registerNativeModuleFactory:${m.iosModuleFactory}()];`).join('\n')}
+${modules.filter(m => m.iosModuleFactoryClass).map(m => `    {
+        Class factoryClass = NSClassFromString(@"${m.iosModuleFactoryClass}");
+        if (!factoryClass || ![factoryClass conformsToProtocol:@protocol(SCNValdiCoreModuleFactory)])
+            [NSException raise:NSInternalInconsistencyException format:@"Missing Swift module factory: ${m.iosModuleFactoryClass}"];
+        [runtime registerNativeModuleFactory:[factoryClass new]];
+    }`).join('\n')}
 }
 `;
   writeChanged(path.join(root, 'android/app/generated/valdi/ValdiNativeModules.kt'), kotlin);
   writeChanged(path.join(root, 'ios/Generated/valdi/ValdiNativeModules.h'), header);
   writeChanged(path.join(root, 'ios/Generated/valdi/ValdiNativeModules.m'), implementation);
+  syncModulePlatformConfig(root, modules);
   return modules;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  syncNativeModuleRegistration();
+  if (process.argv[2] === '--json') console.log(JSON.stringify(nativeModules(defaultRoot)));
+  else syncNativeModuleRegistration();
 }

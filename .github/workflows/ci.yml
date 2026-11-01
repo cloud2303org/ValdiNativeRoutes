@@ -122,6 +122,12 @@ jobs:
         with:
           path: ~/.cache/bazel-disk-cache
           key: ${{ steps.bazel-cache.outputs.cache-primary-key }}
+      - name: Typecheck generated Swift against the exported runtime
+        if: matrix.target == 'ios'
+        working-directory: tools/valdi-rolldown
+        env:
+          VALDI_SWIFT_TYPECHECK: '1'
+        run: node node_modules/tsx/dist/cli.mjs --test swift.test.ts 2>&1 | tee ../../.ci/swift-typecheck.log
       - name: Build application modules
         run: pnpm build 2>&1 | tee .ci/build.log
       - name: Restore vision dependencies

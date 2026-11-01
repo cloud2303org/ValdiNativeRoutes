@@ -2,7 +2,7 @@
 // @ExportFunction, @ExportModule, @Component, @ViewModel, @Context), ported from the Valdi compiler (beta-0.2.1, MIT,
 // see LICENSE). The stages are the compiler's processors, in its order, mirroring its Swift names so the two can be
 // compared: symbols dumped from the module's program, annotations parsed and applied, models / view classes / context
-// factories generated per language (Kotlin, Objective-C, C++), then combined into one file per language and kind.
+// factories generated per language (Kotlin, Objective-C, Swift, C++), then combined into one file per language and kind.
 
 // valdiTs imports the companion's JSXProcessor, whose source-map has no types of its own.
 /// <reference path="../vendor/companion/source-map.d.ts" />
@@ -20,12 +20,15 @@ import {
 import { generateModels } from './GenerateModelsProcessor';
 import { generateViewClasses } from './GenerateViewClassesProcessor';
 import type { BundleInfo, NativeSourceAndPlatform, Platform } from './Models';
+import type { TypeScriptNativeTypeResolver } from './TypeScriptNativeTypeResolver';
 
 export interface CodegenModule {
   module: ValdiModule;
   bundleInfo: BundleInfo;
   /** The module's program; by default valdiTs's, from the module's tsconfig.json. */
   program?: () => ts.Program;
+  /** Declared module dependencies, registered with their own language/name settings. */
+  nativeDependencies?: CodegenModule[];
 }
 
 /**
@@ -44,7 +47,7 @@ export const VALDI_PROJECT_CONFIG = {
 
 /** The app modules (pipeline.ts appModules), each configured as valdi_module() configures a module by default. */
 export function codegenModules(): Record<string, CodegenModule> {
-  return Object.fromEntries(
+  const targets: Record<string, CodegenModule> = Object.fromEntries(
     appModules().map(module => [
       module.name,
       {
@@ -54,11 +57,18 @@ export function codegenModules(): Record<string, CodegenModule> {
           name: module.name,
           asyncStrictMode: false,
           iosModuleName: moduleConfig(module.name).iosModuleName ?? module.name,
-          iosLanguage: 'objc',
+          iosLanguage: moduleConfig(module.name).iosLanguage ?? 'objc',
         },
       },
     ]),
   );
+  // The ordinary workspace program can import any local module. Only files
+  // actually present in its program register symbols; Bazel's module action
+  // separately restricts this list to the declared build dependencies.
+  for (const target of Object.values(targets)) target.nativeDependencies = Object.values(targets)
+    .filter(other => other.module.name !== target.module.name)
+    .map(({ module, bundleInfo }) => ({ module, bundleInfo }));
+  return targets;
 }
 
 export interface NativeCode {
@@ -74,7 +84,14 @@ export interface NativeCode {
 export function generateNativeCode(target: CodegenModule, warn: (message: string) => void = console.warn): NativeCode {
   const { module, bundleInfo } = target;
   const program = target.program ? target.program() : valdiTs(module).program();
-  const items = processAnnotations(dumpAllSymbols(module, program, warn), bundleInfo, warn);
+  const nativeTypes: TypeScriptNativeTypeResolver[] = [];
+  for (const dependency of target.nativeDependencies ?? []) {
+    const registered = processAnnotations(dumpAllSymbols(dependency.module, program, warn), dependency.bundleInfo, warn, {
+      registerOnly: true, onRegistered: resolver => nativeTypes.push(resolver),
+    });
+    if (registered.errors.length) throw new Error(`Dependency ${dependency.module.name}: ${registered.errors.map(error => error.message).join('\n')}`);
+  }
+  const items = processAnnotations(dumpAllSymbols(module, program, warn), bundleInfo, warn, { nativeTypes });
   if (items.errors.length) {
     throw new Error(
       `Native code generation for ${module.name} failed:\n${items.errors.map(error => `  ${error.message}`).join('\n')}`,

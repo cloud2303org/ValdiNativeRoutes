@@ -233,6 +233,14 @@ function doCombineNativeSources(filename: string, nativeSources: NativeSource[])
   }
   // The combined Kotlin is at the root of the srcjar, whatever its package.
   if (sorted.some(source => source.filename.endsWith('.kt'))) return outputSource(filename, mergeKotlinSources(sorted));
+  if (sorted.some(source => source.filename.endsWith('.swift'))) {
+    const imports = new Set<string>();
+    const bodies = sorted.map(source => fileBanner(source.filename) + source.content.split('\n').filter(line => {
+      if (line.startsWith('import ')) { imports.add(line); return false; }
+      return true;
+    }).join('\n'));
+    return outputSource(filename, [...imports].sort().join('\n') + '\n\n' + bodies.join('\n'), relativePath);
+  }
   if (sorted.some(source => source.filename.endsWith('.hpp'))) {
     return outputSource(filename, mergeCppHeaders(sorted), relativePath);
   }
@@ -282,7 +290,7 @@ function emitMissingSingleFileCodegenIosNativeOutputs(
 /**
  * generateEmptySourcesIfNeeded, for the module the compiler is told to generate native code for: an empty Kotlin file
  * when there's no Kotlin, an ObjC type's four files with no type in them when there's no ObjC, and empty C++ files when
- * there's no C++. (The empty Swift files of swift and both modules aren't made: Swift isn't generated here.)
+ * there's no C++, and empty Swift groups when no declarations belong in them.
  */
 function generateEmptySourcesIfNeeded(
   bundleInfo: BundleInfo,
@@ -302,6 +310,15 @@ function generateEmptySourcesIfNeeded(
         platform: 'ios',
         source: outputSource(source.groupingIdentifier, source.content, source.relativePath),
       });
+    }
+  }
+  if (bundleInfo.iosCodegenEnabled && bundleInfo.iosLanguage !== 'objc') {
+    for (const [filename, relativePath] of [
+      [`${bundleInfo.iosModuleName}.swift`, undefined],
+      [`${bundleInfo.iosModuleName}Types.swift`, `../${bundleInfo.iosModuleName}Types`],
+    ] as const) {
+      if (!sources.some(({ source }) => source.groupingIdentifier === filename))
+        output.push({ platform: 'ios', source: outputSource(filename, '', relativePath) });
     }
   }
   if (bundleInfo.cppCodegenEnabled && !has('.cpp')) {

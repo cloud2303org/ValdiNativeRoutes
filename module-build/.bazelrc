@@ -1,6 +1,6 @@
 try-import %workspace%/win.local.bazelrc
 
-common --registry=https://raw.githubusercontent.com/cloud2303org/Valdi/387568f9f333e21ca504354aa96dbd507843e455/registry
+common --registry=https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry
 common --registry=https://bcr.bazel.build
 common --enable_platform_specific_config
 common --noincompatible_disallow_empty_glob

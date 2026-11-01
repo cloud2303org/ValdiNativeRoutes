@@ -11,7 +11,7 @@ def _tools_impl(ctx):
     ctx.file("BUILD.bazel", """
 package(default_visibility = ["//visibility:public"])
 exports_files(["environment.bzl"])
-filegroup(name = "sources", srcs = glob(["tools/*.ts", "tools/codegen/**/*.ts", "tools/vendor/**"]) + ["tools/package.json", "tools/pnpm-lock.yaml"])
+filegroup(name = "sources", srcs = glob(["tools/*.ts", "tools/*.mjs", "tools/codegen/**/*.ts", "tools/vendor/**"]) + ["tools/package.json", "tools/pnpm-lock.yaml"])
 """)
 
 node_compiler_tools = repository_rule(

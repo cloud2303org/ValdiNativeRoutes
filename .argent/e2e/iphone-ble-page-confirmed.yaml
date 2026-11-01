@@ -1,0 +1,76 @@
+steps:
+  - launch: io.valdiroutes.app
+  - when: { visible: { id: sign-in } }
+    steps:
+      - type: { into: { role: AXTextField }, text: demo-account-1, submit: false }
+      - tool: gesture-tap
+        args: { x: 0.5, y: 0.4635, udid: "00008020-001375211484003A" }
+      - tool: keyboard
+        args: { text: "{{secret:DEMO_LOGIN_PASSWORD}}", udid: "00008020-001375211484003A" }
+      - tap: { id: sign-in }
+      - await: { visible: { text: Valdi + Compose Nav3 }, timeout: 20000 }
+  - await: { visible: { text: Valdi + Compose Nav3 } }
+  - await: { idle: true }
+  - scroll-to: { target: { id: input-check } }
+  - await: { idle: true }
+  - tap: { id: input-check }
+  - await: { visible: { id: input-check-field } }
+  - await: { idle: true }
+  - assert: { text: { in: { id: input-check-count }, contains: 提交次数：0 } }
+  - scroll-to: { target: { text: 返回 }, direction: up }
+  - tap: { text: 返回 }
+  - await: { visible: { id: calculator } }
+  - await: { idle: true }
+  - assert: { hidden: { id: open } }
+  - scroll-to: { target: { id: ble } }
+  - await: { idle: true }
+  - tap: { id: ble }
+  - await: { visible: { id: open } }
+  - await: { idle: true }
+  - scroll-to: { target: { id: open } }
+  - tap: { id: open }
+  - scroll-to: { target: { text: 'openBluetoothAdapter:ok' } }
+  - await: { visible: { text: 'openBluetoothAdapter:ok' }, timeout: 20000 }
+  - scroll-to: { target: { id: state }, direction: up }
+  - tap: { id: state }
+  - scroll-to: { target: { text: 'available true · discovering false' } }
+  - await: { visible: { text: 'available true · discovering false' }, timeout: 15000 }
+  - scroll-to: { target: { id: scan } }
+  - tap: { id: scan }
+  - await: { visible: { text: stopBluetoothDevicesDiscovery, after: { text: 扫描与连接 } }, timeout: 20000 }
+  - await: { exists: { text: { matches: 'RSSI -\d+' } }, timeout: 20000 }
+  - scroll-to: { target: { id: scan } }
+  - tap: { id: scan }
+  - await: { visible: { text: startBluetoothDevicesDiscovery, after: { text: 扫描与连接 } }, timeout: 20000 }
+  - scroll-to: { target: { text: 'stopBluetoothDevicesDiscovery:ok' } }
+  - await: { visible: { text: 'stopBluetoothDevicesDiscovery:ok' }, timeout: 15000 }
+  - scroll-to: { target: { id: state }, direction: up }
+  - tap: { id: state }
+  - scroll-to: { target: { text: 'available true · discovering false' } }
+  - await: { visible: { text: 'available true · discovering false' }, timeout: 15000 }
+  - scroll-to: { target: { id: advertise } }
+  - tap: { id: advertise }
+  - await: { visible: { text: 关闭从机, after: { text: 从机广播 } }, timeout: 20000 }
+  - scroll-to: { target: { text: 正在广播服务 FEED } }
+  - await: { visible: { text: 正在广播服务 FEED }, timeout: 15000 }
+  - scroll-to: { target: { id: advertise } }
+  - tap: { id: advertise }
+  - await: { visible: { text: 开始从机广播, after: { text: 从机广播 } }, timeout: 20000 }
+  - scroll-to: { target: { text: 从机 server 已关闭 } }
+  - await: { visible: { text: 从机 server 已关闭 }, timeout: 15000 }
+  - scroll-to: { target: { text: 返回 }, direction: up }
+  - tap: { text: 返回 }
+  - await: { visible: { id: ble } }
+  - await: { idle: true }
+  - assert: { hidden: { id: open } }
+  - scroll-to: { target: { id: ble } }
+  - await: { idle: true }
+  - tap: { id: ble }
+  - await: { visible: { id: open } }
+  - await: { idle: true }
+  - assert: { hidden: { text: 'RSSI -' } }
+  - assert: { visible: { text: startBluetoothDevicesDiscovery, after: { text: 扫描与连接 } } }
+  - scroll-to: { target: { id: state }, direction: up }
+  - tap: { id: state }
+  - scroll-to: { target: { text: 'available true · discovering false' } }
+  - await: { visible: { text: 'available true · discovering false' }, timeout: 15000 }

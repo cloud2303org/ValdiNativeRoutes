@@ -11,6 +11,7 @@ export type FormLayout = 'scroll' | 'plain';
 /** Params and results of every route; the host only sees them as JSON. */
 export interface RouteParams {
   login: Record<string, never>;
+  inputCheck: Record<string, never>;
   main: { tab?: TabName };
   home: Record<string, never>;
   detail: { id: number; from: string };
@@ -27,6 +28,7 @@ export interface RouteParams {
 
 export interface RouteResults {
   login: never;
+  inputCheck: never;
   main: never;
   home: never;
   detail: { visited: number };
@@ -148,6 +150,7 @@ export function resolveNavigation(...layers: (NavigationOptions | undefined)[]):
 
 export const ROUTES: Record<RouteName, RouteDefinition> = {
   login: { kind: 'valdi', title: '登录', component: 'LoginPage@app_pages/src/LoginPage' },
+  inputCheck: { kind: 'valdi', title: '输入自检', component: 'InputCheckPage@app_pages/src/InputCheckPage' },
   main: { kind: 'tabs', title: '首页' },
   home: { kind: 'valdi', title: '首页', component: 'HomePage@app_pages/src/HomePage' },
   detail: { kind: 'valdi', title: '详情', component: 'DetailPage@app_pages/src/DetailPage' },

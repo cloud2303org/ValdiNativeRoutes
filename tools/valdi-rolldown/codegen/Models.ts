@@ -282,7 +282,7 @@ export interface BundleInfo {
   iosClassPrefix?: string;
   /** valdi_module(ios_module_name), the module's name by default: its headers' (`app_pages.h`) and directories'. */
   iosModuleName: string;
-  /** valdi_module(ios_language). The Swift generator isn't ported: only the Objective-C of objc and both is made. */
+  /** valdi_module(ios_language): Objective-C, Swift or parallel bindings. */
   iosLanguage: IOSLanguage;
 }
 
@@ -387,22 +387,27 @@ export interface NativeSourceParameters {
   cppType?: CppType;
 }
 
-/** One exported type's generator, one method per language (Swift's isn't ported). */
+/** One exported type's generator, one method per language. */
 export interface NativeSourceGenerator {
+  generateSwiftSources(parameters: NativeSourceParameters, type: IOSType): NativeSource[];
   generateObjCSources(parameters: NativeSourceParameters, type: IOSType): NativeSource[];
   generateKotlinSources(parameters: NativeSourceParameters, fullTypeName: string): NativeSource[];
   generateCppSources(parameters: NativeSourceParameters, type: CppType): NativeSource[];
 }
 
 /**
- * NativeSourceGenerator.generate(parameters:): every language the type has a native name in. For iOS, that's the
- * Objective-C of objc and both modules: Swift sources, of swift and both modules, aren't generated here.
+ * NativeSourceGenerator.generate(parameters:): every language the type has a native name in.
  */
 export function generateNativeSources(
   generator: NativeSourceGenerator,
   parameters: NativeSourceParameters,
 ): NativeSourceAndPlatform[] {
   const sources: NativeSourceAndPlatform[] = [];
+  if (parameters.iosType !== undefined && parameters.bundleInfo.iosLanguage !== 'objc') {
+    for (const source of generator.generateSwiftSources(parameters, parameters.iosType)) {
+      sources.push({ source, platform: 'ios' });
+    }
+  }
   if (parameters.iosType !== undefined && parameters.bundleInfo.iosLanguage !== 'swift') {
     for (const source of generator.generateObjCSources(parameters, parameters.iosType)) {
       sources.push({ source, platform: 'ios' });

@@ -113,6 +113,7 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
 
           <label style={styles.section} value="路由" />
           <Button id="calculator" title="Calculator" onTap={() => this.router.push('calculator', {})} />
+          <Button id="input-check" title="输入自检" onTap={() => this.router.push('inputCheck', {})} />
           <Button id="detail" title="push 详情页" onTap={this.handleRoute} />
           <Button id="picker" title="打开原生选择页，等结果" onTap={this.handleRoute} />
           <label key="last-result" style={styles.result} value={`结果：${lastResult}`} />

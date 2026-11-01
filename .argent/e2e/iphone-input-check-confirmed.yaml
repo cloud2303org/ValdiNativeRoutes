@@ -1,0 +1,40 @@
+steps:
+  - launch: io.valdiroutes.app
+  - await: { visible: { id: input-check } }
+  - await: { idle: true }
+  - tap: { id: input-check }
+  - await: { visible: { id: input-check-field } }
+  - await: { idle: true }
+  - assert: { text: { in: { id: input-check-count }, contains: 提交次数：0 } }
+  - assert: { text: { in: { id: input-check-result }, contains: 尚未提交 } }
+  - tap: { id: input-check-field }
+  - type: { into: { id: input-check-field }, text: hello-valdi-123, submit: false }
+  - assert: { text: { in: { id: input-check-field }, equals: hello-valdi-123 } }
+  - tap: { id: input-check-submit }
+  - await: { text: { in: { id: input-check-count }, contains: 提交次数：1 } }
+  - assert: { text: { in: { id: input-check-result }, equals: '已提交："hello-valdi-123"' } }
+  - tap: { id: input-check-submit }
+  - await: { text: { in: { id: input-check-count }, contains: 提交次数：2 } }
+  - tap: { id: input-check-clear }
+  - tap: { id: input-check-field }
+  - type: { into: { id: input-check-field }, text: second-456, submit: false }
+  - assert: { text: { in: { id: input-check-field }, equals: second-456 } }
+  - tap: { id: input-check-clear }
+  - tap: { id: input-check-submit }
+  - await: { text: { in: { id: input-check-count }, contains: 提交次数：3 } }
+  - assert: { text: { in: { id: input-check-result }, matches: '^已提交：""$' } }
+  - tap: { id: input-check-field }
+  - type: { into: { id: input-check-field }, text: third-789, submit: false }
+  - assert: { text: { in: { id: input-check-field }, equals: third-789 } }
+  - tap: { id: input-check-submit }
+  - await: { text: { in: { id: input-check-count }, contains: 提交次数：4 } }
+  - assert: { text: { in: { id: input-check-result }, equals: '已提交："third-789"' } }
+  - tap: { text: 返回 }
+  - await: { visible: { id: input-check } }
+  - await: { idle: true }
+  - tap: { id: input-check }
+  - await: { visible: { id: input-check-field } }
+  - await: { idle: true }
+  - assert: { text: { in: { id: input-check-count }, contains: 提交次数：0 } }
+  - assert: { text: { in: { id: input-check-result }, contains: 尚未提交 } }
+  - assert: { hidden: { text: third-789 } }

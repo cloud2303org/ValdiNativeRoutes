@@ -1,5 +1,6 @@
 import Foundation
 import ValdiRuntime
+import ValdiCoreCPP
 
 /// `api`'s Bluetooth on the app-wide BleCore (ble/BleHost.ts). Capability only: wechat.ts and peripheral.ts own the
 /// mini-program rules on both platforms, so this maps calls and events and nothing else. iOS prompts for Bluetooth on
@@ -24,32 +25,36 @@ final class BleHostImpl: NSObject, VRBleHost {
     }
 
     /// A native Promise outlives the calling page: JS hands native no function that the page's teardown could drop.
-    private func promise<T, R: AnyObject>(_ future: BleFuture<T>, _ map: @escaping (T) -> R) -> SCValdiPromise<R> {
-        let promise = SCValdiResolvablePromise<R>()
-        future.observe { [weak self] result in
-            switch result {
-            case let .success(value): promise.fulfill(withSuccessValue: map(value))
-            case let .failure(error): promise.fulfillWithError(Self.nsError(self?.message(error) ?? "\(error)"))
+    private func promise<T, R>(_ future: BleFuture<T>, _ map: @escaping (T) -> R,
+                                push: @escaping (ValdiMarshaller, R) throws -> Int = { try $0.pushUntyped($1) }) -> ValdiPromise<R> {
+        // The official generic resolver cannot marshal Void/arrays. Use the same
+        // native Promise API with an explicit value marshaller, retaining its owner
+        // until completion. No page-created callback crosses the bridge.
+        let pointer = withMarshaller { marshaller in
+            let index = SwiftValdiMarshaller_PushNewPromise(marshaller.marshallerCpp)
+            return SwiftValdiMarshaller_GetPromise(marshaller.marshallerCpp, index)!
+        }
+        let promise = ValdiPromise<R>(pointer)
+        future.observe { [promise] result in
+            withExtendedLifetime(promise) {
+                do {
+                    let value = try result.get()
+                    try withMarshaller { marshaller in
+                        let index = try push(marshaller, map(value))
+                        try marshaller.checkError()
+                        SwiftValdiMarshaller_ResolvePromise(marshaller.marshallerCpp, pointer, index)
+                    }
+                } catch {
+                    let message = (error as? LocalizedError)?.errorDescription ?? "\(error)"
+                    message.withCString { SwiftValdiMarshaller_RejectPromise(pointer, $0) }
+                }
             }
         }
         return promise
     }
 
-    private func promise<T, E>(_ future: BleFuture<T>, _ map: @escaping (T) -> [E]) -> SCValdiPromise<NSArray> {
-        promise(future) { map($0) as NSArray }
-    }
-
-    private func promise<T>(_ future: BleFuture<T>) -> SCValdiPromise<SCValdiUndefinedValue> {
-        ValdiVoidPromise.make { settle in
-            future.observe { [weak self] result in
-                if case let .failure(error) = result { settle(self?.message(error) ?? "\(error)") } else { settle(nil) }
-            }
-        }
-    }
-
-    /// The JS Error's message is exactly `message`, so wechat.ts can read its E_BLE_ code.
-    private static func nsError(_ message: String) -> NSError {
-        NSError(domain: "BleHost", code: 0, userInfo: [NSLocalizedDescriptionKey: message])
+    private func promise<T>(_ future: BleFuture<T>) -> ValdiPromise<Void> {
+        promise(future, { _ in () }, push: { marshaller, _ in marshaller.pushUndefined() })
     }
 
     private func resetScanFilter(allowDuplicates: Bool = false, intervalMs: Double = 0) {
@@ -72,80 +77,80 @@ final class BleHostImpl: NSObject, VRBleHost {
         return admitted
     }
 
-    func setEventsWith(_ events: VRBleHostEvents) {
+    func setEvents(events: VRBleHostEvents) {
         self.events = events
         _ = session // Listen from now on, not from the first call.
     }
 
     // MARK: - Adapter and discovery
 
-    func openBluetoothAdapter(withMode mode: String?) -> SCValdiPromise<SCValdiUndefinedValue> {
+    func openBluetoothAdapter(mode: String?) -> ValdiPromise<Void> {
         return promise(session.openBluetoothAdapter(mode: mode))
     }
 
-    func closeBluetoothAdapter() -> SCValdiPromise<SCValdiUndefinedValue> {
+    func closeBluetoothAdapter() -> ValdiPromise<Void> {
         return promise(session.closeBluetoothAdapter())
     }
 
-    func getBluetoothAdapterState() -> SCValdiPromise<VRBleAdapterState> {
+    func getBluetoothAdapterState() -> ValdiPromise<VRBleAdapterState> {
         promise(session.getBluetoothAdapterState(), Self.adapterState)
     }
 
-    func startBluetoothDevicesDiscovery(with params: VRBleScanParams) -> SCValdiPromise<SCValdiUndefinedValue> {
-        resetScanFilter(allowDuplicates: params.allowDuplicatesKey?.boolValue ?? false, intervalMs: params.interval?.doubleValue ?? 0)
+    func startBluetoothDevicesDiscovery(params: VRBleScanParams) -> ValdiPromise<Void> {
+        resetScanFilter(allowDuplicates: params.allowDuplicatesKey ?? false, intervalMs: params.interval ?? 0)
         return promise(session.startBluetoothDevicesDiscovery(params: BleScanParams(
-            services: params.services, allowDuplicatesKey: params.allowDuplicatesKey?.boolValue,
-            interval: params.interval?.doubleValue, powerLevel: params.powerLevel
+            services: params.services, allowDuplicatesKey: params.allowDuplicatesKey,
+            interval: params.interval, powerLevel: params.powerLevel
         )))
     }
 
-    func startBluetoothDevicesDiscoveryWithNames(withNames names: [String]) -> SCValdiPromise<SCValdiUndefinedValue> {
+    func startBluetoothDevicesDiscoveryWithNames(names: [String]) -> ValdiPromise<Void> {
         resetScanFilter()
         return promise(session.startBluetoothDevicesDiscoveryWithNames(params: BleScanWithNameParams(peripheralNames: names)))
     }
 
-    func startBluetoothDevicesDiscoveryWithAddresses(withAddresses addresses: [String]) -> SCValdiPromise<SCValdiUndefinedValue> {
+    func startBluetoothDevicesDiscoveryWithAddresses(addresses: [String]) -> ValdiPromise<Void> {
         resetScanFilter()
         return promise(session.startBluetoothDevicesDiscoveryWithAddresses(params: BleScanWithAddressesParams(peripheralAddresses: addresses)))
     }
 
-    func stopBluetoothDevicesDiscovery() -> SCValdiPromise<SCValdiUndefinedValue> {
+    func stopBluetoothDevicesDiscovery() -> ValdiPromise<Void> {
         return promise(session.stopBluetoothDevicesDiscovery())
     }
 
-    func getBluetoothDevices() -> SCValdiPromise<NSArray> {
+    func getBluetoothDevices() -> ValdiPromise<[VRBleDevice]> {
         return promise(session.getBluetoothDevices()) { $0.devices.map(Self.device) }
     }
 
     // MARK: - Connection and GATT
 
-    func createBLEConnection(withDeviceId deviceId: String, timeout: NSNumber?) -> SCValdiPromise<SCValdiUndefinedValue> {
-        return promise(session.createBLEConnection(deviceId: deviceId, timeout: timeout?.doubleValue ?? 15_000))
+    func createBLEConnection(deviceId: String, timeout: Double?) -> ValdiPromise<Void> {
+        return promise(session.createBLEConnection(deviceId: deviceId, timeout: timeout ?? 15_000))
     }
 
-    func closeBLEConnection(withDeviceId deviceId: String) -> SCValdiPromise<SCValdiUndefinedValue> {
+    func closeBLEConnection(deviceId: String) -> ValdiPromise<Void> {
         return promise(session.closeBLEConnection(deviceId: deviceId))
     }
 
-    func makeBluetoothPair(with params: VRBlePairParams) -> SCValdiPromise<SCValdiUndefinedValue> {
+    func makeBluetoothPair(params: VRBlePairParams) -> ValdiPromise<Void> {
         return promise(session.makeBluetoothPair(params: BlePairParams(deviceId: params.deviceId, pin: params.pin, timeout: params.timeout)))
     }
 
-    func isBluetoothDevicePaired(withDeviceId deviceId: String) -> SCValdiPromise<SCValdiUndefinedValue> {
+    func isBluetoothDevicePaired(deviceId: String) -> ValdiPromise<Void> {
         return promise(session.isBluetoothDevicePaired(deviceId: deviceId))
     }
 
-    func getBLEDeviceServices(withDeviceId deviceId: String) -> SCValdiPromise<NSArray> {
+    func getBLEDeviceServices(deviceId: String) -> ValdiPromise<[VRBleService]> {
         return promise(session.getBLEDeviceServices(deviceId: deviceId)) { list in
             list.services.map { VRBleService(uuid: $0.uuid, isPrimary: $0.isPrimary) }
         }
     }
 
-    func getBLEDeviceRSSI(withDeviceId deviceId: String) -> SCValdiPromise<NSNumber> {
-        return promise(session.getBLEDeviceRSSI(deviceId: deviceId)) { NSNumber(value: $0.RSSI) }
+    func getBLEDeviceRSSI(deviceId: String) -> ValdiPromise<Double> {
+        return promise(session.getBLEDeviceRSSI(deviceId: deviceId)) { $0.RSSI }
     }
 
-    func getBLEDeviceCharacteristics(withDeviceId deviceId: String, serviceId: String) -> SCValdiPromise<NSArray> {
+    func getBLEDeviceCharacteristics(deviceId: String, serviceId: String) -> ValdiPromise<[VRBleCharacteristic]> {
         return promise(session.getBLEDeviceCharacteristics(params: BleDeviceServiceParams(deviceId: deviceId, serviceId: serviceId))) { list in
             list.characteristics.map {
                 let p = $0.properties
@@ -157,35 +162,35 @@ final class BleHostImpl: NSObject, VRBleHost {
         }
     }
 
-    func notifyBLECharacteristicValueChange(with params: VRBleNotifyParams) -> SCValdiPromise<SCValdiUndefinedValue> {
+    func notifyBLECharacteristicValueChange(params: VRBleNotifyParams) -> ValdiPromise<Void> {
         return promise(session.notifyBLECharacteristicValueChange(params: BleNotifyParams(
             deviceId: params.deviceId, serviceId: params.serviceId, characteristicId: params.characteristicId,
             state: params.state, type: params.type
         )))
     }
 
-    func writeBLECharacteristicValue(with params: VRBleWriteParams) -> SCValdiPromise<SCValdiUndefinedValue> {
+    func writeBLECharacteristicValue(params: VRBleWriteParams) -> ValdiPromise<Void> {
         return promise(session.writeBLECharacteristicValue(params: BleWriteParams(
             deviceId: params.deviceId, serviceId: params.serviceId, characteristicId: params.characteristicId,
             value: params.value, writeType: params.writeType
         )))
     }
 
-    func readBLECharacteristicValue(with params: VRBleReadParams) -> SCValdiPromise<SCValdiUndefinedValue> {
+    func readBLECharacteristicValue(params: VRBleReadParams) -> ValdiPromise<Void> {
         return promise(session.readBLECharacteristicValue(params: BleReadParams(
             deviceId: params.deviceId, serviceId: params.serviceId, characteristicId: params.characteristicId
         )))
     }
 
-    func setBLEMTUWithDeviceId(_ deviceId: String, mtu: Double) -> SCValdiPromise<NSNumber> {
-        return promise(session.setBLEMTU(params: BleMTUParams(deviceId: deviceId, mtu: mtu))) { NSNumber(value: $0.mtu) }
+    func setBLEMTU(deviceId: String, mtu: Double) -> ValdiPromise<Double> {
+        return promise(session.setBLEMTU(params: BleMTUParams(deviceId: deviceId, mtu: mtu))) { $0.mtu }
     }
 
-    func getBLEMTUWithDeviceId(_ deviceId: String, writeType: String?) -> SCValdiPromise<NSNumber> {
-        return promise(session.getBLEMTU(params: BleDeviceIdParams(deviceId: deviceId, writeType: writeType))) { NSNumber(value: $0.mtu) }
+    func getBLEMTU(deviceId: String, writeType: String?) -> ValdiPromise<Double> {
+        return promise(session.getBLEMTU(params: BleDeviceIdParams(deviceId: deviceId, writeType: writeType))) { $0.mtu }
     }
 
-    func getConnectedBluetoothDevices(withServices services: [String]) -> SCValdiPromise<NSArray> {
+    func getConnectedBluetoothDevices(services: [String]) -> ValdiPromise<[VRBleConnectedDevice]> {
         return promise(session.getConnectedBluetoothDevices(params: BleConnectedDevicesParams(services: services))) { result in
             result.devices.map { VRBleConnectedDevice(deviceId: $0.deviceId, name: $0.name) }
         }
@@ -193,19 +198,19 @@ final class BleHostImpl: NSObject, VRBleHost {
 
     // MARK: - Peripheral
 
-    func createBLEPeripheralServer() -> SCValdiPromise<NSString> {
-        return promise(session.createBLEPeripheralServer()) { $0.serverId as NSString }
+    func createBLEPeripheralServer() -> ValdiPromise<String> {
+        return promise(session.createBLEPeripheralServer()) { $0.serverId }
     }
 
-    func addPeripheralService(withServerId serverId: String, service: VRBlePeripheralService) -> SCValdiPromise<SCValdiUndefinedValue> {
+    func addPeripheralService(serverId: String, service: VRBlePeripheralService) -> ValdiPromise<Void> {
         return promise(session.addPeripheralService(params: BlePeripheralServiceParams(serverId: serverId, service: Self.peripheralService(service))))
     }
 
-    func removePeripheralService(withServerId serverId: String, serviceId: String) -> SCValdiPromise<SCValdiUndefinedValue> {
+    func removePeripheralService(serverId: String, serviceId: String) -> ValdiPromise<Void> {
         return promise(session.removePeripheralService(params: BlePeripheralRemoveServiceParams(serverId: serverId, serviceId: serviceId)))
     }
 
-    func startPeripheralAdvertising(with params: VRBlePeripheralAdvertisingParams) -> SCValdiPromise<SCValdiUndefinedValue> {
+    func startPeripheralAdvertising(params: VRBlePeripheralAdvertisingParams) -> ValdiPromise<Void> {
         return promise(session.startPeripheralAdvertising(params: BlePeripheralAdvertisingParams(
             serverId: params.serverId, connectable: params.connectable, deviceName: params.deviceName,
             serviceUuids: params.serviceUuids,
@@ -219,18 +224,18 @@ final class BleHostImpl: NSObject, VRBleHost {
         )))
     }
 
-    func stopPeripheralAdvertising(withServerId serverId: String) -> SCValdiPromise<SCValdiUndefinedValue> {
+    func stopPeripheralAdvertising(serverId: String) -> ValdiPromise<Void> {
         return promise(session.stopPeripheralAdvertising(serverId: serverId))
     }
 
-    func writePeripheralCharacteristicValue(with params: VRBlePeripheralWriteParams) -> SCValdiPromise<SCValdiUndefinedValue> {
+    func writePeripheralCharacteristicValue(params: VRBlePeripheralWriteParams) -> ValdiPromise<Void> {
         return promise(session.writePeripheralCharacteristicValue(params: BlePeripheralWriteParams(
             serverId: params.serverId, serviceId: params.serviceId, characteristicId: params.characteristicId,
-            value: params.value, needNotify: params.needNotify, callbackId: params.callbackId?.doubleValue
+            value: params.value, needNotify: params.needNotify, callbackId: params.callbackId
         )))
     }
 
-    func closeBLEPeripheralServer(withServerId serverId: String) -> SCValdiPromise<SCValdiUndefinedValue> {
+    func closeBLEPeripheralServer(serverId: String) -> ValdiPromise<Void> {
         return promise(session.closeBLEPeripheralServer(serverId: serverId))
     }
 
@@ -240,31 +245,31 @@ final class BleHostImpl: NSObject, VRBleHost {
     private func listen(_ session: BleSession) {
         _ = try? session.onBluetoothDeviceFound { [weak self] in
             guard let self, self.admits($0.deviceId) else { return }
-            self.events?.deviceFound(Self.device($0))
+            try? self.events?.deviceFound(Self.device($0))
         }
-        _ = try? session.onAdapterStateChange { [weak self] in self?.events?.adapterStateChange(Self.adapterState($0)) }
+        _ = try? session.onAdapterStateChange { [weak self] in try? self?.events?.adapterStateChange(Self.adapterState($0)) }
         _ = try? session.onConnectStateChange { [weak self] in
-            self?.events?.connectStateChange(VRBleConnectStateChange(deviceId: $0.deviceId, connected: $0.connected))
+            try? self?.events?.connectStateChange(VRBleConnectStateChange(deviceId: $0.deviceId, connected: $0.connected))
         }
         _ = try? session.onCharacteristicUpdate { [weak self] in
-            self?.events?.characteristicUpdate(VRBleCharacteristicValue(deviceId: $0.deviceId, serviceId: $0.serviceId,
+            try? self?.events?.characteristicUpdate(VRBleCharacteristicValue(deviceId: $0.deviceId, serviceId: $0.serviceId,
                                                                          characteristicId: $0.characteristicId, value: $0.value))
         }
-        _ = try? session.onMtuChange { [weak self] in self?.events?.mtuChange(VRBleMTUChange(deviceId: $0.deviceId, mtu: $0.mtu)) }
+        _ = try? session.onMtuChange { [weak self] in try? self?.events?.mtuChange(VRBleMTUChange(deviceId: $0.deviceId, mtu: $0.mtu)) }
         _ = try? session.onPeripheralReadRequest { [weak self] in
-            self?.events?.peripheralReadRequest(VRBlePeripheralReadRequest(
+            try? self?.events?.peripheralReadRequest(VRBlePeripheralReadRequest(
                 serverId: $0.serverId, serviceId: $0.serviceId, characteristicId: $0.characteristicId,
                 callbackId: $0.callbackId, deviceId: $0.deviceId, offset: $0.offset))
         }
         _ = try? session.onPeripheralWriteRequest { [weak self] in
-            self?.events?.peripheralWriteRequest(VRBlePeripheralWriteRequest(
+            try? self?.events?.peripheralWriteRequest(VRBlePeripheralWriteRequest(
                 serverId: $0.serverId, serviceId: $0.serviceId, characteristicId: $0.characteristicId, callbackId: $0.callbackId,
                 deviceId: $0.deviceId, offset: $0.offset, value: $0.value, needResponse: $0.needResponse))
         }
-        _ = try? session.onPeripheralSubscribed { [weak self] in self?.events?.peripheralSubscribed(Self.subscription($0)) }
-        _ = try? session.onPeripheralUnsubscribed { [weak self] in self?.events?.peripheralUnsubscribed(Self.subscription($0)) }
+        _ = try? session.onPeripheralSubscribed { [weak self] in try? self?.events?.peripheralSubscribed(Self.subscription($0)) }
+        _ = try? session.onPeripheralUnsubscribed { [weak self] in try? self?.events?.peripheralUnsubscribed(Self.subscription($0)) }
         _ = try? session.onPeripheralConnectionStateChange { [weak self] in
-            self?.events?.peripheralConnectionStateChange(
+            try? self?.events?.peripheralConnectionStateChange(
                 VRBlePeripheralConnectionState(serverId: $0.serverId, deviceId: $0.deviceId, connected: $0.connected))
         }
     }
@@ -273,17 +278,17 @@ final class BleHostImpl: NSObject, VRBleHost {
 
     private static func adapterState(_ state: BleAdapterState) -> VRBleAdapterState {
         let result = VRBleAdapterState(available: state.available, discovering: state.discovering)
-        result.peripheralAvailable = state.peripheralAvailable.map { NSNumber(value: $0) }
+        result.peripheralAvailable = state.peripheralAvailable
         return result
     }
 
     private static func device(_ source: BleDevice) -> VRBleDevice {
         let result = VRBleDevice(
-            rssi: source.RSSI, advertisData: Data(source.advertisData.map { UInt8(truncatingIfNeeded: Int($0)) }),
+            RSSI: source.RSSI, advertisData: Data(source.advertisData.map { UInt8(truncatingIfNeeded: Int($0)) }),
             advertisServiceUUIDs: source.advertisServiceUUIDs, deviceId: source.deviceId, localName: source.localName,
             name: source.name, serviceData: source.serviceData.map { VRBleServiceData(uuid: $0.key, data: $0.value) }
         )
-        result.connectable = source.connectable.map { NSNumber(value: $0) }
+        result.connectable = source.connectable
         return result
     }
 

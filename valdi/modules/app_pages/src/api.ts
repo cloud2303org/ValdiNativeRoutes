@@ -9,7 +9,7 @@ import {
   PresentationReply,
   ScanCodeReply,
 } from './AppUIHost';
-import { bluetoothApi } from './ble/extension';
+import { bluetoothApi } from 'bluetooth/src/index';
 import { createNFCExtension } from './nfc/extension';
 import * as schema from './schemas';
 import { storageApi } from './storage';
@@ -255,7 +255,7 @@ const wifiApi = createWifiExtension();
 const nfcApi = { getNFCAdapter: createNFCExtension().getNFCAdapter };
 
 /**
- * UI, storage (storage.ts), Bluetooth (ble/), Wi-Fi (wifi/) and NFC (nfc/), one object for every page. It lives as
+ * UI, storage (storage.ts), Bluetooth (bluetooth module), Wi-Fi (wifi/) and NFC (nfc/), one object for every page. It lives as
  * long as the app: nothing here is released with a page, business code stops or closes what it started.
  */
 export const api = {

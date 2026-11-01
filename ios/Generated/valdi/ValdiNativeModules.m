@@ -5,4 +5,10 @@ extern id<SCNValdiCoreModuleFactory> CalculatorCreateModuleFactory(void);
 
 void VRRegisterNativeModules(SCValdiRuntime *runtime) {
     [runtime registerNativeModuleFactory:CalculatorCreateModuleFactory()];
+    {
+        Class factoryClass = NSClassFromString(@"VRBluetoothModuleFactory");
+        if (!factoryClass || ![factoryClass conformsToProtocol:@protocol(SCNValdiCoreModuleFactory)])
+            [NSException raise:NSInternalInconsistencyException format:@"Missing Swift module factory: VRBluetoothModuleFactory"];
+        [runtime registerNativeModuleFactory:[factoryClass new]];
+    }
 }

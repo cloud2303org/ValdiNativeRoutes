@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -52,6 +52,7 @@ test('every official module template compiles with the Node backend and preserve
     }
     assert.throws(() => createModule({ root: fixture, sources, name: created.name, template }), /already exists/);
   }
+  writeFileSync(path.join(fixture, 'package.json'), JSON.stringify({ valdi: { modules: MODULE_TEMPLATES.map(template => `sample_${template}`) } }));
   const modules = syncNativeModuleRegistration(fixture);
   assert.equal(modules.length, 2);
   assert.deepEqual(nativeModules(fixture), modules);
@@ -76,4 +77,38 @@ test('two native view templates have distinct Objective-C symbols and bad paths 
   assert.throws(() => createModule({ root: fixture, sources, name: 'first__view', template: 'polyglot_view_module' }), /already used/);
   assert.throws(() => createModule({ root: fixture, sources, name: 'class', template: 'polyglot_bridge_module' }), /reserved/);
   assert.throws(() => createModule({ root: fixture, sources, name: 'drawing', template: 'ui_component' }), /runtime module/);
+  assert.throws(() => createModule({ root: fixture, sources, name: 'context_view', template: 'polyglot_view_module', androidContext: true }), /requires polyglot_bridge_module/);
+});
+
+test('Swift bridge and SwiftUI templates generate independent native libraries and registration', async t => {
+  const fixture = mkdtempSync(path.join(tmpdir(), 'valdi-swift-scaffold-'));
+  t.after(() => rmSync(fixture, { recursive: true, force: true }));
+  const sources = valdiSourceRoot()!;
+  for (const [name, template] of [
+    ['swift_math', 'polyglot_bridge_module'],
+    ['swift_counter', 'polyglot_view_module'],
+  ] as const) {
+    const created = createModule({ root: fixture, sources, name, template, iosLanguage: 'swift', swiftUI: template === 'polyglot_view_module', androidContext: template === 'polyglot_bridge_module' });
+    const config = JSON.parse(readFileSync(path.join(created.directory, 'module.json'), 'utf8'));
+    assert.equal(config.iosLanguage, 'swift');
+    const output = path.join(fixture, 'out', name);
+    await compileNodeModule({
+      name, dir: created.directory, generatedDirs: [], nodeModules: path.join(root, 'valdi/node_modules'),
+    }, output, config.iosModuleName, 'release', [], 'swift');
+    if (template === 'polyglot_bridge_module') {
+      assert.equal(config.iosModuleFactoryClass, 'VRSwiftMathModuleFactory');
+      assert.equal(config.androidModuleFactoryContext, true);
+      assert.match(readFileSync(path.join(created.directory, 'android/CalculatorModuleFactory.kt'), 'utf8'), /private val context: android.content.Context/);
+      assert.match(readFileSync(path.join(output, 'ios/SwiftMathTypes/SwiftMathTypes.swift'), 'utf8'), /protocol VRSwiftMathCalculatorModule/);
+    } else {
+      const view = readFileSync(path.join(created.directory, 'ios/NativeView.swift'), 'utf8');
+      assert.match(view, /UIHostingController/);
+      assert.match(view, /removeFromParent/);
+    }
+  }
+  writeFileSync(path.join(fixture, 'package.json'), JSON.stringify({ valdi: { modules: ['swift_math', 'swift_counter'] } }));
+  syncNativeModuleRegistration(fixture);
+  assert.match(readFileSync(path.join(fixture, 'ios/Generated/valdi/ValdiNativeModules.m'), 'utf8'), /VRSwiftMathModuleFactory/);
+  assert.match(readFileSync(path.join(fixture, 'android/app/generated/valdi/ValdiNativeModules.kt'), 'utf8'), /CalculatorModuleFactoryImpl\(context.applicationContext\)/);
+  assert.throws(() => createModule({ root: fixture, sources, name: 'bad_ui', template: 'polyglot_bridge_module', swiftUI: true }), /requires/);
 });

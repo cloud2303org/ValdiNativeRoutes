@@ -1,4 +1,6 @@
 import { setCatchAllUncaughtErrorHandler, UncaughtErrorHandlerResult } from 'valdi_core/src/UncaughtErrorHandler';
+import { initializeBluetooth } from 'bluetooth/src/index';
+import * as permissions from './permissions/index';
 import { api } from './api';
 import { auth, installAuth, TokenStore } from './auth';
 import { getAppDb } from './db';
@@ -17,6 +19,7 @@ import { installTheme } from './theme';
  * @ExportFunction({ios: 'VRStartApp', android: 'io.valdiroutes.pages.StartApp'})
  */
 export function startApp(debug: boolean, navigation: NavigationHost, tokens: TokenStore): string {
+  initializeBluetooth(permissions);
   installTheme();
   installAuth(tokens);
   installDatabase();

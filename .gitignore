@@ -24,6 +24,8 @@ ota/dist/
 
 # CI logs, upstream comparison reports and simulator archives.
 /.ci/
+/ios/build-device/
+/ios/Generated/AppInfo.plist
 /.tools/
 /module-build/win.local.bazelrc
 /valdi/win.local.bazelrc

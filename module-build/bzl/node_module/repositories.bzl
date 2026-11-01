@@ -23,13 +23,24 @@ package(default_visibility = ["//visibility:public"])
 exports_files(["environment.bzl"])
 filegroup(
     name = "tool_sources",
-    srcs = glob(["tools/*.ts", "tools/codegen/**/*.ts", "tools/vendor/**"]) +
+    srcs = glob(["tools/*.ts", "tools/*.mjs", "tools/codegen/**/*.ts", "tools/vendor/**"]) +
            ["tools/package.json", "tools/pnpm-lock.yaml", "app-pnpm-lock.yaml"],
 )
 aar_import(name = "android_runtime", aar = "valdi_runtime.aar")
 apple_dynamic_xcframework_import(
     name = "ios_runtime",
     xcframework_imports = glob(["ValdiRuntime.xcframework/**"]),
+)
+config_setting(
+    name = "ios_simulator",
+    constraint_values = ["@apple_support//constraints:simulator"],
+)
+filegroup(
+    name = "ios_runtime_modulemap",
+    srcs = select({
+        ":ios_simulator": ["ValdiRuntime.xcframework/ios-arm64_x86_64-simulator/ValdiRuntime.framework/Modules/module.modulemap"],
+        "//conditions:default": ["ValdiRuntime.xcframework/ios-arm64/ValdiRuntime.framework/Modules/module.modulemap"],
+    }),
 )
 """)
 

@@ -8,6 +8,16 @@ pnpm new-module device_api --template polyglot_bridge_module
 pnpm new-module camera_view --template polyglot_view_module
 ```
 
+需要 Android `Application Context` 的能力模块可以加 `--android-context`：
+
+```sh
+pnpm new-module bluetooth --template polyglot_bridge_module --ios-language swift --android-context
+```
+
+脚手架给 Kotlin 工厂生成 Context 构造参数，并在 `module.json` 设置
+`androidModuleFactoryContext: true`。宿主注册模块时自动传入 `applicationContext`，
+不要在模块里保留 Activity。默认桥接模板仍使用无参工厂。
+
 不传 `--template` 时，交互终端会显示模板菜单；非交互执行默认生成 `ui_component`。
 名字会规范为 snake_case，例如 `CameraView` 生成 `camera_view`。
 模板来自 `npm_modules/cli/.bootstrap/modules/`，保留上游许可证。
@@ -22,9 +32,133 @@ pnpm 安装的是构建工具和 npm 依赖；这些依赖仍会由 Node 管线�
 
 生成的原生模板使用 `node_valdi_module()`，由 `module.json` 驱动宿主自动链接和注册。
 创建后运行 `pnpm android` 或 `pnpm ios` 即可准备模块库并构建 App。
-修改 Kotlin / Objective-C 实现需要重新构建 App；只修改 TSX 页面可用开发服务器热更新。
-官方模板本身使用 Objective-C，生成器不会另外生成 Swift 实现。
+修改 Kotlin / Objective-C / Swift 实现需要重新构建 App；只修改 TSX 页面可用开发服务器热更新。
+官方模板默认使用 Objective-C；仓库同时提供 Swift 实现选项。
 保留 Web / macOS 模板源码不代表当前仓库提供对应宿主的构建入口。
+
+## Swift 与 SwiftUI
+
+```sh
+# TS 声明、Kotlin 实现、Swift 原生接口实现
+pnpm new-module swift_math --template polyglot_bridge_module --ios-language swift
+
+# TSX custom-view、Android View、Swift UIView
+pnpm new-module swift_view --template polyglot_view_module --ios-language swift
+
+# iOS 改用 UIHostingController 承载 SwiftUI；Android 仍保留官方 View 实现
+pnpm new-module swift_counter --template polyglot_view_module --ios-language swift --swiftui
+```
+
+这条路线由 Node 直接生成 Swift 绑定，使用固定 Valdi 版本的 Swift marshaller 契约，
+没有经过 Objective-C 生成绑定，也不调用已删除的 Swift 版 Valdi 编译器。
+模型、协议代理、数值/字符串枚举、导出函数、泛型、可空类型、数组、映射、回调、
+Promise 和导出的 Valdi View 使用 `ValdiCoreSwift` 的类型与 schema 规则。
+仓库导出的 framework 将这份官方 Swift runtime 合入 `ValdiRuntime`。
+
+固定版本官方编译器的 `ExportedModuleGenerator.generateSwiftSources()` 返回空列表。
+本仓库在相同模型/proxy 契约上补充 Swift 模块工厂：实现生成的协议，
+继承生成的 `<协议名>Factory`，覆盖 `onLoadModule()`；模块导出对象通过原有 C++ Value
+wrapper 进入原生模块加载器。业务方法的 `throws` 通过 marshaller 传回 JS。
+工厂构建出无效 schema 属于原生编程错误，不能用返回空对象掩盖。
+
+`module.json` 的 `iosLanguage` 与 BUILD 的 `ios_language` 必须一致，默认均为 `objc`；
+可以设成 `swift`，也可以设成 `both` 同时生成两套绑定。`swift_srcs` 编译手写实现，
+`swift_deps` 声明原生 Swift 库依赖；TS 模块依赖仍通过 `deps` 声明。
+双语言模块的 Swift module 名为 `<iosModuleName>_Swift`，与官方规则一致。
+脚手架会给模块协议设置唯一的 `swift:` 名称，避免多个 Calculator 模板在 Swift registry 中重名。
+手写跨模块模型也应给出唯一的原生名称。
+
+Swift 工厂使用 `@objc(唯一类名)`，通过 `iosModuleFactoryClass` 自动注册。
+原生 View 同样需要稳定的 `@objc` 名称，与 TSX 的 `iosClass` 一致。
+SwiftUI 本身不直接注册给 Valdi：模板用 `UIView` 包装 `UIHostingController`，
+在进入/离开窗口时处理 controller containment；数据和事件可继续通过 View attributes
+或生成的原生接口传递。原生 View 的尺寸仍由 Valdi 页面布局决定。
+
+Swift runtime 导出包含 `valdi_core`、`ValdiCoreCPP` 所需的公开头文件与 module map。
+独立 Bazel 模块和 Xcode App 已自动传入该 module map；不需要使用 Bazel execroot 内的头文件。
+手写代码中，`import ValdiRuntime` 提供 Swift marshaller；需要 `SCValdi*` Objective-C API 时，
+另加 `import valdi_core`。更新 Xcode/Swift 工具链后应重新导出 runtime。
+
+```sh
+sh scripts/export-ios.sh debug
+pnpm ios
+
+# 单独检查真实 Swift ABI（macOS，先导出上述 runtime）
+cd tools/valdi-rolldown
+VALDI_SWIFT_TYPECHECK=1 node node_modules/tsx/dist/cli.mjs --test swift.test.ts
+```
+
+模块原生库默认构建 arm64 模拟器；Xcode 真机构建时会根据 `SDK_NAME`/`PLATFORM_NAME`
+选择设备架构，也可显式设置 `VALDI_IOS_PLATFORM=device`。Release 配置使用优化编译。
+Swift 库与 ObjC 库一起汇入 `libvaldi_modules_ios.a`，宿主保留动态注册需要的 Swift 对象。
+额外的第三方原生 framework、资源、entitlements 仍需在宿主显式配置。
+
+## 已迁移的 Bluetooth 模块
+
+### App 启用名单
+
+根 `package.json` 的 `valdi.modules` 明确列出当前 App 使用的模块 ID：
+
+```json
+{
+  "valdi": {
+    "modules": ["app_pages", "bluetooth", "calculator"]
+  }
+}
+```
+
+ID 是 `valdi/modules/` 下的目录名。模块的 `module.json` 描述原生工厂、平台配置；
+App 的名单只引用这些 ID。未列出的模块可以留在仓库，但不会被本 App 的 TS 构建、
+原生构建、工厂注册、模块 JAR/静态库汇总或 OTA 打包选中。Bazel 内的模块目标仍可单独构建。
+新增脚手架模块不会自动启用；把它加入名单后运行 `pnpm android` / `pnpm ios`，
+有新导出声明时由 prebuild 更新绑定。
+
+启用模块中的 TS、声明文件或 BUILD 依赖若仍引用未启用模块，构建会明确报错，
+不会隐式启用依赖。目前 `app_pages` 的蓝牙演示与启动代码依赖 `bluetooth`；
+要制作无蓝牙 App，需要移除这些业务引用，再从名单移除 `bluetooth`。
+这份 App 的入口是 `app_pages`，它也需要保留在名单中。
+
+构建会清理仍在仓库但已停用模块的旧暂存产物，重新生成注册代码与 iOS 聚合静态库，
+避免上一次构建留下的文件混入包内。修改名单后重建 App，并重启已经运行的 `pnpm dev`。
+外部 npm 依赖和 Valdi runtime 内置模块不使用这份名单。
+
+蓝牙专属 Android 权限/feature、iOS `NSBluetoothAlwaysUsageDescription` 由其 `module.json`
+贡献，停用后不再合入 App。Android 主 Manifest 与 iOS 基础 Info.plist 保留 App 自己的配置；
+共享定位权限仍属于宿主 Wi-Fi 等能力，不能随蓝牙一起删除。iOS entitlements、签名、
+第三方 framework 和 SwiftPM 配置仍由宿主管理。
+
+`valdi/modules/bluetooth` 实际通过上面的 `polyglot_bridge_module` 命令创建，
+再用已有 BLE 业务替换模板里的 Calculator 示例。它使用相同的 Node 编译、绑定生成、
+Bazel 原生库和模块工厂注册流程，没有独立的 BLE 构建入口。
+
+- `src/`：公共 API、参数校验、中心/外设模式、事件分发及原生声明。
+- `android/`：Kotlin 工厂、适配和 BLE 核心。
+- `ios/`：直接实现生成的 Swift 协议及模块工厂，CoreBluetooth 核心随模块编译。
+- `App`：保留 Manifest/Info.plist 权限说明，以及与 Wi-Fi/NFC 共用的权限服务。
+
+App 在其长期持有的启动作用域初始化一次：
+
+```ts
+import { initializeBluetooth, bluetoothApi } from 'bluetooth/src/index';
+import * as permissions from './permissions/index';
+
+initializeBluetooth(permissions);
+const bluetooth = bluetoothApi();
+```
+
+`permissions` 传入平台信息、权限请求和同一个权限串行队列；模块不反向导入
+`app_pages`。页面监听归页面所有，连接/扫描/外设服务由应用级会话持有，
+直到业务主动停止或关闭。`BlePage` 仍是 App 的演示页面；它在销毁时移除监听，
+并主动停止该演示页发起的扫描。
+
+第三方 Android 库在 BUILD 的 `android_deps` 中用于独立编译，在 `module.json`
+的 `androidDependencies` 中声明 Maven 坐标供 Gradle 打包；两处需保持一致。
+Bluetooth 的 Blessed 依赖仍使用原项目的 JitPack 来源。模块 JAR 不内嵌依赖库，
+也不会把第三方蓝牙实现复制回宿主源码目录。
+
+官方 Swift `ValdiResolvablePromise<T>` 的通用值编码不覆盖 `Void` 和数组。
+Bluetooth 使用同一份 runtime 的 Promise/marshaller API 显式编码这些结果，
+保留 native Promise 的生命周期；没有修改 runtime，也没有用页面 callback 替代 Promise。
 
 ## Calculator 参考实验
 
@@ -77,8 +211,9 @@ pnpm build:android
 - Node 的 `module-build.ts` 在临时目录生成 tsconfig、资源声明和绑定，不向源模块或宿主绑定目录写文件。
 - TS 模块依赖通过 `deps` 指定其他模块的 `_compiled` target，规则传递源码输入和资源类型声明。
   原生库依赖分别由 `android_deps` / `ios_deps` 声明。calculator 本身不依赖 app_pages。
-  模块引入额外原生第三方库时，还需在宿主配置相应的链接 / 打包依赖；
-  当前自动收集的是各模块自身的 JAR / 静态库，不会把 Bazel 依赖转换成 Gradle / SwiftPM 依赖。
+  Android 第三方库还需在 `module.json` 的 `androidDependencies` 中列出 Maven 坐标，
+  宿主 Gradle 会读取这些坐标；它不会自动解析 Bazel 依赖图。iOS 第三方 framework、
+  SwiftPM 依赖和资源仍需在宿主配置。
 - Android 由 `scripts/native-modules.mjs` 生成工厂和 AttributesBinder 注册入口，不依赖上游注解处理器。
 - iOS 保留模板的 factory / protocol 结构。已有 XCFramework 隐藏了
   `VALDI_REGISTER_MODULE()` 调用的 C 注册函数，因此由模块导出工厂创建函数，宿主通过公开的
@@ -89,7 +224,8 @@ pnpm build:android
 
 新增原生模块由生成器创建 BUILD 和 module.json，并自动接入宿主的链接及工厂注册。
 `androidModuleFactory`、`androidViewBinder`、`iosModuleFactory` 指定相应注册类或函数；
-Android 工厂使用无参构造，Binder 使用接收 `Context` 的构造；iOS 工厂函数返回
+Android 工厂默认使用无参构造；`--android-context` 创建的工厂接收 `applicationContext`。
+Binder 使用接收 `Context` 的构造；iOS 工厂函数返回
 `id<SCNValdiCoreModuleFactory>`。手写模块也可以使用这些字段。
 iOS 模块库合并到 `module-build/out/ios/libvaldi_modules_ios.a`，
 生成头文件集中在 `module-build/out/ios/include`；Android 按模块链接各自的 JAR。

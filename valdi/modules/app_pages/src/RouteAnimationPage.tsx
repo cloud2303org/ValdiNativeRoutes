@@ -7,7 +7,7 @@ import { Button } from './Button';
 import { PageContext, PageViewModel } from './Page';
 import { Page } from './PageComponent';
 import { PageHeader } from './PageHeader';
-import { NavigationOptions, Router, readParams } from './routes';
+import { NavigationOptions, Router, readParams } from './navigation';
 
 interface Example {
   title: string;

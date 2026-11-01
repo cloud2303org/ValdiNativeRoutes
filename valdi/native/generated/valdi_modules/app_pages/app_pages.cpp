@@ -1249,7 +1249,7 @@ namespace snap::valdi_modules::app_pages {
   NavigationHost::NavigationHost(): Valdi::CppGeneratedModel(getRegisteredClass()) {
   }
 
-  NavigationHost::NavigationHost(const NavigationHost::PushFn &push, const NavigationHost::PushForResultFn &pushForResult, const NavigationHost::ReplaceFn &replace, const NavigationHost::BackFn &back, const NavigationHost::PopToRootFn &popToRoot, const NavigationHost::ResetFn &reset, const NavigationHost::SwitchTabFn &switchTab, const NavigationHost::SetStatusBarStyleFn &setStatusBarStyle, const NavigationHost::CurrentPagesFn &currentPages): Valdi::CppGeneratedModel(getRegisteredClass()),
+  NavigationHost::NavigationHost(const NavigationHost::PushFn &push, const NavigationHost::PushForResultFn &pushForResult, const NavigationHost::ReplaceFn &replace, const NavigationHost::BackFn &back, const NavigationHost::PopToRootFn &popToRoot, const NavigationHost::ResetFn &reset, const NavigationHost::SwitchTabFn &switchTab, const NavigationHost::SetStatusBarStyleFn &setStatusBarStyle, const NavigationHost::CurrentPagesFn &currentPages, const NavigationHost::UpdateRoutesFn &updateRoutes): Valdi::CppGeneratedModel(getRegisteredClass()),
   _push(std::move(push)),
   _pushForResult(std::move(pushForResult)),
   _replace(std::move(replace)),
@@ -1258,7 +1258,8 @@ namespace snap::valdi_modules::app_pages {
   _reset(std::move(reset)),
   _switchTab(std::move(switchTab)),
   _setStatusBarStyle(std::move(setStatusBarStyle)),
-  _currentPages(std::move(currentPages)) {
+  _currentPages(std::move(currentPages)),
+  _updateRoutes(std::move(updateRoutes)) {
   }
 
   const NavigationHost::PushFn &NavigationHost::getPush() const {
@@ -1369,18 +1370,30 @@ namespace snap::valdi_modules::app_pages {
     _currentPages = std::move(value);
   }
 
+  const NavigationHost::UpdateRoutesFn &NavigationHost::getUpdateRoutes() const {
+    return _updateRoutes;
+  }
+
+  void NavigationHost::setUpdateRoutes(const NavigationHost::UpdateRoutesFn &value) {
+    _updateRoutes = value;
+  }
+
+  void NavigationHost::setUpdateRoutes(NavigationHost::UpdateRoutesFn &&value) {
+    _updateRoutes = std::move(value);
+  }
+
   void NavigationHost::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, NavigationHost &out) {
     auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._push, self._pushForResult, self._replace, self._back, self._popToRoot, self._reset, self._switchTab, self._setStatusBarStyle, self._currentPages);
+    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._push, self._pushForResult, self._replace, self._back, self._popToRoot, self._reset, self._switchTab, self._setStatusBarStyle, self._currentPages, self._updateRoutes);
   }
 
   void NavigationHost::marshall(Valdi::ExceptionTracker &exceptionTracker, const NavigationHost &value, Valdi::Value &out) {
     const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._push, self._pushForResult, self._replace, self._back, self._popToRoot, self._reset, self._switchTab, self._setStatusBarStyle, self._currentPages);
+    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._push, self._pushForResult, self._replace, self._back, self._popToRoot, self._reset, self._switchTab, self._setStatusBarStyle, self._currentPages, self._updateRoutes);
   }
 
   Valdi::RegisteredCppGeneratedClass *NavigationHost::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::NavigationHost'{'push':f(s, s, s, s), 'pushForResult':f(s, s, s, s, f(s, b)), 'replace':f(s, s, s), 'back':f(d), 'popToRoot':f(), 'reset':f(s, s), 'switchTab':f(s), 'setStatusBarStyle':f(s), 'currentPages':f(f(s))}");
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::NavigationHost'{'push':f(s, s, s, s), 'pushForResult':f(s, s, s, s, f(s, b)), 'replace':f(s, s, s), 'back':f(d), 'popToRoot':f(), 'reset':f(s, s), 'switchTab':f(s), 'setStatusBarStyle':f(s), 'currentPages':f(f(s)), 'updateRoutes':f(s)}");
 
     return kRegisteredClass;
   }

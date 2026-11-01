@@ -25,6 +25,8 @@ export interface NavigationHost {
   setStatusBarStyle: (style: string) => void;
   /** A JSON array of `{pageId, route, params}`, root first. */
   currentPages: (done: (pagesJson: string) => void) => void;
+  /** Replaces the declaration after a development reload; never changes the installed native implementations. */
+  updateRoutes: (routesJson: string) => void;
 }
 
 // On globalThis rather than in this module, as AppUIHost: a module Valdi unloads and reloads would lose it.
@@ -40,4 +42,13 @@ export function navigationHost(): NavigationHost {
     throw new Error('native navigation is not installed');
   }
   return host;
+}
+
+export function publishRoutes(json: string): void {
+  const state = globalThis as any;
+  const host = state[HOST_KEY] as NavigationHost | undefined;
+  if (host && state.__valdiRoutesDeclaration !== json) {
+    host.updateRoutes(json);
+  }
+  state.__valdiRoutesDeclaration = json;
 }

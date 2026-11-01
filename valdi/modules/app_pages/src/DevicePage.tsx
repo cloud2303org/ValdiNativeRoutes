@@ -7,7 +7,7 @@ import type { NFCDiscoveredCallback } from './nfc/adapter';
 import { PageContext, PageViewModel } from './Page';
 import { Page } from './PageComponent';
 import { PageHeader } from './PageHeader';
-import { Router } from './routes';
+import { Router } from './navigation';
 import type { GetWifiListCallback } from './wifi/wechat';
 
 interface State {

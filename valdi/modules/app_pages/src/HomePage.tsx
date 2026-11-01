@@ -8,7 +8,7 @@ import { getAppDb } from './db';
 import { PageContext, PageViewModel } from './Page';
 import { HideReason, Page, ShowReason } from './PageComponent';
 import { PageHeader } from './PageHeader';
-import { FormLayout, Presentation, Router } from './routes';
+import { FormLayout, Presentation, Router } from './navigation';
 import { ClientSQLSubscription } from './sqlgen/SubmissionQueries';
 
 /** The JS engine running this page, read from the runtime itself. */

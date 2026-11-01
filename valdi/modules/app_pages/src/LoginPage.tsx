@@ -7,7 +7,7 @@ import { Button } from './Button';
 import { NavigationBar } from './NavigationBar';
 import { PageContext, PageViewModel } from './Page';
 import { Page } from './PageComponent';
-import { Router } from './routes';
+import { Router } from './navigation';
 import { color, tokens } from './theme';
 
 interface State {

@@ -21,7 +21,7 @@ export interface PageViewModel {
   pageId: string;
   route: string;
   paramsJson: string;
-  /** 'push', 'sheet' or 'compactSheet'; 'tab' for a page shown in the tab shell (TAB_BAR), which has nothing to close. */
+  /** 'push', 'sheet' or 'compactSheet'; 'tab' for a page shown in the tab shell (routes.tabs), which has nothing to close. */
   presentation: string;
   /**
    * Areas the page must keep its content out of. The host already subtracts whatever it handles itself:

@@ -139,6 +139,13 @@ object ValdiHost {
         { tab -> onNavigator { it.switchTab(tab) } },
         { style -> onNavigator { it.statusBarStyle = style } },
         { done -> main.post { done(navigator?.currentPages() ?: "[]") } },
+        { json ->
+            val table = RouteTable.parse(json)
+            main.post {
+                navigator?.reloadRoutes(table)
+                started = table.withRoot(navigator?.stack?.firstOrNull()?.route ?: table.root)
+            }
+        },
     )
 
     private fun onNavigator(action: (Navigator) -> Unit) {
@@ -305,15 +312,19 @@ object ValdiHost {
 
 data class Insets(val top: Float, val bottom: Float, val left: Float, val right: Float)
 
-class RouteDefinition(val kind: String, val title: String, val component: String?)
+class RouteDefinition(val kind: String, val title: String, val component: String?, val nativeName: String?)
 
-/** One tab of TAB_BAR; icons are the res/ images' drawable names without the module prefix. */
-class Tab(val tab: String, val route: String, val text: String, val icon: String, val selectedIcon: String?)
+/** One tab of routes.tabs; icons are the res/ images' drawable names without the module prefix. */
+class Tab(val route: String, val text: String, val icon: String, val selectedIcon: String?,
+          val iconData: String?, val selectedIconData: String?)
 
-class TabBar(val route: String, val tabs: List<Tab>)
+class TabBar(val route: String, val tabs: List<Tab>, val initial: String)
 
 /** What startApp (app.ts) returns: the routes, the tab bar and the first page. */
 class RouteTable(private val routes: Map<String, RouteDefinition>, val tabBar: TabBar?, val root: String) {
+    fun contains(route: String) = routes.containsKey(route)
+    fun withRoot(route: String) = RouteTable(routes, tabBar, route.also { get(it) })
+
     operator fun get(route: String): RouteDefinition = requireNotNull(routes[route]) { "Unknown route: $route" }
 
     companion object {
@@ -322,20 +333,37 @@ class RouteTable(private val routes: Map<String, RouteDefinition>, val tabBar: T
             val routes = start.getJSONObject("routes")
             val bar = start.optJSONObject("tabBar")
             val tabs = bar?.getJSONArray("tabs")
-            return RouteTable(
+            val table = RouteTable(
                 routes.keys().asSequence().associateWith { key ->
                     val route = routes.getJSONObject(key)
-                    RouteDefinition(route.getString("kind"), route.getString("title"), route.optString("component").ifEmpty { null })
+                    RouteDefinition(route.getString("kind"), route.getString("title"), route.optString("component").ifEmpty { null },
+                        route.optString("nativeName").ifEmpty { null })
                 },
                 bar?.let {
                     TabBar(it.getString("route"), (0 until tabs!!.length()).map { i ->
                         val tab = tabs.getJSONObject(i)
-                        Tab(tab.getString("tab"), tab.getString("route"), tab.getString("text"), tab.getString("icon"),
-                            tab.optString("selectedIcon").ifEmpty { null })
-                    })
+                        Tab(tab.getString("route"), tab.getString("text"), tab.getString("icon"),
+                            tab.optString("selectedIcon").ifEmpty { null },
+                            tab.optString("iconData").ifEmpty { null }, tab.optString("selectedIconData").ifEmpty { null })
+                    }, it.getString("initial"))
                 },
                 start.getString("root"),
             )
+            table[table.root]
+            routes.keys().forEach { name ->
+                val definition = table[name]
+                require(definition.kind in listOf("valdi", "native", "tabs")) { "Invalid route kind: $name" }
+                if (definition.kind == "native") require(NativeScreens.contains(requireNotNull(definition.nativeName))) {
+                    "Native page for route $name is not registered: ${definition.nativeName}"
+                }
+            }
+            table.tabBar?.let { config ->
+                require(config.tabs.isNotEmpty() && config.tabs.map { it.route }.distinct().size == config.tabs.size) { "Invalid tabs" }
+                require(table[config.route].kind == "tabs")
+                require(config.tabs.any { it.route == config.initial }) { "Unknown initial tab: ${config.initial}" }
+                config.tabs.forEach { require(table[it.route].kind != "tabs") }
+            }
+            return table
         }
     }
 }

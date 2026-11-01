@@ -940,10 +940,11 @@ namespace snap::valdi_modules::app_pages {
     using SetStatusBarStyleFn = Valdi::Function<void(Valdi::StringBox)>;
     using CurrentPagesDoneFn = Valdi::Function<void(Valdi::StringBox)>;
     using CurrentPagesFn = Valdi::Function<void(CurrentPagesDoneFn)>;
+    using UpdateRoutesFn = Valdi::Function<void(Valdi::StringBox)>;
 
     NavigationHost();
 
-    NavigationHost(const PushFn &push, const PushForResultFn &pushForResult, const ReplaceFn &replace, const BackFn &back, const PopToRootFn &popToRoot, const ResetFn &reset, const SwitchTabFn &switchTab, const SetStatusBarStyleFn &setStatusBarStyle, const CurrentPagesFn &currentPages);
+    NavigationHost(const PushFn &push, const PushForResultFn &pushForResult, const ReplaceFn &replace, const BackFn &back, const PopToRootFn &popToRoot, const ResetFn &reset, const SwitchTabFn &switchTab, const SetStatusBarStyleFn &setStatusBarStyle, const CurrentPagesFn &currentPages, const UpdateRoutesFn &updateRoutes);
 
     const PushFn &getPush() const;
 
@@ -999,6 +1000,12 @@ namespace snap::valdi_modules::app_pages {
 
     void setCurrentPages(CurrentPagesFn &&value);
 
+    const UpdateRoutesFn &getUpdateRoutes() const;
+
+    void setUpdateRoutes(const UpdateRoutesFn &value);
+
+    void setUpdateRoutes(UpdateRoutesFn &&value);
+
     static Valdi::RegisteredCppGeneratedClass *getRegisteredClass();
 
     static void unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, NavigationHost &out);
@@ -1015,6 +1022,7 @@ namespace snap::valdi_modules::app_pages {
     SwitchTabFn _switchTab;
     SetStatusBarStyleFn _setStatusBarStyle;
     CurrentPagesFn _currentPages;
+    UpdateRoutesFn _updateRoutes;
   };
 
 }

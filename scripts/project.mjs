@@ -32,7 +32,7 @@ function main() {
       // Windows and can report `Command "tsx" not found` for the same install.
       const rolldownDir = path.join(root, 'tools/valdi-rolldown');
       const tsx = path.join(rolldownDir, 'node_modules/tsx/dist/cli.mjs');
-      run(process.execPath, [tsx, '--test', 'resources.test.ts', 'hermes.test.ts', 'module-build.test.ts', 'runtime-module.test.ts', 'scaffold.test.ts', 'swift.test.ts', 'bluetooth.test.ts', 'module-selection.test.ts', 'jsx-upstream.test.ts', 'lazy-import.test.ts', 'upstream-runtime.test.ts'], rolldownDir);
+      run(process.execPath, [tsx, '--test', 'routes.test.ts', 'resources.test.ts', 'hermes.test.ts', 'module-build.test.ts', 'runtime-module.test.ts', 'scaffold.test.ts', 'swift.test.ts', 'bluetooth.test.ts', 'module-selection.test.ts', 'jsx-upstream.test.ts', 'lazy-import.test.ts', 'upstream-runtime.test.ts'], rolldownDir);
       // The goldens compare against the same sources the tests used, whatever link holds them.
       const goldensArgs = ['codegen/goldens.ts', ...forwarded];
       if (sourceOption < 0) goldensArgs.push('--valdi', valdiSource);

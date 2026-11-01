@@ -50,9 +50,11 @@ object NativeScreens {
         screens[route] = content
     }
 
+    fun contains(name: String) = screens.containsKey(name)
+
     @Composable
     fun Content(page: NativePage) {
-        requireNotNull(screens[page.entry.route]) { "No native screen registered for ${page.entry.route}" }(page)
+        requireNotNull(screens[page.entry.definition.nativeName]) { "No native screen registered for ${page.entry.route}" }(page)
     }
 
     fun registerDefaults() {

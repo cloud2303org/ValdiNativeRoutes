@@ -3,9 +3,9 @@ import { initializeBluetooth } from 'bluetooth/src/index';
 import * as permissions from './permissions/index';
 import { api } from './api';
 import { auth, installAuth, TokenStore } from './auth';
-import { getAppDb } from './db';
+import { initializeAppDb } from './db';
 import { installNavigation, NavigationHost } from './NavigationHost';
-import { hostRoutes, RouteName } from './routes';
+import { routes } from './routes';
 import { installTheme } from './theme';
 
 /**
@@ -26,16 +26,16 @@ export function startApp(debug: boolean, navigation: NavigationHost, tokens: Tok
   installApi();
   installNavigation(navigation);
   installErrorHandler(debug);
-  return JSON.stringify({ ...hostRoutes(), root: rootRoute() });
+  return JSON.stringify(routes.toHost(rootRoute()));
 }
 
 /** The first page: signed out, the login page; signing in resets the stack to `main` (auth.ts). */
-function rootRoute(): RouteName {
-  return auth.isSignedIn() ? 'main' : 'login';
+function rootRoute(): string {
+  return auth.isSignedIn() ? routes.home : 'login';
 }
 
 function installDatabase(): void {
-  getAppDb();
+  initializeAppDb();
 }
 
 /**

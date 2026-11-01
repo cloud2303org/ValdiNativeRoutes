@@ -86,8 +86,8 @@ class PageEntry(
  * NavigationHost (ValdiHost), native pages call it directly. A call that removes pages removes them from the top down,
  * each cancelled, so a pushForResult caller below still exists when its callback runs.
  */
-class Navigator(private val routes: RouteTable) {
-    val tabBar: TabBar? = routes.tabBar
+class Navigator(private var routes: RouteTable) {
+    val tabBar: TabBar? get() = routes.tabBar
     val stack = mutableStateListOf<PageEntry>()
     var sheet by mutableStateOf<PageEntry?>(null)
         private set
@@ -95,14 +95,29 @@ class Navigator(private val routes: RouteTable) {
         private set
     private var nextId = 0
 
+    fun reloadRoutes(table: RouteTable) {
+        val oldRoot = stack.firstOrNull()
+        val root = oldRoot?.route?.takeIf { table.contains(it) } ?: table.root
+        val selected = oldRoot?.selectedTab?.takeIf { name -> table.tabBar?.tabs?.any { it.route == name } == true }
+        routes = table
+        val params = if (root == table.tabBar?.route) {
+            selected?.let { JSONObject().put("tab", it).toString() } ?: "{}"
+        } else oldRoot?.paramsJson ?: "{}"
+        reset(root, params)
+    }
+
     private fun entry(
         route: String, paramsJson: String, presentation: Presentation, navigation: NavigationOptions, onResult: ResultCallback?,
     ): PageEntry {
         val entry = PageEntry("page-${nextId++}", route, routes[route], paramsJson, presentation,
             NativeRouteAnimations.validated(navigation), onResult)
         if (entry.definition.kind == "tabs") {
-            val requested = JSONObject(paramsJson.ifEmpty { "{}" }).optString("tab")
-            entry.selectedTab = tabBar?.tabs?.firstOrNull { it.tab == requested }?.tab ?: tabBar?.tabs?.firstOrNull()?.tab
+            val params = JSONObject(paramsJson.ifEmpty { "{}" })
+            val requested = params.optString("tab")
+            require(!params.has("tab") || (params.opt("tab") is String && tabBar?.tabs?.any { it.route == requested } == true)) {
+                "Unknown tab: $requested"
+            }
+            entry.selectedTab = tabBar?.tabs?.firstOrNull { it.route == requested }?.route ?: tabBar?.initial
         }
         return entry
     }
@@ -122,7 +137,7 @@ class Navigator(private val routes: RouteTable) {
 
     /** The page shown in a tab shell's `tab`, created the first time. */
     fun tabPage(shell: PageEntry, tab: String): PageEntry = shell.tabPages.getOrPut(tab) {
-        val route = requireNotNull(tabBar?.tabs?.firstOrNull { it.tab == tab }) { "Unknown tab: $tab" }.route
+        val route = requireNotNull(tabBar?.tabs?.firstOrNull { it.route == tab }) { "Unknown tab: $tab" }.route
         entry(route, "{}", Presentation.Tab, NavigationOptions.Default, null).also { it.shell = shell }
     }
 
@@ -256,7 +271,8 @@ class Navigator(private val routes: RouteTable) {
 
     /** Back to the tab shell with `tab` selected; a new root shell when the stack has none. */
     fun switchTab(tab: String) {
-        val bar = tabBar ?: return
+        val bar = requireNotNull(tabBar) { "No tabs declared" }
+        require(bar.tabs.any { it.route == tab }) { "Unknown tab: $tab" }
         val index = stack.indexOfLast { it.route == bar.route }
         if (index < 0) return reset(bar.route, JSONObject().put("tab", tab).toString())
         dismissSheet()

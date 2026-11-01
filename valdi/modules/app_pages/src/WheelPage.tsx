@@ -5,7 +5,7 @@ import { Button } from './Button';
 import { PageContext, PageViewModel } from './Page';
 import { Page } from './PageComponent';
 import { PageHeader } from './PageHeader';
-import { Router } from './routes';
+import { Router } from './navigation';
 import { ColumnPicker, TimePicker, TreeNode, TreePicker, timePickerValue, treePickerValue } from './WheelPickers';
 
 const LOCATIONS = [

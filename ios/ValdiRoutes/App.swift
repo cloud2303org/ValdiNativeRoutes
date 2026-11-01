@@ -66,7 +66,7 @@ final class StackHostController: UIViewController {
 }
 
 /**
- * The tab shell (TAB_BAR in routes.ts): the system tab bar, Liquid Glass from iOS 26 and the classic blur before, over
+ * The tab shell (routes.tabs): the system tab bar, Liquid Glass from iOS 26 and the classic blur before, over
  * pages that extend under it; their bottom safe area, and so their insets, includes it. Each tab's page loads when its
  * tab is first selected and stays.
  */
@@ -83,8 +83,8 @@ final class TabsController: UITabBarController, UITabBarControllerDelegate {
         super.init(nibName: nil, bundle: nil)
         viewControllers = pages.map { tab, entry in
             let page = PageController(entry: entry, navigator: navigator)
-            page.tabBarItem = UITabBarItem(title: tab.text, image: Self.image(tab.icon),
-                                           selectedImage: Self.image(tab.selectedIcon ?? tab.icon))
+            page.tabBarItem = UITabBarItem(title: tab.text, image: Self.image(tab.icon, data: tab.iconData),
+                                           selectedImage: Self.image(tab.selectedIcon ?? tab.icon, data: tab.selectedIconData ?? tab.iconData))
             return page
         }
         delegate = self
@@ -105,7 +105,7 @@ final class TabsController: UITabBarController, UITabBarControllerDelegate {
     /// The shell's selected tab (PageEntry.selectedTab), which switchTab may have changed while it was covered.
     func showSelectedTab() {
         defer { navigator?.updateVisibility() }
-        guard let index = routeTabs.firstIndex(where: { $0.tab == shell.selectedTab }), index != selectedIndex else { return }
+        guard let index = routeTabs.firstIndex(where: { $0.route == shell.selectedTab }), index != selectedIndex else { return }
         selectedIndex = index
     }
 
@@ -116,14 +116,17 @@ final class TabsController: UITabBarController, UITabBarControllerDelegate {
     }
 
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
-        shell.selectedTab = routeTabs[selectedIndex].tab
+        shell.selectedTab = routeTabs[selectedIndex].route
         navigator?.updateVisibility()
     }
 
     /// A res/ image of the app_pages module, as is: from the over-the-air package when it has one (ValdiOta.swift), as
     /// the Valdi pages load it; otherwise from app_pages.bundle, where Valdi exports it.
-    private static func image(_ name: String) -> UIImage? {
-        (ValdiOta.image(module: "app_pages", name: name) ?? UIImage(named: name, in: ValdiHost.resourceBundle, compatibleWith: nil))?
+    private static func image(_ name: String, data: String?) -> UIImage? {
+        if let data, let bytes = Data(base64Encoded: data), let image = UIImage(data: bytes) {
+            return image.withRenderingMode(.alwaysOriginal)
+        }
+        return (ValdiOta.image(module: "app_pages", name: name) ?? UIImage(named: name, in: ValdiHost.resourceBundle, compatibleWith: nil))?
             .withRenderingMode(.alwaysOriginal)
     }
 }
@@ -164,8 +167,10 @@ enum NativeScreens {
         register(route) { UIHostingController(rootView: make($0)) as UIViewController }
     }
 
+    static func contains(_ name: String) -> Bool { screens[name] != nil }
+
     static func make(_ page: NativePage) -> UIViewController {
-        guard let make = screens[page.entry.route] else { fatalError("No native screen registered for \(page.entry.route)") }
+        guard let make = screens[page.entry.definition.nativeName ?? ""] else { fatalError("No native screen registered for \(page.entry.route)") }
         return make(page)
     }
 

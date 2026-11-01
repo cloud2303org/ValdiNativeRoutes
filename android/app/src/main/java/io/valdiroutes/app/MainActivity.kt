@@ -312,14 +312,14 @@ private val TabBarStyle = HazeStyle(
 )
 
 /**
- * The tab shell (TAB_BAR in routes.ts): the selected tab's page fills the screen and the bar is drawn over its bottom,
+ * The tab shell (routes.tabs): the selected tab's page fills the screen and the bar is drawn over its bottom,
  * blurring what scrolls under it. A tab's page is created when first selected and kept, like a covered page; its
  * bottom inset includes the bar.
  */
 @Composable
 private fun TabsScreen(shell: PageEntry, navigator: Navigator) {
     val bar = requireNotNull(navigator.tabBar) { "No tab bar" }
-    val selected = shell.selectedTab ?: bar.tabs.first().tab
+    val selected = shell.selectedTab ?: bar.tabs.first().route
     val haze = rememberHazeState()
     val insets = pageInsets(includeTop = true).let { it.copy(bottom = it.bottom + TabBarHeight.value) }
     Box(Modifier.fillMaxSize().background(PageBackground)) {
@@ -341,16 +341,17 @@ private fun TabBar(bar: TabBar, selected: String, select: (String) -> Unit, modi
         Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color(0x1F000000)))
         Row(Modifier.fillMaxWidth().height(TabBarHeight)) {
             bar.tabs.forEach { tab ->
-                val active = tab.tab == selected
+                val active = tab.route == selected
                 Column(
                     Modifier.weight(1f).fillMaxHeight().selectable(
                         selected = active, role = Role.Tab, interactionSource = remember { MutableInteractionSource() },
-                        indication = null, onClick = { select(tab.tab) },
+                        indication = null, onClick = { select(tab.route) },
                     ),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    Image(resImage(if (active) tab.selectedIcon ?: tab.icon else tab.icon), null, Modifier.size(24.dp))
+                    Image(resImage(if (active) tab.selectedIcon ?: tab.icon else tab.icon,
+                        if (active) tab.selectedIconData ?: tab.iconData else tab.iconData), null, Modifier.size(24.dp))
                     Text(tab.text, color = if (active) TabSelected else TabUnselected, fontSize = 11.sp,
                         fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium, modifier = Modifier.padding(top = 2.dp))
                 }
@@ -366,7 +367,11 @@ private fun TabBar(bar: TabBar, selected: String, select: (String) -> Unit, modi
  */
 @SuppressLint("DiscouragedApi")
 @Composable
-private fun resImage(name: String): Painter {
+private fun resImage(name: String, data: String?): Painter {
+    if (data != null) return remember(name, data) {
+        val bytes = android.util.Base64.decode(data, android.util.Base64.DEFAULT)
+        BitmapPainter(BitmapFactory.decodeByteArray(bytes, 0, bytes.size).asImageBitmap())
+    }
     val file = remember(name) { ValdiOta.image("app_pages", name) }
     if (file != null) return remember(file) { BitmapPainter(BitmapFactory.decodeFile(file.path).asImageBitmap()) }
     val context = LocalContext.current

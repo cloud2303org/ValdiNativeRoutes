@@ -579,10 +579,11 @@ static id SCValdiBlockCreateOD_v(SCValdiBlockTrampoline trampoline) {
 @dynamic switchTab;
 @dynamic setStatusBarStyle;
 @dynamic currentPages;
+@dynamic updateRoutes;
 
-- (instancetype _Nonnull)initWithPush:(VRNavigationHostPushBlock _Nonnull)push pushForResult:(VRNavigationHostPushForResultBlock _Nonnull)pushForResult replace:(VRNavigationHostReplaceBlock _Nonnull)replace back:(VRNavigationHostBackBlock _Nonnull)back popToRoot:(VRNavigationHostPopToRootBlock _Nonnull)popToRoot reset:(VRNavigationHostResetBlock _Nonnull)reset switchTab:(VRNavigationHostSwitchTabBlock _Nonnull)switchTab setStatusBarStyle:(VRNavigationHostSetStatusBarStyleBlock _Nonnull)setStatusBarStyle currentPages:(VRNavigationHostCurrentPagesBlock _Nonnull)currentPages
+- (instancetype _Nonnull)initWithPush:(VRNavigationHostPushBlock _Nonnull)push pushForResult:(VRNavigationHostPushForResultBlock _Nonnull)pushForResult replace:(VRNavigationHostReplaceBlock _Nonnull)replace back:(VRNavigationHostBackBlock _Nonnull)back popToRoot:(VRNavigationHostPopToRootBlock _Nonnull)popToRoot reset:(VRNavigationHostResetBlock _Nonnull)reset switchTab:(VRNavigationHostSwitchTabBlock _Nonnull)switchTab setStatusBarStyle:(VRNavigationHostSetStatusBarStyleBlock _Nonnull)setStatusBarStyle currentPages:(VRNavigationHostCurrentPagesBlock _Nonnull)currentPages updateRoutes:(VRNavigationHostUpdateRoutesBlock _Nonnull)updateRoutes
 {
-    return [super initWithFieldValues:nil, push, pushForResult, replace, back, popToRoot, reset, switchTab, setStatusBarStyle, currentPages];
+    return [super initWithFieldValues:nil, push, pushForResult, replace, back, popToRoot, reset, switchTab, setStatusBarStyle, currentPages, updateRoutes];
 }
 
 + (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
@@ -602,6 +603,7 @@ static id SCValdiBlockCreateOD_v(SCValdiBlockTrampoline trampoline) {
         {.name = "switchTab", .selName = nil, .type = "f(s)"},
         {.name = "setStatusBarStyle", .selName = nil, .type = "f(s)"},
         {.name = "currentPages", .selName = nil, .type = "f(f(s))"},
+        {.name = "updateRoutes", .selName = nil, .type = "f(s)"},
         {.name = nil},
     };
     return SCValdiMarshallableObjectDescriptorMake(kFields, nil, kBlocks, SCValdiMarshallableObjectTypeClass);

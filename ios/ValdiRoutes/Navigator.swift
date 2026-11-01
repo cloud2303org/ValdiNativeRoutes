@@ -208,21 +208,21 @@ final class StackController: UINavigationController, UINavigationControllerDeleg
 /// sheet above whichever of them is in front, in the same window. JS drives it through NavigationHost (ValdiHost),
 /// native pages call it directly. Every page an operation removes is cancelled, top first.
 final class Navigator {
-    let tabBar: TabBar?
+    var tabBar: TabBar? { routes.tabBar }
+    var rootRoute: String? { stack?.entries.first?.route }
     private(set) var stack: StackController!
     /// The page opened with ios.presentation 'fullScreen'; it can't be swiped away, only closed.
     private var cover: StackController?
     private var coverHost: StackHostController?
     private var sheet: (entry: PageEntry, layer: SheetLayerView)?
 
-    private let routes: RouteTable
+    private var routes: RouteTable
     private weak var host: UIViewController?
     private var nextId = 1
 
     init(routes: RouteTable, host: UIViewController) {
         self.routes = routes
         self.host = host
-        tabBar = routes.tabBar
         // The first page is startApp's (app.ts): JS decides it, once, at startup.
         stack = StackController(root: PageController(entry: entry(routes.root), navigator: self))
         stack.onChange = { [weak self] in self?.reportTopPage() }
@@ -233,6 +233,18 @@ final class Navigator {
         NotificationCenter.default.addObserver(forName: UIScene.willEnterForegroundNotification, object: nil, queue: .main) {
             [weak self] _ in self?.setForeground(true)
         }
+    }
+
+    func reloadRoutes(_ table: RouteTable) {
+        let oldRoot = stack.entries.first
+        let route = oldRoot.map { table.contains($0.route) ? $0.route : table.root } ?? table.root
+        let selected = oldRoot?.selectedTab
+        routes = table
+        let params: String
+        if let selected, table.tabBar?.tabs.contains(where: { $0.route == selected }) == true {
+            params = String(data: try! JSONSerialization.data(withJSONObject: ["tab": selected]), encoding: .utf8)!
+        } else { params = route == table.tabBar?.route ? "{}" : oldRoot?.paramsJson ?? "{}" }
+        reset(route, paramsJson: params)
     }
 
     // MARK: Visibility and status bar
@@ -251,7 +263,7 @@ final class Navigator {
     private var frontPage: PageEntry? {
         guard let top = cover?.entries.last ?? stack.entries.last else { return nil }
         guard top.definition.kind == "tabs" else { return top }
-        return top.tabPages.first { $0.route == tabBar?.tabs.first { $0.tab == top.selectedTab }?.route } ?? top
+        return top.tabPages.first { $0.route == tabBar?.tabs.first { $0.route == top.selectedTab }?.route } ?? top
     }
 
     /**
@@ -320,12 +332,15 @@ final class Navigator {
         if entry.definition.kind == "tabs" {
             let params = (try? JSONSerialization.jsonObject(with: Data(paramsJson.utf8))) as? [String: Any]
             let tabs = tabBar?.tabs ?? []
-            entry.selectedTab = tabs.first { $0.tab == params?["tab"] as? String }?.tab ?? tabs.first?.tab
+            if let requested = params?["tab"] {
+                precondition(tabs.contains { $0.route == requested as? String }, "Unknown tab: \(requested)")
+            }
+            entry.selectedTab = tabs.first { $0.route == params?["tab"] as? String }?.route ?? tabBar?.initial
         }
         return entry
     }
 
-    /// A tab shell's pages, one per tab of TAB_BAR; each loads when its tab is first selected.
+    /// A tab shell's pages, one per tab of routes.tabs; each loads when its tab is first selected.
     func tabPages(of shell: PageEntry) -> [(tab: Tab, entry: PageEntry)] {
         let pages = (tabBar?.tabs ?? []).map { (tab: $0, entry: entry($0.route, presentation: .tab)) }
         shell.tabPages = pages.map(\.entry)
@@ -461,7 +476,8 @@ final class Navigator {
 
     /// Back to the tab shell with `tab` selected; a new root shell when the stack has none.
     func switchTab(_ tab: String) {
-        guard let tabBar else { return }
+        guard let tabBar else { preconditionFailure("No tabs declared") }
+        precondition(tabBar.tabs.contains { $0.route == tab }, "Unknown tab: \(tab)")
         guard let index = stack.entries.lastIndex(where: { $0.route == tabBar.route }) else {
             let params = String(data: try! JSONSerialization.data(withJSONObject: ["tab": tab]), encoding: .utf8)!
             return reset(tabBar.route, paramsJson: params)

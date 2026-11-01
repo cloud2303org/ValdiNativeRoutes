@@ -89,6 +89,13 @@ final class ValdiHost {
         setStatusBarStyle: { [weak self] style in self?.onNavigator { $0.setStatusBarStyle(style) } },
         currentPages: { [weak self] done in
             DispatchQueue.main.async { done(self?.navigator?.currentPages() ?? "[]") }
+        },
+        updateRoutes: { [weak self] json in
+            guard let table = RouteTable.parse(json) else { preconditionFailure("Invalid route declaration") }
+            DispatchQueue.main.async {
+                self?.navigator?.reloadRoutes(table)
+                self?.started = table.withRoot(self?.navigator?.rootRoute ?? table.root)
+            }
         }
     )
 
@@ -245,34 +252,18 @@ final class ValdiHost {
     func createPage(_ entry: PageEntry, insets: UIEdgeInsets, navigator: Navigator) -> SCValdiRootView {
         let viewModel = viewModel(entry, insets)
         let context = pageContext(entry, navigator)
-        // One generated root view class per @Component, named by its @ExportModel ios name.
-        let rootView: SCValdiRootView = switch entry.definition.component {
-        case "LoginPage@app_pages/src/LoginPage":
-            VRLoginPage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "InputCheckPage@app_pages/src/InputCheckPage":
-            VRInputCheckPage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "HomePage@app_pages/src/HomePage":
-            VRHomePage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "DetailPage@app_pages/src/DetailPage":
-            VRDetailPage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "FormPage@app_pages/src/FormPage":
-            VRFormPage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "BlePage@app_pages/src/BlePage":
-            VRBlePage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "PresentationPage@app_pages/src/PresentationPage":
-            VRPresentationPage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "VisionPage@app_pages/src/VisionPage":
-            VRVisionPage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "RouteAnimationPage@app_pages/src/RouteAnimationPage":
-            VRRouteAnimationPage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "DevicePage@app_pages/src/DevicePage":
-            VRDevicePage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "WheelPage@app_pages/src/WheelPage":
-            VRWheelPage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "CalculatorComponent@calculator/src/CalculatorComponent":
-            CalculatorRootView(viewModelUntyped: viewModel, componentContextUntyped: context, runtime: runtime)
-        default:
-            fatalError("\(entry.route) has no iOS root view class")
+        guard let component = entry.definition.component else {
+            preconditionFailure("Missing Valdi component for \(entry.route)")
+        }
+        let rootView: SCValdiRootView
+        do {
+            guard let view = try runtime.loadView(withComponentPath: component, owner: nil,
+                                                   viewModel: viewModel, componentContext: context) as? SCValdiRootView else {
+                preconditionFailure("No Valdi root view for \(component)")
+            }
+            rootView = view
+        } catch {
+            preconditionFailure("Cannot create \(component): \(error)")
         }
         // Valdi's own accessibility tree (labels, buttons) for VoiceOver and UI automation; off unless asked for. The
         // Android runtime exposes its views' accessibility by default.
@@ -316,20 +307,23 @@ struct RouteDefinition {
     let kind: String
     let title: String
     let component: String?
+    let nativeName: String?
 }
 
-/// One tab of TAB_BAR; icons are res/ image names in app_pages.bundle.
+/// One tab of routes.tabs; icons are res/ image names in app_pages.bundle.
 struct Tab {
-    let tab: String
     let route: String
     let text: String
     let icon: String
     let selectedIcon: String?
+    let iconData: String?
+    let selectedIconData: String?
 }
 
 struct TabBar {
     let route: String
     let tabs: [Tab]
+    let initial: String
 }
 
 /// What startApp (app.ts) returns: the routes, the tab bar and the first page.
@@ -337,6 +331,12 @@ struct RouteTable {
     private let routes: [String: RouteDefinition]
     let tabBar: TabBar?
     let root: String
+
+    func contains(_ route: String) -> Bool { routes[route] != nil }
+    func withRoot(_ route: String) -> RouteTable {
+        precondition(contains(route), "Unknown root route: \(route)")
+        return RouteTable(routes: routes, tabBar: tabBar, root: route)
+    }
 
     subscript(route: String) -> RouteDefinition {
         guard let definition = routes[route] else { fatalError("Unknown route: \(route)") }
@@ -351,16 +351,33 @@ struct RouteTable {
         // Routes may also carry `options`; routes.ts has already resolved them into each push.
         let routes = start["routes"] as? [String: [String: Any]] ?? [:]
         let bar = start["tabBar"] as? [String: Any]
+        for (name, route) in routes {
+            guard ["valdi", "native", "tabs"].contains(route["kind"] as? String ?? "") else { return nil }
+            if route["kind"] as? String == "native" {
+                guard let nativeName = route["nativeName"] as? String, NativeScreens.contains(nativeName) else {
+                    preconditionFailure("Native page for route \(name) is not registered: \(route["nativeName"] ?? "")")
+                }
+            }
+        }
+        if let bar {
+            guard let items = bar["tabs"] as? [[String: Any]], !items.isEmpty,
+                  let shell = bar["route"] as? String, routes[shell]?["kind"] as? String == "tabs",
+                  let initial = bar["initial"] as? String else { return nil }
+            let names = items.compactMap { $0["route"] as? String }
+            guard names.count == items.count, Set(names).count == names.count, names.contains(initial),
+                  names.allSatisfy({ routes[$0] != nil && routes[$0]?["kind"] as? String != "tabs" }) else { return nil }
+        }
         return RouteTable(
             routes: routes.mapValues { route in
                 RouteDefinition(kind: route["kind"] as? String ?? "", title: route["title"] as? String ?? "",
-                                component: route["component"] as? String)
+                                component: route["component"] as? String, nativeName: route["nativeName"] as? String)
             },
             tabBar: bar.map { bar in
                 TabBar(route: bar["route"] as? String ?? "", tabs: (bar["tabs"] as? [[String: Any]] ?? []).map {
-                    Tab(tab: $0["tab"] as? String ?? "", route: $0["route"] as? String ?? "", text: $0["text"] as? String ?? "",
-                        icon: $0["icon"] as? String ?? "", selectedIcon: $0["selectedIcon"] as? String)
-                })
+                    Tab(route: $0["route"] as? String ?? "", text: $0["text"] as? String ?? "",
+                        icon: $0["icon"] as? String ?? "", selectedIcon: $0["selectedIcon"] as? String,
+                        iconData: $0["iconData"] as? String, selectedIconData: $0["selectedIconData"] as? String)
+                }, initial: bar["initial"] as? String ?? "")
             },
             root: root
         )

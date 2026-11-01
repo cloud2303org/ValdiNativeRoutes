@@ -232,7 +232,7 @@ val valdiCodegenCheck = tasks.register<ValdiCodegenCheck>("valdiCodegenCheck") {
     val tool = repo.resolve("tools/valdi-rolldown")
     sources.from(
         fileTree(repo.resolve("valdi/modules")) { include("*/src/**", "*/tsconfig.json", "*/module.json") },
-        fileTree(tool) { include("codegen.ts", "codegen/**", "vendor/**", "valdiTs.ts", "pipeline.ts", "modules.mjs", "module-selection.ts", "package.json", "pnpm-lock.yaml") },
+        fileTree(tool) { include("codegen.ts", "codegen/**", "vendor/**", "valdiTs.ts", "routes-transform.ts", "pipeline.ts", "modules.mjs", "module-selection.ts", "package.json", "pnpm-lock.yaml") },
         repo.resolve("package.json"),
         fileTree("generated/valdi"),
         fileTree(repo.resolve("valdi/native")),

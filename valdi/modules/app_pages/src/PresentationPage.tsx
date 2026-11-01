@@ -6,7 +6,7 @@ import { Button } from './Button';
 import { PageContext, PageViewModel } from './Page';
 import { Page } from './PageComponent';
 import { PageHeader } from './PageHeader';
-import { Router } from './routes';
+import { Router } from './navigation';
 
 const PHOTOS = [
   'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200',

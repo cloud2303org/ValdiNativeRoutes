@@ -569,6 +569,7 @@ typedef void(^VRNavigationHostSwitchTabBlock)(NSString * _Nonnull tab);
 typedef void(^VRNavigationHostSetStatusBarStyleBlock)(NSString * _Nonnull style);
 typedef void(^VRNavigationHostCurrentPagesDoneBlock)(NSString * _Nonnull pagesJson);
 typedef void(^VRNavigationHostCurrentPagesBlock)(VRNavigationHostCurrentPagesDoneBlock _Nonnull done);
+typedef void(^VRNavigationHostUpdateRoutesBlock)(NSString * _Nonnull routesJson);
 
 /**
 * The host's Navigator as `router` (routes.ts) drives it. The host owns the one stack of Valdi and native pages; calls
@@ -610,7 +611,12 @@ typedef void(^VRNavigationHostCurrentPagesBlock)(VRNavigationHostCurrentPagesDon
 */
 @property (copy, nonatomic) VRNavigationHostCurrentPagesBlock _Nonnull currentPages;
 
-- (instancetype _Nonnull)initWithPush:(VRNavigationHostPushBlock _Nonnull)push pushForResult:(VRNavigationHostPushForResultBlock _Nonnull)pushForResult replace:(VRNavigationHostReplaceBlock _Nonnull)replace back:(VRNavigationHostBackBlock _Nonnull)back popToRoot:(VRNavigationHostPopToRootBlock _Nonnull)popToRoot reset:(VRNavigationHostResetBlock _Nonnull)reset switchTab:(VRNavigationHostSwitchTabBlock _Nonnull)switchTab setStatusBarStyle:(VRNavigationHostSetStatusBarStyleBlock _Nonnull)setStatusBarStyle currentPages:(VRNavigationHostCurrentPagesBlock _Nonnull)currentPages;
+/**
+* Replaces the declaration after a development reload; never changes the installed native implementations.
+*/
+@property (copy, nonatomic) VRNavigationHostUpdateRoutesBlock _Nonnull updateRoutes;
+
+- (instancetype _Nonnull)initWithPush:(VRNavigationHostPushBlock _Nonnull)push pushForResult:(VRNavigationHostPushForResultBlock _Nonnull)pushForResult replace:(VRNavigationHostReplaceBlock _Nonnull)replace back:(VRNavigationHostBackBlock _Nonnull)back popToRoot:(VRNavigationHostPopToRootBlock _Nonnull)popToRoot reset:(VRNavigationHostResetBlock _Nonnull)reset switchTab:(VRNavigationHostSwitchTabBlock _Nonnull)switchTab setStatusBarStyle:(VRNavigationHostSetStatusBarStyleBlock _Nonnull)setStatusBarStyle currentPages:(VRNavigationHostCurrentPagesBlock _Nonnull)currentPages updateRoutes:(VRNavigationHostUpdateRoutesBlock _Nonnull)updateRoutes;
 
 @end
 
@@ -853,7 +859,7 @@ typedef void(^VRPageContextBackBlock)();
 @property (copy, nonatomic) NSString * _Nonnull paramsJson;
 
 /**
-* 'push', 'sheet' or 'compactSheet'; 'tab' for a page shown in the tab shell (TAB_BAR), which has nothing to close.
+* 'push', 'sheet' or 'compactSheet'; 'tab' for a page shown in the tab shell (routes.tabs), which has nothing to close.
 */
 @property (copy, nonatomic) NSString * _Nonnull presentation;
 

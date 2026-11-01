@@ -13,6 +13,7 @@ import type { Plugin } from 'rolldown';
 import ts from 'typescript';
 import { createConsoleLogTransformer } from './vendor/companion/ConsoleLogTransformer';
 import { JSXProcessor } from './vendor/companion/JSXProcessor';
+import { routeTransformer } from './routes-transform';
 
 export interface ValdiModule {
   /** The Valdi module name, the first segment of its import paths (`app_pages`). */
@@ -56,7 +57,7 @@ export interface ValdiTsPlugin extends Plugin {
   program(): ts.Program;
 }
 
-export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext): ValdiTsPlugin {
+export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, inlineRouteIcons = false): ValdiTsPlugin {
   /** A file's place in the module's tree → where it is on disk. */
   const located = new Map<string, string>();
   const locate = (file: string): string | undefined => {
@@ -161,6 +162,7 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext):
     // Workspace.doEmitFile.
     getCustomTransformers: () => ({
       before: [
+        routeTransformer(service.getProgram()!.getTypeChecker(), module, inlineRouteIcons),
         ...(emitting.endsWith('.tsx') ? new JSXProcessor().makeTransformers(service.getProgram()!.getTypeChecker()) : []),
         createConsoleLogTransformer(),
       ],

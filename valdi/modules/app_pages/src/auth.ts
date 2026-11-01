@@ -1,5 +1,5 @@
 import * as v from 'valibot';
-import { router } from './routes';
+import { router } from './navigation';
 
 /**
  * Where the host keeps the token: the iOS Keychain; on Android encrypted with a Keystore key. Synchronous, called on
@@ -58,7 +58,7 @@ export const auth = {
     v.parse(tokenSchema, token);
     tokenStore().write(token);
     cached = token;
-    router.reset('main', {});
+    router.resetToTabs();
   },
 
   /** Forgets the token and starts over at the login page. */

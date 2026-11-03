@@ -47,6 +47,16 @@ Xcode / SDK / CMake / Ninja 的实际版本写入日志和缓存键。Actions �
 CI 不额外指定 Bazel / Gradle / Xcode / Ninja 的构建并发或 Bazel 调度内存，使用各工具默认值。
 Bazel 磁盘 action cache 空闲清理目标保留为 3 GB；这与构建并发、调度内存无关。
 
+Linux GitHub-hosted 临时 runner 在恢复缓存之前运行 `scripts/ci-linux-disk.sh prepare`，
+移除本项目不用的预装 .NET、GHC、CodeQL，以及 Android SDK 中非选定的 NDK；
+保留 Gradle/Vision 使用的 `27.1.12297006`，Bazel 仍下载自身固定的 NDK。
+清理不会触碰工作区、依赖缓存、当前选定的 Android 工具、Java 或 Node；
+脚本不会在本地机器或 self-hosted runner 上删除工具。
+`.ci/disk-prepare.log`、`.ci/disk-before-export.log`、`.ci/disk-final.log`
+分别记录清理前后、缓存恢复后和任务结束时的可用空间与目录大小。
+这用于处理恢复缓存后冷导出解压 NDK 出现的 `No space left on device`；
+3 GB 是 Bazel 空闲 GC 的目标，不是缓存恢复或运行中磁盘占用的硬上限。
+
 三条任务先跑测试和 golden，尽早发现 Node 绑定生成与上游语义的差异。
 此阶段的滚轮 Renderer 测试读取已固定的 Valdi 源码，不要求本地已有 AAR 或 XCFramework。
 原生任务恢复或导出运行时，不再单独编译应用 host 工具或 SQL 校验器。

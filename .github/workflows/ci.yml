@@ -51,6 +51,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      - name: Prepare Linux runner storage
+        if: runner.os == 'Linux'
+        env:
+          CI_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: |
+          mkdir -p .ci
+          bash scripts/ci-linux-disk.sh prepare 2>&1 | tee .ci/disk-prepare.log
       - name: Select framework fork commit
         if: inputs.valdi_commit != ''
         env:
@@ -99,6 +106,9 @@ jobs:
         if: matrix.target != 'npm'
         id: runtime
         run: node scripts/ci.mjs runtime-valid "${{ matrix.target }}"
+      - name: Report Linux storage after cache restoration
+        if: runner.os == 'Linux'
+        run: bash scripts/ci-linux-disk.sh report 2>&1 | tee .ci/disk-before-export.log
       - name: Export runtime on cache miss or fingerprint mismatch
         if: matrix.target != 'npm' && steps.runtime.outputs.valid != 'true'
         run: sh "scripts/export-${{ matrix.target }}.sh" debug 2>&1 | tee .ci/export.log
@@ -167,6 +177,9 @@ jobs:
           mkdir -p .ci
           git diff -- valdi/MODULE.bazel valdi/MODULE.bazel.lock valdi/.bazelrc > .ci/upstream-pin.diff
           if [[ -f .ci/upstream/vendor.md ]]; then cat .ci/upstream/vendor.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Report final Linux storage
+        if: always() && runner.os == 'Linux'
+        run: bash scripts/ci-linux-disk.sh report 2>&1 | tee .ci/disk-final.log
       - name: Upload build evidence
         if: always()
         id: artifacts

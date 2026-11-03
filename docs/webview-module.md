@@ -242,3 +242,63 @@ Build logs for this run are `/tmp/valdi-webview-android-build.log` and
 `/tmp/valdi-webview-ios-build.log`. After the builds, the process scan found
 no active native/Java compiler and only an idle module-build Bazel server.
 The exclusive native build slot was released immediately.
+
+### Full application and iOS simulator verification
+
+The local application was subsequently prepared against the pinned fork and
+built for the arm64 iOS simulator:
+
+```sh
+node scripts/cli.mjs prebuild --platform ios
+node scripts/project.mjs ios ARCHS=arm64 ONLY_ACTIVE_ARCH=YES
+```
+
+The runtime export, all enabled native module libraries, and the final Xcode
+application link succeeded. Bazel refreshed both tracked lockfiles' registry
+URLs from the previous fork pin to `51cec8ae`; normalizing only that URL prefix
+reproduces the original lockfiles exactly, including all recorded values.
+The runtime compatibility check passes with these refreshed inputs.
+
+The first two preparation attempts failed downloading the fixed GitHub
+archive (`Premature EOF`), before compilation. The successful attempt used a
+temporary loopback downloader mapping to the same archive fetched from
+GitHub's codeload endpoint. All 7,278 tracked blobs match the exact pinned Git
+commit; no fork source or repository URL configuration was changed.
+The failed logs remain in `/tmp/valdi-webview-ios-prebuild*.log`.
+
+Argent installed the built `io.valdiroutes.app` on the booted iPhone 17
+simulator running iOS 26.5. The first walkthrough and one uninterrupted replay
+of `.argent/e2e/webview-ios-offline-20261104.yaml` verified:
+
+- Offline HTML rendered in an actual `WKWebView`.
+- `evaluateJavaScript('document.title')` returned `"Valdi WebView"`.
+- Evaluating the DOM button's click executed `window.Valdi.postMessage`;
+  the native listener received `来自网页的消息`.
+- `getState()` returned no back/forward history and `loading=false`.
+- Returning to login and reopening reset page state; title evaluation worked
+  again with the new controller.
+
+Replay executed all 26 steps: 21 actions/checks passed, five echo steps,
+zero failures/errors/skips, in 9.8 seconds. The discovery's first ID-only login
+wait failed because the AX projection omits the button container's identifier;
+the successful stable-text wait replaced it after recording. The original
+discovery recording is preserved with the local evidence.
+
+One replay coordinate exception remains: the back button uses `(0.07, 0.096)`,
+derived from its live AX frame, followed by a positive login-screen check.
+`native-find-views(label: "返回")` found no matches, the full UIKit hierarchy
+has no back identifier/label, and a scratch runner assertion for that text
+failed. The shared NavigationBar lacks a stable UIKit identifier for this
+target. This is a bounded simulator flow with that documented portability
+limit, not a claim of selector-only automation.
+
+Local evidence, screenshots and executable/bundle hashes are in
+`.ci/webview-20261104/proof.json`. Build logs are
+`/tmp/valdi-webview-ios-prebuild-attempt3.log` and
+`/tmp/valdi-webview-ios-app-build.log`. The full local suite passed 183 compiler
+and behavior tests, 39 script tests, five upstream rewrite tests, and ten
+golden groups; application typechecking and canonical binding checks passed.
+
+This establishes the listed iOS simulator paths in the complete application.
+It does not establish Android browser execution, physical-device behavior,
+remote HTTP navigation/history/error handling, or leak-free teardown.

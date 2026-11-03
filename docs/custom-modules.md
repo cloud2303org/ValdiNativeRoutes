@@ -102,7 +102,7 @@ Swift 库与 ObjC 库一起汇入 `libvaldi_modules_ios.a`，宿主保留动态�
 ```json
 {
   "valdi": {
-    "modules": ["app_pages", "bluetooth", "calculator"]
+    "modules": ["app_pages", "bluetooth", "calculator", "valdi_webview"]
   }
 }
 ```
@@ -116,6 +116,7 @@ App 的名单只引用这些 ID。未列出的模块可以留在仓库，但不�
 启用模块中的 TS、声明文件或 BUILD 依赖若仍引用未启用模块，构建会明确报错，
 不会隐式启用依赖。目前 `app_pages` 的蓝牙演示与启动代码依赖 `bluetooth`；
 要制作无蓝牙 App，需要移除这些业务引用，再从名单移除 `bluetooth`。
+WebView 演示同样依赖 `valdi_webview`；停用时需一起移除页面和路由引用。
 这份 App 的入口是 `app_pages`，它也需要保留在名单中。
 
 构建会清理仍在仓库但已停用模块的旧暂存产物，重新生成注册代码与 iOS 聚合静态库，
@@ -126,6 +127,11 @@ App 的名单只引用这些 ID。未列出的模块可以留在仓库，但不�
 贡献，停用后不再合入 App。Android 主 Manifest 与 iOS 基础 Info.plist 保留 App 自己的配置；
 共享定位权限仍属于宿主 Wi-Fi 等能力，不能随蓝牙一起删除。iOS entitlements、签名、
 第三方 framework 和 SwiftPM 配置仍由宿主管理。
+
+Wi-Fi、NFC、权限、MMKV 存储和 AppUI 目前仍属于 `app_pages` 与应用宿主，
+尚未成为可单独开关的模块。仅从名单移除 Bluetooth 不会移除这些能力。
+后续拆分必须同时迁移接口、原生实现、初始化与平台依赖；尤其 MMKV 的
+iOS SwiftPM 依赖当前在 `ios/project.yml`，还不随模块名单切换。
 
 `valdi/modules/bluetooth` 实际通过上面的 `polyglot_bridge_module` 命令创建，
 再用已有 BLE 业务替换模板里的 Calculator 示例。它使用相同的 Node 编译、绑定生成、
@@ -171,6 +177,14 @@ Bluetooth 使用同一份 runtime 的 Promise/marshaller API 显式编码这些�
 模块使用我们自己的 `node_valdi_module()`，入口是独立的 `module-build/` Bazel workspace。
 App 继续由 Gradle / Xcode 打包；原来的 `valdi/` workspace 仍负责运行时导出。
 calculator 不依赖原来的 App Bazel target、`valdi_module()`、`valdi_compiled()` 或 Swift Valdi 编译器。
+
+## 官方 WebView 模块
+
+`valdi_webview` 保留官方 Android WebView / iOS WKWebView 实现及 TypeScript 接口，
+通过相同 Node 编译、生成绑定和原生模块注册流程接入。`androidClassPath` 保留官方
+生成代码的 Java 包名，`ios_frameworks` 声明原生模块编译所需的 WebKit；
+应用的 `ios/project.yml` 同时负责最终 WebKit 链接。
+接入、演示入口和验证边界见 [WebView 模块](webview-module.md)。
 
 ## 构建入口
 

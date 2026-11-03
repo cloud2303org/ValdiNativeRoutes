@@ -1,0 +1,59 @@
+# The back point comes from the live accessibility frame. The UIKit runner has
+# no back id or label; see the selector limitation in docs/webview-module.md.
+steps:
+  - launch: io.valdiroutes.app
+  - await:
+      visible: { text: "WebView 自检（无需登录）" }
+      timeout: 5000
+  - await: { idle: true }
+  - echo: Open the offline WebView check from login.
+  - tap: { text: "WebView 自检（无需登录）" }
+  - await:
+      visible: { text: "离线页面已加载" }
+      timeout: 15000
+  - await: { idle: true }
+  - echo: Evaluate document.title in the actual WKWebView.
+  - tap: { text: "读取网页标题" }
+  - await:
+      text:
+        in: { id: webview-result }
+        contains: Valdi WebView
+      timeout: 5000
+  - echo: Invoke the DOM button and receive window.Valdi.postMessage.
+  - tap: { text: "让网页发送消息" }
+  - await:
+      text:
+        in: { id: webview-message-result }
+        equals: "来自网页的消息"
+      timeout: 5000
+  - echo: Read navigation state after the offline load.
+  - tap: { text: "读取导航状态" }
+  - await:
+      text:
+        in: { id: webview-state-result }
+        equals: "后退 false · 前进 false · 加载中 false"
+      timeout: 5000
+  - echo: Use the AX-derived back point; verify login before reopening.
+  - tap: { x: 0.07, y: 0.096 }
+  - await:
+      visible: { text: "WebView 自检（无需登录）" }
+      timeout: 5000
+  - await: { idle: true }
+  - tap: { text: "WebView 自检（无需登录）" }
+  - await:
+      text:
+        in: { id: webview-phase }
+        equals: "离线页面已加载"
+      timeout: 15000
+  - await: { idle: true }
+  - await:
+      text:
+        in: { id: webview-message-result }
+        equals: "尚未收到网页消息"
+      timeout: 5000
+  - tap: { text: "读取网页标题" }
+  - await:
+      text:
+        in: { id: webview-result }
+        contains: Valdi WebView
+      timeout: 5000

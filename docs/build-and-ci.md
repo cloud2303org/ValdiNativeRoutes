@@ -12,7 +12,7 @@
 （不驱动物理 iPhone）。`pnpm android`/`pnpm ios` 只支持 Debug，Release OTA（导出 release、签名、记录）仍按
 下文的手动流程执行。
 
-`nativeBuild: "bazel"` 的自定义模块（目前为 calculator、bluetooth）由独立 `module-build/` workspace 构建。
+`nativeBuild: "bazel"` 的模块（目前为 calculator、bluetooth、valdi_webview）由独立 `module-build/` workspace 构建。
 它调用同一套 Node TS / 绑定 / 资源管线，再编译模块原生库并接入 Gradle / Xcode；不通过主 App 的旧模块规则。
 见 [自定义模块实验](custom-modules.md)。模块 native targets 依赖现有导出的 runtime，CI 原生任务会自动准备模块库。
 启用哪些 App 模块由根 `package.json` 的 `valdi.modules` 明确指定，TS、原生注册和宿主打包读取同一份名单；

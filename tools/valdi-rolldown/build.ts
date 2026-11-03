@@ -14,7 +14,7 @@
 // Type errors fail the build, after it is written. --compare also emits each file as the Valdi
 // compiler would (CommonJS straight from TypeScript) and diffs the render code against its web output.
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 import { pack, type ArchiveEntries } from './archive';
@@ -27,10 +27,13 @@ import {
   inlineSourceMaps,
   precompile,
   sourceMapJson,
+  writeTsconfig,
   type Built,
 } from './pipeline';
 import { addFontEntries, assetCatalog, findFonts, findImages, writeAndroidResources, writeIosResources, writeResTs } from './resources';
 import { sourceFiles, valdiTs } from './valdiTs';
+import { buildNodeModules, copyModuleTree } from '../../scripts/node-modules.mjs';
+import { availableModuleNames, pruneDisabledModuleOutputs } from './modules.mjs';
 
 const option = (name: string) => {
   const index = process.argv.indexOf(name);
@@ -42,6 +45,12 @@ const androidRes = option('--res');
 const iosRes = option('--ios-res');
 const release = process.argv.includes('--release');
 const minify = release || process.argv.includes('--minify');
+// Validate references before starting native module actions.
+const modules = appModules();
+if (!modules.length) throw new Error('No enabled App modules. Set package.json valdi.modules before building.');
+const available = availableModuleNames(path.resolve(import.meta.dirname, '../..'));
+pruneDisabledModuleOutputs(out, available, modules.map(module => module.name));
+if (iosRes) pruneDisabledModuleOutputs(iosRes, available, modules.map(module => module.name));
 
 if (archivesOnly) {
   mkdirSync(out, { recursive: true });
@@ -51,7 +60,29 @@ if (archivesOnly) {
 }
 
 if (androidRes) rmSync(androidRes, { recursive: true, force: true });
-for (const module of appModules()) {
+const bazelOutputs = buildNodeModules(androidRes ? 'android' : 'ios', release);
+for (const [name, compiled] of bazelOutputs) {
+  rmSync(genDir(name), { recursive: true, force: true });
+  copyModuleTree(path.join(compiled, 'resources/ts'), genDir(name));
+}
+// Gradle and Xcode call this file directly, without the install hook that writes the
+// modules' tsconfig.json. Rewrite them at the sources this host really has, so the
+// bundle reads the module tsconfig instead of failing every bare import (a no-op when
+// this host has no fetched Valdi sources).
+for (const module of modules) writeTsconfig(module, modules);
+for (const module of modules) {
+  const compiled = bazelOutputs.get(module.name);
+  if (compiled) {
+    cpSync(path.join(compiled, `${module.name}.valdimodule`), path.join(out, `${module.name}.valdimodule`));
+    if (release) cpSync(path.join(compiled, `${module.name}.map.json`), path.join(out, `${module.name}.map.json`));
+    if (androidRes) copyModuleTree(path.join(compiled, 'resources/android'), androidRes);
+    if (iosRes) {
+      rmSync(path.join(iosRes, `${module.name}.bundle`), { recursive: true, force: true });
+      copyModuleTree(path.join(compiled, 'resources/ios'), iosRes);
+    }
+    console.log(`${module.name}: custom module rule (${release ? 'release' : 'debug'})`);
+    continue;
+  }
   const started = performance.now();
   // Generated sources first: the program the plugin starts with includes them.
   const images = await findImages(module);

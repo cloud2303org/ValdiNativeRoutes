@@ -13,39 +13,27 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.layout.windowInsetsBottomHeight
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCompositionContext
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -56,25 +44,21 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.rememberHazeState
 import io.valdiroutes.app.appui.AppModalHost
 import io.valdiroutes.app.appui.AppPresentationHost
 import io.valdiroutes.app.appui.AppUI
@@ -299,64 +283,101 @@ private fun insetsOf(density: Density, top: Int, bottom: Int, horizontal: Window
     right = horizontal.getRight(density, layoutDirection) / density.density,
 )
 
-private val TabBarHeight = 56.dp
-private val TabSelected = Color(0xFF2563EB)
-private val TabUnselected = Color(0xFF6B7280)
-
-/** Frosted: the page blurred under a light tint; below Android 12 (no RenderEffect) only the tint. */
-private val TabBarStyle = HazeStyle(
-    backgroundColor = PageBackground,
-    tint = HazeTint(Color.White.copy(alpha = 0.6f)),
-    blurRadius = 24.dp,
-    fallbackTint = HazeTint(Color.White.copy(alpha = 0.92f)),
-)
-
 /**
- * The tab shell (TAB_BAR in routes.ts): the selected tab's page fills the screen and the bar is drawn over its bottom,
- * blurring what scrolls under it. A tab's page is created when first selected and kept, like a covered page; its
- * bottom inset includes the bar.
+ * Default bars use the glass bar's measured footprint (including its system bottom inset). A business Valdi bar is a
+ * full-viewport overlay; its page receives only system insets, and the component owns its visible height.
  */
 @Composable
 private fun TabsScreen(shell: PageEntry, navigator: Navigator) {
     val bar = requireNotNull(navigator.tabBar) { "No tab bar" }
-    val selected = shell.selectedTab ?: bar.tabs.first().tab
-    val haze = rememberHazeState()
-    val insets = pageInsets(includeTop = true).let { it.copy(bottom = it.bottom + TabBarHeight.value) }
-    Box(Modifier.fillMaxSize().background(PageBackground)) {
-        Box(Modifier.fillMaxSize().hazeSource(haze)) {
-            key(selected) {
-                val page = navigator.tabPage(shell, selected)
-                if (page.definition.kind == "valdi") ValdiPage(page, insets, navigator, Modifier.fillMaxSize())
-                else NativeScreens.Content(NativePage(page, navigator, insets))
+    val selected = shell.selectedTab ?: bar.tabs.first().route
+    val systemInsets = pageInsets(includeTop = true)
+    if (bar.mode == "custom") {
+        CustomTabsScreen(shell, bar, selected, systemInsets, navigator)
+    } else {
+        val hazeState = remember(shell.id) { HazeState() }
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = PageBackground,
+            // Pages already receive all system insets through PageViewModel/NativePage.
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            bottomBar = { OfficialTabBar(bar, selected, hazeState) { navigator.selectTab(shell, it) } },
+        ) { padding ->
+            // Scaffold measures the entire bar, including safe padding, before composing the body.
+            // Do not apply this padding to the source bounds: native pixels must extend behind the glass.
+            val insets = systemInsets.copy(bottom = maxOf(systemInsets.bottom, padding.calculateBottomPadding().value))
+            Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+                TabPage(shell, selected, insets, navigator)
             }
         }
-        TabBar(bar, selected, { shell.selectedTab = it }, Modifier.align(Alignment.BottomCenter).hazeEffect(haze, TabBarStyle))
     }
 }
 
-/** Items spread evenly, each an icon over its text; the selected one shows its selected icon. */
 @Composable
-private fun TabBar(bar: TabBar, selected: String, select: (String) -> Unit, modifier: Modifier) {
-    Column(modifier.fillMaxWidth()) {
-        Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color(0x1F000000)))
-        Row(Modifier.fillMaxWidth().height(TabBarHeight)) {
-            bar.tabs.forEach { tab ->
-                val active = tab.tab == selected
-                Column(
-                    Modifier.weight(1f).fillMaxHeight().selectable(
-                        selected = active, role = Role.Tab, interactionSource = remember { MutableInteractionSource() },
-                        indication = null, onClick = { select(tab.tab) },
-                    ),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Image(resImage(if (active) tab.selectedIcon ?: tab.icon else tab.icon), null, Modifier.size(24.dp))
-                    Text(tab.text, color = if (active) TabSelected else TabUnselected, fontSize = 11.sp,
-                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium, modifier = Modifier.padding(top = 2.dp))
-                }
-            }
+private fun TabPage(shell: PageEntry, selected: String, insets: Insets, navigator: Navigator) {
+    Box(Modifier.fillMaxSize().background(PageBackground)) {
+        key(selected) {
+            val page = navigator.tabPage(shell, selected)
+            if (page.definition.kind == "valdi") ValdiPage(page, insets, navigator, Modifier.fillMaxSize())
+            else NativeScreens.Content(NativePage(page, navigator, insets))
         }
-        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+    }
+}
+
+/** The default native bar; the declaration and selected route remain owned by the shell. */
+@Composable
+private fun OfficialTabBar(bar: TabBar, selected: String, hazeState: HazeState, select: (String) -> Unit) {
+    HazeTabBar(bar, selected, hazeState, select) { name, data -> resImage(name, data) }
+}
+
+/**
+ * Both layers must be native siblings. Separate Compose AndroidViews choose the top pointer target before native
+ * dispatch, so returning false from an empty overlay alone cannot offer that touch to the underlying page.
+ *
+ * Business contract: full-viewport layout ancestors have no gesture recognizers/touch targets; only the visible bar
+ * children do. The business root's hitTest gates its own visible region, using its onLayout viewport height and its
+ * chosen visual height + safeAreaBottom (false until layout). Android never measures that visual height.
+ * The custom root uses Valdi's Android backend and legacy dispatcher, which rejects an empty DOWN.
+ * FrameLayout then dispatches to the page ComposeView and preserves that owner for the entire gesture.
+ */
+@Composable
+private fun CustomTabsScreen(shell: PageEntry, bar: TabBar, selected: String, insets: Insets, navigator: Navigator) {
+    val composition = rememberCompositionContext()
+    val density = LocalDensity.current
+    val safeAreaBottom = WindowInsets.systemBars.union(WindowInsets.displayCutout).getBottom(density) /
+        density.density.toDouble()
+    val pageContent by rememberUpdatedState<@Composable () -> Unit>({ TabPage(shell, selected, insets, navigator) })
+    key(shell.id) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { context ->
+                FrameLayout(context).apply {
+                    addView(
+                        ComposeView(context).apply {
+                            setParentCompositionContext(composition)
+                            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
+                            setContent { pageContent() }
+                        },
+                        FrameLayout.LayoutParams(-1, -1),
+                    )
+                    val owner = shell.customTabBar ?: ValdiHost.createTabBar(
+                        context, shell, bar, selected, safeAreaBottom, navigator,
+                    ).also { shell.customTabBar = it }
+                    (owner.rootView.parent as? ViewGroup)?.removeView(owner.rootView)
+                    addView(owner.rootView, FrameLayout.LayoutParams(-1, -1))
+                }
+            },
+            update = {
+                shell.customTabBar?.let { owner ->
+                    ValdiHost.updateTabBar(owner, bar, selected, safeAreaBottom)
+                }
+            },
+            onRelease = { container ->
+                (container.getChildAt(0) as ComposeView).disposeComposition()
+                container.removeAllViews()
+                if (shell.removed) shell.destroy()
+            },
+        )
     }
 }
 
@@ -366,7 +387,11 @@ private fun TabBar(bar: TabBar, selected: String, select: (String) -> Unit, modi
  */
 @SuppressLint("DiscouragedApi")
 @Composable
-private fun resImage(name: String): Painter {
+private fun resImage(name: String, data: String?): Painter {
+    if (data != null) return remember(name, data) {
+        val bytes = android.util.Base64.decode(data, android.util.Base64.DEFAULT)
+        BitmapPainter(BitmapFactory.decodeByteArray(bytes, 0, bytes.size).asImageBitmap())
+    }
     val file = remember(name) { ValdiOta.image("app_pages", name) }
     if (file != null) return remember(file) { BitmapPainter(BitmapFactory.decodeFile(file.path).asImageBitmap()) }
     val context = LocalContext.current

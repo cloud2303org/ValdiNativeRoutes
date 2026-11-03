@@ -27,8 +27,8 @@ final class ValdiHost {
         waiting.append(completion)
         guard waiting.count == 1 else { return }
         let runtime = self.runtime
+        VRRegisterNativeModules(runtime)
         VRInstallAppUI.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: appUIHost) {}
-        VRInstallBleHost.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: bleHost) {}
         VRInstallPermissionHost.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: permissionHost, androidSdk: 0) {}
         VRInstallWifiHost.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: wifiHost) {}
         // No NfcHost: nfc/native.ts answers NOT_SUPPORTED on iOS before it looks one up.
@@ -41,10 +41,9 @@ final class ValdiHost {
         let debug = false
         #endif
         VRStartApp.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, debug: debug, navigation: navigationHost,
-                          tokens: tokenStore.store) { json in
-            // A startApp that threw still completes, with an empty string; its error is in the log. The launch fails
-            // before confirming, so an over-the-air package it ran from is rolled back at the next start.
-            guard let table = RouteTable.parse(json) else { fatalError("startApp returned no route table: '\(json)'") }
+                          tokens: tokenStore.store) { declaration in
+            // Validate before confirming the OTA launch; an invalid startup declaration must not become active.
+            let table = RouteTable(declaration)
             // The modules loaded and ran: a newly installed package is good. Only then look for the next one.
             ValdiOta.confirmLaunch()
             Task.detached(priority: .background) { await ValdiOta.checkForUpdate() }
@@ -70,25 +69,33 @@ final class ValdiHost {
     /// `router` (routes.ts) lands here on the JS thread; the navigator lives on the main thread.
     private lazy var navigationHost = VRNavigationHost(
         push: { [weak self] route, params, presentation, navigation in
-            self?.onNavigator { $0.open(route, paramsJson: params, presentation: Presentation(presentation),
-                                        navigation: NavigationOptions(json: navigation)) }
+            self?.onNavigator { $0.open(route, params: params, presentation: Presentation(presentation),
+                                        navigation: navigation) }
         },
         pushForResult: { [weak self] route, params, presentation, navigation, onResult in
             self?.onNavigator {
-                $0.open(route, paramsJson: params, presentation: Presentation(presentation),
-                        navigation: NavigationOptions(json: navigation)) { json, canceled in onResult(json, canceled) }
+                $0.open(route, params: params, presentation: Presentation(presentation),
+                        navigation: navigation) { result, canceled in onResult(result, canceled) }
             }
         },
         replace: { [weak self] route, params, navigation in
-            self?.onNavigator { $0.replace(route, paramsJson: params, navigation: NavigationOptions(json: navigation)) }
+            self?.onNavigator { $0.replace(route, params: params, navigation: navigation) }
         },
         back: { [weak self] delta in self?.onNavigator { $0.back(Int(delta)) } },
         popToRoot: { [weak self] in self?.onNavigator { $0.popToRoot() } },
-        reset: { [weak self] route, params in self?.onNavigator { $0.reset(route, paramsJson: params) } },
+        reset: { [weak self] route, params in self?.onNavigator { $0.reset(route, params: params) } },
         switchTab: { [weak self] tab in self?.onNavigator { $0.switchTab(tab) } },
         setStatusBarStyle: { [weak self] style in self?.onNavigator { $0.setStatusBarStyle(style) } },
         currentPages: { [weak self] done in
-            DispatchQueue.main.async { done(self?.navigator?.currentPages() ?? "[]") }
+            DispatchQueue.main.async { done(self?.navigator?.currentPages() ?? []) }
+        },
+        updateRoutes: { [weak self] declaration in
+            let table = RouteTable(declaration)
+            DispatchQueue.main.async {
+                self?.navigator?.reloadRoutes(table)
+                let root = self?.navigator?.rootRoute ?? table.root
+                self?.started = table.contains(root) ? table.withRoot(root) : table
+            }
         }
     )
 
@@ -98,10 +105,7 @@ final class ValdiHost {
 
     /// `api` in TS lands here; requests are already validated and defaulted there. Called on the JS thread. Held here
     /// for the app's lifetime: JS only references native functions weakly, so a host nobody holds gets released.
-    private lazy var appUIHost: VRAppUIHost = makeAppUIHost()
-
-    /// `api`'s Bluetooth methods, on the shared BleCore.
-    private let bleHost = BleHostImpl()
+    private let appUIHost = AppUIHostImpl()
 
     /// `runDemo` of vision/VisionHost.ts, on the C++ VisionCore.
     private let visionHost = VisionHostImpl()
@@ -118,160 +122,21 @@ final class ValdiHost {
     /// `api.*StorageSync`, in MMKV.
     private let storageHost = StorageHostImpl()
 
-    private func makeAppUIHost() -> VRAppUIHost {
-        VRAppUIHost(
-            showModal: { request, done in
-                let options = ModalOptions(
-                    title: request.title, content: request.content, showCancel: request.showCancel,
-                    confirmText: request.confirmText, cancelText: request.cancelText, editable: request.editable,
-                    placeholderText: request.placeholderText, defaultText: request.defaultText
-                )
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated {
-                        _ = AppUI.shared.showModal(options) { result in
-                            switch result {
-                            case let .success(reply):
-                                done("", VRModalReply(confirm: reply.confirm, cancel: reply.cancel, content: reply.content))
-                            case let .failure(error):
-                                done(error.localizedDescription, VRModalReply(confirm: false, cancel: true, content: ""))
-                            }
-                        }
-                    }
-                }
-            },
-            showActionSheet: { request, done in
-                Self.present(.actionSheet(ActionSheetOptions(alertText: request.title, itemList: request.itemList)), done)
-            },
-            showPicker: { request, done in
-                Self.present(.picker(PickerOptions(
-                    title: request.title, options: request.options.map { PickerOption($0.value, label: $0.label) },
-                    value: request.value, confirmText: request.confirmText, cancelText: request.cancelText
-                )), done)
-            },
-            showDatePicker: { request, done in
-                Self.present(.datePicker(DatePickerOptions(
-                    title: request.title, mode: request.mode, value: request.value, minYear: Int(request.minYear),
-                    maxYear: Int(request.maxYear), confirmText: request.confirmText, cancelText: request.cancelText
-                )), done)
-            },
-            showBottomSheet: { request, done in
-                Self.present(.bottomSheet(BottomSheetOptions(
-                    title: request.title, content: request.content, confirmText: request.confirmText,
-                    cancelText: request.cancelText, showCancel: request.showCancel, dismissible: request.dismissible
-                )), done)
-            },
-            previewImage: { request, done in
-                Self.present(.imagePreview(ImagePreviewOptions(urls: request.urls, current: request.current)), done)
-            },
-            scanCode: { done in
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated {
-                        AppUI.shared.scanCode { result in
-                            switch result {
-                            case let .success(reply): done("", VRScanCodeReply(result: reply.result, scanType: reply.scanType))
-                            case let .failure(error): done(error.localizedDescription, VRScanCodeReply(result: "", scanType: ""))
-                            }
-                        }
-                    }
-                }
-            },
-            pickAttachments: { source, limit, mimeTypes, done in
-                let options = AttachmentPickOptions(limit: limit.isFinite ? Int(min(max(1, limit), 20)) : 1, mimeTypes: mimeTypes)
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated {
-                        AppUI.shared.pickAttachments(source, options) { result in
-                            switch result {
-                            case let .success(selection):
-                                done("", VRAttachmentSelection(canceled: selection.canceled, assets: selection.assets.map {
-                                    VRAttachmentAsset(id2: $0.id, uri: $0.uri, name: $0.name, mimeType: $0.mimeType, size: $0.size)
-                                }))
-                            case let .failure(error):
-                                done(error.localizedDescription, VRAttachmentSelection(canceled: false, assets: []))
-                            }
-                        }
-                    }
-                }
-            },
-            clearAttachmentCache: { done in
-                Task {
-                    do {
-                        try await AppUI.clearAttachmentCache()
-                        done("")
-                    } catch {
-                        done(error.localizedDescription)
-                    }
-                }
-            },
-            showToast: { request, done in
-                Self.onMain(done) {
-                    try AppUI.shared.showToast(ToastOptions(title: request.title, icon: request.icon,
-                                                            duration: request.duration, mask: request.mask))
-                }
-            },
-            hideToast: { done in Self.onMain(done) { AppUI.shared.hideToast() } },
-            showLoading: { request, done in
-                Self.onMain(done) { try AppUI.shared.showLoading(LoadingOptions(title: request.title, mask: request.mask)) }
-            },
-            hideLoading: { done in Self.onMain(done) { AppUI.shared.hideLoading() } }
-        )
-    }
-
-    private static func present(_ options: PresentationOptions, _ done: @escaping (String, VRPresentationReply) -> Void) {
-        DispatchQueue.main.async {
-            MainActor.assumeIsolated {
-                _ = AppUI.shared.showPresentation(options) { result in
-                    switch result {
-                    case let .success(reply):
-                        done("", VRPresentationReply(confirm: reply.confirm, cancel: reply.cancel, value: reply.value,
-                                                     index: Double(reply.index)))
-                    case let .failure(error):
-                        done(error.localizedDescription, VRPresentationReply(confirm: false, cancel: true, value: "", index: -1))
-                    }
-                }
-            }
-        }
-    }
-
-    private static func onMain(_ done: @escaping (String) -> Void, _ action: @escaping @MainActor () throws -> Void) {
-        DispatchQueue.main.async {
-            MainActor.assumeIsolated {
-                do {
-                    try action()
-                    done("")
-                } catch {
-                    done(error.localizedDescription)
-                }
-            }
-        }
-    }
-
     func createPage(_ entry: PageEntry, insets: UIEdgeInsets, navigator: Navigator) -> SCValdiRootView {
         let viewModel = viewModel(entry, insets)
         let context = pageContext(entry, navigator)
-        // One generated root view class per @Component, named by its @ExportModel ios name.
-        let rootView: SCValdiRootView = switch entry.definition.component {
-        case "LoginPage@app_pages/src/LoginPage":
-            VRLoginPage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "HomePage@app_pages/src/HomePage":
-            VRHomePage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "DetailPage@app_pages/src/DetailPage":
-            VRDetailPage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "FormPage@app_pages/src/FormPage":
-            VRFormPage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "BlePage@app_pages/src/BlePage":
-            VRBlePage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "PresentationPage@app_pages/src/PresentationPage":
-            VRPresentationPage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "VisionPage@app_pages/src/VisionPage":
-            VRVisionPage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "RouteAnimationPage@app_pages/src/RouteAnimationPage":
-            VRRouteAnimationPage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "DevicePage@app_pages/src/DevicePage":
-            VRDevicePage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        case "WheelPage@app_pages/src/WheelPage":
-            VRWheelPage(viewModel: viewModel, componentContext: context, runtime: runtime)
-        default:
-            fatalError("\(entry.route) has no iOS root view class")
+        guard let component = entry.definition.component else {
+            preconditionFailure("Missing Valdi component for \(entry.route)")
+        }
+        let rootView: SCValdiRootView
+        do {
+            guard let view = try runtime.loadView(withComponentPath: component, owner: nil,
+                                                   viewModel: viewModel, componentContext: context) as? SCValdiRootView else {
+                preconditionFailure("No Valdi root view for \(component)")
+            }
+            rootView = view
+        } catch {
+            preconditionFailure("Cannot create \(component): \(error)")
         }
         // Valdi's own accessibility tree (labels, buttons) for VoiceOver and UI automation; off unless asked for. The
         // Android runtime exposes its views' accessibility by default.
@@ -281,6 +146,33 @@ final class ValdiHost {
 
     func updateInsets(_ entry: PageEntry, insets: UIEdgeInsets) {
         entry.rootView?.valdiContext?.viewModel = viewModel(entry, insets)
+    }
+
+    func createTabBar(_ bar: TabBar, shell: PageEntry, safeAreaBottom: CGFloat,
+                      navigator: Navigator) -> SCValdiRootView {
+        guard let component = bar.component else { preconditionFailure("Missing custom tab bar component") }
+        let context = VRTabBarContext(selectTab: { [weak shell, weak navigator] route in
+            DispatchQueue.main.async { [weak shell, weak navigator] in
+                guard let shell, let navigator, !shell.removed else { return }
+                navigator.selectTab(route, in: shell)
+            }
+        })
+        // JS references native functions weakly. Retain the context with the shell, just as pages retain their root.
+        shell.tabBarContext = context
+        let root = TabBarRootView(componentPath: component, owner: nil, viewModel: tabBarViewModel(bar, shell, safeAreaBottom),
+                                  componentContext: context, runtime: runtime)
+        root.backgroundColor = .clear
+        root.isOpaque = false
+        root.valdiContext?.enableAccessibility = true
+        return root
+    }
+
+    func updateTabBar(_ bar: TabBar, shell: PageEntry, safeAreaBottom: CGFloat) {
+        shell.rootView?.valdiContext?.viewModel = tabBarViewModel(bar, shell, safeAreaBottom)
+    }
+
+    private func tabBarViewModel(_ bar: TabBar, _ shell: PageEntry, _ bottom: CGFloat) -> VRTabBarViewModel {
+        VRTabBarViewModel(items: bar.tabs, selectedRoute: shell.selectedTab ?? bar.initial, safeAreaBottom: Double(bottom))
     }
 
     /// The page's visibility changed (Navigator.updateVisibility); a page without its view yet gets it on creation.
@@ -293,7 +185,7 @@ final class ValdiHost {
         VRPageViewModel(
             pageId: entry.id,
             route: entry.route,
-            paramsJson: entry.paramsJson,
+            params: entry.params,
             presentation: entry.presentation.rawValue,
             insets: VRPageInsets(top: insets.top, bottom: insets.bottom, left: insets.left, right: insets.right),
             visible: entry.visible,
@@ -305,63 +197,90 @@ final class ValdiHost {
     // both do nothing for it.
     private func pageContext(_ entry: PageEntry, _ navigator: Navigator) -> VRPageContext {
         VRPageContext(
-            finish: { result in DispatchQueue.main.async { navigator.finish(entry.id, resultJson: result) } },
+            finish: { result in DispatchQueue.main.async { navigator.finish(entry.id, result: result) } },
             back: { DispatchQueue.main.async { navigator.cancel(entry.id) } }
         )
     }
 }
 
-struct RouteDefinition {
-    let kind: String
-    let title: String
-    let component: String?
-}
+// Use the generated data models unchanged; this table only indexes and validates the declaration for UIKit.
+typealias RouteDefinition = VRRouteEntry
+typealias Tab = VRRouteTab
+typealias TabBar = VRRouteTabBar
 
-/// One tab of TAB_BAR; icons are res/ image names in app_pages.bundle.
-struct Tab {
-    let tab: String
-    let route: String
-    let text: String
-    let icon: String
-    let selectedIcon: String?
-}
-
-struct TabBar {
-    let route: String
-    let tabs: [Tab]
-}
-
-/// What startApp (app.ts) returns: the routes, the tab bar and the first page.
+/// What startApp returns: a typed declaration, indexed by route name for native navigation.
 struct RouteTable {
-    private let routes: [String: RouteDefinition]
-    let tabBar: TabBar?
+    private let routes: [String: VRRouteEntry]
+    let tabBar: VRRouteTabBar?
     let root: String
 
-    subscript(route: String) -> RouteDefinition {
-        guard let definition = routes[route] else { fatalError("Unknown route: \(route)") }
+    func contains(_ route: String) -> Bool { routes[route] != nil }
+
+    func withRoot(_ route: String) -> RouteTable {
+        precondition(contains(route), "Unknown root route: \(route)")
+        return RouteTable(routes: routes, tabBar: tabBar, root: route)
+    }
+
+    subscript(route: String) -> VRRouteEntry {
+        guard let definition = routes[route] else { preconditionFailure("Unknown route: \(route)") }
         return definition
     }
 
-    /// nil unless it is startApp's table, with its root among the routes.
-    static func parse(_ json: String) -> RouteTable? {
-        guard let start = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any],
-              let root = start["root"] as? String, (start["routes"] as? [String: Any])?[root] != nil
-        else { return nil }
-        // Routes may also carry `options`; routes.ts has already resolved them into each push.
-        let routes = start["routes"] as? [String: [String: Any]] ?? [:]
-        let bar = start["tabBar"] as? [String: Any]
-        return RouteTable(
-            routes: routes.mapValues { route in
-                RouteDefinition(kind: route["kind"] as? String ?? "", title: route["title"] as? String ?? "",
-                                component: route["component"] as? String)
-            },
-            tabBar: bar.map { bar in
-                TabBar(route: bar["route"] as? String ?? "", tabs: (bar["tabs"] as? [[String: Any]] ?? []).map {
-                    Tab(tab: $0["tab"] as? String ?? "", route: $0["route"] as? String ?? "", text: $0["text"] as? String ?? "",
-                        icon: $0["icon"] as? String ?? "", selectedIcon: $0["selectedIcon"] as? String)
-                })
-            },
-            root: root
-        )
+    /// Kept separate so malformed native/OTA declarations can be checked without trapping a test process.
+    static func tabBarError(_ bar: TabBar) -> String? {
+        switch bar.mode ?? "default" {
+        case "default":
+            return bar.component == nil ? nil : "Default tab bar cannot have a custom component"
+        case "custom":
+            guard let component = bar.component,
+                  component.range(of: #"^[^@\s]+@[^/\s]+/src/[^\s]+$"#, options: .regularExpression) != nil else {
+                return "Custom tab bar requires a canonical Valdi component path"
+            }
+            return nil
+        default:
+            return "Invalid tab bar mode: \(bar.mode ?? "")"
+        }
+    }
+
+    init(_ declaration: VRRouteDeclaration) {
+        var routes: [String: VRRouteEntry] = [:]
+        for entry in declaration.routes {
+            precondition(!entry.route.isEmpty && routes[entry.route] == nil, "Invalid or duplicate route: \(entry.route)")
+            precondition(["valdi", "native", "tabs"].contains(entry.kind), "Invalid route kind: \(entry.kind)")
+            if entry.kind == "valdi" {
+                precondition(!(entry.component ?? "").isEmpty, "Missing Valdi component for \(entry.route)")
+            }
+            if entry.kind == "native" {
+                precondition(NativeScreens.contains(entry.nativeName ?? ""),
+                             "Native page for route \(entry.route) is not registered: \(entry.nativeName ?? "")")
+            }
+            routes[entry.route] = entry
+        }
+        precondition(routes[declaration.root] != nil, "Unknown root route: \(declaration.root)")
+        if let bar = declaration.tabBar {
+            if let error = Self.tabBarError(bar) { preconditionFailure(error) }
+            let names = bar.tabs.map(\.route)
+            precondition(!names.isEmpty && Set(names).count == names.count && names.contains(bar.initial),
+                         "Invalid tab declaration")
+            precondition(routes[bar.route]?.kind == "tabs", "Unknown tab shell: \(bar.route)")
+            precondition(names.allSatisfy { routes[$0] != nil && routes[$0]?.kind != "tabs" }, "Unknown tab route")
+        }
+        self.init(routes: routes, tabBar: declaration.tabBar, root: declaration.root)
+    }
+
+    private init(routes: [String: VRRouteEntry], tabBar: VRRouteTabBar?, root: String) {
+        self.routes = routes
+        self.tabBar = tabBar
+        self.root = root
+    }
+}
+
+/// SCValdiComponentContainerView uses the same inflation path as runtime.loadView(withComponentPath:...).
+/// The business component rejects touches outside its visual region through Valdi's hitTest attribute.
+/// Drop any remaining hit on this empty outer viewport, allowing UIKit to continue to the page below.
+final class TabBarRootView: SCValdiComponentContainerView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hit = super.hitTest(point, with: event)
+        return hit === self ? nil : hit
     }
 }

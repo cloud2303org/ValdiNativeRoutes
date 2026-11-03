@@ -8,7 +8,7 @@ The build and dev server generate `app_pages/res` from the files directly inside
 Android emits WebP at quality 75; iOS keeps matching PNG variants and palette-encodes converted PNGs.
 Mitchell sampling follows the old Skia resize path; encoder output is not required to be byte-identical.
 
-Release uses the pinned official `hermes-compiler` package. `hermes.ts` checks it against the runtime Hermes version,
+Release uses the pinned official `hermes-compiler` package. `hermes.ts` checks it against the Hermes version in the pinned Valdi fork,
 wraps each CommonJS module as Valdi expects, invokes hermesc, and prepends the Valdi header. A changed upstream
 wrapper/header fails explicitly. Run `pnpm test` at the root for image, compiler/protocol and binding golden checks.
 The application build/dev server needs neither the Valdi toolbox nor the ClientSQL Python generator / SQLite 3.16 validator.

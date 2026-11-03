@@ -16,9 +16,11 @@
 // directories. At least one output is needed. Files are written only when their content changes.
 // --check writes nothing and fails, listing them, when files would change: the build runs it, developers run the
 // generator when they change a native interface.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { codegenModules, generateNativeCode, nativeSourceFiles } from './codegen/index';
+import { moduleConfig, root } from './pipeline';
+import { availableModuleNames, enabledModuleNames } from './modules.mjs';
 
 const args = process.argv.slice(2);
 const option = (name: string) => {
@@ -55,7 +57,8 @@ if (
   if (name && !modules[name]) console.error(`Modules: ${Object.keys(modules).join(', ')}`);
   process.exit(2);
 }
-const targets = (name ? [modules[name]] : Object.values(modules)).map(configured =>
+// Bazel modules compile their generated bindings in their own native libraries.
+const targets = (name ? [modules[name]] : Object.values(modules).filter(target => moduleConfig(target.module.name).nativeBuild !== 'bazel')).map(configured =>
   cppClassPrefix ? { ...configured, bundleInfo: { ...configured.bundleInfo, cppClassPrefix } } : configured,
 );
 
@@ -66,6 +69,26 @@ const shown = (file: string) => {
 };
 
 const changed: string[] = [];
+if (!name) {
+  const enabled = new Set(enabledModuleNames(root));
+  for (const disabled of availableModuleNames(root).filter(value => !enabled.has(value))) {
+    const iosName = moduleConfig(disabled).iosModuleName ?? disabled;
+    const obsolete = {
+      android: [`${disabled}.kt`],
+      ios: [iosName, `${iosName}Types`],
+      cpp: [`valdi_modules/${disabled}`],
+    };
+    for (const platform of ['android', 'ios', 'cpp'] as const) {
+      if (!outputs[platform]) continue;
+      for (const file of obsolete[platform]) {
+        const output = path.resolve(outputs[platform]!, file);
+        if (!existsSync(output)) continue;
+        changed.push(`${shown(output)} (disabled module; remove)`);
+        if (!check) rmSync(output, { recursive: true, force: true });
+      }
+    }
+  }
+}
 for (const target of targets) {
   const code = generateNativeCode(target);
   for (const platform of ['android', 'ios', 'cpp'] as const) {
@@ -73,7 +96,9 @@ for (const target of targets) {
     if (!outDir) continue;
     for (const [file, generated] of nativeSourceFiles(target, code, platform)) {
       const content =
-        platform === 'ios' && objcFramework ? generated.replaceAll('#import <valdi_core/', `#import <${objcFramework}/`) : generated;
+        platform === 'ios' && objcFramework ? generated
+          .replaceAll('#import <valdi_core/', `#import <${objcFramework}/`)
+          .replaceAll('import ValdiCoreSwift', `import ${objcFramework}`) : generated;
       const output = path.join(path.resolve(outDir), file);
       // A module without C++ declarations gets empty C++ files, as from Valdi; they aren't written: the C++ is linked
       // into the exported runtime, and a new file would ask for an export (scripts/ota.mjs check-export).

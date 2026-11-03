@@ -1,0 +1,16 @@
+steps:
+  - launch: io.valdiroutes.app
+  - run: home.yaml
+  - echo: Open Calculator and verify its native bridge screen.
+  - tap:
+      text: Calculator
+  - await: { visible: { text: Native multiply }, timeout: 10000 }
+  - await: { idle: true }
+  - echo: "TS calls the native module: 6 × 7 must return 42."
+  - tap:
+      text: 6 × 7
+  - await: { text: { in: { id: calculator-result }, equals: "6 × 7 = 42" } }
+  - echo: Verify negative and fractional arguments across the same native binding.
+  - tap:
+      text: -3 × 2.5
+  - await: { text: { in: { id: calculator-result }, equals: "-3 × 2.5 = -7.5" } }

@@ -13,10 +13,9 @@
 //
 // res/ images go too: an image as res/<name>.<ext> (the app keeps the name, without scale and extension, and loads it
 // from there instead of the APK), with the regenerated res.assetcatalog (sizes) and res.js (names). An image added or
-// renamed shows in Valdi pages; native views that load the APK's drawables (the tab bar) need a rebuilt app.
+// renamed shows in Valdi pages. Route declarations inline their Tab icons in dev output, so the native bar reloads too.
 // Font files and their catalog entries go too; already-loaded platform fonts may require an app restart. A module
 // created while it runs is picked up on the next start.
-import { isUtf8 } from 'node:buffer';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, watch } from 'node:fs';
 import net from 'node:net';
@@ -25,17 +24,18 @@ import type { ArchiveEntries } from './archive';
 import { appModules, buildModule, genDir, inlineSourceMaps, modulesDir } from './pipeline';
 import { addFontEntries, assetCatalog, findFonts, findImages, writeResTs, type Font, type Image } from './resources';
 import { valdiTs, type ValdiModule } from './valdiTs';
+import { startDevControls } from '../../scripts/dev-controls.mjs';
+import { assertEnabledImports } from './module-selection';
+import { availableModuleNames } from './modules.mjs';
+import { root } from './pipeline';
+import { sourceFiles } from './valdiTs';
 
-const DEVICE_PORT = 13592;
+import { DEVICE_PORT, encodeDevPacket, updatedResources, type DevResource } from './dev-protocol';
 /** The name the booted iOS simulator goes by here; it is reached at 127.0.0.1:DEVICE_PORT, without a forward. */
 const IOS_SIMULATOR = 'ios-simulator';
 const MAGIC = 0x0100c633;
 
-interface Resource {
-  bundle: string;
-  file: string;
-  data: Buffer;
-}
+type Resource = DevResource;
 
 // ---- Building
 
@@ -48,7 +48,7 @@ class ModuleBuild {
 
   private constructor(readonly module: ValdiModule, images: Image[] | undefined) {
     this.updateResources(images);
-    this.plugin = valdiTs(module);
+    this.plugin = valdiTs(module, undefined, true);
   }
 
   /** Reads res/ again; res.ts changes with the image and font names. */
@@ -58,6 +58,8 @@ class ModuleBuild {
 
   async loadResources() {
     this.updateResources(await findImages(this.module));
+    // Tab references compile to native image descriptors, including bytes in development builds.
+    for (const file of sourceFiles(this.module)) this.plugin.invalidate(file);
   }
 
   private updateResources(images: Image[] | undefined) {
@@ -68,6 +70,10 @@ class ModuleBuild {
   }
 
   async build(): Promise<ArchiveEntries> {
+    // sourceFiles() contains virtual IDs such as app_pages/res.ts; the program roots contain their real .gen paths.
+    assertEnabledImports(this.plugin.program().getRootFileNames(), modulesDir, availableModuleNames(root), [...modules.keys()]);
+    const diagnostics = this.plugin.diagnostics();
+    if (diagnostics) throw new Error(diagnostics);
     const { images, fonts } = this;
     const built = await buildModule(this.module, this.plugin, false);
     inlineSourceMaps(built);
@@ -76,7 +82,6 @@ class ModuleBuild {
       for (const image of images ?? []) built.entries.set(`res/${image.name}.${image.extension}`, readFileSync(image.file));
     }
     addFontEntries(built.entries, fonts);
-    const diagnostics = this.plugin.diagnostics();
     if (diagnostics !== this.lastDiagnostics) {
       console.log(diagnostics || `✓ ${this.module.name}: no type errors`);
       this.lastDiagnostics = diagnostics;
@@ -93,15 +98,22 @@ const current = new Map<string, ArchiveEntries>();
 /** Builds the given modules (all of them by default) and returns the files that changed. */
 async function build(names: Iterable<string> = modules.keys()): Promise<Resource[]> {
   const started = performance.now();
+  // An API edit in one module may invalidate callers in another, even when only the former emits new files.
+  for (const module of modules.values()) {
+    const diagnostics = module.plugin.diagnostics();
+    if (diagnostics) throw new Error(diagnostics);
+  }
   const changed: Resource[] = [];
+  const staged = new Map<string, ArchiveEntries>();
   for (const name of names) {
     const entries = await modules.get(name)!.build();
     const before = current.get(name);
     for (const [file, data] of entries) {
       if (!before?.get(file)?.equals(data)) changed.push({ bundle: name, file, data });
     }
-    current.set(name, entries);
+    staged.set(name, entries);
   }
+  for (const [name, entries] of staged) current.set(name, entries);
   console.log(`Built in ${Math.round(performance.now() - started)} ms, ${changed.length} file(s) changed`);
   return changed;
 }
@@ -155,27 +167,12 @@ class DeviceConnection {
 
   send(resources: Resource[]) {
     if (!this.configured || !resources.length) return;
-    this.write({
-      event: {
-        updated_resources: {
-          // As the Valdi daemon: text as is, anything else (images, the asset catalog) in base64.
-          resources: resources.map(({ bundle, file, data }) => ({
-            bundle_name: bundle,
-            file_path_within_bundle: file,
-            ...(isUtf8(data) ? { data_string: data.toString('utf8') } : { data_base64: data.toString('base64') }),
-          })),
-        },
-      },
-    });
+    this.write(updatedResources(resources));
     console.log(`[${this.serial}] Sent ${resources.map(({ bundle, file }) => `${bundle}:${file}`).join(', ')}`);
   }
 
   private write(payload: object) {
-    const body = Buffer.from(JSON.stringify(payload));
-    const header = Buffer.alloc(8);
-    header.writeUInt32LE(MAGIC, 0);
-    header.writeUInt32LE(body.length, 4);
-    this.socket?.write(Buffer.concat([header, body]));
+    this.socket?.write(encodeDevPacket(payload));
   }
 
   private receive(data: Buffer) {
@@ -250,10 +247,6 @@ function pollDevices() {
 
 // ---- Watching
 
-await build();
-setInterval(pollDevices, 1000);
-pollDevices();
-
 /** What changed since the last build, per module. */
 interface Pending {
   files: Set<string>;
@@ -285,7 +278,7 @@ watch(modulesDir, { recursive: true }, (_event, file) => {
         for (const [name, changes] of batch) {
           if (changes.res) await modules.get(name)!.loadResources();
         }
-        const changed = await build(batch.keys());
+        const changed = await build(current.size ? batch.keys() : modules.keys());
         for (const device of devices.values()) device.send(changed);
       } catch (error) {
         console.error(error instanceof Error ? error.message : error);
@@ -294,9 +287,23 @@ watch(modulesDir, { recursive: true }, (_event, file) => {
   }, 50);
 });
 
+// Register the watcher before the first build, including its error report. A quick fix after an initial diagnostic
+// must not land in the gap before watch() and be silently missed.
+building = build().catch(error => {
+  console.error(error instanceof Error ? error.message : error);
+  console.log('Fix the errors above; watching for changes.');
+});
+await building;
+setInterval(pollDevices, 1000);
+pollDevices();
+
+const stopControls = startDevControls();
+process.once('exit', stopControls);
+
 // The adb forwards outlive us otherwise.
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
   process.on(signal, () => {
+    stopControls();
     for (const device of devices.values()) device.close();
     process.exit(0);
   });

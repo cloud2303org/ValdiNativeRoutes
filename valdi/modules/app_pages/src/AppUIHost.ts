@@ -1,6 +1,7 @@
 /**
  * The contract between `api` (api.ts) and the native AppUI of each host. Requests arrive validated and with their
- * defaults filled in; the host only presents them. Every callback is called exactly once; `error` is '' on success.
+ * defaults filled in; the host only presents them. Native Promises settle once without retaining a callback from the
+ * calling page, so page teardown cannot strand the app-wide presentation queue.
  */
 
 /**
@@ -157,32 +158,31 @@ export interface ScanCodeReply {
 /**
  * Implemented by the host's AppUI. The modal is shown on whatever page is on top when its turn in the queue comes.
  *
- * @ExportModel({ios: 'VRAppUIHost', android: 'io.valdiroutes.pages.AppUIHost'})
+ * @ExportProxy({ios: 'VRAppUIHost', android: 'io.valdiroutes.pages.AppUIHost'})
  */
 export interface AppUIHost {
   /** Resolves after the dialog has finished closing. */
-  showModal: (request: ModalRequest, done: (error: string, reply: ModalReply) => void) => void;
+  showModal: (request: ModalRequest) => Promise<ModalReply>;
   /** The rest share showModal's queue and page ownership; each resolves after its presentation has closed. */
-  showActionSheet: (request: ActionSheetRequest, done: (error: string, reply: PresentationReply) => void) => void;
-  showPicker: (request: PickerRequest, done: (error: string, reply: PresentationReply) => void) => void;
-  showDatePicker: (request: DatePickerRequest, done: (error: string, reply: PresentationReply) => void) => void;
-  showBottomSheet: (request: BottomSheetRequest, done: (error: string, reply: PresentationReply) => void) => void;
-  previewImage: (request: ImagePreviewRequest, done: (error: string, reply: PresentationReply) => void) => void;
-  /** Native camera scanner over the whole app, not a route; closing it is error 'cancel'. */
-  scanCode: (done: (error: string, reply: ScanCodeReply) => void) => void;
+  showActionSheet: (request: ActionSheetRequest) => Promise<PresentationReply>;
+  showPicker: (request: PickerRequest) => Promise<PresentationReply>;
+  showDatePicker: (request: DatePickerRequest) => Promise<PresentationReply>;
+  showBottomSheet: (request: BottomSheetRequest) => Promise<PresentationReply>;
+  previewImage: (request: ImagePreviewRequest) => Promise<PresentationReply>;
+  /** Native camera scanner over the whole app, not a route; closing it rejects with 'cancel'. */
+  scanCode: () => Promise<ScanCodeReply>;
   /** source: 'photos', 'camera' or 'files'. Cancelling answers canceled: true. */
   pickAttachments: (
     source: string,
     limit: number,
     mimeTypes: string[],
-    done: (error: string, selection: AttachmentSelection) => void,
-  ) => void;
+  ) => Promise<AttachmentSelection>;
   /** Deletes only the picker's own cached copies. */
-  clearAttachmentCache: (done: (error: string) => void) => void;
-  showToast: (request: ToastRequest, done: (error: string) => void) => void;
-  hideToast: (done: (error: string) => void) => void;
-  showLoading: (request: LoadingRequest, done: (error: string) => void) => void;
-  hideLoading: (done: (error: string) => void) => void;
+  clearAttachmentCache: () => Promise<void>;
+  showToast: (request: ToastRequest) => Promise<void>;
+  hideToast: () => Promise<void>;
+  showLoading: (request: LoadingRequest) => Promise<void>;
+  hideLoading: () => Promise<void>;
 }
 
 // On globalThis rather than in this module: Valdi may unload a module once no page uses it, and a reloaded module
@@ -190,7 +190,7 @@ export interface AppUIHost {
 const HOST_KEY = '__valdiRoutesAppUIHost';
 
 /**
- * Called by the host whenever it starts its UI (with the route table), like getRoutesJson.
+ * Called by the host whenever it starts its UI, before startApp returns the typed route declaration.
  *
  * @ExportFunction({ios: 'VRInstallAppUI', android: 'io.valdiroutes.pages.InstallAppUI'})
  */

@@ -4,11 +4,25 @@
 `pnpm build:android` 调用宿主 Gradle；`pnpm build:ios` 生成 Xcode 工程并构建模拟器 Debug App。
 平台构建已内含 TS 模块构建，无需先手动运行 `pnpm build`。
 
+统一开发入口由 `scripts/cli.mjs` 用 Node 分发（Windows / macOS / Linux 一致）：
+`pnpm prebuild --platform android|ios` 按指纹准备 Valdi 源码、绑定、运行时、原生模块和 Vision（未变化时走快速
+路径）；`pnpm android` / `pnpm ios` 依次执行 prebuild、构建、安装并在唯一模拟器（或显式 `--device`）上启动；
+`pnpm dev` 仍是现有热重载；`pnpm build:android` / `pnpm build:ios` 保持纯构建；`pnpm test` 不变。
+物理 Android 设备永远不会被自动选中，多个模拟器会要求 `--device`；iOS 安装/启动只在 macOS 模拟器上支持
+（不驱动物理 iPhone）。`pnpm android`/`pnpm ios` 只支持 Debug，Release OTA（导出 release、签名、记录）仍按
+下文的手动流程执行。
+
+`nativeBuild: "bazel"` 的自定义模块（目前为 calculator、bluetooth）由独立 `module-build/` workspace 构建。
+它调用同一套 Node TS / 绑定 / 资源管线，再编译模块原生库并接入 Gradle / Xcode；不通过主 App 的旧模块规则。
+见 [自定义模块实验](custom-modules.md)。模块 native targets 依赖现有导出的 runtime，CI 原生任务会自动准备模块库。
+启用哪些 App 模块由根 `package.json` 的 `valdi.modules` 明确指定，TS、原生注册和宿主打包读取同一份名单；
+新建模块不会自动集成。未启用模块仍被业务代码引用时，构建会提示修正名单或移除引用。
+
 根目录 `pnpm install` 的 postinstall 安装两个子项目的锁定依赖，并生成编辑器 tsconfig。运行时导出和
 OpenCV/ncnn 编译是单独的原生准备步骤，不在 npm 安装阶段运行。构建入口先检查缺失的产物及运行时指纹，
-Valdi/Hermes 配置、补丁或应用 C++ 变化会提示重新导出；页面 TS 与宿主 Kotlin/Swift 的变化不会误触发运行时重导出。
+Valdi fork 提交、工具链配置、runtime Node 编译器或应用 C++ 变化会提示重新导出；页面 TS 与宿主 Kotlin/Swift 的变化不会误触发运行时重导出。
 首次导出先运行 `scripts/prepare-valdi.mjs`，通过 Bazel 的 `fetch --repo=@valdi` 获取类型声明，再检查 C++ 绑定。
-只获取已固定版本和补丁的源码，不解析应用模块、旧 TS 编译器或 C++ 工具链目标。仅构建 TS 模块时无需编译原生 host 工具或导出 Android/iOS 运行时。图片由预编译 sharp 处理，
+只获取已固定的 fork 源码，不解析应用模块、旧 TS 编译器或 C++ 工具链目标。仅构建 TS 模块时无需编译原生 host 工具或导出 Android/iOS 运行时。图片由预编译 sharp 处理，
 Release 字节码由官方 hermes-compiler 生成，应用 Node 管线不再依赖 toolbox、ClientSQL Python 生成器或 SQLite 3.16 校验器。
 
 已清理 `valdi/package.json` 中无应用引用的旧 ESLint/Jasmine/ts-node/esbuild 直接开发依赖；保留
@@ -21,15 +35,17 @@ Release 字节码由官方 hermes-compiler 生成，应用 Node 管线不再依�
 
 | 任务 | 验证内容 | 产物 |
 | --- | --- | --- |
-| npm | `pnpm test`、`pnpm build` | golden / 构建日志 |
-| android | `pnpm test`、匹配运行时与视觉依赖、`pnpm build:android` | Debug APK、日志 |
-| ios | `pnpm test`、匹配运行时与视觉依赖、`pnpm build:ios` | 模拟器 App 压缩包、日志 |
+| macos-android | `pnpm test`、`pnpm build`、匹配运行时与视觉依赖、`pnpm build:android` | Debug APK、日志 |
+| macos-ios | `pnpm test`、`pnpm build`、匹配运行时与视觉依赖、`pnpm build:ios` | 模拟器 App 压缩包、日志 |
+| linux-android | `pnpm test`、`pnpm build`、匹配运行时与视觉依赖、`pnpm build:android` | Debug APK、日志 |
 
 共用 `prepare` composite action 安装 Node 24、根目录固定的 pnpm、JDK 17，安装三个 frozen lockfile，
-并获取固定版本和补丁的 Valdi 源码。使用 `macos-26` arm64 runner，匹配当前只有 arm64 的视觉库模拟器 slice；
+并获取固定 commit 的 Valdi fork 源码。macOS 使用 `macos-26` arm64 runner，匹配当前只有 arm64 的视觉库模拟器 slice；
+Linux Android 使用 GitHub 托管的 `ubuntu-24.04` x64 runner，与本地 WSL runner 分开；
 runner 的架构见 [GitHub 官方列表](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
 Xcode / SDK / CMake / Ninja 的实际版本写入日志和缓存键。Actions 固定到 commit SHA。
-CI 将 Bazel / Gradle / Xcode 并发限制为 3，Bazel 调度内存为 4 GB，磁盘 action cache 空闲清理目标为 3 GB。
+CI 不额外指定 Bazel / Gradle / Xcode / Ninja 的构建并发或 Bazel 调度内存，使用各工具默认值。
+Bazel 磁盘 action cache 空闲清理目标保留为 3 GB；这与构建并发、调度内存无关。
 
 三条任务先跑测试和 golden，尽早发现 Node 绑定生成与上游语义的差异。
 原生任务恢复或导出运行时，不再单独编译应用 host 工具或 SQL 校验器。
@@ -60,16 +76,31 @@ artifact 上传是可选步骤：账号存储额度不足时会在日志和任�
 helloworld / Widgets / Web 示例构建、Snap 发布和 GCP 缓存认证。这些是上游项目自己的职责，
 并非都已经获得本项目的等价覆盖；特别是新 Node 热重载路径还没有专门的自动 delivery smoke。
 
+## Windows 冷启动与失效验证
+
+`scripts/windows/build-android.ps1` 是完整入口：缺依赖时会先跑 `pnpm install --frozen-lockfile`，再导出
+运行时、准备 Vision、构建 module-build 模块并打包 APK；新机器只需要预装工具（Node 24、pnpm 启动器、
+Bazel 8.2.1、JDK 17、Android SDK/NDK/CMake、Git Bash、CMake/Ninja/curl）。`pnpm build:android` 是日常入口：
+运行时缺失或 `valdi` 指纹过期时只报错并给出 `sh scripts/export-android.sh` 指令，不会静默复用旧 AAR。
+
+`scripts/windows/test-cold-build.ps1` 在空目录里从网络克隆一个提交，并使用空的 pnpm store、Bazel
+output/user root/repository/disk cache、Gradle user home、Go/Coursier 缓存和 Vision 目录跑完整入口，
+然后跑管线测试和 `scripts/windows/test-native-invalidation.ps1`（独立模块改动只重建模块库+APK；
+`valdi/native` 改动会让日常构建拒绝旧 AAR，完整入口重新导出）。CI 的 `Windows Android CI` 增加手动的
+`cold_build` 输入，用同一脚本在隔离路径运行，上传 `logs/cold-build-report.json` 与 APK；workflow 并发组与
+常规 Windows 任务共用，避免同一台机器上并发大构建。详见 [Windows 原生构建](windows-native-build.md)。
+
 ## 仍然需要的原生工具与产物
 
 - **Valdi + Hermes + 应用 C++ 运行时**：由 `scripts/export-android.sh` / `export-ios.sh` 导出
   AAR / XCFramework；`valdi/native` 实现和生成绑定也链接在其中。
 - **Valdi 自带的模块**：`valdi/BUILD.bazel` 仍依赖 `valdi_core`、`valdi_tsx`、`client_sql`。
-  它们随运行时导出，仍会使用上游 Valdi 编译器；替换应用编译管线不等于删除整个 Swift 编译器依赖。
+  它们及传递依赖现在默认使用 Node 编译后端，保留原生库与导出规则。
+  [接入范围、测试和源码清理](node-runtime-compiler.md)。
 - **应用图片**：pnpm 的预编译 `sharp`，保留尺寸、density、命名、透明度和 catalog 协议，编码字节可变化。
 - **应用 Release 字节码**：固定的官方 `hermes-compiler`，启动时检查版本与 `hermes.BUILD` 一致，
   Node 保留当前 Valdi 的模块函数包装和文件头；上游协议变化会明确报错。
-- **上游 toolbox**：Valdi 自带模块随原生运行时导出时仍可能使用；应用 Node 管线不调用它。
+- **导出头文件**：fork 内的 `bzl/valdi/node_tools/rewrite_header.mjs` 由 Bazel Node 工具链执行，无 npm 依赖。C++ toolbox 源码、构建目标和入口已删除。
 - **数据库**：原生 ClientSQL SQLite 模块保留；应用查询暂用 `src/sqlgen/` 的固定源码，后续接入 Drizzle。
   `.sq`、Python 生成器和 SQLite 3.16 校验器已从应用构建移除。
 - **宿主**：Android Gradle / SDK / NDK / CMake；iOS Xcode / XcodeGen / SwiftPM。
@@ -81,7 +112,11 @@ helloworld / Widgets / Web 示例构建、Snap 发布和 GCP 缓存认证。这�
 视觉缓存按平台、工具链、NDK、vendor lock 和准备脚本匹配。Bazel 仅缓存可校验的 action 输出与下载，
 不缓存 `bazel-out` / `bazel-valdi` 绝对路径链接或整个 output base。
 
-只改页面或宿主 Kotlin / Swift 时可复用匹配的导出运行时；更改 Valdi 版本、补丁、Hermes 或应用 C++ 时重新导出。
+GitHub 缓存默认在超过 7 天未访问或仓库缓存总量超过 10 GB 时淘汰，容量不足时优先删除最久未访问的条目；
+具体以仓库设置和 [GitHub 缓存规则](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching) 为准。
+输入变化导致缓存不匹配不等于旧缓存被删除；输入未变也只有在缓存尚存且当前分支可访问时才能恢复。
+
+只改页面或宿主 Kotlin / Swift 时可复用匹配的导出运行时；更改 Valdi fork 提交、工具链或应用 C++ 时重新导出。
 缓存都是加速手段，干净 runner 仍有完整的准备路径。原生冷构建较重，首次 GitHub runner 的耗时、磁盘和内存
 仍需以实际运行结果调整；本地构建通过不代表 hosted runner 已通过。
 
@@ -91,6 +126,21 @@ helloworld / Widgets / Web 示例构建、Snap 发布和 GCP 缓存认证。这�
 接入 CI 时必须通过 `ANDROID_DEVICE` / `IOS_DEVICE` 指定 runner 自己创建的设备，再安装本次产物并提供测试 secret。
 Android 当前只打包 arm64，届时需要选择相应设备或明确增加测试 ABI。
 `pnpm test` 包含前置检查、升级脚本测试、图片/字节码适配测试和绑定 golden 对比；构建通过也不代表 UI、热重载或 Release 字节码验证通过。
+
+### 真机输入测试
+
+登录页账号、密码框分别使用 `login-account`、`login-password` 标识；独立的输入自检页可从登录页
+进入，无需认证。输入后点「提交输入」，检查下方收到的 JSON 字符串和提交次数，才能确认文本经过
+原生输入事件到达 TS state。仅看到输入框显示文本不足以证明这条链路。
+
+2026-11-01 在 Argent 0.30.1 / MEIZU 20 上实测，`fill` 显示成功后，输入自检页提交仍得到空字符串；
+真实键入后可以提交内容。因此本项目的 Android 输入测试使用 `keyboard` 真实键入，不以 `fill` 的
+`verified` 结果代替 `onChange` 验证。该现象的范围限于这次设备和工具路径，不能据此推断用户手输也会丢失。
+微信输入法可能保留组合候选或转换标点，需提交候选并核对页面收到的文本；
+无障碍树可能缓存旧标签，必要时用页面回显与可见界面交叉确认。
+
+登录是本地演示逻辑，测试使用公开的非空 fixture 即可，不需要真实账号或密码。不要在填写密码后保存
+包含输入区域的截图或原始字段值。蓝牙测试仅扫描与广播时，不能把结果写成已验证连接后的读写或通知收发。
 
 ## 格式化范围
 

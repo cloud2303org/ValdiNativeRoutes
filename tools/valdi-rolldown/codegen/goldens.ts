@@ -230,8 +230,30 @@ function readGoldens(dir: string, include: (file: string) => boolean, files = ne
 const LANGUAGES: { label: string; platform: Platform; dir: string; include: (file: string) => boolean }[] = [
   { label: 'kotlin', platform: 'android', dir: 'android/release/src', include: file => file.endsWith('.kt') },
   { label: 'objc', platform: 'ios', dir: 'ios/release/src', include: file => /\.[hm]$/.test(file) },
+  { label: 'swift', platform: 'ios', dir: 'ios/release/src', include: file => file.endsWith('.swift') },
   { label: 'c++', platform: 'cpp', dir: 'cpp/release/src', include: file => /\.(hpp|cpp)$/.test(file) },
 ];
+
+/** Swift uses the pinned marshaller ABI with independently emitted source.
+ * Compare the official wire schemas, registration references, enum values and
+ * public type/method signatures, rather than equating formatting with ABI.
+ * Kotlin/ObjC/C++ below retain their byte-for-byte comparisons.
+ */
+function swiftContract(source: string): string {
+  const compact = (value: string) => value.replace(/"(?:\\.|[^"\\])*"|\s+/g, token => token.startsWith('"') ? token : '');
+  const matches = (pattern: RegExp) => [...source.matchAll(pattern)].map(match => compact(match[1]));
+  const signatures = matches(/(?:public\s+)?func\s+((?!create_|getDescriptor|register_)[A-Za-z_]\w*\s*\([^{}]*?\)\s*(?:throws\s*)?(?:->\s*[^{\n]+)?)/g);
+  return JSON.stringify({
+    types: matches(/public\s+(?:class|protocol|enum)\s+([^{]+)\{/g),
+    properties: matches(/public\s+var\s+([^\n{]+)/g),
+    methods: [...new Set(signatures)].sort(),
+    fields: matches(/(ValdiMarshallableObjectFieldDescriptor\s*\(\s*name:\s*"(?:\\.|[^"\\])*"\s*,\s*type:\s*"(?:\\.|[^"\\])*"\s*\))/g),
+    identifiers: matches(/(ValdiMarshallableIdentifier\s*\(\s*name:\s*"(?:\\.|[^"\\])*"\s*,\s*registerFunc:\s*[^,\n]+\))/g),
+    cases: matches(/\bcase\s+([^\n]+)/g),
+    modulePaths: matches(/func\s+modulePath\(\)\s*->\s*String\s*\{\s*(?:return\s+)?("(?:\\.|[^"\\])*")/g),
+    registrations: matches(/func\s+(register_\w+)\s*\(/g).sort(),
+  }, null, 2);
+}
 
 const work = mkdtempSync(path.join(tmpdir(), 'valdi-codegen-goldens-'));
 const summary: string[] = [];
@@ -249,15 +271,26 @@ for (const name of modules) {
     continue;
   }
   const results: string[] = [];
+  // Upstream emits no Swift @ExportModule implementation. Our additive module
+  // protocols/factories are checked by swift.test.ts and live native-module QA.
+  // Remove only their named source sections for the upstream comparison.
+  const swiftModuleExtensions = new Set(code.sources.flatMap(({ source }) =>
+    [...source.content.matchAll(/open class (\w+)Factory: NSObject, SCNValdiCoreModuleFactory/g)].map(match => match[1]),
+  ));
+  const upstreamSwift = (source: string) => source.split(/(?=^\/\/\n\/\/ \w+\.swift\n\/\/\n)/m)
+    .filter(section => !swiftModuleExtensions.has(/^\/\/\n\/\/ (\w+)\.swift\n\/\/\n/.exec(section)?.[1] ?? ''))
+    .join('');
   for (const { label, platform, dir, include } of LANGUAGES) {
     const goldens = readGoldens(path.join(goldensDir, name, dir), include);
-    const generated = nativeSourceFiles(target, code, platform);
+    const generated = new Map([...nativeSourceFiles(target, code, platform)].filter(([file]) => include(file)));
     let languageDifferent = 0;
     for (const file of [...new Set([...goldens.keys(), ...generated.keys()])].sort()) {
-      const want = goldens.get(file);
-      const got = generated.get(file);
+      const wantSource = goldens.get(file);
+      const gotSource = generated.get(file);
+      const want = label === 'swift' && wantSource !== undefined ? swiftContract(wantSource) : wantSource;
+      const got = label === 'swift' && gotSource !== undefined ? swiftContract(upstreamSwift(gotSource)) : gotSource;
       if (want === got) {
-        console.log(`  identical  ${label} ${file}`);
+        console.log(`  ${label === 'swift' ? 'same ABI ' : 'identical'}  ${label} ${file}`);
         continue;
       }
       languageDifferent++;
@@ -285,7 +318,7 @@ for (const name of modules) {
     }
     different += languageDifferent;
     const count = new Set([...goldens.keys(), ...generated.keys()]).size;
-    results.push(`${label} ${languageDifferent ? `${languageDifferent} of ${count} different` : `${count} identical`}`);
+    results.push(`${label} ${languageDifferent ? `${languageDifferent} of ${count} different` : `${count} ${label === 'swift' ? 'ABI equivalent' : 'identical'}`}`);
   }
   summary.push(`${name}: ${results.join(', ')}`);
 }

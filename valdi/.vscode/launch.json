@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+        "name": "Valdi attach",
+        "type": "node",
+        "request": "attach",
+        "websocketAddress": "ws://localhost:13595",
+        "sourceMapPathOverrides": {
+            "/app_pages/*": "${workspaceRoot}/modules/app_pages/*",
+            "/npm/*": "${workspaceRoot}/node_modules/*"
+        },
+        "sourceMaps": true,
+        "restart": false,
+        "resolveSourceMapLocations": []
+    }
+  ]
+}

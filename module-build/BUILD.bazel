@@ -1,0 +1,11 @@
+exports_files(["MODULE.bazel"])
+
+platform(
+    name = "ios_sim_arm64",
+    constraint_values = ["@platforms//os:ios", "@platforms//cpu:arm64", "@apple_support//constraints:simulator"],
+)
+
+platform(
+    name = "ios_arm64",
+    constraint_values = ["@platforms//os:ios", "@platforms//cpu:aarch64", "@apple_support//constraints:device"],
+)

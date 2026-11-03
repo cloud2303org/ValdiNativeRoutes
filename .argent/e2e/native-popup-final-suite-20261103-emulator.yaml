@@ -1,0 +1,35 @@
+# Fresh live recording on final APK SHA256 37c05ccf8f13929c63b071f351d75fb25643604adcf66a5eef7af97794839cf9.
+# Requires existing signed-in demo session. Launch resets page component state.
+# All navigations recorded. Old presentation-picker/datetime fixtures untouched.
+# Live embedded callback wait was stale; replaced by the separately executed
+# complete-runner-tree assertion below, which passed live at the same state.
+steps:
+  - launch: io.valdiroutes.app
+  - await: { visible: { text: "push 详情页" } }
+  - await: { idle: true }
+  - echo: Final APK native popup selection and date/time callbacks.
+  - scroll-to: { target: { text: "showToast 成功" } }
+  - scroll-to: { target: { text: "选择器、日期、图片预览" } }
+  - tap: { text: "选择器、日期、图片预览" }
+  - await: { visible: { text: "操作菜单 showActionSheet" } }
+  - await: { idle: true }
+  - tap: { text: "采样位置：进水口" }
+  - await: { visible: { role: NumberPicker, text: "选项，进水口，1/2" } }
+  - await: { idle: true }
+  - run: native-popup-picker-qa-20261103-emulator.yaml
+  - run: native-popup-datetime-qa-20261103-emulator.yaml
+  - tap: { text: "取消" }
+  - await: { visible: { text: "操作菜单 showActionSheet" } }
+  - await: { idle: true }
+  - tap: { text: "‹ 返回" }
+  - await: { visible: { text: "页面内滚轮（组件）" } }
+  - await: { idle: true }
+  - tap: { text: "页面内滚轮（组件）" }
+  - await: { visible: { text: "ColumnPicker / TimePicker / TreePicker" } }
+  - await: { idle: true }
+  - echo: "Embedded coordinate exception: no NumberPicker match in describe or full runner tree. Center (.5,.334) derives from label frame, 8dp margin + 8dp padding + 200dp wheel. Callback assertion uses full runner tree."
+  - await: { visible: { text: "采样位置：进水口" } }
+  - swipe: { from: { x: 0.5, y: 0.334 }, by: { y: -0.044 }, duration: 600, momentum: false }
+  - run: native-embedded-outlet-check-20261103-emulator.yaml
+  - await: { visible: { text: "采样日期：2026-10-02" } }
+  - await: { visible: { text: "地区：浙江 / 杭州 / 西湖" } }

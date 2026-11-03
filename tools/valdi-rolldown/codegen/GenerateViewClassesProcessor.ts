@@ -5,7 +5,8 @@ import { KotlinViewClassGenerator, type LanguageSpecificViewClassGenerator } fro
 import type { BundleInfo, NativeSourceAndPlatform } from './Models';
 import { ObjCViewClassGenerator } from './objc/ObjCViewClassGenerator';
 import type { CompilationItem } from './TypeScriptAnnotation';
-import { CompilerError, componentPathString } from './Utils';
+import { componentPathString } from './Utils';
+import { swiftView } from './swift/SwiftGenerators';
 
 function generateViewClass(
   item: CompilationItem,
@@ -23,20 +24,22 @@ function generateViewClass(
   };
 
   const generators: LanguageSpecificViewClassGenerator[] = [];
+  const swiftSources: NativeSourceAndPlatform[] = [];
   if (classMapping.iosType) {
-    if (bundleInfo.iosLanguage !== 'objc') {
-      throw new CompilerError(`ios.language ${bundleInfo.iosLanguage}: only objc is supported`);
+    if (bundleInfo.iosLanguage !== 'objc')
+      swiftSources.push({ platform: 'ios', source: swiftView(bundleInfo, classMapping.iosType, sourceFilename, componentPathString(result.componentPath)) });
+    if (bundleInfo.iosLanguage !== 'swift') {
+      generators.push(
+        new ObjCViewClassGenerator(
+          bundleInfo,
+          classMapping.iosType,
+          componentPathString(result.componentPath),
+          sourceFilename,
+          rawDocument.viewModel?.iosType,
+          rawDocument.componentContext?.iosType,
+        ),
+      );
     }
-    generators.push(
-      new ObjCViewClassGenerator(
-        bundleInfo,
-        classMapping.iosType,
-        componentPathString(result.componentPath),
-        sourceFilename,
-        rawDocument.viewModel?.iosType,
-        rawDocument.componentContext?.iosType,
-      ),
-    );
   }
   if (classMapping.androidClassName !== undefined) {
     generators.push(
@@ -54,7 +57,7 @@ function generateViewClass(
   // No accessors: those are for a template's nodes with ids.
   const nativeActions = result.actions.filter(action => action.type === 'native').map(action => action.name);
   const emitActions = result.actions.filter(action => action.type === 'javaScript').map(action => action.name);
-  const nativeSources: NativeSourceAndPlatform[] = [];
+  const nativeSources: NativeSourceAndPlatform[] = [...swiftSources];
   for (const generator of generators) {
     generator.start();
     generator.appendConstructor();

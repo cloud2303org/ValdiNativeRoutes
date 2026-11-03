@@ -1,7 +1,9 @@
 // Root build commands only build; installing/launching an app belongs to the device workflow.
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkDependencies, checkRuntime, checkSources, checkVision, run, runPnpm } from './prerequisites.mjs';
+import { buildNodeModules } from './node-modules.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const [platform, ...forwarded] = process.argv.slice(2);
@@ -17,9 +19,26 @@ function main() {
     if (platform === 'modules') {
       runPnpm(['--dir', 'tools/valdi-rolldown', 'build', ...forwarded], root);
     } else {
-      run(process.execPath, ['--test', 'scripts/tests/prerequisites.test.mjs', 'scripts/tests/upstream.test.mjs'], root);
-      runPnpm(['--dir', 'tools/valdi-rolldown', 'exec', 'tsx', '--test', 'resources.test.ts', 'hermes.test.ts'], root);
-      runPnpm(['--dir', 'tools/valdi-rolldown', 'exec', 'tsx', 'codegen/goldens.ts', ...forwarded], root);
+      run(process.execPath, ['--test', 'scripts/tests/prerequisites.test.mjs', 'scripts/tests/upstream.test.mjs', 'scripts/tests/cli.test.mjs', 'scripts/tests/dev-controls.test.mjs', 'scripts/tests/native-modules.test.mjs', 'scripts/tests/module-selection.test.mjs', 'scripts/tests/swift-runtime.test.mjs'], root);
+      const valdiSource = sourceOption >= 0 ? forwarded[sourceOption + 1] : [
+        path.join(root, 'valdi/.valdi-sources/external/valdi+'),
+        path.join(root, 'valdi/bazel-valdi/external/valdi+'),
+      ].find(dir => existsSync(path.join(dir, 'modules/_configs/base.tsconfig.json'))) ?? path.join(root, 'valdi/bazel-valdi/external/valdi+');
+      // runtime-module.test.ts and the declaration fixtures read the Valdi sources from here;
+      // the workspace's bazel-valdi link can point at an execroot that no longer has them.
+      process.env.VALDI_SOURCE_ROOT ||= valdiSource;
+      // Compiler fixtures read the app's tsconfigs, which must use this same source tree.
+      const rolldownDir = path.join(root, 'tools/valdi-rolldown');
+      const tsx = path.join(rolldownDir, 'node_modules/tsx/dist/cli.mjs');
+      run(process.execPath, [tsx, 'tsconfig.ts'], rolldownDir);
+      run(process.execPath, ['--test', path.join(valdiSource, 'bzl/valdi/node_tools/rewrite_header.test.mjs')], root);
+      // Run tsx's launcher with Node directly: `pnpm exec` resolves the binary differently on
+      // Windows and can report `Command "tsx" not found` for the same install.
+      run(process.execPath, [tsx, '--test', 'routes.test.ts', 'navigation-options.test.ts', 'mobile-services.test.ts', 'typed-routing.test.ts', 'typed-storage.test.ts', 'appui-promise.test.ts', 'route-animation-parity.test.ts', 'dev-protocol.test.ts', 'wheel-platform-compat.test.ts', 'resources.test.ts', 'hermes.test.ts', 'module-build.test.ts', 'runtime-module.test.ts', 'scaffold.test.ts', 'swift.test.ts', 'bluetooth.test.ts', 'bluetooth-execution.test.ts', 'module-selection.test.ts', 'jsx-upstream.test.ts', 'lazy-import.test.ts', 'upstream-runtime.test.ts'], rolldownDir);
+      // The goldens compare against the same sources the tests used, whatever link holds them.
+      const goldensArgs = ['codegen/goldens.ts', ...forwarded];
+      if (sourceOption < 0) goldensArgs.push('--valdi', valdiSource);
+      run(process.execPath, [tsx, ...goldensArgs], rolldownDir);
     }
     return;
   }
@@ -38,10 +57,14 @@ function main() {
   checkSources(root);
   checkVision(root, platform);
   if (platform === 'android') {
-    run('./gradlew', [':app:assembleDebug', ...forwarded], path.join(root, 'android'));
+    buildNodeModules('android', false, true);
+    // Node 24 refuses to execute Gradle's .cmd wrapper directly, so route through cmd.exe on Windows.
+    if (process.platform === 'win32') run('cmd.exe', ['/d', '/s', '/c', 'gradlew.bat', ':app:assembleDebug', ...forwarded], path.join(root, 'android'));
+    else run('./gradlew', [':app:assembleDebug', ...forwarded], path.join(root, 'android'));
     return;
   }
   const cwd = path.join(root, 'ios');
+  buildNodeModules('ios', false, true);
   run('xcodegen', ['generate', '--spec', 'project.yml'], cwd);
   run('xcodebuild', [
     '-project', 'ValdiRoutes.xcodeproj',

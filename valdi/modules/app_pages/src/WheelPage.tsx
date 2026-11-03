@@ -5,7 +5,7 @@ import { Button } from './Button';
 import { PageContext, PageViewModel } from './Page';
 import { Page } from './PageComponent';
 import { PageHeader } from './PageHeader';
-import { Router } from './routes';
+import { Router } from './navigation';
 import { ColumnPicker, TimePicker, TreeNode, TreePicker, timePickerValue, treePickerValue } from './WheelPickers';
 
 const LOCATIONS = [
@@ -100,7 +100,7 @@ export class WheelPage extends Page<PageViewModel, State, PageContext> {
     const { location, date, sampledAt, region } = this.state;
     const sheet = presentation === 'sheet' || presentation === 'compactSheet';
 
-    <view style={styles.page}>
+    <view style={styles.page} backgroundColor={sheet ? 'white' : '#f3f4f6'}>
       <scroll style={styles.scroll}>
         <view
           paddingTop={insets.top + (sheet ? 4 : 12)}
@@ -161,7 +161,7 @@ export class WheelPage extends Page<PageViewModel, State, PageContext> {
 }
 
 const styles = {
-  page: new Style<View>({ width: '100%', height: '100%', backgroundColor: '#f3f4f6' }),
+  page: new Style<View>({ width: '100%', height: '100%' }),
   scroll: new Style<ScrollView>({ width: '100%', height: '100%' }),
   sheetTitle: new Style<Label>({ color: '#111827', font: systemSemiboldFont(18), marginBottom: 4 }),
   section: new Style<Label>({ color: '#374151', font: systemFont(14), margin: '16 0 8 0' }),

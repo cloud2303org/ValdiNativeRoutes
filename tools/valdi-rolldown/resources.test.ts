@@ -6,9 +6,14 @@ import test from 'node:test';
 import sharp from 'sharp';
 import { findImages, writeAndroidResources, writeIosResources, writeResTs } from './resources';
 
+// libvips keeps decoded images (and their file handles) in a cache, and Windows then
+// refuses to delete the fixture directory. These fixtures are one-shot, so no cache.
+sharp.cache(false);
+
 function fixture(t: { after: (fn: () => void) => void }) {
   const dir = mkdtempSync(path.join(tmpdir(), 'valdi-images-'));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  // Windows keeps a short-lived lock on files sharp just wrote.
+  t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));
   const module = { name: 'icons', dir, generatedDirs: [] };
   mkdirSync(path.join(dir, 'res'));
   return module;

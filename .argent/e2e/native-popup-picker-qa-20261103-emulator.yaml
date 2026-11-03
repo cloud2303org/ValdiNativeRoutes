@@ -1,0 +1,35 @@
+# Fresh live recording on 2026-11-03. Canvas wheel exposes selected value only.
+# Semantic NumberPicker anchors replace recorded frame-derived swipes.
+executionPrerequisite: Android io.valdiroutes.app sampling-location popup open on presentation page; committed location and NumberPicker selection both 进水口 (选项，进水口，1/2). Test restores this popup and value.
+steps:
+  - await: { visible: { role: NumberPicker, text: "选项，进水口，1/2" } }
+  - await: { idle: true }
+  - echo: Change native selection and confirm outlet callback.
+  - swipe: { from: { role: NumberPicker, text: "选项，" }, by: { y: -0.044 }, duration: 600, momentum: false }
+  - await: { visible: { role: NumberPicker, text: "选项，出水口，2/2" } }
+  - tap: { text: "确定" }
+  - await: { visible: { text: "采样位置：出水口" } }
+  - await: { idle: true }
+  - await: { visible: { text: '"confirm":true,"cancel":false,"value":"outlet","index":1' } }
+  - tap: { text: "采样位置：出水口" }
+  - await: { visible: { role: NumberPicker, text: "选项，出水口，2/2" } }
+  - await: { idle: true }
+  - echo: Cancel inlet draft and reopen to prove outlet remains committed.
+  - swipe: { from: { role: NumberPicker, text: "选项，" }, by: { y: 0.044 }, duration: 600, momentum: false }
+  - await: { visible: { role: NumberPicker, text: "选项，进水口，1/2" } }
+  - tap: { text: "取消" }
+  - await: { visible: { text: "采样位置：出水口" } }
+  - await: { idle: true }
+  - await: { visible: { text: '"confirm":false,"cancel":true,"value":"","index":-1' } }
+  - tap: { text: "采样位置：出水口" }
+  - await: { visible: { role: NumberPicker, text: "选项，出水口，2/2" } }
+  - await: { idle: true }
+  - echo: Restore committed inlet and initial popup.
+  - swipe: { from: { role: NumberPicker, text: "选项，" }, by: { y: 0.044 }, duration: 600, momentum: false }
+  - await: { visible: { role: NumberPicker, text: "选项，进水口，1/2" } }
+  - tap: { text: "确定" }
+  - await: { visible: { text: "采样位置：进水口" } }
+  - await: { idle: true }
+  - tap: { text: "采样位置：进水口" }
+  - await: { visible: { role: NumberPicker, text: "选项，进水口，1/2" } }
+  - await: { idle: true }

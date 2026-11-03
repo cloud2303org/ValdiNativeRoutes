@@ -13,27 +13,26 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.key
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -43,7 +42,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
 
 /** A typed menu item shared by Compose callers and the Fabric bridge. */
 data class MenuActionItem(
@@ -117,7 +115,6 @@ fun PopupMenuButton(
  * a selected action returns its id and Back, swipe, outside tap, or Cancel returns null.
  */
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
 fun ActionSheet(
     title: String? = null,
     description: String? = null,
@@ -125,34 +122,51 @@ fun ActionSheet(
     cancelText: String = "取消",
     onResult: (String?) -> Unit,
 ) {
-    val colors = uiColors()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
-    var open by remember { mutableStateOf(true) }
-    var closeStarted by remember { mutableStateOf(false) }
-    val close: (String?) -> Unit = { result ->
-        if (!closeStarted) {
-            closeStarted = true
-            scope.launch {
-                sheetState.hide()
-                open = false
-                onResult(result)
-            }
-        }
+    val result = remember { ActionSheetResultState() }
+    val latestResult by rememberUpdatedState(onResult)
+    // This overload historically also worked outside ProvideOverlays. Inherit a
+    // real page scope when supplied; otherwise this composition owns one sheet.
+    val scope = LocalOverlayScope.current ?: remember {
+        OverlayScope(
+            register = { _, _, event -> event("top"); true },
+            update = { _, _, _ -> },
+            remove = {},
+        )
     }
-    if (open) {
-        ModalBottomSheet(
-            onDismissRequest = { close(null) }, sheetState = sheetState,
-            shape = RoundedCornerShape(UiDesign.radius.sheet.dp), containerColor = colors.surface,
-            contentColor = colors.text, scrimColor = colors.scrim,
-            dragHandle = { SheetHeader(null, null) },
-        ) { ActionSheetPanel(title, description, actions, cancelText, close) }
+    CompositionLocalProvider(LocalOverlayScope provides scope) {
+        ActionSheet(
+            open = result.open, title = title, description = description,
+            actions = actions, cancelText = cancelText,
+            onOpenChange = { open, _ -> if (!open) result.request(null) },
+            onSelect = result::request,
+            onClosed = { reason -> result.closed(reason, latestResult) },
+        )
     }
 }
 
-/** Controlled form uses the same ActionSheet geometry, with page-owned Back and closing lifecycle. */
+/** Selection is a close request; only physical close (or removal) delivers a result. */
+internal class ActionSheetResultState {
+    var open by mutableStateOf(true)
+        private set
+    private var selection: String? = null
+    private var delivered = false
+
+    fun request(value: String?) {
+        if (!open || delivered) return
+        selection = value
+        open = false
+    }
+
+    fun closed(reason: OverlayCloseReason, onResult: (String?) -> Unit) {
+        if (delivered) return
+        delivered = true
+        open = false
+        onResult(if (reason == OverlayCloseReason.Dismissed) selection else null)
+    }
+}
+
+/** Controlled form shares the transplanted shell, page-owned Back and closing lifecycle. */
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
 fun ActionSheet(
     open: Boolean,
     title: String? = null,
@@ -163,37 +177,30 @@ fun ActionSheet(
     onSelect: (String) -> Unit,
     onClosed: (OverlayCloseReason) -> Unit = {},
 ) {
-    val presentation = rememberPresentation(open, true, SheetDismissReason.Back, SheetDismissReason.Navigation, onOpenChange, onClosed)
-    val current = presentation.id ?: return
-    key(current) {
-        val state = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { value ->
-            value != androidx.compose.material3.SheetValue.Hidden || !presentation.open || presentation.top
-        })
-        LaunchedEffect(open) {
-            if (open) state.show() else { state.hide(); presentation.finish(current) }
-        }
-        val colors = uiColors()
-        ModalBottomSheet(
-            onDismissRequest = { presentation.requestClose(SheetDismissReason.Gesture) }, sheetState = state,
-            properties = androidx.compose.material3.ModalBottomSheetProperties(shouldDismissOnBackPress = false),
-            shape = RoundedCornerShape(UiDesign.radius.sheet.dp), containerColor = colors.surface,
-            contentColor = colors.text, scrimColor = colors.scrim,
-            dragHandle = { SheetHeader(null, null) },
-        ) {
-            NotifyOverlayWindowAttached(current)
-            val back = rememberOverlayBack { presentation.requestClose(SheetDismissReason.Back) }
-            androidx.activity.compose.BackHandler(onBack = back)
-            Box {
-                ActionSheetPanel(title, description, actions, cancelText, { result ->
-                    if (presentation.interactive) {
-                        if (result == null) presentation.requestClose(SheetDismissReason.Back) else onSelect(result)
-                    }
-                }, presentation.interactive)
-                if (!presentation.interactive) Box(Modifier.matchParentSize().pointerInput(Unit) {
-                    awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } }
-                })
+    var closeRequested by remember(open) { mutableStateOf(false) }
+    SheetFrame(
+        open = open,
+        onOpenChange = { next, reason ->
+            // Navigation is an owner notification even if selection already
+            // requested closure. Other user requests are accepted only once.
+            if (reason == SheetDismissReason.Navigation || !closeRequested) {
+                if (!next) closeRequested = true
+                onOpenChange(next, reason)
             }
-        }
+        },
+        onClosed = { reason -> closeRequested = false; onClosed(reason) },
+        layout = SheetLayout.Scroll,
+        // Keep the existing left-aligned title/action panel, its padding and
+        // its cancel row. SheetFrame supplies the single handle and native shell.
+        edgeToEdge = true,
+    ) {
+        ActionSheetPanel(title, description, actions, cancelText, { selection ->
+            if (open && !closeRequested) {
+                closeRequested = true
+                if (selection == null) onOpenChange(false, SheetDismissReason.Back)
+                else onSelect(selection)
+            }
+        }, interactive = open && !closeRequested)
     }
 }
 
@@ -203,7 +210,9 @@ private fun ActionSheetPanel(title: String?, description: String?, actions: List
     close: (String?) -> Unit, interactive: Boolean = true) {
     val colors = uiColors()
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = UiDesign.space.content.dp).padding(bottom = UiDesign.space.lg.dp)
+        Modifier.fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom))
+            .padding(horizontal = UiDesign.space.content.dp).padding(bottom = UiDesign.space.lg.dp)
             .then(if (interactive) Modifier else Modifier.semantics { hideFromAccessibility() }),
         verticalArrangement = Arrangement.spacedBy(UiDesign.space.xs.dp),
     ) {

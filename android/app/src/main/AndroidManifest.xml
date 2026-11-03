@@ -2,14 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Bluetooth (api.openBluetoothAdapter and the rest), as in ExpoNativeRoutes android/native/ble. Runtime
-         requests go through PermissionHost (ble/permission.ts): scan/connect or advertise/connect on 12+, location before. -->
-    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
-    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <!-- Selected native modules contribute their own feature/permission declarations at build time. -->
     <!-- Wi-Fi (src/wifi), as in ExpoNativeRoutes android/native/wifi. Scans and full SSID/BSSID reads need location on
          every version: blessed-kotlin's maxSdkVersion 30 is removed (BLE before 12 uses them too). Runtime requests go
          through PermissionHost. -->

@@ -66,194 +66,115 @@ namespace snap::valdi_modules::app_pages {
 
 namespace snap::valdi_modules::app_pages {
 
-  AppUIHost::AppUIHost(): Valdi::CppGeneratedModel(getRegisteredClass()) {
+  class AppUIHostProxy: public AppUIHost {
+    public:
+    using ShowModalFn = Valdi::Function<Valdi::Future<ModalReply>(ModalRequest)>;
+    using ShowActionSheetFn = Valdi::Function<Valdi::Future<PresentationReply>(ActionSheetRequest)>;
+    using ShowPickerFn = Valdi::Function<Valdi::Future<PresentationReply>(PickerRequest)>;
+    using ShowDatePickerFn = Valdi::Function<Valdi::Future<PresentationReply>(DatePickerRequest)>;
+    using ShowBottomSheetFn = Valdi::Function<Valdi::Future<PresentationReply>(BottomSheetRequest)>;
+    using PreviewImageFn = Valdi::Function<Valdi::Future<PresentationReply>(ImagePreviewRequest)>;
+    using ScanCodeFn = Valdi::Function<Valdi::Future<ScanCodeReply>()>;
+    using PickAttachmentsFn = Valdi::Function<Valdi::Future<AttachmentSelection>(Valdi::StringBox, double, std::vector<Valdi::StringBox>)>;
+    using ClearAttachmentCacheFn = Valdi::Function<Valdi::Future<void>()>;
+    using ShowToastFn = Valdi::Function<Valdi::Future<void>(ToastRequest)>;
+    using HideToastFn = Valdi::Function<Valdi::Future<void>()>;
+    using ShowLoadingFn = Valdi::Function<Valdi::Future<void>(LoadingRequest)>;
+    using HideLoadingFn = Valdi::Function<Valdi::Future<void>()>;
+
+    AppUIHostProxy() = default;
+    ~AppUIHostProxy() override = default;
+
+    Valdi::Future<ModalReply> showModal(ModalRequest request) final {
+      return _showModal(request);
+    }
+
+    Valdi::Future<PresentationReply> showActionSheet(ActionSheetRequest request) final {
+      return _showActionSheet(request);
+    }
+
+    Valdi::Future<PresentationReply> showPicker(PickerRequest request) final {
+      return _showPicker(request);
+    }
+
+    Valdi::Future<PresentationReply> showDatePicker(DatePickerRequest request) final {
+      return _showDatePicker(request);
+    }
+
+    Valdi::Future<PresentationReply> showBottomSheet(BottomSheetRequest request) final {
+      return _showBottomSheet(request);
+    }
+
+    Valdi::Future<PresentationReply> previewImage(ImagePreviewRequest request) final {
+      return _previewImage(request);
+    }
+
+    Valdi::Future<ScanCodeReply> scanCode() final {
+      return _scanCode();
+    }
+
+    Valdi::Future<AttachmentSelection> pickAttachments(Valdi::StringBox source, double limit, std::vector<Valdi::StringBox> mimeTypes) final {
+      return _pickAttachments(source, limit, mimeTypes);
+    }
+
+    Valdi::Future<void> clearAttachmentCache() final {
+      return _clearAttachmentCache();
+    }
+
+    Valdi::Future<void> showToast(ToastRequest request) final {
+      return _showToast(request);
+    }
+
+    Valdi::Future<void> hideToast() final {
+      return _hideToast();
+    }
+
+    Valdi::Future<void> showLoading(LoadingRequest request) final {
+      return _showLoading(request);
+    }
+
+    Valdi::Future<void> hideLoading() final {
+      return _hideLoading();
+    }
+
+    static void unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, Valdi::Ref<AppUIHostProxy> &out) {
+      out = Valdi::makeShared<AppUIHostProxy>();
+      auto &self = *out;
+      Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._showModal, self._showActionSheet, self._showPicker, self._showDatePicker, self._showBottomSheet, self._previewImage, self._scanCode, self._pickAttachments, self._clearAttachmentCache, self._showToast, self._hideToast, self._showLoading, self._hideLoading);
+    }
+
+    private:
+    ShowModalFn _showModal;
+    ShowActionSheetFn _showActionSheet;
+    ShowPickerFn _showPicker;
+    ShowDatePickerFn _showDatePicker;
+    ShowBottomSheetFn _showBottomSheet;
+    PreviewImageFn _previewImage;
+    ScanCodeFn _scanCode;
+    PickAttachmentsFn _pickAttachments;
+    ClearAttachmentCacheFn _clearAttachmentCache;
+    ShowToastFn _showToast;
+    HideToastFn _hideToast;
+    ShowLoadingFn _showLoading;
+    HideLoadingFn _hideLoading;
+  };
+
+  AppUIHost::AppUIHost(): Valdi::CppGeneratedInterface(getRegisteredClass()) {
   }
 
-  AppUIHost::AppUIHost(const AppUIHost::ShowModalFn &showModal, const AppUIHost::ShowActionSheetFn &showActionSheet, const AppUIHost::ShowPickerFn &showPicker, const AppUIHost::ShowDatePickerFn &showDatePicker, const AppUIHost::ShowBottomSheetFn &showBottomSheet, const AppUIHost::PreviewImageFn &previewImage, const AppUIHost::ScanCodeFn &scanCode, const AppUIHost::PickAttachmentsFn &pickAttachments, const AppUIHost::ClearAttachmentCacheFn &clearAttachmentCache, const AppUIHost::ShowToastFn &showToast, const AppUIHost::HideToastFn &hideToast, const AppUIHost::ShowLoadingFn &showLoading, const AppUIHost::HideLoadingFn &hideLoading): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _showModal(std::move(showModal)),
-  _showActionSheet(std::move(showActionSheet)),
-  _showPicker(std::move(showPicker)),
-  _showDatePicker(std::move(showDatePicker)),
-  _showBottomSheet(std::move(showBottomSheet)),
-  _previewImage(std::move(previewImage)),
-  _scanCode(std::move(scanCode)),
-  _pickAttachments(std::move(pickAttachments)),
-  _clearAttachmentCache(std::move(clearAttachmentCache)),
-  _showToast(std::move(showToast)),
-  _hideToast(std::move(hideToast)),
-  _showLoading(std::move(showLoading)),
-  _hideLoading(std::move(hideLoading)) {
+  void AppUIHost::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, Valdi::Ref<AppUIHost> &out) {
+    Valdi::CppMarshaller::unmarshallProxyObject<AppUIHostProxy>(exceptionTracker, *getRegisteredClass(), value, out);
   }
 
-  const AppUIHost::ShowModalFn &AppUIHost::getShowModal() const {
-    return _showModal;
-  }
-
-  void AppUIHost::setShowModal(const AppUIHost::ShowModalFn &value) {
-    _showModal = value;
-  }
-
-  void AppUIHost::setShowModal(AppUIHost::ShowModalFn &&value) {
-    _showModal = std::move(value);
-  }
-
-  const AppUIHost::ShowActionSheetFn &AppUIHost::getShowActionSheet() const {
-    return _showActionSheet;
-  }
-
-  void AppUIHost::setShowActionSheet(const AppUIHost::ShowActionSheetFn &value) {
-    _showActionSheet = value;
-  }
-
-  void AppUIHost::setShowActionSheet(AppUIHost::ShowActionSheetFn &&value) {
-    _showActionSheet = std::move(value);
-  }
-
-  const AppUIHost::ShowPickerFn &AppUIHost::getShowPicker() const {
-    return _showPicker;
-  }
-
-  void AppUIHost::setShowPicker(const AppUIHost::ShowPickerFn &value) {
-    _showPicker = value;
-  }
-
-  void AppUIHost::setShowPicker(AppUIHost::ShowPickerFn &&value) {
-    _showPicker = std::move(value);
-  }
-
-  const AppUIHost::ShowDatePickerFn &AppUIHost::getShowDatePicker() const {
-    return _showDatePicker;
-  }
-
-  void AppUIHost::setShowDatePicker(const AppUIHost::ShowDatePickerFn &value) {
-    _showDatePicker = value;
-  }
-
-  void AppUIHost::setShowDatePicker(AppUIHost::ShowDatePickerFn &&value) {
-    _showDatePicker = std::move(value);
-  }
-
-  const AppUIHost::ShowBottomSheetFn &AppUIHost::getShowBottomSheet() const {
-    return _showBottomSheet;
-  }
-
-  void AppUIHost::setShowBottomSheet(const AppUIHost::ShowBottomSheetFn &value) {
-    _showBottomSheet = value;
-  }
-
-  void AppUIHost::setShowBottomSheet(AppUIHost::ShowBottomSheetFn &&value) {
-    _showBottomSheet = std::move(value);
-  }
-
-  const AppUIHost::PreviewImageFn &AppUIHost::getPreviewImage() const {
-    return _previewImage;
-  }
-
-  void AppUIHost::setPreviewImage(const AppUIHost::PreviewImageFn &value) {
-    _previewImage = value;
-  }
-
-  void AppUIHost::setPreviewImage(AppUIHost::PreviewImageFn &&value) {
-    _previewImage = std::move(value);
-  }
-
-  const AppUIHost::ScanCodeFn &AppUIHost::getScanCode() const {
-    return _scanCode;
-  }
-
-  void AppUIHost::setScanCode(const AppUIHost::ScanCodeFn &value) {
-    _scanCode = value;
-  }
-
-  void AppUIHost::setScanCode(AppUIHost::ScanCodeFn &&value) {
-    _scanCode = std::move(value);
-  }
-
-  const AppUIHost::PickAttachmentsFn &AppUIHost::getPickAttachments() const {
-    return _pickAttachments;
-  }
-
-  void AppUIHost::setPickAttachments(const AppUIHost::PickAttachmentsFn &value) {
-    _pickAttachments = value;
-  }
-
-  void AppUIHost::setPickAttachments(AppUIHost::PickAttachmentsFn &&value) {
-    _pickAttachments = std::move(value);
-  }
-
-  const AppUIHost::ClearAttachmentCacheFn &AppUIHost::getClearAttachmentCache() const {
-    return _clearAttachmentCache;
-  }
-
-  void AppUIHost::setClearAttachmentCache(const AppUIHost::ClearAttachmentCacheFn &value) {
-    _clearAttachmentCache = value;
-  }
-
-  void AppUIHost::setClearAttachmentCache(AppUIHost::ClearAttachmentCacheFn &&value) {
-    _clearAttachmentCache = std::move(value);
-  }
-
-  const AppUIHost::ShowToastFn &AppUIHost::getShowToast() const {
-    return _showToast;
-  }
-
-  void AppUIHost::setShowToast(const AppUIHost::ShowToastFn &value) {
-    _showToast = value;
-  }
-
-  void AppUIHost::setShowToast(AppUIHost::ShowToastFn &&value) {
-    _showToast = std::move(value);
-  }
-
-  const AppUIHost::HideToastFn &AppUIHost::getHideToast() const {
-    return _hideToast;
-  }
-
-  void AppUIHost::setHideToast(const AppUIHost::HideToastFn &value) {
-    _hideToast = value;
-  }
-
-  void AppUIHost::setHideToast(AppUIHost::HideToastFn &&value) {
-    _hideToast = std::move(value);
-  }
-
-  const AppUIHost::ShowLoadingFn &AppUIHost::getShowLoading() const {
-    return _showLoading;
-  }
-
-  void AppUIHost::setShowLoading(const AppUIHost::ShowLoadingFn &value) {
-    _showLoading = value;
-  }
-
-  void AppUIHost::setShowLoading(AppUIHost::ShowLoadingFn &&value) {
-    _showLoading = std::move(value);
-  }
-
-  const AppUIHost::HideLoadingFn &AppUIHost::getHideLoading() const {
-    return _hideLoading;
-  }
-
-  void AppUIHost::setHideLoading(const AppUIHost::HideLoadingFn &value) {
-    _hideLoading = value;
-  }
-
-  void AppUIHost::setHideLoading(AppUIHost::HideLoadingFn &&value) {
-    _hideLoading = std::move(value);
-  }
-
-  void AppUIHost::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, AppUIHost &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._showModal, self._showActionSheet, self._showPicker, self._showDatePicker, self._showBottomSheet, self._previewImage, self._scanCode, self._pickAttachments, self._clearAttachmentCache, self._showToast, self._hideToast, self._showLoading, self._hideLoading);
-  }
-
-  void AppUIHost::marshall(Valdi::ExceptionTracker &exceptionTracker, const AppUIHost &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._showModal, self._showActionSheet, self._showPicker, self._showDatePicker, self._showBottomSheet, self._previewImage, self._scanCode, self._pickAttachments, self._clearAttachmentCache, self._showToast, self._hideToast, self._showLoading, self._hideLoading);
+  void AppUIHost::marshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Ref<AppUIHost> &value, Valdi::Value &out) {
+    Valdi::CppMarshaller::marshallProxyObject(exceptionTracker, *getRegisteredClass(), *value, out, [&]() {
+      Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, Valdi::CppMarshaller::methodToFunction<AppUIHost, &AppUIHost::showModal>(value), Valdi::CppMarshaller::methodToFunction<AppUIHost, &AppUIHost::showActionSheet>(value), Valdi::CppMarshaller::methodToFunction<AppUIHost, &AppUIHost::showPicker>(value), Valdi::CppMarshaller::methodToFunction<AppUIHost, &AppUIHost::showDatePicker>(value), Valdi::CppMarshaller::methodToFunction<AppUIHost, &AppUIHost::showBottomSheet>(value), Valdi::CppMarshaller::methodToFunction<AppUIHost, &AppUIHost::previewImage>(value), Valdi::CppMarshaller::methodToFunction<AppUIHost, &AppUIHost::scanCode>(value), Valdi::CppMarshaller::methodToFunction<AppUIHost, &AppUIHost::pickAttachments>(value), Valdi::CppMarshaller::methodToFunction<AppUIHost, &AppUIHost::clearAttachmentCache>(value), Valdi::CppMarshaller::methodToFunction<AppUIHost, &AppUIHost::showToast>(value), Valdi::CppMarshaller::methodToFunction<AppUIHost, &AppUIHost::hideToast>(value), Valdi::CppMarshaller::methodToFunction<AppUIHost, &AppUIHost::showLoading>(value), Valdi::CppMarshaller::methodToFunction<AppUIHost, &AppUIHost::hideLoading>(value));
+    });
   }
 
   Valdi::RegisteredCppGeneratedClass *AppUIHost::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::AppUIHost'{'showModal':f(r:'[0]', f(s, r:'[1]')), 'showActionSheet':f(r:'[2]', f(s, r:'[3]')), 'showPicker':f(r:'[4]', f(s, r:'[3]')), 'showDatePicker':f(r:'[5]', f(s, r:'[3]')), 'showBottomSheet':f(r:'[6]', f(s, r:'[3]')), 'previewImage':f(r:'[7]', f(s, r:'[3]')), 'scanCode':f(f(s, r:'[8]')), 'pickAttachments':f(s, d, a<s>, f(s, r:'[9]')), 'clearAttachmentCache':f(f(s)), 'showToast':f(r:'[10]', f(s)), 'hideToast':f(f(s)), 'showLoading':f(r:'[11]', f(s)), 'hideLoading':f(f(s))}", []() -> Valdi::TypeReferencesVec {
-      return {ModalRequest::getRegisteredClass(), ModalReply::getRegisteredClass(), ActionSheetRequest::getRegisteredClass(), PresentationReply::getRegisteredClass(), PickerRequest::getRegisteredClass(), DatePickerRequest::getRegisteredClass(), BottomSheetRequest::getRegisteredClass(), ImagePreviewRequest::getRegisteredClass(), ScanCodeReply::getRegisteredClass(), AttachmentSelection::getRegisteredClass(), ToastRequest::getRegisteredClass(), LoadingRequest::getRegisteredClass()};
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c+ 'snap::valdi_modules::app_pages::AppUIHost'{'showModal':f|m|(r:'[1]'): p<r:'[0]'>, 'showActionSheet':f|m|(r:'[3]'): p<r:'[2]'>, 'showPicker':f|m|(r:'[4]'): p<r:'[2]'>, 'showDatePicker':f|m|(r:'[5]'): p<r:'[2]'>, 'showBottomSheet':f|m|(r:'[6]'): p<r:'[2]'>, 'previewImage':f|m|(r:'[7]'): p<r:'[2]'>, 'scanCode':f|m|(): p<r:'[8]'>, 'pickAttachments':f|m|(s, d, a<s>): p<r:'[9]'>, 'clearAttachmentCache':f|m|(): p<v>, 'showToast':f|m|(r:'[10]'): p<v>, 'hideToast':f|m|(): p<v>, 'showLoading':f|m|(r:'[11]'): p<v>, 'hideLoading':f|m|(): p<v>}", []() -> Valdi::TypeReferencesVec {
+      return {ModalReply::getRegisteredClass(), ModalRequest::getRegisteredClass(), PresentationReply::getRegisteredClass(), ActionSheetRequest::getRegisteredClass(), PickerRequest::getRegisteredClass(), DatePickerRequest::getRegisteredClass(), BottomSheetRequest::getRegisteredClass(), ImagePreviewRequest::getRegisteredClass(), ScanCodeReply::getRegisteredClass(), AttachmentSelection::getRegisteredClass(), ToastRequest::getRegisteredClass(), LoadingRequest::getRegisteredClass()};
     });
 
     return kRegisteredClass;
@@ -413,2627 +334,6 @@ namespace snap::valdi_modules::app_pages {
 }
 
 //
-// BleAdapterState.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BleAdapterState::BleAdapterState(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BleAdapterState::BleAdapterState(bool available, bool discovering, std::optional<bool> peripheralAvailable): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _available(available),
-  _discovering(discovering),
-  _peripheralAvailable(peripheralAvailable) {
-  }
-
-  bool BleAdapterState::getAvailable() const {
-    return _available;
-  }
-
-  void BleAdapterState::setAvailable(bool value) {
-    _available = value;
-  }
-
-  bool BleAdapterState::getDiscovering() const {
-    return _discovering;
-  }
-
-  void BleAdapterState::setDiscovering(bool value) {
-    _discovering = value;
-  }
-
-  std::optional<bool> BleAdapterState::getPeripheralAvailable() const {
-    return _peripheralAvailable;
-  }
-
-  void BleAdapterState::setPeripheralAvailable(std::optional<bool> value) {
-    _peripheralAvailable = value;
-  }
-
-  void BleAdapterState::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BleAdapterState &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._available, self._discovering, self._peripheralAvailable);
-  }
-
-  void BleAdapterState::marshall(Valdi::ExceptionTracker &exceptionTracker, const BleAdapterState &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._available, self._discovering, self._peripheralAvailable);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BleAdapterState::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BleAdapterState'{'available':b, 'discovering':b, 'peripheralAvailable':b@?}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BleCharacteristic.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BleCharacteristic::BleCharacteristic(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BleCharacteristic::BleCharacteristic(const Valdi::StringBox &uuid, const BleCharacteristicProperties &properties): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _uuid(std::move(uuid)),
-  _properties(std::move(properties)) {
-  }
-
-  const Valdi::StringBox &BleCharacteristic::getUuid() const {
-    return _uuid;
-  }
-
-  void BleCharacteristic::setUuid(const Valdi::StringBox &value) {
-    _uuid = value;
-  }
-
-  void BleCharacteristic::setUuid(Valdi::StringBox &&value) {
-    _uuid = std::move(value);
-  }
-
-  const BleCharacteristicProperties &BleCharacteristic::getProperties() const {
-    return _properties;
-  }
-
-  void BleCharacteristic::setProperties(const BleCharacteristicProperties &value) {
-    _properties = value;
-  }
-
-  void BleCharacteristic::setProperties(BleCharacteristicProperties &&value) {
-    _properties = std::move(value);
-  }
-
-  void BleCharacteristic::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BleCharacteristic &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._uuid, self._properties);
-  }
-
-  void BleCharacteristic::marshall(Valdi::ExceptionTracker &exceptionTracker, const BleCharacteristic &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._uuid, self._properties);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BleCharacteristic::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BleCharacteristic'{'uuid':s, 'properties':r:'[0]'}", []() -> Valdi::TypeReferencesVec {
-      return {BleCharacteristicProperties::getRegisteredClass()};
-    });
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BleCharacteristicProperties.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BleCharacteristicProperties::BleCharacteristicProperties(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BleCharacteristicProperties::BleCharacteristicProperties(bool read, bool write, bool writeDefault, bool writeNoResponse, bool notify, bool indicate): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _read(read),
-  _write(write),
-  _writeDefault(writeDefault),
-  _writeNoResponse(writeNoResponse),
-  _notify(notify),
-  _indicate(indicate) {
-  }
-
-  bool BleCharacteristicProperties::getRead() const {
-    return _read;
-  }
-
-  void BleCharacteristicProperties::setRead(bool value) {
-    _read = value;
-  }
-
-  bool BleCharacteristicProperties::getWrite() const {
-    return _write;
-  }
-
-  void BleCharacteristicProperties::setWrite(bool value) {
-    _write = value;
-  }
-
-  bool BleCharacteristicProperties::getWriteDefault() const {
-    return _writeDefault;
-  }
-
-  void BleCharacteristicProperties::setWriteDefault(bool value) {
-    _writeDefault = value;
-  }
-
-  bool BleCharacteristicProperties::getWriteNoResponse() const {
-    return _writeNoResponse;
-  }
-
-  void BleCharacteristicProperties::setWriteNoResponse(bool value) {
-    _writeNoResponse = value;
-  }
-
-  bool BleCharacteristicProperties::getNotify() const {
-    return _notify;
-  }
-
-  void BleCharacteristicProperties::setNotify(bool value) {
-    _notify = value;
-  }
-
-  bool BleCharacteristicProperties::getIndicate() const {
-    return _indicate;
-  }
-
-  void BleCharacteristicProperties::setIndicate(bool value) {
-    _indicate = value;
-  }
-
-  void BleCharacteristicProperties::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BleCharacteristicProperties &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._read, self._write, self._writeDefault, self._writeNoResponse, self._notify, self._indicate);
-  }
-
-  void BleCharacteristicProperties::marshall(Valdi::ExceptionTracker &exceptionTracker, const BleCharacteristicProperties &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._read, self._write, self._writeDefault, self._writeNoResponse, self._notify, self._indicate);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BleCharacteristicProperties::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BleCharacteristicProperties'{'read':b, 'write':b, 'writeDefault':b, 'writeNoResponse':b, 'notify':b, 'indicate':b}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BleCharacteristicValue.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BleCharacteristicValue::BleCharacteristicValue(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BleCharacteristicValue::BleCharacteristicValue(const Valdi::StringBox &deviceId, const Valdi::StringBox &serviceId, const Valdi::StringBox &characteristicId, const Valdi::BytesView &value): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _deviceId(std::move(deviceId)),
-  _serviceId(std::move(serviceId)),
-  _characteristicId(std::move(characteristicId)),
-  _value(std::move(value)) {
-  }
-
-  const Valdi::StringBox &BleCharacteristicValue::getDeviceId() const {
-    return _deviceId;
-  }
-
-  void BleCharacteristicValue::setDeviceId(const Valdi::StringBox &value) {
-    _deviceId = value;
-  }
-
-  void BleCharacteristicValue::setDeviceId(Valdi::StringBox &&value) {
-    _deviceId = std::move(value);
-  }
-
-  const Valdi::StringBox &BleCharacteristicValue::getServiceId() const {
-    return _serviceId;
-  }
-
-  void BleCharacteristicValue::setServiceId(const Valdi::StringBox &value) {
-    _serviceId = value;
-  }
-
-  void BleCharacteristicValue::setServiceId(Valdi::StringBox &&value) {
-    _serviceId = std::move(value);
-  }
-
-  const Valdi::StringBox &BleCharacteristicValue::getCharacteristicId() const {
-    return _characteristicId;
-  }
-
-  void BleCharacteristicValue::setCharacteristicId(const Valdi::StringBox &value) {
-    _characteristicId = value;
-  }
-
-  void BleCharacteristicValue::setCharacteristicId(Valdi::StringBox &&value) {
-    _characteristicId = std::move(value);
-  }
-
-  const Valdi::BytesView &BleCharacteristicValue::getValue() const {
-    return _value;
-  }
-
-  void BleCharacteristicValue::setValue(const Valdi::BytesView &value) {
-    _value = value;
-  }
-
-  void BleCharacteristicValue::setValue(Valdi::BytesView &&value) {
-    _value = std::move(value);
-  }
-
-  void BleCharacteristicValue::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BleCharacteristicValue &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._deviceId, self._serviceId, self._characteristicId, self._value);
-  }
-
-  void BleCharacteristicValue::marshall(Valdi::ExceptionTracker &exceptionTracker, const BleCharacteristicValue &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._deviceId, self._serviceId, self._characteristicId, self._value);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BleCharacteristicValue::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BleCharacteristicValue'{'deviceId':s, 'serviceId':s, 'characteristicId':s, 'value':t}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BleConnectStateChange.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BleConnectStateChange::BleConnectStateChange(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BleConnectStateChange::BleConnectStateChange(const Valdi::StringBox &deviceId, bool connected): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _deviceId(std::move(deviceId)),
-  _connected(connected) {
-  }
-
-  const Valdi::StringBox &BleConnectStateChange::getDeviceId() const {
-    return _deviceId;
-  }
-
-  void BleConnectStateChange::setDeviceId(const Valdi::StringBox &value) {
-    _deviceId = value;
-  }
-
-  void BleConnectStateChange::setDeviceId(Valdi::StringBox &&value) {
-    _deviceId = std::move(value);
-  }
-
-  bool BleConnectStateChange::getConnected() const {
-    return _connected;
-  }
-
-  void BleConnectStateChange::setConnected(bool value) {
-    _connected = value;
-  }
-
-  void BleConnectStateChange::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BleConnectStateChange &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._deviceId, self._connected);
-  }
-
-  void BleConnectStateChange::marshall(Valdi::ExceptionTracker &exceptionTracker, const BleConnectStateChange &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._deviceId, self._connected);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BleConnectStateChange::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BleConnectStateChange'{'deviceId':s, 'connected':b}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BleConnectedDevice.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BleConnectedDevice::BleConnectedDevice(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BleConnectedDevice::BleConnectedDevice(const Valdi::StringBox &deviceId, const Valdi::StringBox &name): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _deviceId(std::move(deviceId)),
-  _name(std::move(name)) {
-  }
-
-  const Valdi::StringBox &BleConnectedDevice::getDeviceId() const {
-    return _deviceId;
-  }
-
-  void BleConnectedDevice::setDeviceId(const Valdi::StringBox &value) {
-    _deviceId = value;
-  }
-
-  void BleConnectedDevice::setDeviceId(Valdi::StringBox &&value) {
-    _deviceId = std::move(value);
-  }
-
-  const Valdi::StringBox &BleConnectedDevice::getName() const {
-    return _name;
-  }
-
-  void BleConnectedDevice::setName(const Valdi::StringBox &value) {
-    _name = value;
-  }
-
-  void BleConnectedDevice::setName(Valdi::StringBox &&value) {
-    _name = std::move(value);
-  }
-
-  void BleConnectedDevice::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BleConnectedDevice &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._deviceId, self._name);
-  }
-
-  void BleConnectedDevice::marshall(Valdi::ExceptionTracker &exceptionTracker, const BleConnectedDevice &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._deviceId, self._name);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BleConnectedDevice::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BleConnectedDevice'{'deviceId':s, 'name':s}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BleDevice.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BleDevice::BleDevice(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BleDevice::BleDevice(double RSSI, const Valdi::BytesView &advertisData, const std::vector<Valdi::StringBox> &advertisServiceUUIDs, const Valdi::StringBox &deviceId, const Valdi::StringBox &localName, const Valdi::StringBox &name, const std::vector<BleServiceData> &serviceData, std::optional<bool> connectable): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _RSSI(RSSI),
-  _advertisData(std::move(advertisData)),
-  _advertisServiceUUIDs(std::move(advertisServiceUUIDs)),
-  _deviceId(std::move(deviceId)),
-  _localName(std::move(localName)),
-  _name(std::move(name)),
-  _serviceData(std::move(serviceData)),
-  _connectable(connectable) {
-  }
-
-  double BleDevice::getRSSI() const {
-    return _RSSI;
-  }
-
-  void BleDevice::setRSSI(double value) {
-    _RSSI = value;
-  }
-
-  const Valdi::BytesView &BleDevice::getAdvertisData() const {
-    return _advertisData;
-  }
-
-  void BleDevice::setAdvertisData(const Valdi::BytesView &value) {
-    _advertisData = value;
-  }
-
-  void BleDevice::setAdvertisData(Valdi::BytesView &&value) {
-    _advertisData = std::move(value);
-  }
-
-  const std::vector<Valdi::StringBox> &BleDevice::getAdvertisServiceUUIDs() const {
-    return _advertisServiceUUIDs;
-  }
-
-  void BleDevice::setAdvertisServiceUUIDs(const std::vector<Valdi::StringBox> &value) {
-    _advertisServiceUUIDs = value;
-  }
-
-  void BleDevice::setAdvertisServiceUUIDs(std::vector<Valdi::StringBox> &&value) {
-    _advertisServiceUUIDs = std::move(value);
-  }
-
-  const Valdi::StringBox &BleDevice::getDeviceId() const {
-    return _deviceId;
-  }
-
-  void BleDevice::setDeviceId(const Valdi::StringBox &value) {
-    _deviceId = value;
-  }
-
-  void BleDevice::setDeviceId(Valdi::StringBox &&value) {
-    _deviceId = std::move(value);
-  }
-
-  const Valdi::StringBox &BleDevice::getLocalName() const {
-    return _localName;
-  }
-
-  void BleDevice::setLocalName(const Valdi::StringBox &value) {
-    _localName = value;
-  }
-
-  void BleDevice::setLocalName(Valdi::StringBox &&value) {
-    _localName = std::move(value);
-  }
-
-  const Valdi::StringBox &BleDevice::getName() const {
-    return _name;
-  }
-
-  void BleDevice::setName(const Valdi::StringBox &value) {
-    _name = value;
-  }
-
-  void BleDevice::setName(Valdi::StringBox &&value) {
-    _name = std::move(value);
-  }
-
-  const std::vector<BleServiceData> &BleDevice::getServiceData() const {
-    return _serviceData;
-  }
-
-  void BleDevice::setServiceData(const std::vector<BleServiceData> &value) {
-    _serviceData = value;
-  }
-
-  void BleDevice::setServiceData(std::vector<BleServiceData> &&value) {
-    _serviceData = std::move(value);
-  }
-
-  std::optional<bool> BleDevice::getConnectable() const {
-    return _connectable;
-  }
-
-  void BleDevice::setConnectable(std::optional<bool> value) {
-    _connectable = value;
-  }
-
-  void BleDevice::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BleDevice &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._RSSI, self._advertisData, self._advertisServiceUUIDs, self._deviceId, self._localName, self._name, self._serviceData, self._connectable);
-  }
-
-  void BleDevice::marshall(Valdi::ExceptionTracker &exceptionTracker, const BleDevice &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._RSSI, self._advertisData, self._advertisServiceUUIDs, self._deviceId, self._localName, self._name, self._serviceData, self._connectable);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BleDevice::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BleDevice'{'RSSI':d, 'advertisData':t, 'advertisServiceUUIDs':a<s>, 'deviceId':s, 'localName':s, 'name':s, 'serviceData':a<r:'[0]'>, 'connectable':b@?}", []() -> Valdi::TypeReferencesVec {
-      return {BleServiceData::getRegisteredClass()};
-    });
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BleHost.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  class BleHostProxy: public BleHost {
-    public:
-    using SetEventsFn = Valdi::Function<void(BleHostEvents)>;
-    using OpenBluetoothAdapterFn = Valdi::Function<Valdi::Future<void>(std::optional<Valdi::StringBox>)>;
-    using CloseBluetoothAdapterFn = Valdi::Function<Valdi::Future<void>()>;
-    using GetBluetoothAdapterStateFn = Valdi::Function<Valdi::Future<BleAdapterState>()>;
-    using StartBluetoothDevicesDiscoveryFn = Valdi::Function<Valdi::Future<void>(BleScanParams)>;
-    using StartBluetoothDevicesDiscoveryWithNamesFn = Valdi::Function<Valdi::Future<void>(std::vector<Valdi::StringBox>)>;
-    using StartBluetoothDevicesDiscoveryWithAddressesFn = Valdi::Function<Valdi::Future<void>(std::vector<Valdi::StringBox>)>;
-    using StopBluetoothDevicesDiscoveryFn = Valdi::Function<Valdi::Future<void>()>;
-    using GetBluetoothDevicesFn = Valdi::Function<Valdi::Future<std::vector<BleDevice>>()>;
-    using CreateBLEConnectionFn = Valdi::Function<Valdi::Future<void>(Valdi::StringBox, std::optional<double>)>;
-    using CloseBLEConnectionFn = Valdi::Function<Valdi::Future<void>(Valdi::StringBox)>;
-    using MakeBluetoothPairFn = Valdi::Function<Valdi::Future<void>(BlePairParams)>;
-    using IsBluetoothDevicePairedFn = Valdi::Function<Valdi::Future<void>(Valdi::StringBox)>;
-    using GetBLEDeviceServicesFn = Valdi::Function<Valdi::Future<std::vector<BleService>>(Valdi::StringBox)>;
-    using GetBLEDeviceRSSIFn = Valdi::Function<Valdi::Future<double>(Valdi::StringBox)>;
-    using GetBLEDeviceCharacteristicsFn = Valdi::Function<Valdi::Future<std::vector<BleCharacteristic>>(Valdi::StringBox, Valdi::StringBox)>;
-    using NotifyBLECharacteristicValueChangeFn = Valdi::Function<Valdi::Future<void>(BleNotifyParams)>;
-    using WriteBLECharacteristicValueFn = Valdi::Function<Valdi::Future<void>(BleWriteParams)>;
-    using ReadBLECharacteristicValueFn = Valdi::Function<Valdi::Future<void>(BleReadParams)>;
-    using SetBLEMTUFn = Valdi::Function<Valdi::Future<double>(Valdi::StringBox, double)>;
-    using GetBLEMTUFn = Valdi::Function<Valdi::Future<double>(Valdi::StringBox, std::optional<Valdi::StringBox>)>;
-    using GetConnectedBluetoothDevicesFn = Valdi::Function<Valdi::Future<std::vector<BleConnectedDevice>>(std::vector<Valdi::StringBox>)>;
-    using CreateBLEPeripheralServerFn = Valdi::Function<Valdi::Future<Valdi::StringBox>()>;
-    using AddPeripheralServiceFn = Valdi::Function<Valdi::Future<void>(Valdi::StringBox, BlePeripheralService)>;
-    using RemovePeripheralServiceFn = Valdi::Function<Valdi::Future<void>(Valdi::StringBox, Valdi::StringBox)>;
-    using StartPeripheralAdvertisingFn = Valdi::Function<Valdi::Future<void>(BlePeripheralAdvertisingParams)>;
-    using StopPeripheralAdvertisingFn = Valdi::Function<Valdi::Future<void>(Valdi::StringBox)>;
-    using WritePeripheralCharacteristicValueFn = Valdi::Function<Valdi::Future<void>(BlePeripheralWriteParams)>;
-    using CloseBLEPeripheralServerFn = Valdi::Function<Valdi::Future<void>(Valdi::StringBox)>;
-
-    BleHostProxy() = default;
-    ~BleHostProxy() override = default;
-
-    void setEvents(BleHostEvents events) final {
-      _setEvents(events);
-    }
-
-    Valdi::Future<void> openBluetoothAdapter(std::optional<Valdi::StringBox> mode) final {
-      return _openBluetoothAdapter(mode);
-    }
-
-    Valdi::Future<void> closeBluetoothAdapter() final {
-      return _closeBluetoothAdapter();
-    }
-
-    Valdi::Future<BleAdapterState> getBluetoothAdapterState() final {
-      return _getBluetoothAdapterState();
-    }
-
-    Valdi::Future<void> startBluetoothDevicesDiscovery(BleScanParams params) final {
-      return _startBluetoothDevicesDiscovery(params);
-    }
-
-    Valdi::Future<void> startBluetoothDevicesDiscoveryWithNames(std::vector<Valdi::StringBox> names) final {
-      return _startBluetoothDevicesDiscoveryWithNames(names);
-    }
-
-    Valdi::Future<void> startBluetoothDevicesDiscoveryWithAddresses(std::vector<Valdi::StringBox> addresses) final {
-      return _startBluetoothDevicesDiscoveryWithAddresses(addresses);
-    }
-
-    Valdi::Future<void> stopBluetoothDevicesDiscovery() final {
-      return _stopBluetoothDevicesDiscovery();
-    }
-
-    Valdi::Future<std::vector<BleDevice>> getBluetoothDevices() final {
-      return _getBluetoothDevices();
-    }
-
-    Valdi::Future<void> createBLEConnection(Valdi::StringBox deviceId, std::optional<double> timeout) final {
-      return _createBLEConnection(deviceId, timeout);
-    }
-
-    Valdi::Future<void> closeBLEConnection(Valdi::StringBox deviceId) final {
-      return _closeBLEConnection(deviceId);
-    }
-
-    Valdi::Future<void> makeBluetoothPair(BlePairParams params) final {
-      return _makeBluetoothPair(params);
-    }
-
-    Valdi::Future<void> isBluetoothDevicePaired(Valdi::StringBox deviceId) final {
-      return _isBluetoothDevicePaired(deviceId);
-    }
-
-    Valdi::Future<std::vector<BleService>> getBLEDeviceServices(Valdi::StringBox deviceId) final {
-      return _getBLEDeviceServices(deviceId);
-    }
-
-    Valdi::Future<double> getBLEDeviceRSSI(Valdi::StringBox deviceId) final {
-      return _getBLEDeviceRSSI(deviceId);
-    }
-
-    Valdi::Future<std::vector<BleCharacteristic>> getBLEDeviceCharacteristics(Valdi::StringBox deviceId, Valdi::StringBox serviceId) final {
-      return _getBLEDeviceCharacteristics(deviceId, serviceId);
-    }
-
-    Valdi::Future<void> notifyBLECharacteristicValueChange(BleNotifyParams params) final {
-      return _notifyBLECharacteristicValueChange(params);
-    }
-
-    Valdi::Future<void> writeBLECharacteristicValue(BleWriteParams params) final {
-      return _writeBLECharacteristicValue(params);
-    }
-
-    Valdi::Future<void> readBLECharacteristicValue(BleReadParams params) final {
-      return _readBLECharacteristicValue(params);
-    }
-
-    Valdi::Future<double> setBLEMTU(Valdi::StringBox deviceId, double mtu) final {
-      return _setBLEMTU(deviceId, mtu);
-    }
-
-    Valdi::Future<double> getBLEMTU(Valdi::StringBox deviceId, std::optional<Valdi::StringBox> writeType) final {
-      return _getBLEMTU(deviceId, writeType);
-    }
-
-    Valdi::Future<std::vector<BleConnectedDevice>> getConnectedBluetoothDevices(std::vector<Valdi::StringBox> services) final {
-      return _getConnectedBluetoothDevices(services);
-    }
-
-    Valdi::Future<Valdi::StringBox> createBLEPeripheralServer() final {
-      return _createBLEPeripheralServer();
-    }
-
-    Valdi::Future<void> addPeripheralService(Valdi::StringBox serverId, BlePeripheralService service) final {
-      return _addPeripheralService(serverId, service);
-    }
-
-    Valdi::Future<void> removePeripheralService(Valdi::StringBox serverId, Valdi::StringBox serviceId) final {
-      return _removePeripheralService(serverId, serviceId);
-    }
-
-    Valdi::Future<void> startPeripheralAdvertising(BlePeripheralAdvertisingParams params) final {
-      return _startPeripheralAdvertising(params);
-    }
-
-    Valdi::Future<void> stopPeripheralAdvertising(Valdi::StringBox serverId) final {
-      return _stopPeripheralAdvertising(serverId);
-    }
-
-    Valdi::Future<void> writePeripheralCharacteristicValue(BlePeripheralWriteParams params) final {
-      return _writePeripheralCharacteristicValue(params);
-    }
-
-    Valdi::Future<void> closeBLEPeripheralServer(Valdi::StringBox serverId) final {
-      return _closeBLEPeripheralServer(serverId);
-    }
-
-    static void unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, Valdi::Ref<BleHostProxy> &out) {
-      out = Valdi::makeShared<BleHostProxy>();
-      auto &self = *out;
-      Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._setEvents, self._openBluetoothAdapter, self._closeBluetoothAdapter, self._getBluetoothAdapterState, self._startBluetoothDevicesDiscovery, self._startBluetoothDevicesDiscoveryWithNames, self._startBluetoothDevicesDiscoveryWithAddresses, self._stopBluetoothDevicesDiscovery, self._getBluetoothDevices, self._createBLEConnection, self._closeBLEConnection, self._makeBluetoothPair, self._isBluetoothDevicePaired, self._getBLEDeviceServices, self._getBLEDeviceRSSI, self._getBLEDeviceCharacteristics, self._notifyBLECharacteristicValueChange, self._writeBLECharacteristicValue, self._readBLECharacteristicValue, self._setBLEMTU, self._getBLEMTU, self._getConnectedBluetoothDevices, self._createBLEPeripheralServer, self._addPeripheralService, self._removePeripheralService, self._startPeripheralAdvertising, self._stopPeripheralAdvertising, self._writePeripheralCharacteristicValue, self._closeBLEPeripheralServer);
-    }
-
-    private:
-    SetEventsFn _setEvents;
-    OpenBluetoothAdapterFn _openBluetoothAdapter;
-    CloseBluetoothAdapterFn _closeBluetoothAdapter;
-    GetBluetoothAdapterStateFn _getBluetoothAdapterState;
-    StartBluetoothDevicesDiscoveryFn _startBluetoothDevicesDiscovery;
-    StartBluetoothDevicesDiscoveryWithNamesFn _startBluetoothDevicesDiscoveryWithNames;
-    StartBluetoothDevicesDiscoveryWithAddressesFn _startBluetoothDevicesDiscoveryWithAddresses;
-    StopBluetoothDevicesDiscoveryFn _stopBluetoothDevicesDiscovery;
-    GetBluetoothDevicesFn _getBluetoothDevices;
-    CreateBLEConnectionFn _createBLEConnection;
-    CloseBLEConnectionFn _closeBLEConnection;
-    MakeBluetoothPairFn _makeBluetoothPair;
-    IsBluetoothDevicePairedFn _isBluetoothDevicePaired;
-    GetBLEDeviceServicesFn _getBLEDeviceServices;
-    GetBLEDeviceRSSIFn _getBLEDeviceRSSI;
-    GetBLEDeviceCharacteristicsFn _getBLEDeviceCharacteristics;
-    NotifyBLECharacteristicValueChangeFn _notifyBLECharacteristicValueChange;
-    WriteBLECharacteristicValueFn _writeBLECharacteristicValue;
-    ReadBLECharacteristicValueFn _readBLECharacteristicValue;
-    SetBLEMTUFn _setBLEMTU;
-    GetBLEMTUFn _getBLEMTU;
-    GetConnectedBluetoothDevicesFn _getConnectedBluetoothDevices;
-    CreateBLEPeripheralServerFn _createBLEPeripheralServer;
-    AddPeripheralServiceFn _addPeripheralService;
-    RemovePeripheralServiceFn _removePeripheralService;
-    StartPeripheralAdvertisingFn _startPeripheralAdvertising;
-    StopPeripheralAdvertisingFn _stopPeripheralAdvertising;
-    WritePeripheralCharacteristicValueFn _writePeripheralCharacteristicValue;
-    CloseBLEPeripheralServerFn _closeBLEPeripheralServer;
-  };
-
-  BleHost::BleHost(): Valdi::CppGeneratedInterface(getRegisteredClass()) {
-  }
-
-  void BleHost::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, Valdi::Ref<BleHost> &out) {
-    Valdi::CppMarshaller::unmarshallProxyObject<BleHostProxy>(exceptionTracker, *getRegisteredClass(), value, out);
-  }
-
-  void BleHost::marshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Ref<BleHost> &value, Valdi::Value &out) {
-    Valdi::CppMarshaller::marshallProxyObject(exceptionTracker, *getRegisteredClass(), *value, out, [&]() {
-      Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::setEvents>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::openBluetoothAdapter>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::closeBluetoothAdapter>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::getBluetoothAdapterState>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::startBluetoothDevicesDiscovery>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::startBluetoothDevicesDiscoveryWithNames>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::startBluetoothDevicesDiscoveryWithAddresses>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::stopBluetoothDevicesDiscovery>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::getBluetoothDevices>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::createBLEConnection>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::closeBLEConnection>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::makeBluetoothPair>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::isBluetoothDevicePaired>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::getBLEDeviceServices>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::getBLEDeviceRSSI>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::getBLEDeviceCharacteristics>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::notifyBLECharacteristicValueChange>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::writeBLECharacteristicValue>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::readBLECharacteristicValue>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::setBLEMTU>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::getBLEMTU>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::getConnectedBluetoothDevices>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::createBLEPeripheralServer>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::addPeripheralService>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::removePeripheralService>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::startPeripheralAdvertising>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::stopPeripheralAdvertising>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::writePeripheralCharacteristicValue>(value), Valdi::CppMarshaller::methodToFunction<BleHost, &BleHost::closeBLEPeripheralServer>(value));
-    });
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BleHost::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c+ 'snap::valdi_modules::app_pages::BleHost'{'setEvents':f|m|(r:'[0]'), 'openBluetoothAdapter':f|m|(s?): p<v>, 'closeBluetoothAdapter':f|m|(): p<v>, 'getBluetoothAdapterState':f|m|(): p<r:'[1]'>, 'startBluetoothDevicesDiscovery':f|m|(r:'[2]'): p<v>, 'startBluetoothDevicesDiscoveryWithNames':f|m|(a<s>): p<v>, 'startBluetoothDevicesDiscoveryWithAddresses':f|m|(a<s>): p<v>, 'stopBluetoothDevicesDiscovery':f|m|(): p<v>, 'getBluetoothDevices':f|m|(): p<a<r:'[3]'>>, 'createBLEConnection':f|m|(s, d@?): p<v>, 'closeBLEConnection':f|m|(s): p<v>, 'makeBluetoothPair':f|m|(r:'[4]'): p<v>, 'isBluetoothDevicePaired':f|m|(s): p<v>, 'getBLEDeviceServices':f|m|(s): p<a<r:'[5]'>>, 'getBLEDeviceRSSI':f|m|(s): p<d@>, 'getBLEDeviceCharacteristics':f|m|(s, s): p<a<r:'[6]'>>, 'notifyBLECharacteristicValueChange':f|m|(r:'[7]'): p<v>, 'writeBLECharacteristicValue':f|m|(r:'[8]'): p<v>, 'readBLECharacteristicValue':f|m|(r:'[9]'): p<v>, 'setBLEMTU':f|m|(s, d): p<d@>, 'getBLEMTU':f|m|(s, s?): p<d@>, 'getConnectedBluetoothDevices':f|m|(a<s>): p<a<r:'[10]'>>, 'createBLEPeripheralServer':f|m|(): p<s>, 'addPeripheralService':f|m|(s, r:'[11]'): p<v>, 'removePeripheralService':f|m|(s, s): p<v>, 'startPeripheralAdvertising':f|m|(r:'[12]'): p<v>, 'stopPeripheralAdvertising':f|m|(s): p<v>, 'writePeripheralCharacteristicValue':f|m|(r:'[13]'): p<v>, 'closeBLEPeripheralServer':f|m|(s): p<v>}", []() -> Valdi::TypeReferencesVec {
-      return {BleHostEvents::getRegisteredClass(), BleAdapterState::getRegisteredClass(), BleScanParams::getRegisteredClass(), BleDevice::getRegisteredClass(), BlePairParams::getRegisteredClass(), BleService::getRegisteredClass(), BleCharacteristic::getRegisteredClass(), BleNotifyParams::getRegisteredClass(), BleWriteParams::getRegisteredClass(), BleReadParams::getRegisteredClass(), BleConnectedDevice::getRegisteredClass(), BlePeripheralService::getRegisteredClass(), BlePeripheralAdvertisingParams::getRegisteredClass(), BlePeripheralWriteParams::getRegisteredClass()};
-    });
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BleHostEvents.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BleHostEvents::BleHostEvents(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BleHostEvents::BleHostEvents(const BleHostEvents::DeviceFoundFn &deviceFound, const BleHostEvents::AdapterStateChangeFn &adapterStateChange, const BleHostEvents::ConnectStateChangeFn &connectStateChange, const BleHostEvents::CharacteristicUpdateFn &characteristicUpdate, const BleHostEvents::MtuChangeFn &mtuChange, const BleHostEvents::PeripheralReadRequestFn &peripheralReadRequest, const BleHostEvents::PeripheralWriteRequestFn &peripheralWriteRequest, const BleHostEvents::PeripheralSubscribedFn &peripheralSubscribed, const BleHostEvents::PeripheralUnsubscribedFn &peripheralUnsubscribed, const BleHostEvents::PeripheralConnectionStateChangeFn &peripheralConnectionStateChange): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _deviceFound(std::move(deviceFound)),
-  _adapterStateChange(std::move(adapterStateChange)),
-  _connectStateChange(std::move(connectStateChange)),
-  _characteristicUpdate(std::move(characteristicUpdate)),
-  _mtuChange(std::move(mtuChange)),
-  _peripheralReadRequest(std::move(peripheralReadRequest)),
-  _peripheralWriteRequest(std::move(peripheralWriteRequest)),
-  _peripheralSubscribed(std::move(peripheralSubscribed)),
-  _peripheralUnsubscribed(std::move(peripheralUnsubscribed)),
-  _peripheralConnectionStateChange(std::move(peripheralConnectionStateChange)) {
-  }
-
-  const BleHostEvents::DeviceFoundFn &BleHostEvents::getDeviceFound() const {
-    return _deviceFound;
-  }
-
-  void BleHostEvents::setDeviceFound(const BleHostEvents::DeviceFoundFn &value) {
-    _deviceFound = value;
-  }
-
-  void BleHostEvents::setDeviceFound(BleHostEvents::DeviceFoundFn &&value) {
-    _deviceFound = std::move(value);
-  }
-
-  const BleHostEvents::AdapterStateChangeFn &BleHostEvents::getAdapterStateChange() const {
-    return _adapterStateChange;
-  }
-
-  void BleHostEvents::setAdapterStateChange(const BleHostEvents::AdapterStateChangeFn &value) {
-    _adapterStateChange = value;
-  }
-
-  void BleHostEvents::setAdapterStateChange(BleHostEvents::AdapterStateChangeFn &&value) {
-    _adapterStateChange = std::move(value);
-  }
-
-  const BleHostEvents::ConnectStateChangeFn &BleHostEvents::getConnectStateChange() const {
-    return _connectStateChange;
-  }
-
-  void BleHostEvents::setConnectStateChange(const BleHostEvents::ConnectStateChangeFn &value) {
-    _connectStateChange = value;
-  }
-
-  void BleHostEvents::setConnectStateChange(BleHostEvents::ConnectStateChangeFn &&value) {
-    _connectStateChange = std::move(value);
-  }
-
-  const BleHostEvents::CharacteristicUpdateFn &BleHostEvents::getCharacteristicUpdate() const {
-    return _characteristicUpdate;
-  }
-
-  void BleHostEvents::setCharacteristicUpdate(const BleHostEvents::CharacteristicUpdateFn &value) {
-    _characteristicUpdate = value;
-  }
-
-  void BleHostEvents::setCharacteristicUpdate(BleHostEvents::CharacteristicUpdateFn &&value) {
-    _characteristicUpdate = std::move(value);
-  }
-
-  const BleHostEvents::MtuChangeFn &BleHostEvents::getMtuChange() const {
-    return _mtuChange;
-  }
-
-  void BleHostEvents::setMtuChange(const BleHostEvents::MtuChangeFn &value) {
-    _mtuChange = value;
-  }
-
-  void BleHostEvents::setMtuChange(BleHostEvents::MtuChangeFn &&value) {
-    _mtuChange = std::move(value);
-  }
-
-  const BleHostEvents::PeripheralReadRequestFn &BleHostEvents::getPeripheralReadRequest() const {
-    return _peripheralReadRequest;
-  }
-
-  void BleHostEvents::setPeripheralReadRequest(const BleHostEvents::PeripheralReadRequestFn &value) {
-    _peripheralReadRequest = value;
-  }
-
-  void BleHostEvents::setPeripheralReadRequest(BleHostEvents::PeripheralReadRequestFn &&value) {
-    _peripheralReadRequest = std::move(value);
-  }
-
-  const BleHostEvents::PeripheralWriteRequestFn &BleHostEvents::getPeripheralWriteRequest() const {
-    return _peripheralWriteRequest;
-  }
-
-  void BleHostEvents::setPeripheralWriteRequest(const BleHostEvents::PeripheralWriteRequestFn &value) {
-    _peripheralWriteRequest = value;
-  }
-
-  void BleHostEvents::setPeripheralWriteRequest(BleHostEvents::PeripheralWriteRequestFn &&value) {
-    _peripheralWriteRequest = std::move(value);
-  }
-
-  const BleHostEvents::PeripheralSubscribedFn &BleHostEvents::getPeripheralSubscribed() const {
-    return _peripheralSubscribed;
-  }
-
-  void BleHostEvents::setPeripheralSubscribed(const BleHostEvents::PeripheralSubscribedFn &value) {
-    _peripheralSubscribed = value;
-  }
-
-  void BleHostEvents::setPeripheralSubscribed(BleHostEvents::PeripheralSubscribedFn &&value) {
-    _peripheralSubscribed = std::move(value);
-  }
-
-  const BleHostEvents::PeripheralUnsubscribedFn &BleHostEvents::getPeripheralUnsubscribed() const {
-    return _peripheralUnsubscribed;
-  }
-
-  void BleHostEvents::setPeripheralUnsubscribed(const BleHostEvents::PeripheralUnsubscribedFn &value) {
-    _peripheralUnsubscribed = value;
-  }
-
-  void BleHostEvents::setPeripheralUnsubscribed(BleHostEvents::PeripheralUnsubscribedFn &&value) {
-    _peripheralUnsubscribed = std::move(value);
-  }
-
-  const BleHostEvents::PeripheralConnectionStateChangeFn &BleHostEvents::getPeripheralConnectionStateChange() const {
-    return _peripheralConnectionStateChange;
-  }
-
-  void BleHostEvents::setPeripheralConnectionStateChange(const BleHostEvents::PeripheralConnectionStateChangeFn &value) {
-    _peripheralConnectionStateChange = value;
-  }
-
-  void BleHostEvents::setPeripheralConnectionStateChange(BleHostEvents::PeripheralConnectionStateChangeFn &&value) {
-    _peripheralConnectionStateChange = std::move(value);
-  }
-
-  void BleHostEvents::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BleHostEvents &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._deviceFound, self._adapterStateChange, self._connectStateChange, self._characteristicUpdate, self._mtuChange, self._peripheralReadRequest, self._peripheralWriteRequest, self._peripheralSubscribed, self._peripheralUnsubscribed, self._peripheralConnectionStateChange);
-  }
-
-  void BleHostEvents::marshall(Valdi::ExceptionTracker &exceptionTracker, const BleHostEvents &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._deviceFound, self._adapterStateChange, self._connectStateChange, self._characteristicUpdate, self._mtuChange, self._peripheralReadRequest, self._peripheralWriteRequest, self._peripheralSubscribed, self._peripheralUnsubscribed, self._peripheralConnectionStateChange);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BleHostEvents::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BleHostEvents'{'deviceFound':f(r:'[0]'), 'adapterStateChange':f(r:'[1]'), 'connectStateChange':f(r:'[2]'), 'characteristicUpdate':f(r:'[3]'), 'mtuChange':f(r:'[4]'), 'peripheralReadRequest':f(r:'[5]'), 'peripheralWriteRequest':f(r:'[6]'), 'peripheralSubscribed':f(r:'[7]'), 'peripheralUnsubscribed':f(r:'[7]'), 'peripheralConnectionStateChange':f(r:'[8]')}", []() -> Valdi::TypeReferencesVec {
-      return {BleDevice::getRegisteredClass(), BleAdapterState::getRegisteredClass(), BleConnectStateChange::getRegisteredClass(), BleCharacteristicValue::getRegisteredClass(), BleMTUChange::getRegisteredClass(), BlePeripheralReadRequest::getRegisteredClass(), BlePeripheralWriteRequest::getRegisteredClass(), BlePeripheralSubscriptionEvent::getRegisteredClass(), BlePeripheralConnectionState::getRegisteredClass()};
-    });
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BleMTUChange.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BleMTUChange::BleMTUChange(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BleMTUChange::BleMTUChange(const Valdi::StringBox &deviceId, double mtu): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _deviceId(std::move(deviceId)),
-  _mtu(mtu) {
-  }
-
-  const Valdi::StringBox &BleMTUChange::getDeviceId() const {
-    return _deviceId;
-  }
-
-  void BleMTUChange::setDeviceId(const Valdi::StringBox &value) {
-    _deviceId = value;
-  }
-
-  void BleMTUChange::setDeviceId(Valdi::StringBox &&value) {
-    _deviceId = std::move(value);
-  }
-
-  double BleMTUChange::getMtu() const {
-    return _mtu;
-  }
-
-  void BleMTUChange::setMtu(double value) {
-    _mtu = value;
-  }
-
-  void BleMTUChange::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BleMTUChange &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._deviceId, self._mtu);
-  }
-
-  void BleMTUChange::marshall(Valdi::ExceptionTracker &exceptionTracker, const BleMTUChange &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._deviceId, self._mtu);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BleMTUChange::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BleMTUChange'{'deviceId':s, 'mtu':d}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BleNotifyParams.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BleNotifyParams::BleNotifyParams(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BleNotifyParams::BleNotifyParams(const Valdi::StringBox &deviceId, const Valdi::StringBox &serviceId, const Valdi::StringBox &characteristicId, bool state, const std::optional<Valdi::StringBox> &type): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _deviceId(std::move(deviceId)),
-  _serviceId(std::move(serviceId)),
-  _characteristicId(std::move(characteristicId)),
-  _state(state),
-  _type(std::move(type)) {
-  }
-
-  const Valdi::StringBox &BleNotifyParams::getDeviceId() const {
-    return _deviceId;
-  }
-
-  void BleNotifyParams::setDeviceId(const Valdi::StringBox &value) {
-    _deviceId = value;
-  }
-
-  void BleNotifyParams::setDeviceId(Valdi::StringBox &&value) {
-    _deviceId = std::move(value);
-  }
-
-  const Valdi::StringBox &BleNotifyParams::getServiceId() const {
-    return _serviceId;
-  }
-
-  void BleNotifyParams::setServiceId(const Valdi::StringBox &value) {
-    _serviceId = value;
-  }
-
-  void BleNotifyParams::setServiceId(Valdi::StringBox &&value) {
-    _serviceId = std::move(value);
-  }
-
-  const Valdi::StringBox &BleNotifyParams::getCharacteristicId() const {
-    return _characteristicId;
-  }
-
-  void BleNotifyParams::setCharacteristicId(const Valdi::StringBox &value) {
-    _characteristicId = value;
-  }
-
-  void BleNotifyParams::setCharacteristicId(Valdi::StringBox &&value) {
-    _characteristicId = std::move(value);
-  }
-
-  bool BleNotifyParams::getState() const {
-    return _state;
-  }
-
-  void BleNotifyParams::setState(bool value) {
-    _state = value;
-  }
-
-  const std::optional<Valdi::StringBox> &BleNotifyParams::getType() const {
-    return _type;
-  }
-
-  void BleNotifyParams::setType(const std::optional<Valdi::StringBox> &value) {
-    _type = value;
-  }
-
-  void BleNotifyParams::setType(std::optional<Valdi::StringBox> &&value) {
-    _type = std::move(value);
-  }
-
-  void BleNotifyParams::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BleNotifyParams &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._deviceId, self._serviceId, self._characteristicId, self._state, self._type);
-  }
-
-  void BleNotifyParams::marshall(Valdi::ExceptionTracker &exceptionTracker, const BleNotifyParams &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._deviceId, self._serviceId, self._characteristicId, self._state, self._type);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BleNotifyParams::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BleNotifyParams'{'deviceId':s, 'serviceId':s, 'characteristicId':s, 'state':b, 'type':s?}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BlePairParams.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BlePairParams::BlePairParams(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BlePairParams::BlePairParams(const Valdi::StringBox &deviceId, const Valdi::StringBox &pin, double timeout): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _deviceId(std::move(deviceId)),
-  _pin(std::move(pin)),
-  _timeout(timeout) {
-  }
-
-  const Valdi::StringBox &BlePairParams::getDeviceId() const {
-    return _deviceId;
-  }
-
-  void BlePairParams::setDeviceId(const Valdi::StringBox &value) {
-    _deviceId = value;
-  }
-
-  void BlePairParams::setDeviceId(Valdi::StringBox &&value) {
-    _deviceId = std::move(value);
-  }
-
-  const Valdi::StringBox &BlePairParams::getPin() const {
-    return _pin;
-  }
-
-  void BlePairParams::setPin(const Valdi::StringBox &value) {
-    _pin = value;
-  }
-
-  void BlePairParams::setPin(Valdi::StringBox &&value) {
-    _pin = std::move(value);
-  }
-
-  double BlePairParams::getTimeout() const {
-    return _timeout;
-  }
-
-  void BlePairParams::setTimeout(double value) {
-    _timeout = value;
-  }
-
-  void BlePairParams::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BlePairParams &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._deviceId, self._pin, self._timeout);
-  }
-
-  void BlePairParams::marshall(Valdi::ExceptionTracker &exceptionTracker, const BlePairParams &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._deviceId, self._pin, self._timeout);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BlePairParams::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BlePairParams'{'deviceId':s, 'pin':s, 'timeout':d}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BlePeripheralAdvertisingParams.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BlePeripheralAdvertisingParams::BlePeripheralAdvertisingParams(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BlePeripheralAdvertisingParams::BlePeripheralAdvertisingParams(const Valdi::StringBox &serverId, bool connectable, const Valdi::StringBox &deviceName, const std::vector<Valdi::StringBox> &serviceUuids, const std::vector<BlePeripheralManufacturerData> &manufacturerData, const Valdi::StringBox &powerLevel, const Valdi::Ref<BlePeripheralBeacon> &beacon): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _serverId(std::move(serverId)),
-  _connectable(connectable),
-  _deviceName(std::move(deviceName)),
-  _serviceUuids(std::move(serviceUuids)),
-  _manufacturerData(std::move(manufacturerData)),
-  _powerLevel(std::move(powerLevel)),
-  _beacon(std::move(beacon)) {
-  }
-
-  const Valdi::StringBox &BlePeripheralAdvertisingParams::getServerId() const {
-    return _serverId;
-  }
-
-  void BlePeripheralAdvertisingParams::setServerId(const Valdi::StringBox &value) {
-    _serverId = value;
-  }
-
-  void BlePeripheralAdvertisingParams::setServerId(Valdi::StringBox &&value) {
-    _serverId = std::move(value);
-  }
-
-  bool BlePeripheralAdvertisingParams::getConnectable() const {
-    return _connectable;
-  }
-
-  void BlePeripheralAdvertisingParams::setConnectable(bool value) {
-    _connectable = value;
-  }
-
-  const Valdi::StringBox &BlePeripheralAdvertisingParams::getDeviceName() const {
-    return _deviceName;
-  }
-
-  void BlePeripheralAdvertisingParams::setDeviceName(const Valdi::StringBox &value) {
-    _deviceName = value;
-  }
-
-  void BlePeripheralAdvertisingParams::setDeviceName(Valdi::StringBox &&value) {
-    _deviceName = std::move(value);
-  }
-
-  const std::vector<Valdi::StringBox> &BlePeripheralAdvertisingParams::getServiceUuids() const {
-    return _serviceUuids;
-  }
-
-  void BlePeripheralAdvertisingParams::setServiceUuids(const std::vector<Valdi::StringBox> &value) {
-    _serviceUuids = value;
-  }
-
-  void BlePeripheralAdvertisingParams::setServiceUuids(std::vector<Valdi::StringBox> &&value) {
-    _serviceUuids = std::move(value);
-  }
-
-  const std::vector<BlePeripheralManufacturerData> &BlePeripheralAdvertisingParams::getManufacturerData() const {
-    return _manufacturerData;
-  }
-
-  void BlePeripheralAdvertisingParams::setManufacturerData(const std::vector<BlePeripheralManufacturerData> &value) {
-    _manufacturerData = value;
-  }
-
-  void BlePeripheralAdvertisingParams::setManufacturerData(std::vector<BlePeripheralManufacturerData> &&value) {
-    _manufacturerData = std::move(value);
-  }
-
-  const Valdi::StringBox &BlePeripheralAdvertisingParams::getPowerLevel() const {
-    return _powerLevel;
-  }
-
-  void BlePeripheralAdvertisingParams::setPowerLevel(const Valdi::StringBox &value) {
-    _powerLevel = value;
-  }
-
-  void BlePeripheralAdvertisingParams::setPowerLevel(Valdi::StringBox &&value) {
-    _powerLevel = std::move(value);
-  }
-
-  const Valdi::Ref<BlePeripheralBeacon> &BlePeripheralAdvertisingParams::getBeacon() const {
-    return _beacon;
-  }
-
-  void BlePeripheralAdvertisingParams::setBeacon(const Valdi::Ref<BlePeripheralBeacon> &value) {
-    _beacon = value;
-  }
-
-  void BlePeripheralAdvertisingParams::setBeacon(Valdi::Ref<BlePeripheralBeacon> &&value) {
-    _beacon = std::move(value);
-  }
-
-  void BlePeripheralAdvertisingParams::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BlePeripheralAdvertisingParams &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._serverId, self._connectable, self._deviceName, self._serviceUuids, self._manufacturerData, self._powerLevel, self._beacon);
-  }
-
-  void BlePeripheralAdvertisingParams::marshall(Valdi::ExceptionTracker &exceptionTracker, const BlePeripheralAdvertisingParams &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._serverId, self._connectable, self._deviceName, self._serviceUuids, self._manufacturerData, self._powerLevel, self._beacon);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BlePeripheralAdvertisingParams::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BlePeripheralAdvertisingParams'{'serverId':s, 'connectable':b, 'deviceName':s, 'serviceUuids':a<s>, 'manufacturerData':a<r:'[0]'>, 'powerLevel':s, 'beacon':r?:'[1]'}", []() -> Valdi::TypeReferencesVec {
-      return {BlePeripheralManufacturerData::getRegisteredClass(), BlePeripheralBeacon::getRegisteredClass()};
-    });
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BlePeripheralBeacon.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BlePeripheralBeacon::BlePeripheralBeacon(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BlePeripheralBeacon::BlePeripheralBeacon(const Valdi::StringBox &uuid, double major, double minor, double measuredPower): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _uuid(std::move(uuid)),
-  _major(major),
-  _minor(minor),
-  _measuredPower(measuredPower) {
-  }
-
-  const Valdi::StringBox &BlePeripheralBeacon::getUuid() const {
-    return _uuid;
-  }
-
-  void BlePeripheralBeacon::setUuid(const Valdi::StringBox &value) {
-    _uuid = value;
-  }
-
-  void BlePeripheralBeacon::setUuid(Valdi::StringBox &&value) {
-    _uuid = std::move(value);
-  }
-
-  double BlePeripheralBeacon::getMajor() const {
-    return _major;
-  }
-
-  void BlePeripheralBeacon::setMajor(double value) {
-    _major = value;
-  }
-
-  double BlePeripheralBeacon::getMinor() const {
-    return _minor;
-  }
-
-  void BlePeripheralBeacon::setMinor(double value) {
-    _minor = value;
-  }
-
-  double BlePeripheralBeacon::getMeasuredPower() const {
-    return _measuredPower;
-  }
-
-  void BlePeripheralBeacon::setMeasuredPower(double value) {
-    _measuredPower = value;
-  }
-
-  void BlePeripheralBeacon::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BlePeripheralBeacon &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._uuid, self._major, self._minor, self._measuredPower);
-  }
-
-  void BlePeripheralBeacon::marshall(Valdi::ExceptionTracker &exceptionTracker, const BlePeripheralBeacon &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._uuid, self._major, self._minor, self._measuredPower);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BlePeripheralBeacon::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BlePeripheralBeacon'{'uuid':s, 'major':d, 'minor':d, 'measuredPower':d}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BlePeripheralCharacteristic.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BlePeripheralCharacteristic::BlePeripheralCharacteristic(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BlePeripheralCharacteristic::BlePeripheralCharacteristic(const Valdi::StringBox &uuid, const BlePeripheralProperties &properties, const BlePeripheralPermissions &permission, const Valdi::BytesView &value, const std::vector<BlePeripheralDescriptor> &descriptors): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _uuid(std::move(uuid)),
-  _properties(std::move(properties)),
-  _permission(std::move(permission)),
-  _value(std::move(value)),
-  _descriptors(std::move(descriptors)) {
-  }
-
-  const Valdi::StringBox &BlePeripheralCharacteristic::getUuid() const {
-    return _uuid;
-  }
-
-  void BlePeripheralCharacteristic::setUuid(const Valdi::StringBox &value) {
-    _uuid = value;
-  }
-
-  void BlePeripheralCharacteristic::setUuid(Valdi::StringBox &&value) {
-    _uuid = std::move(value);
-  }
-
-  const BlePeripheralProperties &BlePeripheralCharacteristic::getProperties() const {
-    return _properties;
-  }
-
-  void BlePeripheralCharacteristic::setProperties(const BlePeripheralProperties &value) {
-    _properties = value;
-  }
-
-  void BlePeripheralCharacteristic::setProperties(BlePeripheralProperties &&value) {
-    _properties = std::move(value);
-  }
-
-  const BlePeripheralPermissions &BlePeripheralCharacteristic::getPermission() const {
-    return _permission;
-  }
-
-  void BlePeripheralCharacteristic::setPermission(const BlePeripheralPermissions &value) {
-    _permission = value;
-  }
-
-  void BlePeripheralCharacteristic::setPermission(BlePeripheralPermissions &&value) {
-    _permission = std::move(value);
-  }
-
-  const Valdi::BytesView &BlePeripheralCharacteristic::getValue() const {
-    return _value;
-  }
-
-  void BlePeripheralCharacteristic::setValue(const Valdi::BytesView &value) {
-    _value = value;
-  }
-
-  void BlePeripheralCharacteristic::setValue(Valdi::BytesView &&value) {
-    _value = std::move(value);
-  }
-
-  const std::vector<BlePeripheralDescriptor> &BlePeripheralCharacteristic::getDescriptors() const {
-    return _descriptors;
-  }
-
-  void BlePeripheralCharacteristic::setDescriptors(const std::vector<BlePeripheralDescriptor> &value) {
-    _descriptors = value;
-  }
-
-  void BlePeripheralCharacteristic::setDescriptors(std::vector<BlePeripheralDescriptor> &&value) {
-    _descriptors = std::move(value);
-  }
-
-  void BlePeripheralCharacteristic::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BlePeripheralCharacteristic &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._uuid, self._properties, self._permission, self._value, self._descriptors);
-  }
-
-  void BlePeripheralCharacteristic::marshall(Valdi::ExceptionTracker &exceptionTracker, const BlePeripheralCharacteristic &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._uuid, self._properties, self._permission, self._value, self._descriptors);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BlePeripheralCharacteristic::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BlePeripheralCharacteristic'{'uuid':s, 'properties':r:'[0]', 'permission':r:'[1]', 'value':t, 'descriptors':a<r:'[2]'>}", []() -> Valdi::TypeReferencesVec {
-      return {BlePeripheralProperties::getRegisteredClass(), BlePeripheralPermissions::getRegisteredClass(), BlePeripheralDescriptor::getRegisteredClass()};
-    });
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BlePeripheralConnectionState.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BlePeripheralConnectionState::BlePeripheralConnectionState(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BlePeripheralConnectionState::BlePeripheralConnectionState(const Valdi::StringBox &serverId, const Valdi::StringBox &deviceId, bool connected): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _serverId(std::move(serverId)),
-  _deviceId(std::move(deviceId)),
-  _connected(connected) {
-  }
-
-  const Valdi::StringBox &BlePeripheralConnectionState::getServerId() const {
-    return _serverId;
-  }
-
-  void BlePeripheralConnectionState::setServerId(const Valdi::StringBox &value) {
-    _serverId = value;
-  }
-
-  void BlePeripheralConnectionState::setServerId(Valdi::StringBox &&value) {
-    _serverId = std::move(value);
-  }
-
-  const Valdi::StringBox &BlePeripheralConnectionState::getDeviceId() const {
-    return _deviceId;
-  }
-
-  void BlePeripheralConnectionState::setDeviceId(const Valdi::StringBox &value) {
-    _deviceId = value;
-  }
-
-  void BlePeripheralConnectionState::setDeviceId(Valdi::StringBox &&value) {
-    _deviceId = std::move(value);
-  }
-
-  bool BlePeripheralConnectionState::getConnected() const {
-    return _connected;
-  }
-
-  void BlePeripheralConnectionState::setConnected(bool value) {
-    _connected = value;
-  }
-
-  void BlePeripheralConnectionState::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BlePeripheralConnectionState &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._serverId, self._deviceId, self._connected);
-  }
-
-  void BlePeripheralConnectionState::marshall(Valdi::ExceptionTracker &exceptionTracker, const BlePeripheralConnectionState &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._serverId, self._deviceId, self._connected);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BlePeripheralConnectionState::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BlePeripheralConnectionState'{'serverId':s, 'deviceId':s, 'connected':b}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BlePeripheralDescriptor.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BlePeripheralDescriptor::BlePeripheralDescriptor(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BlePeripheralDescriptor::BlePeripheralDescriptor(const Valdi::StringBox &uuid, bool read, bool write, const Valdi::BytesView &value): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _uuid(std::move(uuid)),
-  _read(read),
-  _write(write),
-  _value(std::move(value)) {
-  }
-
-  const Valdi::StringBox &BlePeripheralDescriptor::getUuid() const {
-    return _uuid;
-  }
-
-  void BlePeripheralDescriptor::setUuid(const Valdi::StringBox &value) {
-    _uuid = value;
-  }
-
-  void BlePeripheralDescriptor::setUuid(Valdi::StringBox &&value) {
-    _uuid = std::move(value);
-  }
-
-  bool BlePeripheralDescriptor::getRead() const {
-    return _read;
-  }
-
-  void BlePeripheralDescriptor::setRead(bool value) {
-    _read = value;
-  }
-
-  bool BlePeripheralDescriptor::getWrite() const {
-    return _write;
-  }
-
-  void BlePeripheralDescriptor::setWrite(bool value) {
-    _write = value;
-  }
-
-  const Valdi::BytesView &BlePeripheralDescriptor::getValue() const {
-    return _value;
-  }
-
-  void BlePeripheralDescriptor::setValue(const Valdi::BytesView &value) {
-    _value = value;
-  }
-
-  void BlePeripheralDescriptor::setValue(Valdi::BytesView &&value) {
-    _value = std::move(value);
-  }
-
-  void BlePeripheralDescriptor::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BlePeripheralDescriptor &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._uuid, self._read, self._write, self._value);
-  }
-
-  void BlePeripheralDescriptor::marshall(Valdi::ExceptionTracker &exceptionTracker, const BlePeripheralDescriptor &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._uuid, self._read, self._write, self._value);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BlePeripheralDescriptor::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BlePeripheralDescriptor'{'uuid':s, 'read':b, 'write':b, 'value':t}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BlePeripheralManufacturerData.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BlePeripheralManufacturerData::BlePeripheralManufacturerData(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BlePeripheralManufacturerData::BlePeripheralManufacturerData(double manufacturerId, const Valdi::BytesView &manufacturerSpecificData): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _manufacturerId(manufacturerId),
-  _manufacturerSpecificData(std::move(manufacturerSpecificData)) {
-  }
-
-  double BlePeripheralManufacturerData::getManufacturerId() const {
-    return _manufacturerId;
-  }
-
-  void BlePeripheralManufacturerData::setManufacturerId(double value) {
-    _manufacturerId = value;
-  }
-
-  const Valdi::BytesView &BlePeripheralManufacturerData::getManufacturerSpecificData() const {
-    return _manufacturerSpecificData;
-  }
-
-  void BlePeripheralManufacturerData::setManufacturerSpecificData(const Valdi::BytesView &value) {
-    _manufacturerSpecificData = value;
-  }
-
-  void BlePeripheralManufacturerData::setManufacturerSpecificData(Valdi::BytesView &&value) {
-    _manufacturerSpecificData = std::move(value);
-  }
-
-  void BlePeripheralManufacturerData::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BlePeripheralManufacturerData &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._manufacturerId, self._manufacturerSpecificData);
-  }
-
-  void BlePeripheralManufacturerData::marshall(Valdi::ExceptionTracker &exceptionTracker, const BlePeripheralManufacturerData &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._manufacturerId, self._manufacturerSpecificData);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BlePeripheralManufacturerData::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BlePeripheralManufacturerData'{'manufacturerId':d, 'manufacturerSpecificData':t}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BlePeripheralPermissions.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BlePeripheralPermissions::BlePeripheralPermissions(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BlePeripheralPermissions::BlePeripheralPermissions(bool readable, bool writeable, bool readEncryptionRequired, bool writeEncryptionRequired): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _readable(readable),
-  _writeable(writeable),
-  _readEncryptionRequired(readEncryptionRequired),
-  _writeEncryptionRequired(writeEncryptionRequired) {
-  }
-
-  bool BlePeripheralPermissions::getReadable() const {
-    return _readable;
-  }
-
-  void BlePeripheralPermissions::setReadable(bool value) {
-    _readable = value;
-  }
-
-  bool BlePeripheralPermissions::getWriteable() const {
-    return _writeable;
-  }
-
-  void BlePeripheralPermissions::setWriteable(bool value) {
-    _writeable = value;
-  }
-
-  bool BlePeripheralPermissions::getReadEncryptionRequired() const {
-    return _readEncryptionRequired;
-  }
-
-  void BlePeripheralPermissions::setReadEncryptionRequired(bool value) {
-    _readEncryptionRequired = value;
-  }
-
-  bool BlePeripheralPermissions::getWriteEncryptionRequired() const {
-    return _writeEncryptionRequired;
-  }
-
-  void BlePeripheralPermissions::setWriteEncryptionRequired(bool value) {
-    _writeEncryptionRequired = value;
-  }
-
-  void BlePeripheralPermissions::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BlePeripheralPermissions &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._readable, self._writeable, self._readEncryptionRequired, self._writeEncryptionRequired);
-  }
-
-  void BlePeripheralPermissions::marshall(Valdi::ExceptionTracker &exceptionTracker, const BlePeripheralPermissions &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._readable, self._writeable, self._readEncryptionRequired, self._writeEncryptionRequired);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BlePeripheralPermissions::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BlePeripheralPermissions'{'readable':b, 'writeable':b, 'readEncryptionRequired':b, 'writeEncryptionRequired':b}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BlePeripheralProperties.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BlePeripheralProperties::BlePeripheralProperties(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BlePeripheralProperties::BlePeripheralProperties(bool read, bool write, bool writeNoResponse, bool notify, bool indicate): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _read(read),
-  _write(write),
-  _writeNoResponse(writeNoResponse),
-  _notify(notify),
-  _indicate(indicate) {
-  }
-
-  bool BlePeripheralProperties::getRead() const {
-    return _read;
-  }
-
-  void BlePeripheralProperties::setRead(bool value) {
-    _read = value;
-  }
-
-  bool BlePeripheralProperties::getWrite() const {
-    return _write;
-  }
-
-  void BlePeripheralProperties::setWrite(bool value) {
-    _write = value;
-  }
-
-  bool BlePeripheralProperties::getWriteNoResponse() const {
-    return _writeNoResponse;
-  }
-
-  void BlePeripheralProperties::setWriteNoResponse(bool value) {
-    _writeNoResponse = value;
-  }
-
-  bool BlePeripheralProperties::getNotify() const {
-    return _notify;
-  }
-
-  void BlePeripheralProperties::setNotify(bool value) {
-    _notify = value;
-  }
-
-  bool BlePeripheralProperties::getIndicate() const {
-    return _indicate;
-  }
-
-  void BlePeripheralProperties::setIndicate(bool value) {
-    _indicate = value;
-  }
-
-  void BlePeripheralProperties::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BlePeripheralProperties &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._read, self._write, self._writeNoResponse, self._notify, self._indicate);
-  }
-
-  void BlePeripheralProperties::marshall(Valdi::ExceptionTracker &exceptionTracker, const BlePeripheralProperties &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._read, self._write, self._writeNoResponse, self._notify, self._indicate);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BlePeripheralProperties::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BlePeripheralProperties'{'read':b, 'write':b, 'writeNoResponse':b, 'notify':b, 'indicate':b}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BlePeripheralReadRequest.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BlePeripheralReadRequest::BlePeripheralReadRequest(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BlePeripheralReadRequest::BlePeripheralReadRequest(const Valdi::StringBox &serverId, const Valdi::StringBox &serviceId, const Valdi::StringBox &characteristicId, double callbackId, const Valdi::StringBox &deviceId, double offset): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _serverId(std::move(serverId)),
-  _serviceId(std::move(serviceId)),
-  _characteristicId(std::move(characteristicId)),
-  _callbackId(callbackId),
-  _deviceId(std::move(deviceId)),
-  _offset(offset) {
-  }
-
-  const Valdi::StringBox &BlePeripheralReadRequest::getServerId() const {
-    return _serverId;
-  }
-
-  void BlePeripheralReadRequest::setServerId(const Valdi::StringBox &value) {
-    _serverId = value;
-  }
-
-  void BlePeripheralReadRequest::setServerId(Valdi::StringBox &&value) {
-    _serverId = std::move(value);
-  }
-
-  const Valdi::StringBox &BlePeripheralReadRequest::getServiceId() const {
-    return _serviceId;
-  }
-
-  void BlePeripheralReadRequest::setServiceId(const Valdi::StringBox &value) {
-    _serviceId = value;
-  }
-
-  void BlePeripheralReadRequest::setServiceId(Valdi::StringBox &&value) {
-    _serviceId = std::move(value);
-  }
-
-  const Valdi::StringBox &BlePeripheralReadRequest::getCharacteristicId() const {
-    return _characteristicId;
-  }
-
-  void BlePeripheralReadRequest::setCharacteristicId(const Valdi::StringBox &value) {
-    _characteristicId = value;
-  }
-
-  void BlePeripheralReadRequest::setCharacteristicId(Valdi::StringBox &&value) {
-    _characteristicId = std::move(value);
-  }
-
-  double BlePeripheralReadRequest::getCallbackId() const {
-    return _callbackId;
-  }
-
-  void BlePeripheralReadRequest::setCallbackId(double value) {
-    _callbackId = value;
-  }
-
-  const Valdi::StringBox &BlePeripheralReadRequest::getDeviceId() const {
-    return _deviceId;
-  }
-
-  void BlePeripheralReadRequest::setDeviceId(const Valdi::StringBox &value) {
-    _deviceId = value;
-  }
-
-  void BlePeripheralReadRequest::setDeviceId(Valdi::StringBox &&value) {
-    _deviceId = std::move(value);
-  }
-
-  double BlePeripheralReadRequest::getOffset() const {
-    return _offset;
-  }
-
-  void BlePeripheralReadRequest::setOffset(double value) {
-    _offset = value;
-  }
-
-  void BlePeripheralReadRequest::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BlePeripheralReadRequest &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._serverId, self._serviceId, self._characteristicId, self._callbackId, self._deviceId, self._offset);
-  }
-
-  void BlePeripheralReadRequest::marshall(Valdi::ExceptionTracker &exceptionTracker, const BlePeripheralReadRequest &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._serverId, self._serviceId, self._characteristicId, self._callbackId, self._deviceId, self._offset);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BlePeripheralReadRequest::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BlePeripheralReadRequest'{'serverId':s, 'serviceId':s, 'characteristicId':s, 'callbackId':d, 'deviceId':s, 'offset':d}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BlePeripheralService.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BlePeripheralService::BlePeripheralService(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BlePeripheralService::BlePeripheralService(const Valdi::StringBox &uuid, const std::vector<BlePeripheralCharacteristic> &characteristics): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _uuid(std::move(uuid)),
-  _characteristics(std::move(characteristics)) {
-  }
-
-  const Valdi::StringBox &BlePeripheralService::getUuid() const {
-    return _uuid;
-  }
-
-  void BlePeripheralService::setUuid(const Valdi::StringBox &value) {
-    _uuid = value;
-  }
-
-  void BlePeripheralService::setUuid(Valdi::StringBox &&value) {
-    _uuid = std::move(value);
-  }
-
-  const std::vector<BlePeripheralCharacteristic> &BlePeripheralService::getCharacteristics() const {
-    return _characteristics;
-  }
-
-  void BlePeripheralService::setCharacteristics(const std::vector<BlePeripheralCharacteristic> &value) {
-    _characteristics = value;
-  }
-
-  void BlePeripheralService::setCharacteristics(std::vector<BlePeripheralCharacteristic> &&value) {
-    _characteristics = std::move(value);
-  }
-
-  void BlePeripheralService::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BlePeripheralService &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._uuid, self._characteristics);
-  }
-
-  void BlePeripheralService::marshall(Valdi::ExceptionTracker &exceptionTracker, const BlePeripheralService &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._uuid, self._characteristics);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BlePeripheralService::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BlePeripheralService'{'uuid':s, 'characteristics':a<r:'[0]'>}", []() -> Valdi::TypeReferencesVec {
-      return {BlePeripheralCharacteristic::getRegisteredClass()};
-    });
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BlePeripheralSubscriptionEvent.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BlePeripheralSubscriptionEvent::BlePeripheralSubscriptionEvent(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BlePeripheralSubscriptionEvent::BlePeripheralSubscriptionEvent(const Valdi::StringBox &serverId, const Valdi::StringBox &serviceId, const Valdi::StringBox &characteristicId, const Valdi::StringBox &deviceId): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _serverId(std::move(serverId)),
-  _serviceId(std::move(serviceId)),
-  _characteristicId(std::move(characteristicId)),
-  _deviceId(std::move(deviceId)) {
-  }
-
-  const Valdi::StringBox &BlePeripheralSubscriptionEvent::getServerId() const {
-    return _serverId;
-  }
-
-  void BlePeripheralSubscriptionEvent::setServerId(const Valdi::StringBox &value) {
-    _serverId = value;
-  }
-
-  void BlePeripheralSubscriptionEvent::setServerId(Valdi::StringBox &&value) {
-    _serverId = std::move(value);
-  }
-
-  const Valdi::StringBox &BlePeripheralSubscriptionEvent::getServiceId() const {
-    return _serviceId;
-  }
-
-  void BlePeripheralSubscriptionEvent::setServiceId(const Valdi::StringBox &value) {
-    _serviceId = value;
-  }
-
-  void BlePeripheralSubscriptionEvent::setServiceId(Valdi::StringBox &&value) {
-    _serviceId = std::move(value);
-  }
-
-  const Valdi::StringBox &BlePeripheralSubscriptionEvent::getCharacteristicId() const {
-    return _characteristicId;
-  }
-
-  void BlePeripheralSubscriptionEvent::setCharacteristicId(const Valdi::StringBox &value) {
-    _characteristicId = value;
-  }
-
-  void BlePeripheralSubscriptionEvent::setCharacteristicId(Valdi::StringBox &&value) {
-    _characteristicId = std::move(value);
-  }
-
-  const Valdi::StringBox &BlePeripheralSubscriptionEvent::getDeviceId() const {
-    return _deviceId;
-  }
-
-  void BlePeripheralSubscriptionEvent::setDeviceId(const Valdi::StringBox &value) {
-    _deviceId = value;
-  }
-
-  void BlePeripheralSubscriptionEvent::setDeviceId(Valdi::StringBox &&value) {
-    _deviceId = std::move(value);
-  }
-
-  void BlePeripheralSubscriptionEvent::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BlePeripheralSubscriptionEvent &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._serverId, self._serviceId, self._characteristicId, self._deviceId);
-  }
-
-  void BlePeripheralSubscriptionEvent::marshall(Valdi::ExceptionTracker &exceptionTracker, const BlePeripheralSubscriptionEvent &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._serverId, self._serviceId, self._characteristicId, self._deviceId);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BlePeripheralSubscriptionEvent::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BlePeripheralSubscriptionEvent'{'serverId':s, 'serviceId':s, 'characteristicId':s, 'deviceId':s}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BlePeripheralWriteParams.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BlePeripheralWriteParams::BlePeripheralWriteParams(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BlePeripheralWriteParams::BlePeripheralWriteParams(const Valdi::StringBox &serverId, const Valdi::StringBox &serviceId, const Valdi::StringBox &characteristicId, const Valdi::BytesView &value, bool needNotify, std::optional<double> callbackId): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _serverId(std::move(serverId)),
-  _serviceId(std::move(serviceId)),
-  _characteristicId(std::move(characteristicId)),
-  _value(std::move(value)),
-  _needNotify(needNotify),
-  _callbackId(callbackId) {
-  }
-
-  const Valdi::StringBox &BlePeripheralWriteParams::getServerId() const {
-    return _serverId;
-  }
-
-  void BlePeripheralWriteParams::setServerId(const Valdi::StringBox &value) {
-    _serverId = value;
-  }
-
-  void BlePeripheralWriteParams::setServerId(Valdi::StringBox &&value) {
-    _serverId = std::move(value);
-  }
-
-  const Valdi::StringBox &BlePeripheralWriteParams::getServiceId() const {
-    return _serviceId;
-  }
-
-  void BlePeripheralWriteParams::setServiceId(const Valdi::StringBox &value) {
-    _serviceId = value;
-  }
-
-  void BlePeripheralWriteParams::setServiceId(Valdi::StringBox &&value) {
-    _serviceId = std::move(value);
-  }
-
-  const Valdi::StringBox &BlePeripheralWriteParams::getCharacteristicId() const {
-    return _characteristicId;
-  }
-
-  void BlePeripheralWriteParams::setCharacteristicId(const Valdi::StringBox &value) {
-    _characteristicId = value;
-  }
-
-  void BlePeripheralWriteParams::setCharacteristicId(Valdi::StringBox &&value) {
-    _characteristicId = std::move(value);
-  }
-
-  const Valdi::BytesView &BlePeripheralWriteParams::getValue() const {
-    return _value;
-  }
-
-  void BlePeripheralWriteParams::setValue(const Valdi::BytesView &value) {
-    _value = value;
-  }
-
-  void BlePeripheralWriteParams::setValue(Valdi::BytesView &&value) {
-    _value = std::move(value);
-  }
-
-  bool BlePeripheralWriteParams::getNeedNotify() const {
-    return _needNotify;
-  }
-
-  void BlePeripheralWriteParams::setNeedNotify(bool value) {
-    _needNotify = value;
-  }
-
-  std::optional<double> BlePeripheralWriteParams::getCallbackId() const {
-    return _callbackId;
-  }
-
-  void BlePeripheralWriteParams::setCallbackId(std::optional<double> value) {
-    _callbackId = value;
-  }
-
-  void BlePeripheralWriteParams::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BlePeripheralWriteParams &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._serverId, self._serviceId, self._characteristicId, self._value, self._needNotify, self._callbackId);
-  }
-
-  void BlePeripheralWriteParams::marshall(Valdi::ExceptionTracker &exceptionTracker, const BlePeripheralWriteParams &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._serverId, self._serviceId, self._characteristicId, self._value, self._needNotify, self._callbackId);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BlePeripheralWriteParams::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BlePeripheralWriteParams'{'serverId':s, 'serviceId':s, 'characteristicId':s, 'value':t, 'needNotify':b, 'callbackId':d@?}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BlePeripheralWriteRequest.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BlePeripheralWriteRequest::BlePeripheralWriteRequest(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BlePeripheralWriteRequest::BlePeripheralWriteRequest(const Valdi::StringBox &serverId, const Valdi::StringBox &serviceId, const Valdi::StringBox &characteristicId, double callbackId, const Valdi::StringBox &deviceId, double offset, const Valdi::BytesView &value, bool needResponse): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _serverId(std::move(serverId)),
-  _serviceId(std::move(serviceId)),
-  _characteristicId(std::move(characteristicId)),
-  _callbackId(callbackId),
-  _deviceId(std::move(deviceId)),
-  _offset(offset),
-  _value(std::move(value)),
-  _needResponse(needResponse) {
-  }
-
-  const Valdi::StringBox &BlePeripheralWriteRequest::getServerId() const {
-    return _serverId;
-  }
-
-  void BlePeripheralWriteRequest::setServerId(const Valdi::StringBox &value) {
-    _serverId = value;
-  }
-
-  void BlePeripheralWriteRequest::setServerId(Valdi::StringBox &&value) {
-    _serverId = std::move(value);
-  }
-
-  const Valdi::StringBox &BlePeripheralWriteRequest::getServiceId() const {
-    return _serviceId;
-  }
-
-  void BlePeripheralWriteRequest::setServiceId(const Valdi::StringBox &value) {
-    _serviceId = value;
-  }
-
-  void BlePeripheralWriteRequest::setServiceId(Valdi::StringBox &&value) {
-    _serviceId = std::move(value);
-  }
-
-  const Valdi::StringBox &BlePeripheralWriteRequest::getCharacteristicId() const {
-    return _characteristicId;
-  }
-
-  void BlePeripheralWriteRequest::setCharacteristicId(const Valdi::StringBox &value) {
-    _characteristicId = value;
-  }
-
-  void BlePeripheralWriteRequest::setCharacteristicId(Valdi::StringBox &&value) {
-    _characteristicId = std::move(value);
-  }
-
-  double BlePeripheralWriteRequest::getCallbackId() const {
-    return _callbackId;
-  }
-
-  void BlePeripheralWriteRequest::setCallbackId(double value) {
-    _callbackId = value;
-  }
-
-  const Valdi::StringBox &BlePeripheralWriteRequest::getDeviceId() const {
-    return _deviceId;
-  }
-
-  void BlePeripheralWriteRequest::setDeviceId(const Valdi::StringBox &value) {
-    _deviceId = value;
-  }
-
-  void BlePeripheralWriteRequest::setDeviceId(Valdi::StringBox &&value) {
-    _deviceId = std::move(value);
-  }
-
-  double BlePeripheralWriteRequest::getOffset() const {
-    return _offset;
-  }
-
-  void BlePeripheralWriteRequest::setOffset(double value) {
-    _offset = value;
-  }
-
-  const Valdi::BytesView &BlePeripheralWriteRequest::getValue() const {
-    return _value;
-  }
-
-  void BlePeripheralWriteRequest::setValue(const Valdi::BytesView &value) {
-    _value = value;
-  }
-
-  void BlePeripheralWriteRequest::setValue(Valdi::BytesView &&value) {
-    _value = std::move(value);
-  }
-
-  bool BlePeripheralWriteRequest::getNeedResponse() const {
-    return _needResponse;
-  }
-
-  void BlePeripheralWriteRequest::setNeedResponse(bool value) {
-    _needResponse = value;
-  }
-
-  void BlePeripheralWriteRequest::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BlePeripheralWriteRequest &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._serverId, self._serviceId, self._characteristicId, self._callbackId, self._deviceId, self._offset, self._value, self._needResponse);
-  }
-
-  void BlePeripheralWriteRequest::marshall(Valdi::ExceptionTracker &exceptionTracker, const BlePeripheralWriteRequest &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._serverId, self._serviceId, self._characteristicId, self._callbackId, self._deviceId, self._offset, self._value, self._needResponse);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BlePeripheralWriteRequest::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BlePeripheralWriteRequest'{'serverId':s, 'serviceId':s, 'characteristicId':s, 'callbackId':d, 'deviceId':s, 'offset':d, 'value':t, 'needResponse':b}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BleReadParams.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BleReadParams::BleReadParams(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BleReadParams::BleReadParams(const Valdi::StringBox &deviceId, const Valdi::StringBox &serviceId, const Valdi::StringBox &characteristicId): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _deviceId(std::move(deviceId)),
-  _serviceId(std::move(serviceId)),
-  _characteristicId(std::move(characteristicId)) {
-  }
-
-  const Valdi::StringBox &BleReadParams::getDeviceId() const {
-    return _deviceId;
-  }
-
-  void BleReadParams::setDeviceId(const Valdi::StringBox &value) {
-    _deviceId = value;
-  }
-
-  void BleReadParams::setDeviceId(Valdi::StringBox &&value) {
-    _deviceId = std::move(value);
-  }
-
-  const Valdi::StringBox &BleReadParams::getServiceId() const {
-    return _serviceId;
-  }
-
-  void BleReadParams::setServiceId(const Valdi::StringBox &value) {
-    _serviceId = value;
-  }
-
-  void BleReadParams::setServiceId(Valdi::StringBox &&value) {
-    _serviceId = std::move(value);
-  }
-
-  const Valdi::StringBox &BleReadParams::getCharacteristicId() const {
-    return _characteristicId;
-  }
-
-  void BleReadParams::setCharacteristicId(const Valdi::StringBox &value) {
-    _characteristicId = value;
-  }
-
-  void BleReadParams::setCharacteristicId(Valdi::StringBox &&value) {
-    _characteristicId = std::move(value);
-  }
-
-  void BleReadParams::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BleReadParams &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._deviceId, self._serviceId, self._characteristicId);
-  }
-
-  void BleReadParams::marshall(Valdi::ExceptionTracker &exceptionTracker, const BleReadParams &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._deviceId, self._serviceId, self._characteristicId);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BleReadParams::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BleReadParams'{'deviceId':s, 'serviceId':s, 'characteristicId':s}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BleScanParams.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BleScanParams::BleScanParams(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BleScanParams::BleScanParams(const std::optional<std::vector<Valdi::StringBox>> &services, std::optional<bool> allowDuplicatesKey, std::optional<double> interval, const std::optional<Valdi::StringBox> &powerLevel): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _services(std::move(services)),
-  _allowDuplicatesKey(allowDuplicatesKey),
-  _interval(interval),
-  _powerLevel(std::move(powerLevel)) {
-  }
-
-  const std::optional<std::vector<Valdi::StringBox>> &BleScanParams::getServices() const {
-    return _services;
-  }
-
-  void BleScanParams::setServices(const std::optional<std::vector<Valdi::StringBox>> &value) {
-    _services = value;
-  }
-
-  void BleScanParams::setServices(std::optional<std::vector<Valdi::StringBox>> &&value) {
-    _services = std::move(value);
-  }
-
-  std::optional<bool> BleScanParams::getAllowDuplicatesKey() const {
-    return _allowDuplicatesKey;
-  }
-
-  void BleScanParams::setAllowDuplicatesKey(std::optional<bool> value) {
-    _allowDuplicatesKey = value;
-  }
-
-  std::optional<double> BleScanParams::getInterval() const {
-    return _interval;
-  }
-
-  void BleScanParams::setInterval(std::optional<double> value) {
-    _interval = value;
-  }
-
-  const std::optional<Valdi::StringBox> &BleScanParams::getPowerLevel() const {
-    return _powerLevel;
-  }
-
-  void BleScanParams::setPowerLevel(const std::optional<Valdi::StringBox> &value) {
-    _powerLevel = value;
-  }
-
-  void BleScanParams::setPowerLevel(std::optional<Valdi::StringBox> &&value) {
-    _powerLevel = std::move(value);
-  }
-
-  void BleScanParams::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BleScanParams &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._services, self._allowDuplicatesKey, self._interval, self._powerLevel);
-  }
-
-  void BleScanParams::marshall(Valdi::ExceptionTracker &exceptionTracker, const BleScanParams &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._services, self._allowDuplicatesKey, self._interval, self._powerLevel);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BleScanParams::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BleScanParams'{'services':a?<s>, 'allowDuplicatesKey':b@?, 'interval':d@?, 'powerLevel':s?}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BleService.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BleService::BleService(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BleService::BleService(const Valdi::StringBox &uuid, bool isPrimary): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _uuid(std::move(uuid)),
-  _isPrimary(isPrimary) {
-  }
-
-  const Valdi::StringBox &BleService::getUuid() const {
-    return _uuid;
-  }
-
-  void BleService::setUuid(const Valdi::StringBox &value) {
-    _uuid = value;
-  }
-
-  void BleService::setUuid(Valdi::StringBox &&value) {
-    _uuid = std::move(value);
-  }
-
-  bool BleService::getIsPrimary() const {
-    return _isPrimary;
-  }
-
-  void BleService::setIsPrimary(bool value) {
-    _isPrimary = value;
-  }
-
-  void BleService::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BleService &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._uuid, self._isPrimary);
-  }
-
-  void BleService::marshall(Valdi::ExceptionTracker &exceptionTracker, const BleService &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._uuid, self._isPrimary);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BleService::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BleService'{'uuid':s, 'isPrimary':b}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BleServiceData.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BleServiceData::BleServiceData(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BleServiceData::BleServiceData(const Valdi::StringBox &uuid, const Valdi::BytesView &data): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _uuid(std::move(uuid)),
-  _data(std::move(data)) {
-  }
-
-  const Valdi::StringBox &BleServiceData::getUuid() const {
-    return _uuid;
-  }
-
-  void BleServiceData::setUuid(const Valdi::StringBox &value) {
-    _uuid = value;
-  }
-
-  void BleServiceData::setUuid(Valdi::StringBox &&value) {
-    _uuid = std::move(value);
-  }
-
-  const Valdi::BytesView &BleServiceData::getData() const {
-    return _data;
-  }
-
-  void BleServiceData::setData(const Valdi::BytesView &value) {
-    _data = value;
-  }
-
-  void BleServiceData::setData(Valdi::BytesView &&value) {
-    _data = std::move(value);
-  }
-
-  void BleServiceData::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BleServiceData &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._uuid, self._data);
-  }
-
-  void BleServiceData::marshall(Valdi::ExceptionTracker &exceptionTracker, const BleServiceData &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._uuid, self._data);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BleServiceData::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BleServiceData'{'uuid':s, 'data':t}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
-// BleWriteParams.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  BleWriteParams::BleWriteParams(): Valdi::CppGeneratedModel(getRegisteredClass()) {
-  }
-
-  BleWriteParams::BleWriteParams(const Valdi::StringBox &deviceId, const Valdi::StringBox &serviceId, const Valdi::StringBox &characteristicId, const Valdi::BytesView &value, const std::optional<Valdi::StringBox> &writeType): Valdi::CppGeneratedModel(getRegisteredClass()),
-  _deviceId(std::move(deviceId)),
-  _serviceId(std::move(serviceId)),
-  _characteristicId(std::move(characteristicId)),
-  _value(std::move(value)),
-  _writeType(std::move(writeType)) {
-  }
-
-  const Valdi::StringBox &BleWriteParams::getDeviceId() const {
-    return _deviceId;
-  }
-
-  void BleWriteParams::setDeviceId(const Valdi::StringBox &value) {
-    _deviceId = value;
-  }
-
-  void BleWriteParams::setDeviceId(Valdi::StringBox &&value) {
-    _deviceId = std::move(value);
-  }
-
-  const Valdi::StringBox &BleWriteParams::getServiceId() const {
-    return _serviceId;
-  }
-
-  void BleWriteParams::setServiceId(const Valdi::StringBox &value) {
-    _serviceId = value;
-  }
-
-  void BleWriteParams::setServiceId(Valdi::StringBox &&value) {
-    _serviceId = std::move(value);
-  }
-
-  const Valdi::StringBox &BleWriteParams::getCharacteristicId() const {
-    return _characteristicId;
-  }
-
-  void BleWriteParams::setCharacteristicId(const Valdi::StringBox &value) {
-    _characteristicId = value;
-  }
-
-  void BleWriteParams::setCharacteristicId(Valdi::StringBox &&value) {
-    _characteristicId = std::move(value);
-  }
-
-  const Valdi::BytesView &BleWriteParams::getValue() const {
-    return _value;
-  }
-
-  void BleWriteParams::setValue(const Valdi::BytesView &value) {
-    _value = value;
-  }
-
-  void BleWriteParams::setValue(Valdi::BytesView &&value) {
-    _value = std::move(value);
-  }
-
-  const std::optional<Valdi::StringBox> &BleWriteParams::getWriteType() const {
-    return _writeType;
-  }
-
-  void BleWriteParams::setWriteType(const std::optional<Valdi::StringBox> &value) {
-    _writeType = value;
-  }
-
-  void BleWriteParams::setWriteType(std::optional<Valdi::StringBox> &&value) {
-    _writeType = std::move(value);
-  }
-
-  void BleWriteParams::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, BleWriteParams &out) {
-    auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._deviceId, self._serviceId, self._characteristicId, self._value, self._writeType);
-  }
-
-  void BleWriteParams::marshall(Valdi::ExceptionTracker &exceptionTracker, const BleWriteParams &value, Valdi::Value &out) {
-    const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._deviceId, self._serviceId, self._characteristicId, self._value, self._writeType);
-  }
-
-  Valdi::RegisteredCppGeneratedClass *BleWriteParams::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BleWriteParams'{'deviceId':s, 'serviceId':s, 'characteristicId':s, 'value':t, 'writeType':s?}");
-
-    return kRegisteredClass;
-  }
-
-}
-
-//
 // BottomSheetRequest.cpp
 //
 
@@ -3130,6 +430,67 @@ namespace snap::valdi_modules::app_pages {
 
   Valdi::RegisteredCppGeneratedClass *BottomSheetRequest::getRegisteredClass() {
     static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::BottomSheetRequest'{'title':s, 'content':s, 'confirmText':s, 'cancelText':s, 'showCancel':b, 'dismissible':b}");
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
+// ColumnWheelConfig.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  ColumnWheelConfig::ColumnWheelConfig(): Valdi::CppGeneratedModel(getRegisteredClass()) {
+  }
+
+  ColumnWheelConfig::ColumnWheelConfig(const std::vector<PickerOption> &options, const Valdi::StringBox &value): Valdi::CppGeneratedModel(getRegisteredClass()),
+  _options(std::move(options)),
+  _value(std::move(value)) {
+  }
+
+  const std::vector<PickerOption> &ColumnWheelConfig::getOptions() const {
+    return _options;
+  }
+
+  void ColumnWheelConfig::setOptions(const std::vector<PickerOption> &value) {
+    _options = value;
+  }
+
+  void ColumnWheelConfig::setOptions(std::vector<PickerOption> &&value) {
+    _options = std::move(value);
+  }
+
+  const Valdi::StringBox &ColumnWheelConfig::getValue() const {
+    return _value;
+  }
+
+  void ColumnWheelConfig::setValue(const Valdi::StringBox &value) {
+    _value = value;
+  }
+
+  void ColumnWheelConfig::setValue(Valdi::StringBox &&value) {
+    _value = std::move(value);
+  }
+
+  void ColumnWheelConfig::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, ColumnWheelConfig &out) {
+    auto &self = out;
+    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._options, self._value);
+  }
+
+  void ColumnWheelConfig::marshall(Valdi::ExceptionTracker &exceptionTracker, const ColumnWheelConfig &value, Valdi::Value &out) {
+    const auto &self = value;
+    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._options, self._value);
+  }
+
+  Valdi::RegisteredCppGeneratedClass *ColumnWheelConfig::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::ColumnWheelConfig'{'options':a<r:'[0]'>, 'value':s}", []() -> Valdi::TypeReferencesVec {
+      return {PickerOption::getRegisteredClass()};
+    });
 
     return kRegisteredClass;
   }
@@ -3482,31 +843,6 @@ namespace snap::valdi_modules::app_pages {
 
   Valdi::Result<Valdi::Ref<Valdi::ValueTypedObject>> InstallAppUI::resolveAsTypedObject(snap::valdi_core::JSRuntime &jsRuntime, const std::shared_ptr<snap::valdi_core::JSRuntimeNativeObjectsManager>& nativeObjectsManager) {
     return Valdi::CppGeneratedExportedFunctionUtils::resolveAsTypedObject(jsRuntime, nativeObjectsManager, "app_pages/src/AppUIHost", registeredSchema());
-  }
-}
-
-//
-// InstallBleHost.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppGeneratedExportedFunctionUtils.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  Valdi::RegisteredCppGeneratedClass& InstallBleHost::registeredSchema() {
-    static auto *kSchema = Valdi::CppGeneratedExportedFunctionUtils::registerFunctionSchema("c 'InstallBleHost'{'installBleHost':f(r:'[0]')}", []() -> Valdi::TypeReferencesVec {
-      return {BleHost::getRegisteredClass()};
-    });
-    return *kSchema;
-  }
-
-  Valdi::Result<InstallBleHost> InstallBleHost::resolve(snap::valdi_core::JSRuntime &jsRuntime, const std::shared_ptr<snap::valdi_core::JSRuntimeNativeObjectsManager>& nativeObjectsManager) {
-    return Valdi::CppGeneratedExportedFunctionUtils::resolve<InstallBleHost>(jsRuntime, nativeObjectsManager, "app_pages/src/ble/BleHost", registeredSchema());
-  }
-
-  Valdi::Result<Valdi::Ref<Valdi::ValueTypedObject>> InstallBleHost::resolveAsTypedObject(snap::valdi_core::JSRuntime &jsRuntime, const std::shared_ptr<snap::valdi_core::JSRuntimeNativeObjectsManager>& nativeObjectsManager) {
-    return Valdi::CppGeneratedExportedFunctionUtils::resolveAsTypedObject(jsRuntime, nativeObjectsManager, "app_pages/src/ble/BleHost", registeredSchema());
   }
 }
 
@@ -3895,7 +1231,7 @@ namespace snap::valdi_modules::app_pages {
   NavigationHost::NavigationHost(): Valdi::CppGeneratedModel(getRegisteredClass()) {
   }
 
-  NavigationHost::NavigationHost(const NavigationHost::PushFn &push, const NavigationHost::PushForResultFn &pushForResult, const NavigationHost::ReplaceFn &replace, const NavigationHost::BackFn &back, const NavigationHost::PopToRootFn &popToRoot, const NavigationHost::ResetFn &reset, const NavigationHost::SwitchTabFn &switchTab, const NavigationHost::SetStatusBarStyleFn &setStatusBarStyle, const NavigationHost::CurrentPagesFn &currentPages): Valdi::CppGeneratedModel(getRegisteredClass()),
+  NavigationHost::NavigationHost(const NavigationHost::PushFn &push, const NavigationHost::PushForResultFn &pushForResult, const NavigationHost::ReplaceFn &replace, const NavigationHost::BackFn &back, const NavigationHost::PopToRootFn &popToRoot, const NavigationHost::ResetFn &reset, const NavigationHost::SwitchTabFn &switchTab, const NavigationHost::SetStatusBarStyleFn &setStatusBarStyle, const NavigationHost::CurrentPagesFn &currentPages, const NavigationHost::UpdateRoutesFn &updateRoutes): Valdi::CppGeneratedModel(getRegisteredClass()),
   _push(std::move(push)),
   _pushForResult(std::move(pushForResult)),
   _replace(std::move(replace)),
@@ -3904,7 +1240,8 @@ namespace snap::valdi_modules::app_pages {
   _reset(std::move(reset)),
   _switchTab(std::move(switchTab)),
   _setStatusBarStyle(std::move(setStatusBarStyle)),
-  _currentPages(std::move(currentPages)) {
+  _currentPages(std::move(currentPages)),
+  _updateRoutes(std::move(updateRoutes)) {
   }
 
   const NavigationHost::PushFn &NavigationHost::getPush() const {
@@ -4015,18 +1352,32 @@ namespace snap::valdi_modules::app_pages {
     _currentPages = std::move(value);
   }
 
+  const NavigationHost::UpdateRoutesFn &NavigationHost::getUpdateRoutes() const {
+    return _updateRoutes;
+  }
+
+  void NavigationHost::setUpdateRoutes(const NavigationHost::UpdateRoutesFn &value) {
+    _updateRoutes = value;
+  }
+
+  void NavigationHost::setUpdateRoutes(NavigationHost::UpdateRoutesFn &&value) {
+    _updateRoutes = std::move(value);
+  }
+
   void NavigationHost::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, NavigationHost &out) {
     auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._push, self._pushForResult, self._replace, self._back, self._popToRoot, self._reset, self._switchTab, self._setStatusBarStyle, self._currentPages);
+    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._push, self._pushForResult, self._replace, self._back, self._popToRoot, self._reset, self._switchTab, self._setStatusBarStyle, self._currentPages, self._updateRoutes);
   }
 
   void NavigationHost::marshall(Valdi::ExceptionTracker &exceptionTracker, const NavigationHost &value, Valdi::Value &out) {
     const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._push, self._pushForResult, self._replace, self._back, self._popToRoot, self._reset, self._switchTab, self._setStatusBarStyle, self._currentPages);
+    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._push, self._pushForResult, self._replace, self._back, self._popToRoot, self._reset, self._switchTab, self._setStatusBarStyle, self._currentPages, self._updateRoutes);
   }
 
   Valdi::RegisteredCppGeneratedClass *NavigationHost::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::NavigationHost'{'push':f(s, s, s, s), 'pushForResult':f(s, s, s, s, f(s, b)), 'replace':f(s, s, s), 'back':f(d), 'popToRoot':f(), 'reset':f(s, s), 'switchTab':f(s), 'setStatusBarStyle':f(s), 'currentPages':f(f(s))}");
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::NavigationHost'{'push':f(s, m<s,u>, s, r:'[0]'), 'pushForResult':f(s, m<s,u>, s, r:'[0]', f(m<s,u>, b)), 'replace':f(s, m<s,u>, r:'[0]'), 'back':f(d), 'popToRoot':f(), 'reset':f(s, m<s,u>), 'switchTab':f(s), 'setStatusBarStyle':f(s), 'currentPages':f(f(a<r:'[1]'>)), 'updateRoutes':f(r:'[2]')}", []() -> Valdi::TypeReferencesVec {
+      return {ResolvedNavigation::getRegisteredClass(), StackPage::getRegisteredClass(), RouteDeclaration::getRegisteredClass()};
+    });
 
     return kRegisteredClass;
   }
@@ -4573,7 +1924,7 @@ namespace snap::valdi_modules::app_pages {
   }
 
   Valdi::RegisteredCppGeneratedClass *PageContext::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::PageContext'{'finish':f(s), 'back':f()}");
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::PageContext'{'finish':f(m<s,u>), 'back':f()}");
 
     return kRegisteredClass;
   }
@@ -4661,10 +2012,10 @@ namespace snap::valdi_modules::app_pages {
   PageViewModel::PageViewModel(): Valdi::CppGeneratedModel(getRegisteredClass()) {
   }
 
-  PageViewModel::PageViewModel(const Valdi::StringBox &pageId, const Valdi::StringBox &route, const Valdi::StringBox &paramsJson, const Valdi::StringBox &presentation, const PageInsets &insets, bool visible, const Valdi::StringBox &visibilityReason): Valdi::CppGeneratedModel(getRegisteredClass()),
+  PageViewModel::PageViewModel(const Valdi::StringBox &pageId, const Valdi::StringBox &route, const Valdi::Ref<Valdi::ValueMap> &params, const Valdi::StringBox &presentation, const PageInsets &insets, bool visible, const Valdi::StringBox &visibilityReason): Valdi::CppGeneratedModel(getRegisteredClass()),
   _pageId(std::move(pageId)),
   _route(std::move(route)),
-  _paramsJson(std::move(paramsJson)),
+  _params(std::move(params)),
   _presentation(std::move(presentation)),
   _insets(std::move(insets)),
   _visible(visible),
@@ -4695,16 +2046,16 @@ namespace snap::valdi_modules::app_pages {
     _route = std::move(value);
   }
 
-  const Valdi::StringBox &PageViewModel::getParamsJson() const {
-    return _paramsJson;
+  const Valdi::Ref<Valdi::ValueMap> &PageViewModel::getParams() const {
+    return _params;
   }
 
-  void PageViewModel::setParamsJson(const Valdi::StringBox &value) {
-    _paramsJson = value;
+  void PageViewModel::setParams(const Valdi::Ref<Valdi::ValueMap> &value) {
+    _params = value;
   }
 
-  void PageViewModel::setParamsJson(Valdi::StringBox &&value) {
-    _paramsJson = std::move(value);
+  void PageViewModel::setParams(Valdi::Ref<Valdi::ValueMap> &&value) {
+    _params = std::move(value);
   }
 
   const Valdi::StringBox &PageViewModel::getPresentation() const {
@@ -4753,16 +2104,16 @@ namespace snap::valdi_modules::app_pages {
 
   void PageViewModel::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, PageViewModel &out) {
     auto &self = out;
-    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._pageId, self._route, self._paramsJson, self._presentation, self._insets, self._visible, self._visibilityReason);
+    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._pageId, self._route, self._params, self._presentation, self._insets, self._visible, self._visibilityReason);
   }
 
   void PageViewModel::marshall(Valdi::ExceptionTracker &exceptionTracker, const PageViewModel &value, Valdi::Value &out) {
     const auto &self = value;
-    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._pageId, self._route, self._paramsJson, self._presentation, self._insets, self._visible, self._visibilityReason);
+    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._pageId, self._route, self._params, self._presentation, self._insets, self._visible, self._visibilityReason);
   }
 
   Valdi::RegisteredCppGeneratedClass *PageViewModel::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::PageViewModel'{'pageId':s, 'route':s, 'paramsJson':s, 'presentation':s, 'insets':r:'[0]', 'visible':b, 'visibilityReason':s}", []() -> Valdi::TypeReferencesVec {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::PageViewModel'{'pageId':s, 'route':s, 'params':m<s,u>, 'presentation':s, 'insets':r:'[0]', 'visible':b, 'visibilityReason':s}", []() -> Valdi::TypeReferencesVec {
       return {PageInsets::getRegisteredClass()};
     });
 
@@ -5128,6 +2479,457 @@ namespace snap::valdi_modules::app_pages {
 }
 
 //
+// ResolvedNavigation.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  ResolvedNavigation::ResolvedNavigation(): Valdi::CppGeneratedModel(getRegisteredClass()) {
+  }
+
+  ResolvedNavigation::ResolvedNavigation(const Valdi::StringBox &animation, double durationMs, const Valdi::StringBox &presentation): Valdi::CppGeneratedModel(getRegisteredClass()),
+  _animation(std::move(animation)),
+  _durationMs(durationMs),
+  _presentation(std::move(presentation)) {
+  }
+
+  const Valdi::StringBox &ResolvedNavigation::getAnimation() const {
+    return _animation;
+  }
+
+  void ResolvedNavigation::setAnimation(const Valdi::StringBox &value) {
+    _animation = value;
+  }
+
+  void ResolvedNavigation::setAnimation(Valdi::StringBox &&value) {
+    _animation = std::move(value);
+  }
+
+  double ResolvedNavigation::getDurationMs() const {
+    return _durationMs;
+  }
+
+  void ResolvedNavigation::setDurationMs(double value) {
+    _durationMs = value;
+  }
+
+  const Valdi::StringBox &ResolvedNavigation::getPresentation() const {
+    return _presentation;
+  }
+
+  void ResolvedNavigation::setPresentation(const Valdi::StringBox &value) {
+    _presentation = value;
+  }
+
+  void ResolvedNavigation::setPresentation(Valdi::StringBox &&value) {
+    _presentation = std::move(value);
+  }
+
+  void ResolvedNavigation::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, ResolvedNavigation &out) {
+    auto &self = out;
+    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._animation, self._durationMs, self._presentation);
+  }
+
+  void ResolvedNavigation::marshall(Valdi::ExceptionTracker &exceptionTracker, const ResolvedNavigation &value, Valdi::Value &out) {
+    const auto &self = value;
+    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._animation, self._durationMs, self._presentation);
+  }
+
+  Valdi::RegisteredCppGeneratedClass *ResolvedNavigation::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::ResolvedNavigation'{'animation':s, 'durationMs':d, 'presentation':s}");
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
+// RouteDeclaration.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  RouteDeclaration::RouteDeclaration(): Valdi::CppGeneratedModel(getRegisteredClass()) {
+  }
+
+  RouteDeclaration::RouteDeclaration(const std::vector<RouteEntry> &routes, const Valdi::Ref<RouteTabBar> &tabBar, const Valdi::StringBox &root): Valdi::CppGeneratedModel(getRegisteredClass()),
+  _routes(std::move(routes)),
+  _tabBar(std::move(tabBar)),
+  _root(std::move(root)) {
+  }
+
+  const std::vector<RouteEntry> &RouteDeclaration::getRoutes() const {
+    return _routes;
+  }
+
+  void RouteDeclaration::setRoutes(const std::vector<RouteEntry> &value) {
+    _routes = value;
+  }
+
+  void RouteDeclaration::setRoutes(std::vector<RouteEntry> &&value) {
+    _routes = std::move(value);
+  }
+
+  const Valdi::Ref<RouteTabBar> &RouteDeclaration::getTabBar() const {
+    return _tabBar;
+  }
+
+  void RouteDeclaration::setTabBar(const Valdi::Ref<RouteTabBar> &value) {
+    _tabBar = value;
+  }
+
+  void RouteDeclaration::setTabBar(Valdi::Ref<RouteTabBar> &&value) {
+    _tabBar = std::move(value);
+  }
+
+  const Valdi::StringBox &RouteDeclaration::getRoot() const {
+    return _root;
+  }
+
+  void RouteDeclaration::setRoot(const Valdi::StringBox &value) {
+    _root = value;
+  }
+
+  void RouteDeclaration::setRoot(Valdi::StringBox &&value) {
+    _root = std::move(value);
+  }
+
+  void RouteDeclaration::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, RouteDeclaration &out) {
+    auto &self = out;
+    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._routes, self._tabBar, self._root);
+  }
+
+  void RouteDeclaration::marshall(Valdi::ExceptionTracker &exceptionTracker, const RouteDeclaration &value, Valdi::Value &out) {
+    const auto &self = value;
+    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._routes, self._tabBar, self._root);
+  }
+
+  Valdi::RegisteredCppGeneratedClass *RouteDeclaration::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::RouteDeclaration'{'routes':a<r:'[0]'>, 'tabBar':r?:'[1]', 'root':s}", []() -> Valdi::TypeReferencesVec {
+      return {RouteEntry::getRegisteredClass(), RouteTabBar::getRegisteredClass()};
+    });
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
+// RouteEntry.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  RouteEntry::RouteEntry(): Valdi::CppGeneratedModel(getRegisteredClass()) {
+  }
+
+  RouteEntry::RouteEntry(const Valdi::StringBox &route, const Valdi::StringBox &kind, const Valdi::StringBox &title, const std::optional<Valdi::StringBox> &component, const std::optional<Valdi::StringBox> &nativeName): Valdi::CppGeneratedModel(getRegisteredClass()),
+  _route(std::move(route)),
+  _kind(std::move(kind)),
+  _title(std::move(title)),
+  _component(std::move(component)),
+  _nativeName(std::move(nativeName)) {
+  }
+
+  const Valdi::StringBox &RouteEntry::getRoute() const {
+    return _route;
+  }
+
+  void RouteEntry::setRoute(const Valdi::StringBox &value) {
+    _route = value;
+  }
+
+  void RouteEntry::setRoute(Valdi::StringBox &&value) {
+    _route = std::move(value);
+  }
+
+  const Valdi::StringBox &RouteEntry::getKind() const {
+    return _kind;
+  }
+
+  void RouteEntry::setKind(const Valdi::StringBox &value) {
+    _kind = value;
+  }
+
+  void RouteEntry::setKind(Valdi::StringBox &&value) {
+    _kind = std::move(value);
+  }
+
+  const Valdi::StringBox &RouteEntry::getTitle() const {
+    return _title;
+  }
+
+  void RouteEntry::setTitle(const Valdi::StringBox &value) {
+    _title = value;
+  }
+
+  void RouteEntry::setTitle(Valdi::StringBox &&value) {
+    _title = std::move(value);
+  }
+
+  const std::optional<Valdi::StringBox> &RouteEntry::getComponent() const {
+    return _component;
+  }
+
+  void RouteEntry::setComponent(const std::optional<Valdi::StringBox> &value) {
+    _component = value;
+  }
+
+  void RouteEntry::setComponent(std::optional<Valdi::StringBox> &&value) {
+    _component = std::move(value);
+  }
+
+  const std::optional<Valdi::StringBox> &RouteEntry::getNativeName() const {
+    return _nativeName;
+  }
+
+  void RouteEntry::setNativeName(const std::optional<Valdi::StringBox> &value) {
+    _nativeName = value;
+  }
+
+  void RouteEntry::setNativeName(std::optional<Valdi::StringBox> &&value) {
+    _nativeName = std::move(value);
+  }
+
+  void RouteEntry::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, RouteEntry &out) {
+    auto &self = out;
+    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._route, self._kind, self._title, self._component, self._nativeName);
+  }
+
+  void RouteEntry::marshall(Valdi::ExceptionTracker &exceptionTracker, const RouteEntry &value, Valdi::Value &out) {
+    const auto &self = value;
+    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._route, self._kind, self._title, self._component, self._nativeName);
+  }
+
+  Valdi::RegisteredCppGeneratedClass *RouteEntry::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::RouteEntry'{'route':s, 'kind':s, 'title':s, 'component':s?, 'nativeName':s?}");
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
+// RouteTab.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  RouteTab::RouteTab(): Valdi::CppGeneratedModel(getRegisteredClass()) {
+  }
+
+  RouteTab::RouteTab(const Valdi::StringBox &route, const Valdi::StringBox &text, const Valdi::StringBox &icon, const Valdi::StringBox &selectedIcon, const std::optional<Valdi::StringBox> &iconData, const std::optional<Valdi::StringBox> &selectedIconData): Valdi::CppGeneratedModel(getRegisteredClass()),
+  _route(std::move(route)),
+  _text(std::move(text)),
+  _icon(std::move(icon)),
+  _selectedIcon(std::move(selectedIcon)),
+  _iconData(std::move(iconData)),
+  _selectedIconData(std::move(selectedIconData)) {
+  }
+
+  const Valdi::StringBox &RouteTab::getRoute() const {
+    return _route;
+  }
+
+  void RouteTab::setRoute(const Valdi::StringBox &value) {
+    _route = value;
+  }
+
+  void RouteTab::setRoute(Valdi::StringBox &&value) {
+    _route = std::move(value);
+  }
+
+  const Valdi::StringBox &RouteTab::getText() const {
+    return _text;
+  }
+
+  void RouteTab::setText(const Valdi::StringBox &value) {
+    _text = value;
+  }
+
+  void RouteTab::setText(Valdi::StringBox &&value) {
+    _text = std::move(value);
+  }
+
+  const Valdi::StringBox &RouteTab::getIcon() const {
+    return _icon;
+  }
+
+  void RouteTab::setIcon(const Valdi::StringBox &value) {
+    _icon = value;
+  }
+
+  void RouteTab::setIcon(Valdi::StringBox &&value) {
+    _icon = std::move(value);
+  }
+
+  const Valdi::StringBox &RouteTab::getSelectedIcon() const {
+    return _selectedIcon;
+  }
+
+  void RouteTab::setSelectedIcon(const Valdi::StringBox &value) {
+    _selectedIcon = value;
+  }
+
+  void RouteTab::setSelectedIcon(Valdi::StringBox &&value) {
+    _selectedIcon = std::move(value);
+  }
+
+  const std::optional<Valdi::StringBox> &RouteTab::getIconData() const {
+    return _iconData;
+  }
+
+  void RouteTab::setIconData(const std::optional<Valdi::StringBox> &value) {
+    _iconData = value;
+  }
+
+  void RouteTab::setIconData(std::optional<Valdi::StringBox> &&value) {
+    _iconData = std::move(value);
+  }
+
+  const std::optional<Valdi::StringBox> &RouteTab::getSelectedIconData() const {
+    return _selectedIconData;
+  }
+
+  void RouteTab::setSelectedIconData(const std::optional<Valdi::StringBox> &value) {
+    _selectedIconData = value;
+  }
+
+  void RouteTab::setSelectedIconData(std::optional<Valdi::StringBox> &&value) {
+    _selectedIconData = std::move(value);
+  }
+
+  void RouteTab::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, RouteTab &out) {
+    auto &self = out;
+    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._route, self._text, self._icon, self._selectedIcon, self._iconData, self._selectedIconData);
+  }
+
+  void RouteTab::marshall(Valdi::ExceptionTracker &exceptionTracker, const RouteTab &value, Valdi::Value &out) {
+    const auto &self = value;
+    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._route, self._text, self._icon, self._selectedIcon, self._iconData, self._selectedIconData);
+  }
+
+  Valdi::RegisteredCppGeneratedClass *RouteTab::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::RouteTab'{'route':s, 'text':s, 'icon':s, 'selectedIcon':s, 'iconData':s?, 'selectedIconData':s?}");
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
+// RouteTabBar.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  RouteTabBar::RouteTabBar(): Valdi::CppGeneratedModel(getRegisteredClass()) {
+  }
+
+  RouteTabBar::RouteTabBar(const Valdi::StringBox &route, const Valdi::StringBox &initial, const std::vector<RouteTab> &tabs, const std::optional<Valdi::StringBox> &mode, const std::optional<Valdi::StringBox> &component): Valdi::CppGeneratedModel(getRegisteredClass()),
+  _route(std::move(route)),
+  _initial(std::move(initial)),
+  _tabs(std::move(tabs)),
+  _mode(std::move(mode)),
+  _component(std::move(component)) {
+  }
+
+  const Valdi::StringBox &RouteTabBar::getRoute() const {
+    return _route;
+  }
+
+  void RouteTabBar::setRoute(const Valdi::StringBox &value) {
+    _route = value;
+  }
+
+  void RouteTabBar::setRoute(Valdi::StringBox &&value) {
+    _route = std::move(value);
+  }
+
+  const Valdi::StringBox &RouteTabBar::getInitial() const {
+    return _initial;
+  }
+
+  void RouteTabBar::setInitial(const Valdi::StringBox &value) {
+    _initial = value;
+  }
+
+  void RouteTabBar::setInitial(Valdi::StringBox &&value) {
+    _initial = std::move(value);
+  }
+
+  const std::vector<RouteTab> &RouteTabBar::getTabs() const {
+    return _tabs;
+  }
+
+  void RouteTabBar::setTabs(const std::vector<RouteTab> &value) {
+    _tabs = value;
+  }
+
+  void RouteTabBar::setTabs(std::vector<RouteTab> &&value) {
+    _tabs = std::move(value);
+  }
+
+  const std::optional<Valdi::StringBox> &RouteTabBar::getMode() const {
+    return _mode;
+  }
+
+  void RouteTabBar::setMode(const std::optional<Valdi::StringBox> &value) {
+    _mode = value;
+  }
+
+  void RouteTabBar::setMode(std::optional<Valdi::StringBox> &&value) {
+    _mode = std::move(value);
+  }
+
+  const std::optional<Valdi::StringBox> &RouteTabBar::getComponent() const {
+    return _component;
+  }
+
+  void RouteTabBar::setComponent(const std::optional<Valdi::StringBox> &value) {
+    _component = value;
+  }
+
+  void RouteTabBar::setComponent(std::optional<Valdi::StringBox> &&value) {
+    _component = std::move(value);
+  }
+
+  void RouteTabBar::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, RouteTabBar &out) {
+    auto &self = out;
+    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._route, self._initial, self._tabs, self._mode, self._component);
+  }
+
+  void RouteTabBar::marshall(Valdi::ExceptionTracker &exceptionTracker, const RouteTabBar &value, Valdi::Value &out) {
+    const auto &self = value;
+    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._route, self._initial, self._tabs, self._mode, self._component);
+  }
+
+  Valdi::RegisteredCppGeneratedClass *RouteTabBar::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::RouteTabBar'{'route':s, 'initial':s, 'tabs':a<r:'[0]'>, 'mode':s?, 'component':s?}", []() -> Valdi::TypeReferencesVec {
+      return {RouteTab::getRegisteredClass()};
+    });
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
 // ScanCodeReply.cpp
 //
 
@@ -5187,6 +2989,78 @@ namespace snap::valdi_modules::app_pages {
 }
 
 //
+// StackPage.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  StackPage::StackPage(): Valdi::CppGeneratedModel(getRegisteredClass()) {
+  }
+
+  StackPage::StackPage(const Valdi::StringBox &pageId, const Valdi::StringBox &route, const Valdi::Ref<Valdi::ValueMap> &params): Valdi::CppGeneratedModel(getRegisteredClass()),
+  _pageId(std::move(pageId)),
+  _route(std::move(route)),
+  _params(std::move(params)) {
+  }
+
+  const Valdi::StringBox &StackPage::getPageId() const {
+    return _pageId;
+  }
+
+  void StackPage::setPageId(const Valdi::StringBox &value) {
+    _pageId = value;
+  }
+
+  void StackPage::setPageId(Valdi::StringBox &&value) {
+    _pageId = std::move(value);
+  }
+
+  const Valdi::StringBox &StackPage::getRoute() const {
+    return _route;
+  }
+
+  void StackPage::setRoute(const Valdi::StringBox &value) {
+    _route = value;
+  }
+
+  void StackPage::setRoute(Valdi::StringBox &&value) {
+    _route = std::move(value);
+  }
+
+  const Valdi::Ref<Valdi::ValueMap> &StackPage::getParams() const {
+    return _params;
+  }
+
+  void StackPage::setParams(const Valdi::Ref<Valdi::ValueMap> &value) {
+    _params = value;
+  }
+
+  void StackPage::setParams(Valdi::Ref<Valdi::ValueMap> &&value) {
+    _params = std::move(value);
+  }
+
+  void StackPage::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, StackPage &out) {
+    auto &self = out;
+    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._pageId, self._route, self._params);
+  }
+
+  void StackPage::marshall(Valdi::ExceptionTracker &exceptionTracker, const StackPage &value, Valdi::Value &out) {
+    const auto &self = value;
+    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._pageId, self._route, self._params);
+  }
+
+  Valdi::RegisteredCppGeneratedClass *StackPage::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::StackPage'{'pageId':s, 'route':s, 'params':m<s,u>}");
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
 // StartApp.cpp
 //
 
@@ -5196,8 +3070,8 @@ namespace snap::valdi_modules::app_pages {
 namespace snap::valdi_modules::app_pages {
 
   Valdi::RegisteredCppGeneratedClass& StartApp::registeredSchema() {
-    static auto *kSchema = Valdi::CppGeneratedExportedFunctionUtils::registerFunctionSchema("c 'StartApp'{'startApp':f(b, r:'[0]', r:'[1]'): s}", []() -> Valdi::TypeReferencesVec {
-      return {NavigationHost::getRegisteredClass(), TokenStore::getRegisteredClass()};
+    static auto *kSchema = Valdi::CppGeneratedExportedFunctionUtils::registerFunctionSchema("c 'StartApp'{'startApp':f(b, r:'[1]', r:'[2]'): r:'[0]'}", []() -> Valdi::TypeReferencesVec {
+      return {RouteDeclaration::getRegisteredClass(), NavigationHost::getRegisteredClass(), TokenStore::getRegisteredClass()};
     });
     return *kSchema;
   }
@@ -5289,7 +3163,329 @@ namespace snap::valdi_modules::app_pages {
   }
 
   Valdi::RegisteredCppGeneratedClass *StorageHost::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::StorageHost'{'get':f(s): s, 'set':f(s, s): b, 'remove':f(s), 'clear':f()}");
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::StorageHost'{'get':f(s): r:'[0]', 'set':f(r:'[1]'): b, 'remove':f(s), 'clear':f()}", []() -> Valdi::TypeReferencesVec {
+      return {StorageReadReply::getRegisteredClass(), StorageWriteRequest::getRegisteredClass()};
+    });
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
+// StorageReadReply.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  StorageReadReply::StorageReadReply(): Valdi::CppGeneratedModel(getRegisteredClass()) {
+  }
+
+  StorageReadReply::StorageReadReply(bool found, const Valdi::Ref<Valdi::ValueMap> &payload, const Valdi::StringBox &error): Valdi::CppGeneratedModel(getRegisteredClass()),
+  _found(found),
+  _payload(std::move(payload)),
+  _error(std::move(error)) {
+  }
+
+  bool StorageReadReply::getFound() const {
+    return _found;
+  }
+
+  void StorageReadReply::setFound(bool value) {
+    _found = value;
+  }
+
+  const Valdi::Ref<Valdi::ValueMap> &StorageReadReply::getPayload() const {
+    return _payload;
+  }
+
+  void StorageReadReply::setPayload(const Valdi::Ref<Valdi::ValueMap> &value) {
+    _payload = value;
+  }
+
+  void StorageReadReply::setPayload(Valdi::Ref<Valdi::ValueMap> &&value) {
+    _payload = std::move(value);
+  }
+
+  const Valdi::StringBox &StorageReadReply::getError() const {
+    return _error;
+  }
+
+  void StorageReadReply::setError(const Valdi::StringBox &value) {
+    _error = value;
+  }
+
+  void StorageReadReply::setError(Valdi::StringBox &&value) {
+    _error = std::move(value);
+  }
+
+  void StorageReadReply::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, StorageReadReply &out) {
+    auto &self = out;
+    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._found, self._payload, self._error);
+  }
+
+  void StorageReadReply::marshall(Valdi::ExceptionTracker &exceptionTracker, const StorageReadReply &value, Valdi::Value &out) {
+    const auto &self = value;
+    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._found, self._payload, self._error);
+  }
+
+  Valdi::RegisteredCppGeneratedClass *StorageReadReply::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::StorageReadReply'{'found':b, 'payload':m<s,u>, 'error':s}");
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
+// StorageWriteRequest.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  StorageWriteRequest::StorageWriteRequest(): Valdi::CppGeneratedModel(getRegisteredClass()) {
+  }
+
+  StorageWriteRequest::StorageWriteRequest(const Valdi::StringBox &key, const Valdi::Ref<Valdi::ValueMap> &payload): Valdi::CppGeneratedModel(getRegisteredClass()),
+  _key(std::move(key)),
+  _payload(std::move(payload)) {
+  }
+
+  const Valdi::StringBox &StorageWriteRequest::getKey() const {
+    return _key;
+  }
+
+  void StorageWriteRequest::setKey(const Valdi::StringBox &value) {
+    _key = value;
+  }
+
+  void StorageWriteRequest::setKey(Valdi::StringBox &&value) {
+    _key = std::move(value);
+  }
+
+  const Valdi::Ref<Valdi::ValueMap> &StorageWriteRequest::getPayload() const {
+    return _payload;
+  }
+
+  void StorageWriteRequest::setPayload(const Valdi::Ref<Valdi::ValueMap> &value) {
+    _payload = value;
+  }
+
+  void StorageWriteRequest::setPayload(Valdi::Ref<Valdi::ValueMap> &&value) {
+    _payload = std::move(value);
+  }
+
+  void StorageWriteRequest::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, StorageWriteRequest &out) {
+    auto &self = out;
+    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._key, self._payload);
+  }
+
+  void StorageWriteRequest::marshall(Valdi::ExceptionTracker &exceptionTracker, const StorageWriteRequest &value, Valdi::Value &out) {
+    const auto &self = value;
+    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._key, self._payload);
+  }
+
+  Valdi::RegisteredCppGeneratedClass *StorageWriteRequest::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::StorageWriteRequest'{'key':s, 'payload':m<s,u>}");
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
+// TabBarContext.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  TabBarContext::TabBarContext(): Valdi::CppGeneratedModel(getRegisteredClass()) {
+  }
+
+  TabBarContext::TabBarContext(const TabBarContext::SelectTabFn &selectTab): Valdi::CppGeneratedModel(getRegisteredClass()),
+  _selectTab(std::move(selectTab)) {
+  }
+
+  const TabBarContext::SelectTabFn &TabBarContext::getSelectTab() const {
+    return _selectTab;
+  }
+
+  void TabBarContext::setSelectTab(const TabBarContext::SelectTabFn &value) {
+    _selectTab = value;
+  }
+
+  void TabBarContext::setSelectTab(TabBarContext::SelectTabFn &&value) {
+    _selectTab = std::move(value);
+  }
+
+  void TabBarContext::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, TabBarContext &out) {
+    auto &self = out;
+    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._selectTab);
+  }
+
+  void TabBarContext::marshall(Valdi::ExceptionTracker &exceptionTracker, const TabBarContext &value, Valdi::Value &out) {
+    const auto &self = value;
+    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._selectTab);
+  }
+
+  Valdi::RegisteredCppGeneratedClass *TabBarContext::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::TabBarContext'{'selectTab':f(s)}");
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
+// TabBarViewModel.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  TabBarViewModel::TabBarViewModel(): Valdi::CppGeneratedModel(getRegisteredClass()) {
+  }
+
+  TabBarViewModel::TabBarViewModel(const std::vector<RouteTab> &items, const Valdi::StringBox &selectedRoute, double safeAreaBottom): Valdi::CppGeneratedModel(getRegisteredClass()),
+  _items(std::move(items)),
+  _selectedRoute(std::move(selectedRoute)),
+  _safeAreaBottom(safeAreaBottom) {
+  }
+
+  const std::vector<RouteTab> &TabBarViewModel::getItems() const {
+    return _items;
+  }
+
+  void TabBarViewModel::setItems(const std::vector<RouteTab> &value) {
+    _items = value;
+  }
+
+  void TabBarViewModel::setItems(std::vector<RouteTab> &&value) {
+    _items = std::move(value);
+  }
+
+  const Valdi::StringBox &TabBarViewModel::getSelectedRoute() const {
+    return _selectedRoute;
+  }
+
+  void TabBarViewModel::setSelectedRoute(const Valdi::StringBox &value) {
+    _selectedRoute = value;
+  }
+
+  void TabBarViewModel::setSelectedRoute(Valdi::StringBox &&value) {
+    _selectedRoute = std::move(value);
+  }
+
+  double TabBarViewModel::getSafeAreaBottom() const {
+    return _safeAreaBottom;
+  }
+
+  void TabBarViewModel::setSafeAreaBottom(double value) {
+    _safeAreaBottom = value;
+  }
+
+  void TabBarViewModel::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, TabBarViewModel &out) {
+    auto &self = out;
+    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._items, self._selectedRoute, self._safeAreaBottom);
+  }
+
+  void TabBarViewModel::marshall(Valdi::ExceptionTracker &exceptionTracker, const TabBarViewModel &value, Valdi::Value &out) {
+    const auto &self = value;
+    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._items, self._selectedRoute, self._safeAreaBottom);
+  }
+
+  Valdi::RegisteredCppGeneratedClass *TabBarViewModel::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::TabBarViewModel'{'items':a<r:'[0]'>, 'selectedRoute':s, 'safeAreaBottom':d}", []() -> Valdi::TypeReferencesVec {
+      return {RouteTab::getRegisteredClass()};
+    });
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
+// TimeWheelConfig.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  TimeWheelConfig::TimeWheelConfig(): Valdi::CppGeneratedModel(getRegisteredClass()) {
+  }
+
+  TimeWheelConfig::TimeWheelConfig(const Valdi::StringBox &mode, const Valdi::StringBox &value, double minYear, double maxYear): Valdi::CppGeneratedModel(getRegisteredClass()),
+  _mode(std::move(mode)),
+  _value(std::move(value)),
+  _minYear(minYear),
+  _maxYear(maxYear) {
+  }
+
+  const Valdi::StringBox &TimeWheelConfig::getMode() const {
+    return _mode;
+  }
+
+  void TimeWheelConfig::setMode(const Valdi::StringBox &value) {
+    _mode = value;
+  }
+
+  void TimeWheelConfig::setMode(Valdi::StringBox &&value) {
+    _mode = std::move(value);
+  }
+
+  const Valdi::StringBox &TimeWheelConfig::getValue() const {
+    return _value;
+  }
+
+  void TimeWheelConfig::setValue(const Valdi::StringBox &value) {
+    _value = value;
+  }
+
+  void TimeWheelConfig::setValue(Valdi::StringBox &&value) {
+    _value = std::move(value);
+  }
+
+  double TimeWheelConfig::getMinYear() const {
+    return _minYear;
+  }
+
+  void TimeWheelConfig::setMinYear(double value) {
+    _minYear = value;
+  }
+
+  double TimeWheelConfig::getMaxYear() const {
+    return _maxYear;
+  }
+
+  void TimeWheelConfig::setMaxYear(double value) {
+    _maxYear = value;
+  }
+
+  void TimeWheelConfig::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, TimeWheelConfig &out) {
+    auto &self = out;
+    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._mode, self._value, self._minYear, self._maxYear);
+  }
+
+  void TimeWheelConfig::marshall(Valdi::ExceptionTracker &exceptionTracker, const TimeWheelConfig &value, Valdi::Value &out) {
+    const auto &self = value;
+    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._mode, self._value, self._minYear, self._maxYear);
+  }
+
+  Valdi::RegisteredCppGeneratedClass *TimeWheelConfig::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::TimeWheelConfig'{'mode':s, 'value':s, 'minYear':d, 'maxYear':d}");
 
     return kRegisteredClass;
   }
@@ -5452,6 +3648,76 @@ namespace snap::valdi_modules::app_pages {
 
   Valdi::RegisteredCppGeneratedClass *TokenStore::getRegisteredClass() {
     static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::TokenStore'{'has':f(): b, 'read':f(): s, 'write':f(s), 'clear':f()}");
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
+// TreeWheelConfig.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  TreeWheelConfig::TreeWheelConfig(): Valdi::CppGeneratedModel(getRegisteredClass()) {
+  }
+
+  TreeWheelConfig::TreeWheelConfig(const std::vector<WheelTreeNode> &data, const std::vector<Valdi::StringBox> &value, double columns): Valdi::CppGeneratedModel(getRegisteredClass()),
+  _data(std::move(data)),
+  _value(std::move(value)),
+  _columns(columns) {
+  }
+
+  const std::vector<WheelTreeNode> &TreeWheelConfig::getData() const {
+    return _data;
+  }
+
+  void TreeWheelConfig::setData(const std::vector<WheelTreeNode> &value) {
+    _data = value;
+  }
+
+  void TreeWheelConfig::setData(std::vector<WheelTreeNode> &&value) {
+    _data = std::move(value);
+  }
+
+  const std::vector<Valdi::StringBox> &TreeWheelConfig::getValue() const {
+    return _value;
+  }
+
+  void TreeWheelConfig::setValue(const std::vector<Valdi::StringBox> &value) {
+    _value = value;
+  }
+
+  void TreeWheelConfig::setValue(std::vector<Valdi::StringBox> &&value) {
+    _value = std::move(value);
+  }
+
+  double TreeWheelConfig::getColumns() const {
+    return _columns;
+  }
+
+  void TreeWheelConfig::setColumns(double value) {
+    _columns = value;
+  }
+
+  void TreeWheelConfig::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, TreeWheelConfig &out) {
+    auto &self = out;
+    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._data, self._value, self._columns);
+  }
+
+  void TreeWheelConfig::marshall(Valdi::ExceptionTracker &exceptionTracker, const TreeWheelConfig &value, Valdi::Value &out) {
+    const auto &self = value;
+    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._data, self._value, self._columns);
+  }
+
+  Valdi::RegisteredCppGeneratedClass *TreeWheelConfig::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::TreeWheelConfig'{'data':a<r:'[0]'>, 'value':a<s>, 'columns':d}", []() -> Valdi::TypeReferencesVec {
+      return {WheelTreeNode::getRegisteredClass()};
+    });
 
     return kRegisteredClass;
   }
@@ -5749,6 +4015,80 @@ namespace snap::valdi_modules::app_pages {
 
   Valdi::RegisteredCppGeneratedClass *VisionPrediction::getRegisteredClass() {
     static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::VisionPrediction'{'label':s, 'score':d}");
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
+// WheelTreeNode.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  WheelTreeNode::WheelTreeNode(): Valdi::CppGeneratedModel(getRegisteredClass()) {
+  }
+
+  WheelTreeNode::WheelTreeNode(const Valdi::StringBox &value, const Valdi::StringBox &label, const std::optional<std::vector<WheelTreeNode>> &children): Valdi::CppGeneratedModel(getRegisteredClass()),
+  _value(std::move(value)),
+  _label(std::move(label)),
+  _children(std::move(children)) {
+  }
+
+  const Valdi::StringBox &WheelTreeNode::getValue() const {
+    return _value;
+  }
+
+  void WheelTreeNode::setValue(const Valdi::StringBox &value) {
+    _value = value;
+  }
+
+  void WheelTreeNode::setValue(Valdi::StringBox &&value) {
+    _value = std::move(value);
+  }
+
+  const Valdi::StringBox &WheelTreeNode::getLabel() const {
+    return _label;
+  }
+
+  void WheelTreeNode::setLabel(const Valdi::StringBox &value) {
+    _label = value;
+  }
+
+  void WheelTreeNode::setLabel(Valdi::StringBox &&value) {
+    _label = std::move(value);
+  }
+
+  const std::optional<std::vector<WheelTreeNode>> &WheelTreeNode::getChildren() const {
+    return _children;
+  }
+
+  void WheelTreeNode::setChildren(const std::optional<std::vector<WheelTreeNode>> &value) {
+    _children = value;
+  }
+
+  void WheelTreeNode::setChildren(std::optional<std::vector<WheelTreeNode>> &&value) {
+    _children = std::move(value);
+  }
+
+  void WheelTreeNode::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, WheelTreeNode &out) {
+    auto &self = out;
+    Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._value, self._label, self._children);
+  }
+
+  void WheelTreeNode::marshall(Valdi::ExceptionTracker &exceptionTracker, const WheelTreeNode &value, Valdi::Value &out) {
+    const auto &self = value;
+    Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, self._value, self._label, self._children);
+  }
+
+  Valdi::RegisteredCppGeneratedClass *WheelTreeNode::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::WheelTreeNode'{'value':s, 'label':s, 'children':a?<r:'[0]'>}", []() -> Valdi::TypeReferencesVec {
+      return {WheelTreeNode::getRegisteredClass()};
+    });
 
     return kRegisteredClass;
   }

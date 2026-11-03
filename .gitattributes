@@ -1,0 +1,8 @@
+# The native bindings toolchain is line-ending sensitive: tools/valdi-rolldown/codegen.ts
+# writes LF, and its --check byte-compares the result with the checked-in bindings that the
+# export scripts verify on every platform. A Windows checkout with core.autocrlf=true
+# rewrites the sources and generated files to CRLF, which changes the generated C++ headers
+# and fails the check. Check out LF everywhere except batch files, which keep CRLF for cmd.exe.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf

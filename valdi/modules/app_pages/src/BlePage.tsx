@@ -3,11 +3,11 @@ import { systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
 import { Label, ScrollView, TextField, View } from 'valdi_tsx/src/NativeTemplateElements';
 import { api } from './api';
 import { Button } from './Button';
-import type { BLEPeripheralServer, BluetoothDevice } from './ble/wechat';
+import type { BLEPeripheralServer, BluetoothDevice } from 'bluetooth/src/index';
 import { PageContext, PageViewModel } from './Page';
 import { Page } from './PageComponent';
 import { PageHeader } from './PageHeader';
-import { Router } from './routes';
+import { Router } from './navigation';
 
 /** The service this page publishes in peripheral mode, so a phone or computer can connect to it as a central. */
 const DEMO_SERVICE = '0000feed-0000-1000-8000-00805f9b34fb';

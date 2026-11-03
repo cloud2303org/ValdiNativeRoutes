@@ -27,30 +27,53 @@ scripts/
 日常构建和测试从仓库根目录运行：
 
 ```sh
-pnpm build                    # TS 模块、图片和字体；输出 tools/valdi-rolldown/out/
-pnpm build:android            # Android Debug APK；输出 android/app/build/outputs/apk/debug/
-pnpm build:ios                # iOS Simulator Debug App；输出 ios/build/Build/Products/Debug-iphonesimulator/
-pnpm test                     # 构建前置检查测试 + Kotlin / Objective-C / C++ golden 对比
+pnpm prebuild --platform android   # 准备 Valdi 源码/绑定/运行时/原生模块/Vision（未变化时走快速路径）
+pnpm android                       # prebuild + 构建 + 安装 + 启动（唯一模拟器，或 --device 指定）
+pnpm ios                           # 同上，iOS 模拟器（仅 macOS）
+pnpm dev                           # Node 热重载；按 a / i 选择设备并构建、安装、启动 App
+pnpm build:android                 # 只构建 Android Debug APK，不安装/启动
+pnpm build:ios                     # 只构建 iOS Simulator Debug App（自动 XcodeGen）
+pnpm build                         # TS 模块、图片和字体；输出 tools/valdi-rolldown/out/
+pnpm test                          # 构建前置检查测试 + Kotlin / Objective-C / C++ golden 对比
 pnpm test:e2e:android          # 已安装 Android App 的 UI 测试
 pnpm test:e2e:ios              # 已安装 iOS App 的 UI 测试
 ```
 
-`build:ios` 自动运行 XcodeGen；两个原生构建命令只构建，不安装或启动 App。Android 的 Gradle 参数、iOS 的
-`xcodebuild` 参数可跟在命令后面，例如 `pnpm build:android --stacktrace`。UI 测试沿用现有设备配置（可用
+也可以先只运行 `pnpm dev`，在同一个终端按 **a**（Android）或 **i**（iOS 模拟器，仅 Mac），
+输入设备编号后按回车启动。支持大写 A/I；Esc 取消选择，Ctrl+C 退出并停止从这里启动的构建。
+Android 列出已启动的模拟器和已授权的连接设备；尚未启动的 Android 模拟器需先在 Android Studio 打开。
+iOS 列出可用 iPhone 模拟器，选中后由 `pnpm ios --device` 自动启动。选择 Android 后热重载也定向到该设备。
+原生构建在子进程执行，Node 热重载继续运行；构建期间不会重复启动第二个构建，失败后可以再次按 a/i 重试。
+输出重定向或非交互终端不启用快捷键，仍可另开终端执行 `pnpm android` / `pnpm ios`。
+
+统一入口都是 Node 分发，Windows / macOS / Linux 用法一致；`android`/`ios` 先按指纹准备（源码、绑定、运行时、
+原生模块、Vision），指纹未变化时不会重新导出运行时，只改 TS 不会触发导出。设备选择是显式的：唯一运行中的
+模拟器会被使用，多个模拟器或只有物理设备时必须 `--device <adb serial | simulator udid|name>`，永远不会自动挑
+物理设备（物理设备只在使用 `--device` 时安装）。常用选项：`--no-install`（只构建）、`--no-launch`（安装不启动）、
+`--no-prebuild`（跳过准备，交给构建自己的指纹检查）；`--` 之后的参数原样传给 Gradle / `xcodebuild`，例如
+`pnpm android -- --stacktrace`。`pnpm android`/`pnpm ios` 目前只做 Debug，Release OTA 构建仍需手动导出与签名，
+见 [构建与 CI 边界](docs/build-and-ci.md)。iOS 的 prebuild/构建/安装只在 macOS + Xcode 下可用；Linux 支持
+`prebuild --platform android` 与 `android`（需要 adb/模拟器）。
+
+仓库根目录的 `.npmrc` 关闭了 pnpm 的 pre/post 脚本自动执行（`enable-pre-post-scripts=false`），否则
+`pnpm build` 会先自动跑同名的 `prebuild` 脚本；`pnpm prebuild --platform android` 是显式命令，不受影响。
+
+直接构建时 Android 的 Gradle 参数、iOS 的 `xcodebuild` 参数可跟在命令后面，例如 `pnpm build:android --stacktrace`。
+UI 测试沿用现有设备配置（可用
 `ANDROID_DEVICE` / `IOS_DEVICE` 覆盖），默认跑全部用例；也可指定一个用例，例如
 `pnpm test:e2e:android detail-scroll`。UI 测试不隐式构建或覆盖已安装的 App。
 
 `pnpm format` 只格式化 `valdi/modules/` 的前端代码；`pnpm check` 也只检查这个范围。不添加原生格式化步骤。
 GitHub Actions 运行 golden、TS 构建、Android Debug APK 和 iOS 模拟器 App 构建。
 CI 的范围和缓存规则见 [构建与 CI 边界](docs/build-and-ci.md)，
-上游版本试跑、补丁及 vendored 代码的同步步骤见 [同步 Valdi 上游](docs/upgrading-valdi.md)。
+框架 fork 同步、版本试跑及 vendored 代码的维护步骤见 [同步 Valdi 上游](docs/upgrading-valdi.md)。
+Windows 原生 Android 构建入口见 [Native Windows Android builds](docs/windows-native-build.md)。
 
-首次准备依赖和原生运行时仍需下面的步骤；改 TS、图片后直接使用上面的根目录命令：
+准备依赖和原生运行时可以显式执行（`pnpm android`/`pnpm prebuild` 会自动完成同样的步骤）：
 
 ```sh
 pnpm install                               # 一次安装根目录、页面和构建工具的锁定依赖，生成 tsconfig
-scripts/export-android.sh                   # 只在第一次和 Valdi 本身变了时跑；release 包加参数 release
-cd android && ./gradlew :app:installDebug
+pnpm prebuild --platform android           # 首次/Valdi 或 valdi/native 变化时导出运行时并准备其余产物
 ```
 
 需要 JDK 17、Android SDK、Node、pnpm。Valdi 命令行工具不用全局安装：它是 `valdi/package.json` 里的开发依赖（`@snap/valdi` 1.2.1），导出脚本用 `pnpm exec valdi` 调它。导出只编 Valdi 运行时（`libvaldi_runtime.so`、Valdi 的 Kotlin 和它自带的模块）以及构建要用的 Valdi 工具，第一次从头编译约 17 分钟。aar 里有三种 CPU 架构，APK 只打包 arm64（`abiFilters`）。
@@ -244,28 +267,32 @@ Drizzle 尚未接入，后续一起替换 schema、驱动和迁移；原生 SQLi
 - **token：** 存在 `TokenStore`（`src/auth.ts`）里：iOS 存 Keychain，重装后算未登录；安卓用 Keystore 里的 AES 密钥加密后存 SharedPreferences，这个文件不进备份。安卓判断是否已登录只看有没有存过 token，不解密，启动时不碰 Keystore。
 - **为什么不用 Valdi 的 `PersistentStore`：** 它只有异步接口，而 `startApp` 要同步决定首页。它的加密只给 user-scoped 的存储用，要宿主提供 Snap 的 `UserSession` 和 Keychain 实现；`deviceGlobal` 的存储不加密。
 
-## Valdi 补丁
+## Valdi fork 与工具补丁
 
-Valdi 用 beta-0.2.1，补丁都在 `valdi/bzl/patches/valdi/`，以后升级 Valdi 时逐个看上游是否已经修复。Valdi 的 Kotlin 代码用 rules_kotlin 2.3.10 编译，编译器是 Kotlin 2.3.10（和 Valdi 自己 registry 里的版本一致，原来的 rules_kotlin 1.9.0 是 Kotlin 1.9）；宿主 Gradle 是 Kotlin 2.4.21 + AGP 内置 Kotlin，能读 2.3 编出的类。
+框架维护在 [cloud2303org/Valdi](https://github.com/cloud2303org/Valdi/tree/valdiroutes) 的 `valdiroutes` 分支，当前基于上游 `beta-0.2.1`。
+应用通过 `valdi/MODULE.bazel` 的 `VALDI_COMMIT` 固定完整提交，registry 使用同一个 fork 提交。
+原来的 11 个框架补丁已转换为 fork 中的独立提交，Hermes 构建输入也迁入 fork；应用不再持有这套补丁。
+后续在 fork 中合并上游，再更新应用 pin，详见 [同步 Valdi 上游](docs/upgrading-valdi.md)。
+Valdi 的 Kotlin 代码用 rules_kotlin 2.3.10 编译；宿主 Gradle 是 Kotlin 2.4.21 + AGP 内置 Kotlin。
 
 **Bazel 8 和 Valdi 命令行工具的补丁。** Valdi 0.2.1 本身用 Bazel 8.2.1（`valdi/.bazelversion`），但命令行工具 1.2.1 的 `bootstrap` 模板还停在 Valdi 0.1.x：Bazel 7.2.1、protobuf 27.0、rules_java 7.4.0、rules_kotlin 1.9.0、rules_jvm_external 6.2，`projectsync` 也只认 Bazel 7 的外部仓库名（`valdi~`），不认 Bazel 8 的（`valdi+`）。`valdi/patches/@snap__valdi@1.2.1.patch`（`pnpm patch`，登记在 `pnpm-workspace.yaml`）把模板改成和 Valdi 0.2.1 一致，并让 `projectsync` 认 `+`。这个项目自己的 `.bazelversion`、`MODULE.bazel`、`.bazelrc` 也按同样的版本改过（另加 `platforms` 依赖和两个 Bazel 8 参数）。升级命令行工具时先看上游是否已修复，修复了就删掉补丁。Bazel 的磁盘缓存在 `~/.cache/bazel-disk-cache`，空闲时自动清理到 30 GB 以内（`.bazelrc` 的 `--experimental_disk_cache_gc_max_size`）。
 
-`valdi/bzl/patches/valdi/clientsql_rules_python.patch`：Valdi 的 ClientSQL 工具用的是 Bazel 内置的 `py_binary`，在 rules_python 1.9 下启动时不设置导入路径，`.sq` 编译和 `valdi hotreload` 都会报 `No module named 'python'`。补丁改成从 rules_python 加载这些规则。应用 Node 构建已移除该生成器；此补丁仅为上游原生导出路径保留。升级 Valdi 时先看上游是否已修复，修复了就删掉补丁。
+ClientSQL 的 rules_python 导入路径修复已迁入 fork。应用 Node 构建已移除旧 SQL 生成器；框架自己的构建路径继续保留该修复。
 
 ### Hermes V1
 
-Hermes 固定为 `260318099.0.4`，构建定义在 `valdi/third_party/hermes_v1/`。`hermes_v1.patch` 替换上游依赖，`hermes_v1_adapter.patch` 适配 Valdi 的 VM、编译器和调试器接口。
+Hermes 固定为 `260318099.0.4`，构建定义和生成头文件在 fork 的 `third-party/hermes_v1/`。VM、编译器、调试器适配作为源码提交维护。
 
 - Debug 使用完整运行时，模块保留 JavaScript 源码。
-- Android release 通过 `.bazelrc` 的 `js_bytecode_format=hermes` 预编译模块；编译工具和设备运行时使用同一版本的 Hermes。`hermes_release.patch` 让 production flavor 也包含精简运行时。精简运行时不编译调试器，消息转发代码同样受 `HERMES_API` 条件保护。
+- Android release 通过 `.bazelrc` 的 `js_bytecode_format=hermes` 预编译模块；编译工具和设备运行时使用同一版本的 Hermes。fork 中的 Hermes 构建调整让 production flavor 也包含精简运行时。精简运行时不编译调试器，消息转发代码同样受 `HERMES_API` 条件保护。
 - 首页引擎版本来自 `HermesInternal.getRuntimeProperties()`，可检查安装包实际使用的运行时。
-- 模块预编译为 Hermes 字节码时，`hermes_release.patch` 同时去掉 QuickJS（debug 和 release 都是），arm64 so 小约 0.6 MiB。
-- `ts_target_es2020.patch` 把 TypeScript 输出从 ES2016 提到 ES2020（`lib` 到 ES2021，Hermes 支持 `replaceAll`、`Promise.allSettled`），`async/await`、对象展开、`?.`、`??` 都原样输出。`terser5.patch` 把 Valdi 的压缩器从 terser 4.6.10 换成 5.44.1（4.x 解析不了 `?.` 和 `??`），按 ES2020 压缩。
-- `android_16kb_pages.patch` 给 Valdi 链接 `.so` 加 `-Wl,-z,max-page-size=16384`，三个 ABI 都按 16 KB 对齐（lld 在 arm64/armv7 默认 4 KB）。不对齐的包在 16 KB 页设备上会进兼容模式并弹出 "isn't 16 KB compatible" 提示。检查：`llvm-readelf -lW libvaldi_runtime.so` 的 LOAD 对齐为 `0x4000`，`zipalign -c -P 16 -v 4 app-release.apk` 通过。AVD `ValdiRoutes_16K`（`google_apis_ps16k`）可以实测。
+- 模块预编译为 Hermes 字节码时，fork 中的 Hermes 构建调整同时去掉 QuickJS（debug 和 release 都是），arm64 so 小约 0.6 MiB。
+- fork 把 TypeScript 输出从 ES2016 提到 ES2020（`lib` 到 ES2021，Hermes 支持 `replaceAll`、`Promise.allSettled`），`async/await`、对象展开、`?.`、`??` 都原样输出。fork 把 Valdi 的压缩器从 terser 4.6.10 换成 5.44.1（4.x 解析不了 `?.` 和 `??`），按 ES2020 压缩。
+- fork 给 Valdi 链接 `.so` 加 `-Wl,-z,max-page-size=16384`，三个 ABI 都按 16 KB 对齐（lld 在 arm64/armv7 默认 4 KB）。不对齐的包在 16 KB 页设备上会进兼容模式并弹出 "isn't 16 KB compatible" 提示。检查：`llvm-readelf -lW libvaldi_runtime.so` 的 LOAD 对齐为 `0x4000`，`zipalign -c -P 16 -v 4 app-release.apk` 通过。AVD `ValdiRoutes_16K`（`google_apis_ps16k`）可以实测。
 - 64 位 Android 的 `libhermesvm-config.h` 用压缩指针、连续堆和装箱 double，与 Hermes 自己的 Android 构建（`HEAP_HV_PREFER32`）一致。
-- iOS 也用 Hermes（`.bazelrc` 的引擎设置是全局的）。模块是 Hermes 字节码时 `hermes_release.patch` 不编 `valdi_jscore`，也不再链接系统 JavaScriptCore（`otool -L` 里没有）。Valdi 的编译器只给 Android release 预编译字节码，iOS release 拿到的是 JS 源码，精简 Hermes 跑不了，启动时报 `Hermes not compiled with compilation enabled`。`ios_hermes_bytecode.patch` 让字节码格式是 Hermes 时 iOS release 也用同一份字节码，debug 仍是源码。这两个补丁现在只影响 Valdi 自带的模块；我们的模块由 `tools/valdi-rolldown` 调用与运行时同版本的官方 `hermes-compiler` 编成字节码，两个平台的 release 都是。
-- `ios_export_drawing_hdrs.patch`：导出的 xcframework 里 `SCValdiDrawingModuleFactory.h` 引用了 drawing 模块的 `SCCDrawingTypes.h`，但没打包进去，宿主一 `import ValdiRuntime` 就编译失败。补丁把 drawing 模块的 ObjC 头加进导出列表。
-- `no_fbjni.patch` 允许未接入 fbjni 的宿主构建，但不会把 JSI finalizer 线程附加到 JVM。以后若引入需要访问 JNI 的 JSI finalizer，必须重新处理该线程的 JVM 附加。
+- iOS 也用 Hermes（`.bazelrc` 的引擎设置是全局的）。模块是 Hermes 字节码时 fork 不编 `valdi_jscore`，也不再链接系统 JavaScriptCore（`otool -L` 里没有）。Valdi 的编译器只给 Android release 预编译字节码，iOS release 拿到的是 JS 源码，精简 Hermes 跑不了，启动时报 `Hermes not compiled with compilation enabled`。fork 让字节码格式是 Hermes 时 iOS release 也用同一份字节码，debug 仍是源码。这些框架调整现在只影响 Valdi 自带的模块；我们的模块由 `tools/valdi-rolldown` 调用与运行时同版本的官方 `hermes-compiler` 编成字节码，两个平台的 release 都是。
+- iOS 导出头文件修复：导出的 xcframework 里 `SCValdiDrawingModuleFactory.h` 引用了 drawing 模块的 `SCCDrawingTypes.h`，但没打包进去，宿主一 `import ValdiRuntime` 就编译失败。fork 的导出规则把 drawing 模块的 ObjC 头加进导出列表。
+- fork 的 `third-party/hermes_v1/no_fbjni.patch` 允许未接入 fbjni 的宿主构建，但不会把 JSI finalizer 线程附加到 JVM。以后若引入需要访问 JNI 的 JSI finalizer，必须重新处理该线程的 JVM 附加。
 
 iOS 宿主和 Android 结构一样：`ValdiHost.swift` 读路由表、按组件创建生成的根 view 类（`VRHomePage` 等），`Navigator.swift` 管一个 `UINavigationController`（`StackController`）、最多一层全屏 cover 和一个 Sheet。Valdi 页面自己画标题栏，所以导航栏只在原生页显示，隐藏导航栏后关掉的侧滑返回另外打开。用户侧滑或点原生返回按钮离开的页面按取消处理。
 
@@ -285,7 +312,7 @@ Android release 开了 R8（`isMinifyEnabled`、`isShrinkResources`），APK 从
 **加载。** Valdi 读模块前先问 runtime 的 custom module provider，返回 null 才读安装包里的 `.valdimodule`。图片的清单（名字、宽高）在 `.valdimodule` 里，图片文件在外面（Android 是 drawable，iOS 是 `<module>.bundle`），和 RN 的 AssetRegistry 加 `--assets-dest` 一样。`custom_module_assets.patch` 给 provider 加了一个可选方法，Valdi 找模块图片前先问它（Android `resolveAssetUrl`，iOS `assetURLForModule:resourcePath:`），返回 `file://` 地址就用热更新包里的图，返回 null 用安装包里的。宿主的 provider 在 `ValdiOta.kt` / `ValdiOta.swift`（iOS 的 provider 本身是 Objective-C 的 `ValdiOtaModules`：Swift 的 `throws -> Data` 表达不了"没有错误、用安装包里的"）。原生 Tab 栏图标也先问 `ValdiOta.image`。
 
 **按 App 版本下发，指纹兜底。** 热更新包针对一个 App 版本（Android `versionName`，iOS `CFBundleShortVersionString`，`project.yml` 的 `MARKETING_VERSION`），打包时指定，这个版本的安装包都会收到。前提是这个版本的原生部分没变，指纹用来检查这一点。指纹由四部分组成：
-- 导出时记下的 Valdi 部分：Valdi/Hermes 版本、补丁、`valdi/native`，写在 `libs/valdi_ota.json`、`ios/Frameworks/valdi_ota.json` 里；
+- 导出时记下的 Valdi 部分：Valdi fork 提交、依赖规则补丁、`valdi/native`，写在 `libs/valdi_ota.json`、`ios/Frameworks/valdi_ota.json` 里；
 - `codegen.ts` 从 `@Export…` 生成的原生绑定（`android/app/generated/valdi/`、`ios/Generated/valdi/`，去掉注释后计算）；
 - `ota/fingerprint.json` 列出的原生源码；
 - debug/release：包里是 Hermes 字节码，只发 release。
@@ -321,6 +348,10 @@ iOS 是 `scripts/export-ios.sh release`、`project.yml` 的 `VALDI_OTA_URL`、`s
 
 我们的模块不再经过 Valdi 的编译器（Swift 写的，只能在 Bazel 里跑），由 `tools/valdi-rolldown` 用 Node 构建，产物和 Valdi 的格式一样，运行时照常加载：
 
+自定义原生模块另有 [calculator 实验与模块规则](docs/custom-modules.md)：独立 `module-build/` workspace
+运行时内置模块固定使用 Node 后端，旧 Swift Valdi 编译器源码和回退已从 fork 删除；接入范围和验证见 [Node runtime 编译器](docs/node-runtime-compiler.md)。
+运行我们的 Node 编译和绑定生成，再用 Bazel 编译模块原生库，宿主继续使用 Gradle / Xcode，现有 runtime 不变。
+
 - **编译**：TypeScript LanguageService 做类型检查（有错构建就失败），`.tsx` 用 Valdi 自己的 JSX 转换（`vendor/companion/`，MIT），再由 rolldown 输出 CommonJS：每个源文件是一个入口，输出一个 Valdi 模块文件，懒加载和内存警告时卸载都和原来一样；npm 代码按引用关系拆分（见“npm 依赖”）。
 - **打包**：`.valdimodule`（zstd 压缩的 ValdiPacket）。debug 是 JS 加内联 source map；release 用官方预编译 `hermes-compiler` 编成 Hermes 字节码，由 Node 补齐 Valdi 模块包装和文件头，source map 单独放 `<module>.map.json`。
 - **图片**：`res/` 生成 `res.ts` 和 `res.assetcatalog`；Android 输出 5 种密度的 webp 和 keep.xml，iOS 输出 `app_pages.bundle`（@2x/@3x）。
@@ -335,10 +366,10 @@ iOS 是 `scripts/export-ios.sh release`、`project.yml` 的 `VALDI_OTA_URL`、`s
 
 - **接入**：Android 是 Gradle 的 `<variant>ValdiModules`（产物进 assets 和 res）和 `valdiCodegenCheck`（挂在 preBuild）；iOS 是 `project.yml` 的 “Valdi bindings check” 和 “Valdi modules” 两个构建脚本（产物进 app 的资源目录，Valdi 先在这里找模块）。改了 `project.yml` 要重新 `xcodegen generate`。
 - **命令行**：`pnpm build [--release] [--minify] [--out <dir>] [--res <dir>] [--ios-res <dir>]`；`pnpm dev` 是热重载（`scripts/hotreload.sh`），监听 `src/`、`res/`、`sql/`，把改动推给 Android 模拟器和启动着的 iOS 模拟器（端口 13592，Valdi daemon 的协议），代替 `valdi hotreload`。真机只在 `ANDROID_SERIAL` 指定时才推，因为装着别的构建的 app 收到推送会出问题。
-- **模块**：`valdi/modules/` 下每个有 `src/` 的目录都是一个模块，不用登记，各自打成 `<模块>.valdimodule`（自己的图片、npm 代码），绑定也按模块生成到同一组目录。模块之间按路径导入（`import { X } from 'other/src/X'`），运行时 Valdi 加载对方的模块。新建：`pnpm new-module <名字>`（snake_case，它也是 Kotlin 包 `com.snap.modules.<名字>`、Objective-C 目录和 C++ 命名空间），写出 `src/<Name>Component.tsx`（Valdi 的 ui_component 模板）、所有模块的 tsconfig.json 和这个模块的绑定；iOS 要再 `xcodegen generate` 把新的 Objective-C 文件加进工程。没有 `@Export…` 的模块不生成 C++ 文件，所以不需要重新导出运行时。删掉一个模块后，删它在 `android/app/generated/valdi`、`ios/Generated/valdi` 里的绑定，再跑 `pnpm tsconfig`。
+- **模块**：`valdi/modules/` 下每个有 `src/` 的目录都是一个模块，不用登记，各自打成 `<模块>.valdimodule`（自己的图片、npm 代码），绑定也按模块生成到同一组目录。模块之间按路径导入（`import { X } from 'other/src/X'`），运行时 Valdi 加载对方的模块。新建：`pnpm new-module <名字>`，交互选择官方 `ui_component`、`polyglot_bridge_module` 或 `polyglot_view_module` 模板，也可用 `--template` 指定。名字规范为 snake_case；原生模板自动接入库链接、工厂和 View Binder 注册，再运行 `pnpm android` / `pnpm ios`。详见 [自定义模块](docs/custom-modules.md)。没有 `@Export…` 的模块不生成 C++ 文件，所以不需要重新导出运行时。删掉一个模块后，删它在 `android/app/generated/valdi`、`ios/Generated/valdi` 里的绑定，再跑 `pnpm tsconfig`。
 - **IDE**：各模块的 `tsconfig.json` 由 `pnpm tsconfig` 生成（`new-module` 会跑），代替 `valdi projectsync`：Valdi 的基础配置、运行时带的 Valdi 模块（只有这些能导入）、所有 app 模块，生成的资源声明（`res.ts`）在 `tools/valdi-rolldown/.gen/`。`valdi/modules/app_pages/BUILD.bazel` 已经用不到了。
 
-导出脚本只在 Valdi 本身（`MODULE.bazel`、补丁、`.bazelrc`）或 `valdi/native`（C++，见下一节）变了时才需要跑：它提供运行时 aar / xcframework 和指纹的 Valdi 一半；导出内置模块时仍可能构建上游 toolbox，应用 Node 管线不再调用它。
+导出脚本只在 Valdi fork 提交、工具链配置或 `valdi/native`（C++，见下一节）变了时才需要跑：它提供运行时 aar / xcframework 和指纹的 Valdi 一半；导出内置模块时仍可能构建上游 toolbox，应用 Node 管线不再调用它。
 
 ## C++ 绑定
 
@@ -346,7 +377,7 @@ TS 声明一个 `@ExportModule` 的 `.d.ts`，C++ 实现它，JS 像普通模块
 
 - **生成**：`codegen.ts --cpp-out ../../valdi/native/generated` 写出 `valdi_modules/app_pages/app_pages.{hpp,cpp}`，命名空间 `snap::valdi_modules::app_pages`，和 Valdi 编译器的输出一样。`Cpp.d.ts` 生成接口 `CppModule`（每个函数一个纯虚方法，常量是无参方法）和工厂 `CppModuleFactory`；同时也生成 Kotlin / Objective-C 的同名接口，没人实现，不影响。模块和模型要像其他注解一样写上 `ios` / `android` 名字，否则 Kotlin 默认落在 `com.snap.modules.app_pages`，和模块的包冲突，生成会失败（Valdi 的编译器也一样）。
 - **实现**：继承 `CppModuleFactory`，重写 `onLoadModule()` 返回 `CppModule` 的实现，再用 `Valdi::RegisterModuleFactory::registerTyped<…>()` 静态注册。运行时创建时收集这些注册，JS 第一次读 `app_pages/src/cpp/Cpp` 时调用工厂。
-- **编进运行时**：`valdi/native/BUILD.bazel` 的 `app_pages_native`（实现 + 生成的绑定，`alwayslink`）通过 `valdi_exported_library` 的 `native_deps`（`bzl/patches/valdi/export_native_deps.patch`）链接进 `libvaldi_runtime.so` 和 `ValdiRuntime.xcframework`。不在 CMake / Xcode 里单独编：`libvaldi_runtime.so` 静态链接 libc++、只导出 JNI 符号，单独编的 so 会带另一份 libc++，跨 so 传 `shared_ptr`、抛异常都不安全。代价是改了 C++ 要重新导出（增量编译）。
+- **编进运行时**：`valdi/native/BUILD.bazel` 的 `app_pages_native`（实现 + 生成的绑定，`alwayslink`）通过 `valdi_exported_library` 的 `native_deps`（fork 中的原生导出规则扩展）链接进 `libvaldi_runtime.so` 和 `ValdiRuntime.xcframework`。不在 CMake / Xcode 里单独编：`libvaldi_runtime.so` 静态链接 libc++、只导出 JNI 符号，单独编的 so 会带另一份 libc++，跨 so 传 `shared_ptr`、抛异常都不安全。代价是改了 C++ 要重新导出（增量编译）。
 - **检查**：导出脚本先检查 C++ 绑定没过期；导出时 `valdi_ota.json` 记下 `valdi/native` 的哈希，Gradle 的 `valdiCodegenCheck` 和 Xcode 的 “Valdi bindings check” 比对它（`scripts/ota.mjs check-export`），改了 C++ 没重新导出就构建失败并给出命令。`valdi/native` 也算进 OTA 指纹：C++ 在安装包里，不能热更新。
 - **耗时的计算**：同步调用期间 JS 线程被占住。要在后台算，用回调参数，C++ 在自己的线程（`Valdi::DispatchQueue::create`）算完再调回调，Valdi 会把调用转回 JS 线程。
 

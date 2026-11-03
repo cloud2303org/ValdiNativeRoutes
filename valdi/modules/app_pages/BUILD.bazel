@@ -10,7 +10,7 @@ valdi_module(
         "src/**/*.ts",
         "src/**/*.tsx",
     ]),
-    # Tab bar icons (TAB_BAR in routes.ts); the native tab bars load the exported variants.
+    # Tab bar icons (routes.tabs); the native tab bars load the exported variants.
     res = glob(["res/**/*.png"]),
     visibility = ["//visibility:public"],
     deps = [

@@ -13,6 +13,7 @@ import type { Plugin } from 'rolldown';
 import ts from 'typescript';
 import { createConsoleLogTransformer } from './vendor/companion/ConsoleLogTransformer';
 import { JSXProcessor } from './vendor/companion/JSXProcessor';
+import { routeTransformer } from './routes-transform';
 
 export interface ValdiModule {
   /** The Valdi module name, the first segment of its import paths (`app_pages`). */
@@ -23,11 +24,15 @@ export interface ValdiModule {
   generatedDirs: string[];
   /** Where the npm packages it imports are (only declared dependencies are there, as pnpm installs them). */
   nodeModules?: string;
+  /** Explicit runtime-module inputs; ordinary app modules still discover src/. */
+  sourceEntries?: string[];
+  includeJavaScript?: boolean;
 }
 
 const EXTENSIONS = ['.ts', '.tsx', '/index.ts', '/index.tsx'];
 
 export function sourceFiles(module: ValdiModule): string[] {
+  if (module.sourceEntries) return module.sourceEntries.filter(file => !file.endsWith('.d.ts'));
   const files: string[] = [];
   // The module's own sources are src/; generated ones may sit at its root too (res.ts).
   const roots = [path.join(module.dir, 'src'), ...module.generatedDirs];
@@ -43,6 +48,7 @@ export function sourceFiles(module: ValdiModule): string[] {
 export interface ValdiTsPlugin extends Plugin {
   /** The file as TypeScript emits it, before rolldown (without its source map). */
   emit(file: string): string;
+  emitWithMap(file: string): { code: string; map: string };
   /** Called when `file` (anywhere on disk) changed, was added or was removed: the next build reads it again. */
   invalidate(file: string): void;
   /** The module's type errors, formatted; empty when there are none. */
@@ -51,7 +57,7 @@ export interface ValdiTsPlugin extends Plugin {
   program(): ts.Program;
 }
 
-export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext): ValdiTsPlugin {
+export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, inlineRouteIcons = false): ValdiTsPlugin {
   /** A file's place in the module's tree → where it is on disk. */
   const located = new Map<string, string>();
   const locate = (file: string): string | undefined => {
@@ -156,6 +162,7 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext):
     // Workspace.doEmitFile.
     getCustomTransformers: () => ({
       before: [
+        routeTransformer(service.getProgram()!.getTypeChecker(), module, inlineRouteIcons),
         ...(emitting.endsWith('.tsx') ? new JSXProcessor().makeTransformers(service.getProgram()!.getTypeChecker()) : []),
         createConsoleLogTransformer(),
       ],
@@ -173,13 +180,16 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext):
     const js = output.outputFiles.find(file => /\.jsx?$/.test(file.name));
     const map = output.outputFiles.find(file => /\.jsx?\.map$/.test(file.name));
     if (!js || !map) throw new Error(`TypeScript emitted nothing for ${real}`);
-    return { code: js.text.replace(/\n\/\/# sourceMappingURL=\S+\s*$/, '\n'), map: map.text };
+    const sourceMap = JSON.parse(map.text);
+    sourceMap.sources = sourceMap.sources.map((source: string) => path.resolve(path.dirname(map.name), source));
+    return { code: js.text.replace(/\n\/\/# sourceMappingURL=\S+\s*$/, '\n'), map: JSON.stringify(sourceMap) };
   };
   const emit = (real: string) => emitWithMap(real).code;
 
   return {
     name: 'valdi-ts',
     emit,
+    emitWithMap,
 
     invalidate(file) {
       versions.set(file, (versions.get(file) ?? 0) + 1);
@@ -218,12 +228,13 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext):
       } else {
         return { id: source, external: true };
       }
-      for (const extension of ['', ...EXTENSIONS]) {
+      for (const extension of ['', ...EXTENSIONS, ...(module.includeJavaScript ? ['.js', '/index.js'] : [])]) {
         const file = path.join(module.dir, relative + extension);
-        if (/\.tsx?$/.test(file) && locate(file)) return file;
+        if ((/\.tsx?$/.test(file) || (module.includeJavaScript && file.endsWith('.js'))) && locate(file)) return file;
       }
       // Not a TypeScript source of the module: left to Valdi's loader at run time.
-      return { id: `${module.name}/${relative}`, external: true };
+      // The loader's names are Valdi's, forward-slashed, on every host.
+      return { id: `${module.name}/${relative.split(path.sep).join('/')}`, external: true };
     },
 
     load(id) {

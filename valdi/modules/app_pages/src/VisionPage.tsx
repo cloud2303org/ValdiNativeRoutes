@@ -6,7 +6,7 @@ import { BUILD_INFO, CppStats, sha256, stats } from './cpp/Cpp';
 import { PageContext, PageViewModel } from './Page';
 import { Page } from './PageComponent';
 import { PageHeader } from './PageHeader';
-import { Router } from './routes';
+import { Router } from './navigation';
 import { runDemo, VisionDemoResult } from './vision/VisionHost';
 
 const CHANNEL_NAMES: Record<string, string> = {

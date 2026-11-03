@@ -1,7 +1,7 @@
 /** @ExportModel({ios: 'VRPermissionGrant', android: 'io.valdiroutes.pages.PermissionGrant'}) */
 export interface PermissionGrant {
   permission: string;
-  /** 'granted', 'denied' or 'never_ask_again'. */
+  /** Exactly 'granted', 'denied' or 'never_ask_again'; hosts normalize OS results to these strings. */
   result: string;
 }
 
@@ -11,9 +11,12 @@ export interface PermissionGrant {
  * @ExportProxy({ios: 'VRPermissionHost', android: 'io.valdiroutes.pages.PermissionHost'})
  */
 export interface PermissionHost {
-  /** Android: ContextCompat.checkSelfPermission. */
+  /** Exact boolean grant state. Android: ContextCompat. */
   check(permission: string): Promise<boolean>;
-  /** Android: one system prompt for all, from the foreground activity. */
+  /**
+   * One grant per input permission, using its original name and canonical result above.
+   * Android: one foreground activity prompt.
+   */
   requestMultiple(permissions: string[]): Promise<PermissionGrant[]>;
   /** The app's page in system settings. */
   openSettings(): Promise<void>;

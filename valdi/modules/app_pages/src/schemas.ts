@@ -2,6 +2,7 @@ import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import utc from 'dayjs/plugin/utc';
 import * as v from 'valibot';
+import type { WheelTreeNode } from './WheelHost';
 
 dayjs.extend(customParseFormat);
 dayjs.extend(utc);
@@ -178,11 +179,7 @@ export const columnWheel = v.pipe(
   })),
 );
 
-export interface TreeNode {
-  value: string;
-  label: string;
-  children?: TreeNode[];
-}
+export type TreeNode = WheelTreeNode;
 const treeNode: v.GenericSchema<TreeNode> = v.object({
   value: optionText,
   label: optionText,

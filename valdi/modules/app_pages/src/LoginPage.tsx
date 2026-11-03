@@ -7,6 +7,7 @@ import { Button } from './Button';
 import { NavigationBar } from './NavigationBar';
 import { PageContext, PageViewModel } from './Page';
 import { Page } from './PageComponent';
+import { Router } from './navigation';
 import { color, tokens } from './theme';
 
 interface State {
@@ -51,6 +52,7 @@ export class LoginPage extends Page<PageViewModel, State, PageContext> {
             color={color.text}
             placeholderColor={color.muted}
             value={account}
+            accessibilityId="login-account"
             placeholder="手机号或邮箱"
             autocapitalization="none"
             autocorrection="none"
@@ -66,6 +68,7 @@ export class LoginPage extends Page<PageViewModel, State, PageContext> {
             color={color.text}
             placeholderColor={color.muted}
             value={password}
+            accessibilityId="login-password"
             placeholder="密码"
             contentType="password"
             returnKeyText="go"
@@ -76,6 +79,7 @@ export class LoginPage extends Page<PageViewModel, State, PageContext> {
 
         <view style={styles.actions}>
           <Button id="sign-in" title="登录" onTap={this.handleSignIn} />
+          <Button id="input-check" title="输入自检（无需登录）" secondary={true} onTap={this.handleInputCheck} />
         </view>
       </view>
     </view>;
@@ -84,6 +88,7 @@ export class LoginPage extends Page<PageViewModel, State, PageContext> {
   private handleAccount = (event: { text: string }) => this.setState({ account: event.text });
 
   private handlePassword = (event: { text: string }) => this.setState({ password: event.text });
+  private handleInputCheck = () => new Router(this.context).push('inputCheck', {});
 
   private handleSignIn = async () => {
     const account = this.state.account.trim();

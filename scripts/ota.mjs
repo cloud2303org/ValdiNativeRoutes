@@ -24,6 +24,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { nativeModuleInputs } from './native-modules.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const inputs = JSON.parse(readFileSync(path.join(root, 'ota/fingerprint.json'), 'utf8'));
@@ -65,11 +66,14 @@ const stripComments = (text) =>
 /** Where tools/valdi-rolldown/codegen.ts writes each platform's native bindings, and what they are. */
 const bindingSources = {
   android: { dir: 'android/app/generated/valdi', extensions: ['.kt'] },
-  ios: { dir: 'ios/Generated/valdi', extensions: ['.h', '.m'] },
+  ios: { dir: 'ios/Generated/valdi', extensions: ['.h', '.m', '.swift'] },
 };
 
-/** The Valdi side of the fingerprint, as exported: the toolchain (Valdi, Hermes, patches) and valdi/native. */
-const valdiHash = () => digest(fileEntries(inputs.valdi));
+/** The Valdi side of the fingerprint, as exported: the toolchain (Valdi fork, Hermes) and valdi/native. */
+const valdiHash = () => digest([
+  ...fileEntries(inputs.valdi),
+  ['compiler-backend', 'node'],
+]);
 
 /**
  * The native bindings generated from the modules' @Export declarations, as they are when the binary is built:
@@ -81,6 +85,11 @@ function bindingsHash(platform) {
   const bindings = walk(dir)
     .filter((rel) => extensions.some((ext) => rel.endsWith(ext)))
     .map((rel) => [path.relative(dir, rel), stripComments(readFileSync(path.join(root, rel), 'utf8'))]);
+  const moduleBindings = JSON.parse(execFileSync(process.execPath, [
+    path.join(root, 'tools/valdi-rolldown/node_modules/tsx/dist/cli.mjs'),
+    path.join(root, 'tools/valdi-rolldown/module-bindings.ts'), platform,
+  ], { cwd: root, encoding: 'utf8' }));
+  bindings.push(...moduleBindings.map(([name, content]) => [name, stripComments(content)]));
   if (bindings.length === 0) throw new Error(`No generated bindings in ${dir}: run tools/valdi-rolldown/codegen.ts`);
   return digest(bindings);
 }
@@ -117,7 +126,7 @@ function buildModules(platform) {
 /** What the parts of a fingerprint are, for the errors that name the changed ones. */
 const partNames = {
   config: 'the Valdi runtime build (debug/release export)',
-  valdi: 'Valdi, its patches or valdi/native (ota/fingerprint.json "valdi")',
+  valdi: 'the Valdi fork/toolchain or valdi/native (ota/fingerprint.json "valdi")',
   bindings: 'the native bindings (a native interface of a module)',
   native: 'the native sources (ota/fingerprint.json "<platform>")',
 };
@@ -132,7 +141,7 @@ function fingerprintParts(platform, info) {
     config: info ? info.config : 'release',
     valdi: info ? info.valdi : valdiHash(),
     bindings: bindingsHash(platform),
-    native: digest(fileEntries(inputs[platform])),
+    native: digest(fileEntries([...new Set([...inputs[platform], ...nativeModuleInputs(platform)])])),
   };
   const fingerprint = sha256(`${platform}\n${parts.config}\n${parts.valdi}\n${parts.bindings}\n${parts.native}\n`).slice(0, 32);
   return { fingerprint, ...parts };

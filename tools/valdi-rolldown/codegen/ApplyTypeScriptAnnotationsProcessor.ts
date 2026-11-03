@@ -18,6 +18,7 @@ import {
 } from './TypeScriptAnnotation';
 import { CompilerError, deletingPathExtension } from './Utils';
 import type { AST, DumpedRootNode } from '../vendor/companion/AST';
+import type { TypeScriptNativeTypeResolver } from './TypeScriptNativeTypeResolver';
 
 /** ComponentBaseRegistry.swift: where valdi_core's Component base classes take their view model and context. */
 const COMPONENT_BASE_SLOTS: Record<string, { vmSlot?: number; ctxSlot?: number }> = {
@@ -163,12 +164,18 @@ export function processAnnotations(
   items: TypeScriptItemAndSymbols[],
   bundleInfo: BundleInfo,
   warn: (message: string) => void,
+  options: {
+    nativeTypes?: TypeScriptNativeTypeResolver[];
+    registerOnly?: boolean;
+    onRegistered?: (resolver: TypeScriptNativeTypeResolver) => void;
+  } = {},
 ): DocumentsIndexer {
   const out = new DocumentsIndexer();
   const annotationsManager = new TypeScriptAnnotationsManager();
   parseAnnotations(items, annotationsManager, out.errors);
 
   const manager = new NativeCodeGenerationManager(bundleInfo, warn);
+  for (const resolver of options.nativeTypes ?? []) manager.nativeTypeResolver.merge(resolver);
   const allAnnotations = annotationsManager.listAllAnnotations();
   throwIfDuplicateConflictingNativeExportAnnotations(allAnnotations);
 
@@ -326,6 +333,7 @@ export function processAnnotations(
   // The compiler then lists each document's exported symbols for the TypeScript it generates from templates, which
   // documents made from .ts/.tsx don't have.
 
-  manager.createCompilationItems(out);
+  options.onRegistered?.(manager.nativeTypeResolver);
+  if (!options.registerOnly) manager.createCompilationItems(out);
   return out;
 }

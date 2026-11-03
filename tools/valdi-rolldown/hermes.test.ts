@@ -5,11 +5,33 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { formatJsModule, hermesCompiler, precompile, validateRuntimeContract } from './hermes';
+import { compilerBytecodeVersion, formatJsModule, hermesCompiler, precompile, validateRuntimeContract } from './hermes';
+
+test('accepts the pinned Linux and Windows compiler banners while rejecting unknown mismatches', () => {
+  const release = '260318099.0.4';
+  const banner = (version: string, bytecode = '99') =>
+    `Hermes JavaScript compiler.\n  Hermes release version: ${version}\n  HBC bytecode version: ${bytecode}\n`;
+  assert.equal(compilerBytecodeVersion(banner(release), release, 'darwin'), 99);
+  assert.equal(compilerBytecodeVersion(banner('1.0.0'), release, 'linux'), 99);
+  assert.equal(compilerBytecodeVersion(banner('1.0.0'), release, 'win32'), 99);
+  for (const [info, expected, platform] of [
+    [banner('1.0.0'), release, 'darwin'],
+    [banner('1.0.0', '100'), release, 'linux'],
+    [banner('1.0.0', '100'), release, 'win32'],
+    [banner('1.0.0'), '260318099.0.5', 'win32'],
+    [banner('1.0.0'), '260318099.0.5', 'linux'],
+    [banner('2.0.0'), release, 'linux'],
+    [banner(release, '0'), release, 'linux'],
+    [banner(release, 'missing'), release, 'linux'],
+    ['HBC bytecode version: 99', release, 'linux'],
+  ] as const) {
+    assert.throws(() => compilerBytecodeVersion(info, expected, platform), /Unexpected Hermes compiler version/);
+  }
+});
 
 test('official compiler emits a Valdi-wrapped factory and leaves other archive entries intact', async t => {
   const dir = mkdtempSync(path.join(tmpdir(), 'valdi-hermes-test-'));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));
   const source = '"use strict";\nexports.answer = 6 * 7;';
   const resource = Buffer.from('resource bytes');
   const entries = new Map([['sample/index.js', Buffer.from(source)], ['res/catalog', resource]]);
@@ -28,7 +50,58 @@ test('official compiler emits a Valdi-wrapped factory and leaves other archive e
   assert.match(disassembly, /Ret\s+r/);
   assert.deepEqual(entries.get('res/catalog'), resource);
   await precompile(entries);
-  assert.deepEqual(entries.get('sample/index.js'), result);
+  assert.equal(entries.get('sample/index.js'), result);
+});
+
+test('already-compiled modules reject truncated or corrupt HBC headers and incompatible versions', async t => {
+  const name = 'nested/module/index.js';
+  const compiled = new Map([[name, Buffer.from('exports.answer = 42;')]]);
+  await precompile(compiled);
+  const valid = compiled.get(name)!;
+  const invalid: [string, Buffer][] = [];
+  // Keep the Valdi marker intact while truncating every part of the required
+  // HBC magic/version header, including the Valdi-marker-only case.
+  for (let length = 4; length < 16; length++) {
+    invalid.push([`truncated to ${length} bytes`, valid.subarray(0, length)]);
+  }
+  const badMagic = Buffer.from(valid);
+  badMagic[4] ^= 0xff;
+  invalid.push(['corrupt HBC magic', badMagic]);
+  const badVersion = Buffer.from(valid);
+  badVersion.writeUInt32LE(valid.readUInt32LE(12) + 1, 12);
+  invalid.push(['incompatible HBC version', badVersion]);
+  for (const [label, data] of invalid) {
+    await t.test(label, async () => {
+      const entries = new Map([[name, data]]);
+      await assert.rejects(precompile(entries), error => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /Unexpected Hermes bytecode format/);
+        assert.ok(error.message.includes(name));
+        return true;
+      });
+      assert.equal(entries.get(name), data);
+    });
+  }
+  // Validate existing bytecode before scheduling any fresh compilation, too.
+  const source = Buffer.from('exports.fresh = true;');
+  const mixed = new Map([['fresh.js', source], [name, badVersion]]);
+  await assert.rejects(precompile(mixed), /Unexpected Hermes bytecode format/);
+  assert.equal(mixed.get('fresh.js'), source);
+});
+
+test('resource-only and empty archives do not require the compiler or runtime sources', async () => {
+  const previous = process.env.VALDI_SOURCE_ROOT;
+  process.env.VALDI_SOURCE_ROOT = path.join(tmpdir(), 'missing-valdi-hermes-runtime');
+  try {
+    const resource = Buffer.from([0x34, 0xc6, 0x00, 0x01]);
+    const entries = new Map([['res/catalog', resource]]);
+    await precompile(entries);
+    assert.equal(entries.get('res/catalog'), resource);
+    await precompile(new Map());
+  } finally {
+    if (previous === undefined) delete process.env.VALDI_SOURCE_ROOT;
+    else process.env.VALDI_SOURCE_ROOT = previous;
+  }
 });
 
 test('non-strict modules retain Valdi source-map line offset setup', async () => {
@@ -41,20 +114,41 @@ test('non-strict modules retain Valdi source-map line offset setup', async () =>
 
 test('invalid JavaScript fails compilation without replacing the source entry', async () => {
   const source = Buffer.from('exports.value = ;');
-  const entries = new Map([['invalid.js', source]]);
-  await assert.rejects(precompile(entries));
-  assert.deepEqual(entries.get('invalid.js'), source);
+  const name = 'feature/nested/invalid.js';
+  const entries = new Map([[name, source]]);
+  await assert.rejects(precompile(entries), error => {
+    assert.ok(error instanceof Error);
+    assert.ok(error.message.includes(name));
+    const cause = error.cause as Error & { stderr: string; code: number };
+    assert.ok(cause instanceof Error);
+    assert.ok(cause.code !== 0);
+    assert.match(cause.stderr, /error:/);
+    assert.ok(error.message.includes(cause.message));
+    assert.ok(error.message.includes(cause.stderr.trim()));
+    return true;
+  });
+  assert.equal(entries.get(name), source);
 });
 
 test('upstream module protocol drift is rejected before emitting Release bytecode', t => {
   const dir = mkdtempSync(path.join(tmpdir(), 'valdi-hermes-contract-'));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const config = path.join(dir, 'valdi/third_party/hermes_v1/hermes.BUILD');
+  t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));
+  // The workspace's bazel-valdi link points into an execroot, so CI names the fork checkout.
+  const upstream = process.env.VALDI_SOURCE_ROOT ?? path.resolve(import.meta.dirname, '../../valdi/bazel-valdi/external/valdi+');
+  const config = path.join(dir, 'valdi/bazel-valdi/external/valdi+/third-party/hermes_v1/hermes.BUILD');
   const source = path.join(dir, 'valdi/bazel-valdi/external/valdi+/valdi/src/valdi/runtime/JavaScript/JavaScriptUtils.cpp');
   mkdirSync(path.dirname(config), { recursive: true });
   mkdirSync(path.dirname(source), { recursive: true });
-  writeFileSync(config, readFileSync(path.resolve(import.meta.dirname, '../../valdi/third_party/hermes_v1/hermes.BUILD')));
-  const original = readFileSync(path.resolve(import.meta.dirname, '../../valdi/bazel-valdi/external/valdi+/valdi/src/valdi/runtime/JavaScript/JavaScriptUtils.cpp'), 'utf8');
+  writeFileSync(config, readFileSync(path.join(upstream, 'third-party/hermes_v1/hermes.BUILD')));
+  const original = readFileSync(path.join(upstream, 'valdi/src/valdi/runtime/JavaScript/JavaScriptUtils.cpp'), 'utf8');
   writeFileSync(source, original.replace('0x0100C634', '0x0100C635'));
-  assert.throws(() => validateRuntimeContract(dir), /protocol changed/);
+  // The fixture's own Valdi sources must win here; CI exports VALDI_SOURCE_ROOT for the
+  // other tests, and it otherwise takes precedence over the directory argument.
+  const previous = process.env.VALDI_SOURCE_ROOT;
+  delete process.env.VALDI_SOURCE_ROOT;
+  try {
+    assert.throws(() => validateRuntimeContract(dir), /protocol changed/);
+  } finally {
+    if (previous !== undefined) process.env.VALDI_SOURCE_ROOT = previous;
+  }
 });

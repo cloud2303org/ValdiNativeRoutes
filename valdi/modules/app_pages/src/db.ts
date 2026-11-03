@@ -1,15 +1,16 @@
 import { AppDb } from './sqlgen/AppDb';
 
-let appDb: AppDb | undefined;
+// Native ClientSQL functions belong to the scope that opened the connection. Keep the App-startup connection on
+// this JS runtime across module hot reloads; reopening it from HomePage would bind it to a disposable page context.
+const KEY = '__valdiRoutesAppDb';
 
-/**
- * The app's SQLite database (schema in sql/AppDb), shared by every page. Opened by startApp (app.ts): the connection
- * ClientSQL returns is made of native functions, disposed with the Context they were created in, so one opened lazily
- * from a page died with that page's root view (e.g. when the Android activity was destroyed).
- */
+export function initializeAppDb(): void {
+  const state = globalThis as unknown as { [KEY]?: AppDb };
+  if (!state[KEY]) state[KEY] = AppDb.open('app');
+}
+
 export function getAppDb(): AppDb {
-  if (!appDb) {
-    appDb = AppDb.open('app');
-  }
-  return appDb;
+  const database = (globalThis as unknown as { [KEY]?: AppDb })[KEY];
+  if (!database) throw new Error('The App database must be initialized by startApp before opening pages');
+  return database;
 }

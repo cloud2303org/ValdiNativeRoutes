@@ -1,9 +1,0 @@
---- a/compiler/clientsql/BUILD.bazel	2026-10-26 20:06:53
-+++ b/compiler/clientsql/BUILD.bazel	2026-10-26 20:06:53
-@@ -1,5 +1,5 @@
- load("@aspect_rules_js//js:defs.bzl", "js_binary")
--load("@rules_python//python:defs.bzl", "py_test")
-+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
- 
- cc_binary(
-     name = "sqlite_316_validator",

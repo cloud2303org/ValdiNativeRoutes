@@ -400,310 +400,310 @@
     "https://bcr.bazel.build/modules/zlib/1.3.2/source.json": "8f35ed65174ee2ad9630baeccd243cadf482b72d2ab32b57f9d84dc30ab076e0",
     "https://bcr.bazel.build/modules/zstd/1.5.7/MODULE.bazel": "f5780cdbd6f4c5bb985a20f839844316fe48fb5e463056f372dbc37cfabdf450",
     "https://bcr.bazel.build/modules/zstd/1.5.7/source.json": "f72c48184b6528ffc908a5a2bcbf3070c6684f3db03da2182c8ca999ae5f5cfd",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/bazel_registry.json": "83b75b2f215f8a828c366a5a3ed9e22295e1f7c5dd303e72e29f7d4f00eb3007",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/abseil-cpp/20230125.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/abseil-cpp/20230802.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/abseil-cpp/20230802.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/abseil-cpp/20230802.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/abseil-cpp/20240116.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/abseil-cpp/20240116.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/abseil-cpp/20250127.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/abseil-cpp/20250127.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/abseil-py/2.1.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/apple_support/1.11.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/apple_support/1.15.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/apple_support/1.21.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/apple_support/1.21.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/apple_support/1.22.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/asio/1.28.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_bazel_lib/1.31.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_bazel_lib/1.38.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_bazel_lib/1.40.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_bazel_lib/2.0.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_bazel_lib/2.14.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_bazel_lib/2.19.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_bazel_lib/2.19.3/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_bazel_lib/2.22.5/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_bazel_lib/2.7.7/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_bazel_lib/2.8.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_rules_js/1.33.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_rules_js/1.37.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_rules_js/2.0.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_rules_js/2.9.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_rules_lint/0.9.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_rules_ts/3.7.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_rules_ts/3.8.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_tools_telemetry/0.2.6/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_tools_telemetry/0.2.8/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/aspect_tools_telemetry/0.3.3/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/backward-cpp/1.6/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/0.1.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.1.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.1.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.10.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.11.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.13.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.15.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.17.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.18.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.19.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.20.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.21.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.27.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.28.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.3.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.30.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.32.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.34.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.38.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.39.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.4.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.50.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.51.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.9.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_features/1.9.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_lib/3.0.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_lib/3.1.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_skylib/1.0.3/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_skylib/1.1.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_skylib/1.2.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_skylib/1.2.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_skylib/1.3.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_skylib/1.4.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_skylib/1.4.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_skylib/1.5.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_skylib/1.6.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_skylib/1.7.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_skylib/1.7.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_skylib/1.8.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_skylib/1.8.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_skylib/1.8.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_skylib/1.9.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_worker_api/0.0.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_worker_api/0.0.4/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/bazel_worker_java/0.0.4/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.algorithm/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.align/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.array/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.asio/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.assert/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.bind/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.chrono/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.concept_check/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.config/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.container/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.container_hash/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.context/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.conversion/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.core/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.coroutine/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.date_time/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.describe/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.detail/1.83.0.bcr.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.exception/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.function/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.function_types/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.functional/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.fusion/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.integer/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.intrusive/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.io/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.iterator/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.lexical_cast/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.move/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.mp11/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.mpl/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.numeric_conversion/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.optional/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.pool/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.predef/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.preprocessor/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.range/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.ratio/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.rational/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.regex/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.smart_ptr/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.static_assert/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.system/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.throw_exception/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.tokenizer/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.tuple/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.type_traits/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.typeof/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.unordered/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.utility/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.variant2/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boost.winapi/1.83.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boringssl/0.20240913.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boringssl/0.20241024.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/boringssl/0.20250415.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/buildozer/7.1.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/curl/8.12.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/gawk/5.3.2.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/gazelle/0.27.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/gazelle/0.30.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/gazelle/0.32.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/gazelle/0.33.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/gazelle/0.34.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/gazelle/0.36.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/gazelle/0.40.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/google_benchmark/1.8.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/google_benchmark/1.9.5/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/googletest/1.14.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/googletest/1.14.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/googletest/1.15.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/googletest/1.16.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/googletest/1.17.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/helly25_bzl/0.3.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/jq.bzl/0.1.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/jsoncpp/1.9.5/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/jsoncpp/1.9.6/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/libpfm/4.11.0.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/libpfm/4.11.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/mbedtls/3.6.5/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/nlohmann_json/3.6.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/openssl/3.3.1.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/package_metadata/0.0.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/package_metadata/0.0.3/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/platforms/0.0.10/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/platforms/0.0.11/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/platforms/0.0.4/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/platforms/0.0.5/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/platforms/0.0.6/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/platforms/0.0.7/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/platforms/0.0.8/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/platforms/0.0.9/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/platforms/1.0.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/platforms/1.1.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/protobuf/29.3/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/pybind11_bazel/2.11.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/pybind11_bazel/2.12.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/re2/2023-09-01/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/re2/2024-07-02.bcr.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/re2/2024-07-02/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_android/0.6.5/MODULE.bazel": "64c0dec0d8e00956ead4a2f869a77218970f81bb8561a72ecc6366e93f38f8bb",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_android/0.6.5/source.json": "797781bbe789731f9103ad2342a7e001eb185745d66a306baf8dab12faf76d96",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_android_ndk/0.1.3/MODULE.bazel": "3ca2a6bf93e33c696e0393ef86698d155f1b8c6f72e7418b782690a75bc1ab99",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_android_ndk/0.1.3/source.json": "60c6b30df8d2db918a0151938cc7e9d461916fe434d04bf2e0fa7903e137bfca",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_apple/4.0.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_buf/0.1.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_cc/0.0.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_cc/0.0.10/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_cc/0.0.13/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_cc/0.0.14/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_cc/0.0.15/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_cc/0.0.16/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_cc/0.0.17/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_cc/0.0.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_cc/0.0.6/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_cc/0.0.8/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_cc/0.0.9/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_cc/0.1.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_cc/0.1.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_cc/0.1.5/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_cc/0.2.16/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_cc/0.2.17/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_cc/0.2.20/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_foreign_cc/0.9.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_fuzzing/0.5.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_fuzzing/0.8.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_go/0.33.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_go/0.38.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_go/0.39.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_go/0.41.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_go/0.42.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_go/0.46.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_go/0.50.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_go/0.51.0-rc2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_java/4.0.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_java/5.3.5/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_java/6.0.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_java/6.3.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_java/6.5.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_java/7.10.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_java/7.12.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_java/7.3.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_java/7.4.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_java/7.6.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_java/8.11.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_java/8.13.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_java/8.14.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_java/8.5.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_java/8.6.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_java/8.9.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_jvm_external/5.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_jvm_external/6.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_jvm_external/6.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_jvm_external/6.3/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_jvm_external/6.6/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_kotlin/2.3.10/MODULE.bazel": "f1b27fed6208560834600c0ef40ced22ed1f3e9094c83766ef8c8fafcf2dca9b",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_kotlin/2.3.10/source.json": "47d4df3ca3106ea2ae9462b2a2fa323a8a56674ba9fa931ce461a5894c708276",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_license/0.0.3/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_license/0.0.4/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_license/0.0.7/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_license/1.0.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_nodejs/5.8.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_nodejs/6.2.0/MODULE.bazel": "2f73039759351eaf126e8202bebdbfdbeb046e9e8ed81efc4fec47af1210b668",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_nodejs/6.3.3/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_nodejs/6.7.5/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_perl/0.2.4/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_pkg/0.9.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_proto/4.0.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_proto/5.3.0-21.7/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_proto/6.0.0-rc1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_proto/6.0.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_proto/6.0.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_proto/7.0.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_proto/7.1.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_python/0.10.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_python/0.25.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_python/0.27.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_python/0.28.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_python/0.31.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_python/0.33.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_python/0.37.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_python/0.37.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_python/0.40.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_python/1.3.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_python/1.7.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_python/1.8.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_python/1.9.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_robolectric/4.14.1.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_rust/0.64.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_shell/0.1.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_shell/0.2.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_shell/0.3.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_shell/0.4.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_shell/0.4.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_shell/0.8.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_swift/1.16.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_swift/2.4.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_swift/3.1.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_swift/3.1.2/MODULE.bazel": "72c8f5cf9d26427cee6c76c8e3853eb46ce6b0412a081b2b6db6e8ad56267400",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_swift/3.1.2/source.json": "ce05f4a93cf84d20061bce86774aee4223814ccfe4120529b4eaa8116f04ec54",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/rules_xcodeproj/3.2.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/stardoc/0.5.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/stardoc/0.5.3/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/stardoc/0.5.4/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/stardoc/0.5.6/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/stardoc/0.6.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/stardoc/0.7.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/stardoc/0.7.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/stardoc/0.7.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/swift_argument_parser/1.3.1.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/swift_argument_parser/1.3.1.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/tar.bzl/0.2.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/tar.bzl/0.5.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/tar.bzl/0.6.0/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/toolchains_llvm/1.7.0/MODULE.bazel": "55aca6a8c5b372651f663c5e22faf3664d81165e40074c98fb8a30ee5af83272",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/toolchains_llvm/1.7.0/source.json": "2f16001b9e3bb223b23594c6df6208e133ed857311e7c37206962e1e4ca5f05d",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/websocketpp/0.8.2.bcr.3/MODULE.bazel": "e3e56c3c4857b273c124d54fb987fa96bc76d88e36ad4924d8740a9a2c07d75b",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/websocketpp/0.8.2.bcr.3/source.json": "314e4a50b38ee1148091f86d9bf4ca9fff98544e5914ae0440116769a9f7a54c",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/xxhash/0.8.3/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/yq.bzl/0.1.1/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/yq.bzl/0.3.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/zlib/1.3.2/MODULE.bazel": "not found",
-    "https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry/modules/zstd/1.5.7/MODULE.bazel": "not found"
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/bazel_registry.json": "83b75b2f215f8a828c366a5a3ed9e22295e1f7c5dd303e72e29f7d4f00eb3007",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/abseil-cpp/20230125.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/abseil-cpp/20230802.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/abseil-cpp/20230802.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/abseil-cpp/20230802.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/abseil-cpp/20240116.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/abseil-cpp/20240116.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/abseil-cpp/20250127.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/abseil-cpp/20250127.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/abseil-py/2.1.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/apple_support/1.11.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/apple_support/1.15.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/apple_support/1.21.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/apple_support/1.21.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/apple_support/1.22.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/asio/1.28.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_bazel_lib/1.31.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_bazel_lib/1.38.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_bazel_lib/1.40.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_bazel_lib/2.0.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_bazel_lib/2.14.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_bazel_lib/2.19.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_bazel_lib/2.19.3/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_bazel_lib/2.22.5/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_bazel_lib/2.7.7/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_bazel_lib/2.8.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_rules_js/1.33.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_rules_js/1.37.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_rules_js/2.0.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_rules_js/2.9.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_rules_lint/0.9.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_rules_ts/3.7.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_rules_ts/3.8.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_tools_telemetry/0.2.6/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_tools_telemetry/0.2.8/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/aspect_tools_telemetry/0.3.3/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/backward-cpp/1.6/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/0.1.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.1.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.1.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.10.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.11.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.13.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.15.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.17.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.18.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.19.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.20.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.21.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.27.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.28.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.3.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.30.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.32.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.34.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.38.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.39.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.4.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.50.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.51.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.9.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_features/1.9.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_lib/3.0.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_lib/3.1.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_skylib/1.0.3/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_skylib/1.1.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_skylib/1.2.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_skylib/1.2.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_skylib/1.3.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_skylib/1.4.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_skylib/1.4.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_skylib/1.5.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_skylib/1.6.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_skylib/1.7.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_skylib/1.7.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_skylib/1.8.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_skylib/1.8.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_skylib/1.8.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_skylib/1.9.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_worker_api/0.0.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_worker_api/0.0.4/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/bazel_worker_java/0.0.4/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.algorithm/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.align/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.array/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.asio/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.assert/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.bind/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.chrono/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.concept_check/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.config/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.container/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.container_hash/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.context/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.conversion/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.core/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.coroutine/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.date_time/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.describe/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.detail/1.83.0.bcr.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.exception/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.function/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.function_types/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.functional/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.fusion/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.integer/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.intrusive/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.io/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.iterator/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.lexical_cast/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.move/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.mp11/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.mpl/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.numeric_conversion/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.optional/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.pool/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.predef/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.preprocessor/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.range/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.ratio/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.rational/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.regex/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.smart_ptr/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.static_assert/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.system/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.throw_exception/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.tokenizer/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.tuple/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.type_traits/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.typeof/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.unordered/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.utility/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.variant2/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boost.winapi/1.83.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boringssl/0.20240913.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boringssl/0.20241024.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/boringssl/0.20250415.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/buildozer/7.1.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/curl/8.12.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/gawk/5.3.2.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/gazelle/0.27.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/gazelle/0.30.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/gazelle/0.32.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/gazelle/0.33.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/gazelle/0.34.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/gazelle/0.36.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/gazelle/0.40.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/google_benchmark/1.8.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/google_benchmark/1.9.5/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/googletest/1.14.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/googletest/1.14.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/googletest/1.15.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/googletest/1.16.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/googletest/1.17.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/helly25_bzl/0.3.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/jq.bzl/0.1.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/jsoncpp/1.9.5/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/jsoncpp/1.9.6/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/libpfm/4.11.0.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/libpfm/4.11.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/mbedtls/3.6.5/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/nlohmann_json/3.6.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/openssl/3.3.1.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/package_metadata/0.0.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/package_metadata/0.0.3/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/platforms/0.0.10/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/platforms/0.0.11/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/platforms/0.0.4/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/platforms/0.0.5/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/platforms/0.0.6/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/platforms/0.0.7/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/platforms/0.0.8/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/platforms/0.0.9/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/platforms/1.0.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/platforms/1.1.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/protobuf/29.3/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/pybind11_bazel/2.11.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/pybind11_bazel/2.12.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/re2/2023-09-01/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/re2/2024-07-02.bcr.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/re2/2024-07-02/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_android/0.6.5/MODULE.bazel": "64c0dec0d8e00956ead4a2f869a77218970f81bb8561a72ecc6366e93f38f8bb",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_android/0.6.5/source.json": "4a2895ffe7e4adb4c100019dee997ed40d670c013265b3ea8507dae8bed6a805",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_android_ndk/0.1.3/MODULE.bazel": "3ca2a6bf93e33c696e0393ef86698d155f1b8c6f72e7418b782690a75bc1ab99",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_android_ndk/0.1.3/source.json": "60c6b30df8d2db918a0151938cc7e9d461916fe434d04bf2e0fa7903e137bfca",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_apple/4.0.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_buf/0.1.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_cc/0.0.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_cc/0.0.10/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_cc/0.0.13/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_cc/0.0.14/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_cc/0.0.15/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_cc/0.0.16/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_cc/0.0.17/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_cc/0.0.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_cc/0.0.6/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_cc/0.0.8/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_cc/0.0.9/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_cc/0.1.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_cc/0.1.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_cc/0.1.5/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_cc/0.2.16/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_cc/0.2.17/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_cc/0.2.20/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_foreign_cc/0.9.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_fuzzing/0.5.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_fuzzing/0.8.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_go/0.33.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_go/0.38.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_go/0.39.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_go/0.41.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_go/0.42.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_go/0.46.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_go/0.50.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_go/0.51.0-rc2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_java/4.0.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_java/5.3.5/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_java/6.0.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_java/6.3.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_java/6.5.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_java/7.10.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_java/7.12.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_java/7.3.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_java/7.4.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_java/7.6.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_java/8.11.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_java/8.13.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_java/8.14.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_java/8.5.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_java/8.6.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_java/8.9.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_jvm_external/5.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_jvm_external/6.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_jvm_external/6.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_jvm_external/6.3/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_jvm_external/6.6/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_kotlin/2.3.10/MODULE.bazel": "f1b27fed6208560834600c0ef40ced22ed1f3e9094c83766ef8c8fafcf2dca9b",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_kotlin/2.3.10/source.json": "47d4df3ca3106ea2ae9462b2a2fa323a8a56674ba9fa931ce461a5894c708276",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_license/0.0.3/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_license/0.0.4/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_license/0.0.7/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_license/1.0.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_nodejs/5.8.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_nodejs/6.2.0/MODULE.bazel": "2f73039759351eaf126e8202bebdbfdbeb046e9e8ed81efc4fec47af1210b668",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_nodejs/6.3.3/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_nodejs/6.7.5/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_perl/0.2.4/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_pkg/0.9.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_proto/4.0.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_proto/5.3.0-21.7/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_proto/6.0.0-rc1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_proto/6.0.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_proto/6.0.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_proto/7.0.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_proto/7.1.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_python/0.10.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_python/0.25.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_python/0.27.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_python/0.28.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_python/0.31.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_python/0.33.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_python/0.37.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_python/0.37.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_python/0.40.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_python/1.3.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_python/1.7.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_python/1.8.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_python/1.9.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_robolectric/4.14.1.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_rust/0.64.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_shell/0.1.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_shell/0.2.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_shell/0.3.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_shell/0.4.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_shell/0.4.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_shell/0.8.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_swift/1.16.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_swift/2.4.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_swift/3.1.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_swift/3.1.2/MODULE.bazel": "72c8f5cf9d26427cee6c76c8e3853eb46ce6b0412a081b2b6db6e8ad56267400",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_swift/3.1.2/source.json": "c3b288feaaed369ac657997e644619f8dada4cc07fad67659481233fd0e12bd6",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/rules_xcodeproj/3.2.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/stardoc/0.5.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/stardoc/0.5.3/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/stardoc/0.5.4/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/stardoc/0.5.6/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/stardoc/0.6.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/stardoc/0.7.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/stardoc/0.7.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/stardoc/0.7.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/swift_argument_parser/1.3.1.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/swift_argument_parser/1.3.1.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/tar.bzl/0.2.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/tar.bzl/0.5.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/tar.bzl/0.6.0/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/toolchains_llvm/1.7.0/MODULE.bazel": "55aca6a8c5b372651f663c5e22faf3664d81165e40074c98fb8a30ee5af83272",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/toolchains_llvm/1.7.0/source.json": "2f16001b9e3bb223b23594c6df6208e133ed857311e7c37206962e1e4ca5f05d",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/websocketpp/0.8.2.bcr.3/MODULE.bazel": "e3e56c3c4857b273c124d54fb987fa96bc76d88e36ad4924d8740a9a2c07d75b",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/websocketpp/0.8.2.bcr.3/source.json": "314e4a50b38ee1148091f86d9bf4ca9fff98544e5914ae0440116769a9f7a54c",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/xxhash/0.8.3/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/yq.bzl/0.1.1/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/yq.bzl/0.3.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/zlib/1.3.2/MODULE.bazel": "not found",
+    "https://raw.githubusercontent.com/cloud2303org/Valdi/15feb6530ceecb971f4c8519ea8ab77474b959db/registry/modules/zstd/1.5.7/MODULE.bazel": "not found"
   },
   "selectedYankedVersions": {},
   "moduleExtensions": {
@@ -734,6 +734,160 @@
             "bazel_tools",
             "rules_cc",
             "rules_cc+"
+          ]
+        ]
+      }
+    },
+    "@@aspect_rules_js+//npm:extensions.bzl%pnpm": {
+      "general": {
+        "bzlTransitiveDigest": "OsjC+dnh/NOneGmAyeK3KOYOvgqxkMIIRc4l0zXBGfE=",
+        "usagesDigest": "UCPGCdTkoflpzf0ShZ9hsk2zN6bbQlRvpRRZJnniDDc=",
+        "recordedFileInputs": {},
+        "recordedDirentsInputs": {},
+        "envVariables": {},
+        "generatedRepoSpecs": {
+          "pnpm": {
+            "repoRuleId": "@@aspect_rules_js+//npm/private:npm_import.bzl%npm_import_rule",
+            "attributes": {
+              "package": "pnpm",
+              "version": "8.15.9",
+              "root_package": "",
+              "link_workspace": "",
+              "link_packages": {},
+              "integrity": "sha512-SZQ0ydj90aJ5Tr9FUrOyXApjOrzuW7Fee13pDzL0e1E6ypjNXP0AHDHw20VLw4BO3M1XhQHkyik6aBYWa72fgQ==",
+              "url": "",
+              "commit": "",
+              "patch_args": [
+                "-p0"
+              ],
+              "patches": [],
+              "custom_postinstall": "",
+              "npm_auth": "",
+              "npm_auth_basic": "",
+              "npm_auth_username": "",
+              "npm_auth_password": "",
+              "lifecycle_hooks": [],
+              "extra_build_content": "load(\"@aspect_rules_js//js:defs.bzl\", \"js_binary\")\njs_binary(name = \"pnpm\", data = glob([\"package/**\"]), entry_point = \"package/dist/pnpm.cjs\", visibility = [\"//visibility:public\"])",
+              "generate_bzl_library_targets": false,
+              "extract_full_archive": true,
+              "exclude_package_contents": []
+            }
+          },
+          "pnpm__links": {
+            "repoRuleId": "@@aspect_rules_js+//npm/private:npm_import.bzl%npm_import_links",
+            "attributes": {
+              "package": "pnpm",
+              "version": "8.15.9",
+              "dev": false,
+              "root_package": "",
+              "link_packages": {},
+              "deps": {},
+              "transitive_closure": {},
+              "lifecycle_build_target": false,
+              "lifecycle_hooks_env": [],
+              "lifecycle_hooks_execution_requirements": [
+                "no-sandbox"
+              ],
+              "lifecycle_hooks_use_default_shell_env": false,
+              "bins": {},
+              "package_visibility": [
+                "//visibility:public"
+              ],
+              "replace_package": "",
+              "exclude_package_contents": []
+            }
+          }
+        },
+        "recordedRepoMappingEntries": [
+          [
+            "aspect_bazel_lib+",
+            "bazel_lib",
+            "bazel_lib+"
+          ],
+          [
+            "aspect_bazel_lib+",
+            "bazel_skylib",
+            "bazel_skylib+"
+          ],
+          [
+            "aspect_bazel_lib+",
+            "bazel_tools",
+            "bazel_tools"
+          ],
+          [
+            "aspect_bazel_lib+",
+            "tar.bzl",
+            "tar.bzl+"
+          ],
+          [
+            "aspect_rules_js+",
+            "aspect_bazel_lib",
+            "aspect_bazel_lib+"
+          ],
+          [
+            "aspect_rules_js+",
+            "aspect_rules_js",
+            "aspect_rules_js+"
+          ],
+          [
+            "aspect_rules_js+",
+            "aspect_tools_telemetry_report",
+            "aspect_tools_telemetry++telemetry+aspect_tools_telemetry_report"
+          ],
+          [
+            "aspect_rules_js+",
+            "bazel_features",
+            "bazel_features+"
+          ],
+          [
+            "aspect_rules_js+",
+            "bazel_lib",
+            "bazel_lib+"
+          ],
+          [
+            "aspect_rules_js+",
+            "bazel_skylib",
+            "bazel_skylib+"
+          ],
+          [
+            "aspect_rules_js+",
+            "bazel_tools",
+            "bazel_tools"
+          ],
+          [
+            "bazel_features+",
+            "bazel_features_globals",
+            "bazel_features++version_extension+bazel_features_globals"
+          ],
+          [
+            "bazel_features+",
+            "bazel_features_version",
+            "bazel_features++version_extension+bazel_features_version"
+          ],
+          [
+            "bazel_lib+",
+            "bazel_skylib",
+            "bazel_skylib+"
+          ],
+          [
+            "bazel_lib+",
+            "bazel_tools",
+            "bazel_tools"
+          ],
+          [
+            "tar.bzl+",
+            "aspect_bazel_lib",
+            "aspect_bazel_lib+"
+          ],
+          [
+            "tar.bzl+",
+            "bazel_skylib",
+            "bazel_skylib+"
+          ],
+          [
+            "tar.bzl+",
+            "tar.bzl",
+            "tar.bzl+"
           ]
         ]
       }
@@ -804,9 +958,39 @@
         ]
       }
     },
+    "@@pybind11_bazel+//:internal_configure.bzl%internal_configure_extension": {
+      "general": {
+        "bzlTransitiveDigest": "yA4GkX1zdUTOXU4qKsh/YkjZKHAWkG8Fd7adNeGwiRc=",
+        "usagesDigest": "D1r3lfzMuUBFxgG8V6o0bQTLMk3GkaGOaPzw53wrwyw=",
+        "recordedFileInputs": {
+          "@@pybind11_bazel+//MODULE.bazel": "e6f4c20442eaa7c90d7190d8dc539d0ab422f95c65a57cc59562170c58ae3d34"
+        },
+        "recordedDirentsInputs": {},
+        "envVariables": {},
+        "generatedRepoSpecs": {
+          "pybind11": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file": "@@pybind11_bazel+//:pybind11-BUILD.bazel",
+              "strip_prefix": "pybind11-2.12.0",
+              "urls": [
+                "https://github.com/pybind/pybind11/archive/v2.12.0.zip"
+              ]
+            }
+          }
+        },
+        "recordedRepoMappingEntries": [
+          [
+            "pybind11_bazel+",
+            "bazel_tools",
+            "bazel_tools"
+          ]
+        ]
+      }
+    },
     "@@rules_android+//:bzl/hermetic_android_sdk.bzl%hermetic_android_sdk_extension": {
       "general": {
-        "bzlTransitiveDigest": "fdMzVlyfZVNk3uW8OfytSAdFhyYQuvzNqg4ujsDudz4=",
+        "bzlTransitiveDigest": "c+/7xW/nee7REPY1CR0OKWzTZo2WDs1UqWMwHTCMUW4=",
         "usagesDigest": "vko+ZWvPtgJ/r/atuinmGIUw3SjT6VVhsgrXrzbnJEI=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -818,6 +1002,31 @@
           }
         },
         "recordedRepoMappingEntries": []
+      }
+    },
+    "@@rules_android+//bzlmod_extensions:apksig.bzl%apksig_extension": {
+      "general": {
+        "bzlTransitiveDigest": "BjalZzJZCCeFUitHa3nPXYW0o22VinHOSCBGaN0y87Q=",
+        "usagesDigest": "4iKoMAAOGytoZ8jde/WCK1nWRS2fPGs/AvM8VDeGJRg=",
+        "recordedFileInputs": {},
+        "recordedDirentsInputs": {},
+        "envVariables": {},
+        "generatedRepoSpecs": {
+          "apksig": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "url": "https://android.googlesource.com/platform/tools/apksig/+archive/24e3075e68ebe17c0b529bb24bfda819db5e2f3b.tar.gz",
+              "build_file": "@@rules_android+//bzlmod_extensions:apksig.BUILD"
+            }
+          }
+        },
+        "recordedRepoMappingEntries": [
+          [
+            "rules_android+",
+            "bazel_tools",
+            "bazel_tools"
+          ]
+        ]
       }
     },
     "@@rules_android+//bzlmod_extensions:com_android_dex.bzl%com_android_dex_extension": {
@@ -842,6 +1051,80 @@
             "rules_android+",
             "bazel_tools",
             "bazel_tools"
+          ]
+        ]
+      }
+    },
+    "@@rules_perl+//perl:extensions.bzl%perl_repositories": {
+      "general": {
+        "bzlTransitiveDigest": "ZY5hHpju2JyEfszPhEPZro0EoDc4lS8rz2jKaUsvsew=",
+        "usagesDigest": "qSSNDdCNVxNhY36wMndEAFacdhR0ooLTmumfad0km9s=",
+        "recordedFileInputs": {},
+        "recordedDirentsInputs": {},
+        "envVariables": {},
+        "generatedRepoSpecs": {
+          "perl_darwin_arm64": {
+            "repoRuleId": "@@rules_perl+//perl:repo.bzl%perl_download",
+            "attributes": {
+              "strip_prefix": "perl-darwin-arm64",
+              "sha256": "285769f3c50c339fb59a3987b216ae3c5c573b95babe6875a1ef56fb178433da",
+              "urls": [
+                "https://github.com/skaji/relocatable-perl/releases/download/5.36.0.1/perl-darwin-arm64.tar.xz"
+              ]
+            }
+          },
+          "perl_darwin_amd64": {
+            "repoRuleId": "@@rules_perl+//perl:repo.bzl%perl_download",
+            "attributes": {
+              "strip_prefix": "perl-darwin-amd64",
+              "sha256": "63bc5ee36f5394d71c50cca6cafdd333ee58f9eaa40bca63c85f9bd06f2c1fd6",
+              "urls": [
+                "https://github.com/skaji/relocatable-perl/releases/download/5.36.0.1/perl-darwin-amd64.tar.xz"
+              ]
+            }
+          },
+          "perl_linux_amd64": {
+            "repoRuleId": "@@rules_perl+//perl:repo.bzl%perl_download",
+            "attributes": {
+              "strip_prefix": "perl-linux-amd64",
+              "sha256": "3bdffa9d7a3f97c0207314637b260ba5115b1d0829f97e3e2e301191a4d4d076",
+              "urls": [
+                "https://github.com/skaji/relocatable-perl/releases/download/5.36.0.1/perl-linux-amd64.tar.xz"
+              ]
+            }
+          },
+          "perl_linux_arm64": {
+            "repoRuleId": "@@rules_perl+//perl:repo.bzl%perl_download",
+            "attributes": {
+              "strip_prefix": "perl-linux-arm64",
+              "sha256": "6fa4ece99e790ecbc2861f6ecb7b52694c01c2eeb215b4370f16a3b12d952117",
+              "urls": [
+                "https://github.com/skaji/relocatable-perl/releases/download/5.36.0.1/perl-linux-arm64.tar.xz"
+              ]
+            }
+          },
+          "perl_windows_x86_64": {
+            "repoRuleId": "@@rules_perl+//perl:repo.bzl%perl_download",
+            "attributes": {
+              "strip_prefix": "",
+              "sha256": "aeb973da474f14210d3e1a1f942dcf779e2ae7e71e4c535e6c53ebabe632cc98",
+              "urls": [
+                "https://mirror.bazel.build/strawberryperl.com/download/5.32.1.1/strawberry-perl-5.32.1.1-64bit.zip",
+                "https://strawberryperl.com/download/5.32.1.1/strawberry-perl-5.32.1.1-64bit.zip"
+              ]
+            }
+          }
+        },
+        "recordedRepoMappingEntries": [
+          [
+            "rules_perl+",
+            "bazel_tools",
+            "bazel_tools"
+          ],
+          [
+            "rules_perl+",
+            "rules_perl",
+            "rules_perl+"
           ]
         ]
       }
@@ -2126,9 +2409,219 @@
         ]
       }
     },
+    "@@rules_rust+//crate_universe/private:internal_extensions.bzl%cu_nr": {
+      "general": {
+        "bzlTransitiveDigest": "bLDlOjQSfKqQh7V1deilnTVkoLuTEg+JYGUZF3tJWuw=",
+        "usagesDigest": "yb456V5AYswYUM/WEjkKkxrFqiIqIQ1/8DFU5pKMbsk=",
+        "recordedFileInputs": {},
+        "recordedDirentsInputs": {},
+        "envVariables": {},
+        "generatedRepoSpecs": {
+          "cargo_bazel_bootstrap": {
+            "repoRuleId": "@@rules_rust+//cargo/private:cargo_bootstrap.bzl%cargo_bootstrap_repository",
+            "attributes": {
+              "srcs": [
+                "@@rules_rust+//crate_universe:src/api.rs",
+                "@@rules_rust+//crate_universe:src/api/lockfile.rs",
+                "@@rules_rust+//crate_universe:src/cli.rs",
+                "@@rules_rust+//crate_universe:src/cli/generate.rs",
+                "@@rules_rust+//crate_universe:src/cli/query.rs",
+                "@@rules_rust+//crate_universe:src/cli/render.rs",
+                "@@rules_rust+//crate_universe:src/cli/splice.rs",
+                "@@rules_rust+//crate_universe:src/cli/vendor.rs",
+                "@@rules_rust+//crate_universe:src/config.rs",
+                "@@rules_rust+//crate_universe:src/context.rs",
+                "@@rules_rust+//crate_universe:src/context/crate_context.rs",
+                "@@rules_rust+//crate_universe:src/context/platforms.rs",
+                "@@rules_rust+//crate_universe:src/lib.rs",
+                "@@rules_rust+//crate_universe:src/lockfile.rs",
+                "@@rules_rust+//crate_universe:src/main.rs",
+                "@@rules_rust+//crate_universe:src/metadata.rs",
+                "@@rules_rust+//crate_universe:src/metadata/cargo_bin.rs",
+                "@@rules_rust+//crate_universe:src/metadata/cargo_tree_resolver.rs",
+                "@@rules_rust+//crate_universe:src/metadata/cargo_tree_rustc_wrapper.bat",
+                "@@rules_rust+//crate_universe:src/metadata/cargo_tree_rustc_wrapper.sh",
+                "@@rules_rust+//crate_universe:src/metadata/dependency.rs",
+                "@@rules_rust+//crate_universe:src/metadata/metadata_annotation.rs",
+                "@@rules_rust+//crate_universe:src/rendering.rs",
+                "@@rules_rust+//crate_universe:src/rendering/template_engine.rs",
+                "@@rules_rust+//crate_universe:src/rendering/templates/module_bzl.j2",
+                "@@rules_rust+//crate_universe:src/rendering/templates/partials/header.j2",
+                "@@rules_rust+//crate_universe:src/rendering/templates/partials/module/aliases_map.j2",
+                "@@rules_rust+//crate_universe:src/rendering/templates/partials/module/deps_map.j2",
+                "@@rules_rust+//crate_universe:src/rendering/templates/partials/module/repo_git.j2",
+                "@@rules_rust+//crate_universe:src/rendering/templates/partials/module/repo_http.j2",
+                "@@rules_rust+//crate_universe:src/rendering/templates/vendor_module.j2",
+                "@@rules_rust+//crate_universe:src/rendering/verbatim/alias_rules.bzl",
+                "@@rules_rust+//crate_universe:src/select.rs",
+                "@@rules_rust+//crate_universe:src/splicing.rs",
+                "@@rules_rust+//crate_universe:src/splicing/cargo_config.rs",
+                "@@rules_rust+//crate_universe:src/splicing/crate_index_lookup.rs",
+                "@@rules_rust+//crate_universe:src/splicing/splicer.rs",
+                "@@rules_rust+//crate_universe:src/test.rs",
+                "@@rules_rust+//crate_universe:src/utils.rs",
+                "@@rules_rust+//crate_universe:src/utils/starlark.rs",
+                "@@rules_rust+//crate_universe:src/utils/starlark/glob.rs",
+                "@@rules_rust+//crate_universe:src/utils/starlark/label.rs",
+                "@@rules_rust+//crate_universe:src/utils/starlark/select.rs",
+                "@@rules_rust+//crate_universe:src/utils/starlark/select_dict.rs",
+                "@@rules_rust+//crate_universe:src/utils/starlark/select_list.rs",
+                "@@rules_rust+//crate_universe:src/utils/starlark/select_scalar.rs",
+                "@@rules_rust+//crate_universe:src/utils/starlark/select_set.rs",
+                "@@rules_rust+//crate_universe:src/utils/starlark/serialize.rs",
+                "@@rules_rust+//crate_universe:src/utils/starlark/target_compatible_with.rs",
+                "@@rules_rust+//crate_universe:src/utils/symlink.rs",
+                "@@rules_rust+//crate_universe:src/utils/target_triple.rs"
+              ],
+              "binary": "cargo-bazel",
+              "cargo_lockfile": "@@rules_rust+//crate_universe:Cargo.lock",
+              "cargo_toml": "@@rules_rust+//crate_universe:Cargo.toml",
+              "version": "1.86.0",
+              "timeout": 900,
+              "rust_toolchain_cargo_template": "@rust_host_tools//:bin/{tool}",
+              "rust_toolchain_rustc_template": "@rust_host_tools//:bin/{tool}",
+              "compressed_windows_toolchain_names": false
+            }
+          }
+        },
+        "moduleExtensionMetadata": {
+          "explicitRootModuleDirectDeps": [
+            "cargo_bazel_bootstrap"
+          ],
+          "explicitRootModuleDirectDevDeps": [],
+          "useAllRepos": "NO",
+          "reproducible": false
+        },
+        "recordedRepoMappingEntries": [
+          [
+            "bazel_features+",
+            "bazel_features_globals",
+            "bazel_features++version_extension+bazel_features_globals"
+          ],
+          [
+            "bazel_features+",
+            "bazel_features_version",
+            "bazel_features++version_extension+bazel_features_version"
+          ],
+          [
+            "rules_cc+",
+            "bazel_tools",
+            "bazel_tools"
+          ],
+          [
+            "rules_cc+",
+            "cc_compatibility_proxy",
+            "rules_cc++compatibility_proxy+cc_compatibility_proxy"
+          ],
+          [
+            "rules_cc+",
+            "rules_cc",
+            "rules_cc+"
+          ],
+          [
+            "rules_cc++compatibility_proxy+cc_compatibility_proxy",
+            "rules_cc",
+            "rules_cc+"
+          ],
+          [
+            "rules_rust+",
+            "bazel_features",
+            "bazel_features+"
+          ],
+          [
+            "rules_rust+",
+            "bazel_skylib",
+            "bazel_skylib+"
+          ],
+          [
+            "rules_rust+",
+            "bazel_tools",
+            "bazel_tools"
+          ],
+          [
+            "rules_rust+",
+            "cui",
+            "rules_rust++cu+cui"
+          ],
+          [
+            "rules_rust+",
+            "rules_cc",
+            "rules_cc+"
+          ],
+          [
+            "rules_rust+",
+            "rules_rust",
+            "rules_rust+"
+          ],
+          [
+            "rules_rust+",
+            "rules_rust_ctve",
+            "rules_rust++i2+rules_rust_ctve"
+          ]
+        ]
+      }
+    },
+    "@@rules_xcodeproj+//xcodeproj:extensions.bzl%internal": {
+      "general": {
+        "bzlTransitiveDigest": "dBDIFw9rwj+9kq4VcJzivqFbIiS7I93fb9P6kBSUs1k=",
+        "usagesDigest": "4JUzgKYt0ThXEl4jwVYlhVXlHVRupoUFNX/IoNq3ap4=",
+        "recordedFileInputs": {},
+        "recordedDirentsInputs": {},
+        "envVariables": {},
+        "generatedRepoSpecs": {
+          "rules_xcodeproj_generated": {
+            "repoRuleId": "@@rules_xcodeproj+//xcodeproj:repositories.bzl%generated_files_repo",
+            "attributes": {}
+          }
+        },
+        "recordedRepoMappingEntries": [
+          [
+            "rules_xcodeproj+",
+            "bazel_tools",
+            "bazel_tools"
+          ]
+        ]
+      }
+    },
+    "@@rules_xcodeproj+//xcodeproj:extensions.bzl%non_module_deps": {
+      "general": {
+        "bzlTransitiveDigest": "dBDIFw9rwj+9kq4VcJzivqFbIiS7I93fb9P6kBSUs1k=",
+        "usagesDigest": "nU/rp9TwhY1mV7WIOdgJALy3f88gMtjdfU+zdOSTT8w=",
+        "recordedFileInputs": {},
+        "recordedDirentsInputs": {},
+        "envVariables": {},
+        "generatedRepoSpecs": {
+          "rules_xcodeproj_legacy_index_import": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "load(\"@bazel_skylib//rules:native_binary.bzl\", \"native_binary\")\n\nnative_binary(\n    name = \"index_import\",\n    src = \"index-import\",\n    out = \"index-import\",\n    visibility = [\"//visibility:public\"],\n)\n",
+              "canonical_id": "index-import-5.8.0.1",
+              "sha256": "28c1ffa39d99e74ed70623899b207b41f79214c498c603915aef55972a851a15",
+              "url": "https://github.com/MobileNativeFoundation/index-import/releases/download/5.8.0.1/index-import.tar.gz"
+            }
+          },
+          "rules_xcodeproj_index_import": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "load(\"@bazel_skylib//rules:native_binary.bzl\", \"native_binary\")\n\nnative_binary(\n    name = \"index_import\",\n    src = \"index-import\",\n    out = \"index-import\",\n    visibility = [\"//visibility:public\"],\n)\n",
+              "canonical_id": "index-import-6.1.0.1",
+              "sha256": "9a54fc1674af6031125a9884480a1e31e1bcf48b8f558b3e8bcc6b6fcd6e8b61",
+              "url": "https://github.com/MobileNativeFoundation/index-import/releases/download/6.1.0.1/index-import.tar.gz"
+            }
+          }
+        },
+        "recordedRepoMappingEntries": [
+          [
+            "rules_xcodeproj+",
+            "bazel_tools",
+            "bazel_tools"
+          ]
+        ]
+      }
+    },
     "@@valdi+//bzl:hermetic_android_sdk.bzl%hermetic_android_sdk_extension": {
       "general": {
-        "bzlTransitiveDigest": "xQbCyuMOf2ylCGdIqv7gCQ+/2zY7ql/d7ZcsDCBGbIE=",
+        "bzlTransitiveDigest": "/L9bHkTI9ILyPd38RLlCsNcjxZbsLiGfRveRQGoajWY=",
         "usagesDigest": "HMkjS6MQUWgyv2HXlprACRtXioJtOsv6fxhn3TNpdrs=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -2147,7 +2640,7 @@
     },
     "@@valdi+//bzl:hermetic_ndk.bzl%hermetic_ndk_extension": {
       "general": {
-        "bzlTransitiveDigest": "iC98a/IEvykEvlGZGW0TO4Yoo/xTqwPgOrJqLq37Hd8=",
+        "bzlTransitiveDigest": "L4jARvKY9bat0wUctbI5GlaznnBj7ebhGJM4RruaCwM=",
         "usagesDigest": "JmtE+hPek1Z50jkYewxRc5szbXieZqo9BZUK67BfM44=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -2163,170 +2656,29 @@
         "recordedRepoMappingEntries": []
       }
     },
-    "@@valdi+//bzl:valdi_compiler_swift_deps.bzl%valdi_compiler_swift_deps": {
+    "@@valdi+//bzl:jscore_repos_extension.bzl%jscore_repos": {
       "general": {
-        "bzlTransitiveDigest": "I+9+cYkimYMZTwtWQWmg8lZ4qoiB1zSZHw2E8LYVmUg=",
-        "usagesDigest": "IGn09taOdX/rFqTwsibcM4ZjufBVnVOeBuHDL7WgTfo=",
+        "bzlTransitiveDigest": "WjV2DYaX+2RG4qxtaDJlHjKIgU9xp0lSLtV9J8ecRmg=",
+        "usagesDigest": "JdOzD3ElDRO/ZszI4MAeCVtPCCk+FWgRd8yJ7nbBJyc=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
         "generatedRepoSpecs": {
-          "swxmlhash": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+          "jscore_libs": {
+            "repoRuleId": "@@valdi+//bzl:jscore_repos_extension.bzl%_runtime_local_or_remote",
             "attributes": {
-              "url": "https://github.com/drmohundro/SWXMLHash/archive/a853604c9e9a83ad9954c7e3d2a565273982471f.zip",
-              "strip_prefix": "SWXMLHash-a853604c9e9a83ad9954c7e3d2a565273982471f",
-              "build_file": "@@valdi+//third-party/swift-packages:SWXMLHash.BUILD",
-              "patches": [],
-              "patch_args": [
-                "-p1"
-              ]
-            }
-          },
-          "swift_protobuf": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "url": "https://github.com/apple/swift-protobuf/archive/65e8f29b2d63c4e38e736b25c27b83e012159be8.zip",
-              "strip_prefix": "swift-protobuf-65e8f29b2d63c4e38e736b25c27b83e012159be8",
-              "build_file": "@@valdi+//third-party/swift-packages:swift-protobuf.BUILD",
-              "patches": [],
-              "patch_args": [
-                "-p1"
-              ]
-            }
-          },
-          "legible_error": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "url": "https://github.com/mxcl/LegibleError/archive/bc596702d7ff618c3f90ba480eeb48b3e83a2fbe.zip",
-              "strip_prefix": "LegibleError-bc596702d7ff618c3f90ba480eeb48b3e83a2fbe",
-              "build_file": "@@valdi+//third-party/swift-packages:LegibleError.BUILD",
-              "patches": [],
-              "patch_args": [
-                "-p1"
-              ]
-            }
-          },
-          "chalk": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "url": "https://github.com/mxcl/Chalk/archive/a7f58e47a08ca5a84f73acc4bcf6c2c19d990609.zip",
-              "strip_prefix": "Chalk-a7f58e47a08ca5a84f73acc4bcf6c2c19d990609",
-              "build_file": "@@valdi+//third-party/swift-packages:Chalk.BUILD",
-              "patches": [],
-              "patch_args": [
-                "-p1"
-              ]
-            }
-          },
-          "yams": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "url": "https://github.com/jpsim/Yams/archive/0d9ee7ea8c4ebd4a489ad7a73d5c6cad55d6fed3.zip",
-              "strip_prefix": "Yams-0d9ee7ea8c4ebd4a489ad7a73d5c6cad55d6fed3",
-              "build_file": "@@valdi+//third-party/swift-packages:Yams.BUILD",
-              "patches": [],
-              "patch_args": [
-                "-p1"
-              ]
-            }
-          },
-          "swift_backtrace": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "url": "https://github.com/swift-server/swift-backtrace/archive/f25620d5d05e2f1ba27154b40cafea2b67566956.zip",
-              "strip_prefix": "swift-backtrace-f25620d5d05e2f1ba27154b40cafea2b67566956",
-              "build_file": "@@valdi+//third-party/swift-packages:swift-backtrace.BUILD",
-              "patches": [],
-              "patch_args": [
-                "-p1"
-              ]
-            }
-          },
-          "swift_argument_parser": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "url": "https://github.com/apple/swift-argument-parser/archive/46989693916f56d1186bd59ac15124caef896560.zip",
-              "strip_prefix": "swift-argument-parser-46989693916f56d1186bd59ac15124caef896560",
-              "build_file": "@@valdi+//third-party/swift-packages:swift-argument-parser.BUILD",
-              "patches": [],
-              "patch_args": [
-                "-p1"
-              ]
-            }
-          },
-          "swiftsoup": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "url": "https://github.com/scinfu/SwiftSoup/archive/f83c097597094a04124eb6e0d1e894d24129af87.zip",
-              "strip_prefix": "SwiftSoup-f83c097597094a04124eb6e0d1e894d24129af87",
-              "build_file": "@@valdi+//third-party/swift-packages:SwiftSoup.BUILD",
-              "patches": [],
-              "patch_args": [
-                "-p1"
-              ]
-            }
-          },
-          "swift_crypto": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "url": "https://github.com/apple/swift-crypto/archive/cc76b894169a3c86b71bac10c78a4db6beb7a9ad.zip",
-              "strip_prefix": "swift-crypto-cc76b894169a3c86b71bac10c78a4db6beb7a9ad",
-              "build_file": "@@valdi+//third-party/swift-packages:swift-crypto.BUILD",
-              "patches": [],
-              "patch_args": [
-                "-p1"
-              ]
-            }
-          },
-          "zip_lib": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "url": "https://github.com/marmelroy/Zip/archive/67fa55813b9e7b3b9acee9c0ae501def28746d76.zip",
-              "strip_prefix": "Zip-67fa55813b9e7b3b9acee9c0ae501def28746d76",
-              "build_file": "@@valdi+//third-party/swift-packages:Zip.BUILD",
-              "patches": [
-                "@@valdi+//third-party/swift-packages/patches:zip_linux_fwrite.patch"
-              ],
-              "patch_args": [
-                "-p1"
-              ]
-            }
-          },
-          "swift_collections": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "url": "https://github.com/apple/swift-collections/archive/94cf62b3ba8d4bed62680a282d4c25f9c63c2efb.zip",
-              "strip_prefix": "swift-collections-94cf62b3ba8d4bed62680a282d4c25f9c63c2efb",
-              "build_file": "@@valdi+//third-party/swift-packages:swift-collections.BUILD",
-              "patches": [],
-              "patch_args": [
-                "-p1"
-              ]
-            }
-          },
-          "libxml2": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "url": "https://github.com/GNOME/libxml2/archive/refs/tags/v2.9.14.tar.gz",
-              "sha256": "77e7c7240ce447582d2c3471f050423c01ec0e201c3bf2fd6731064d1891f362",
-              "strip_prefix": "libxml2-2.9.14",
-              "build_file": "@@valdi+//third-party/libxml2:libxml2.BUILD"
+              "target_dir": "third-party/jscore/libs",
+              "archive_url": "",
+              "archive_hash": ""
             }
           }
         },
-        "recordedRepoMappingEntries": [
-          [
-            "valdi+",
-            "bazel_tools",
-            "bazel_tools"
-          ]
-        ]
+        "recordedRepoMappingEntries": []
       }
     },
     "@@valdi+//bzl:valdi_toolchains.bzl%valdi_toolchains": {
       "general": {
-        "bzlTransitiveDigest": "YEUjsvU3hUlZKsoyyDEIY3R7Mh0qL1RjIfpgOEOQmp8=",
+        "bzlTransitiveDigest": "gAz1K0LiZ3+l0sty+1lSjBOojv7ZpNf5lHehxZR2dKQ=",
         "usagesDigest": "UE3UqctJgS6FT9RAJWvsCp3UCiy1idJTuhji8LNpVXU=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},

@@ -1,9 +1,12 @@
 // What build.ts (one build) and dev.ts (the dev server) share: the modules, and building them with rolldown.
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { rolldown, RolldownMagicString, type Plugin, type PreRenderedChunk } from 'rolldown';
 import type { ArchiveEntries } from './archive';
 import { sourceFiles, type ValdiModule, type ValdiTsPlugin } from './valdiTs';
+import { availableModuleNames, enabledModuleNames } from './modules.mjs';
+import { assertEnabledImports } from './module-selection';
 
 
 export const root = path.resolve(import.meta.dirname, '../..');
@@ -18,6 +21,35 @@ export const genDir = (name: string) => path.join(genRoot, name);
 /** The app's Valdi modules: each directory of valdi/modules with a src/ (new-module.ts makes one). */
 export const modulesDir = path.join(valdi, 'modules');
 
+export interface ModuleConfig {
+  nativeBuild?: 'bazel';
+  iosModuleName?: string;
+  iosLanguage?: 'objc' | 'swift' | 'both';
+  androidModuleFactory?: string;
+  androidModuleFactoryContext?: boolean;
+  androidDependencies?: string[];
+  androidPermissions?: { name: string; maxSdkVersion?: number; usesPermissionFlags?: 'neverForLocation' }[];
+  androidFeatures?: { name: string; required?: boolean }[];
+  iosInfoPlist?: Record<string, string>;
+  androidViewBinder?: string;
+  iosModuleFactory?: string;
+  iosModuleFactoryClass?: string;
+  template?: string;
+}
+
+export function moduleConfig(name: string): ModuleConfig {
+  const file = path.join(modulesDir, name, 'module.json');
+  if (!existsSync(file)) return {};
+  const config = JSON.parse(readFileSync(file, 'utf8'));
+  if (config.nativeBuild !== undefined && config.nativeBuild !== 'bazel') throw new Error(`${file}: unsupported nativeBuild`);
+  if (config.iosModuleName !== undefined && !/^[A-Za-z][A-Za-z0-9_]*$/.test(config.iosModuleName)) {
+    throw new Error(`${file}: invalid iosModuleName`);
+  }
+  if (config.iosLanguage !== undefined && !['objc', 'swift', 'both'].includes(config.iosLanguage))
+    throw new Error(`${file}: invalid iosLanguage`);
+  return config;
+}
+
 export function appModule(name: string): ValdiModule {
   return {
     name,
@@ -29,10 +61,25 @@ export function appModule(name: string): ValdiModule {
 }
 
 export function appModules(): ValdiModule[] {
-  return readdirSync(modulesDir)
-    .filter(name => existsSync(path.join(modulesDir, name, 'src')))
-    .sort()
-    .map(appModule);
+  const modules = enabledModuleNames(root).map(appModule);
+  for (const module of modules) {
+    assertEnabledImports(tsSourceFiles(module), modulesDir, availableModuleNames(root), modules.map(value => value.name));
+  }
+  return modules;
+}
+
+function tsSourceFiles(module: ValdiModule): string[] {
+  // Include .d.ts: a type-only dependency is still part of the module contract.
+  const files: string[] = [];
+  const visit = (directory: string) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const file = path.join(directory, entry.name);
+      if (entry.isDirectory()) visit(file);
+      else if (/\.tsx?$/.test(entry.name)) files.push(file);
+    }
+  };
+  visit(path.join(module.dir, 'src'));
+  return files;
 }
 
 /**
@@ -47,12 +94,37 @@ const RUNTIME_MODULES = ['client_sql', 'coreutils', 'jasmine', 'source_map', 'va
  * which rootDirs merges into the module's own tree for imports. Returns whether it
  * changed. Valdi's sources are read through the bazel-valdi link the exports leave.
  */
+export function valdiSourceRoot(): string | undefined {
+  // `.valdi-sources` is prepare-valdi's link to the output base and is the only one Bazel
+  // does not repoint while it runs, so configs written from it stay valid for the job.
+  const candidates = [
+    process.env.VALDI_SOURCE_ROOT,
+    path.join(valdi, '.valdi-sources/external/valdi+'),
+    path.join(valdi, 'bazel-valdi/external/valdi+'),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+  // Bazel names each convenience link after its workspace and repoints it as it runs
+  // (prepare-valdi's output_base link, then the execroot), so take the first link that
+  // really holds the fetched sources instead of trusting one name.
+  if (existsSync(valdi)) {
+    for (const entry of readdirSync(valdi)) {
+      if (entry.startsWith('bazel-')) candidates.push(path.join(valdi, entry, 'external/valdi+'));
+    }
+  }
+  return candidates.find(root => existsSync(path.join(root, 'modules/_configs/base.tsconfig.json')));
+}
+
 export function writeTsconfig(module: ValdiModule, modules: ValdiModule[]): boolean {
-  const relative = (to: string) => path.relative(module.dir, to).split(path.sep).join('/');
-  const valdiSources = path.join(valdi, 'bazel-valdi/external/valdi+');
+  const relative = (to: string) => {
+    const value = path.relative(module.dir, to).split(path.sep).join('/');
+    return value.startsWith('../') ? value : `./${value}`;
+  };
+  // Never write a config that extends a missing file: it silently drops Valdi's compiler
+  // options (JSX, lib, paths) and every import then fails to resolve.
+  const valdiSources = valdiSourceRoot();
+  if (!valdiSources) return false;
   const paths: Record<string, string[]> = {};
   for (const other of modules) {
-    paths[`${other.name}/*`] = [other === module ? './*' : `${relative(other.dir)}/*`, `${relative(genDir(other.name))}/*`];
+    paths[`${other.name}/*`] = [other === module ? './*' : `${relative(other.dir)}/*`, ...other.generatedDirs.map(dir => `${relative(dir)}/*`)];
   }
   for (const name of RUNTIME_MODULES) {
     paths[`${name}/*`] = [`${relative(path.join(valdiSources, 'src/valdi_modules/src/valdi', name))}/*`];
@@ -102,7 +174,10 @@ function sourcePath(module: ValdiModule) {
  */
 function chunkName(module: ValdiModule) {
   return (chunk: PreRenderedChunk): string => {
-    const own = chunk.moduleIds.map(id => path.relative(module.dir, id)).find(file => !file.startsWith('..'));
+    // Packages may physically live inside the module (not only in an external
+    // pnpm store). They still belong to npm/, rather than local source chunks.
+    const own = chunk.moduleIds.map(id => path.relative(module.dir, id))
+      .find(file => !file.startsWith('..') && !file.split(path.sep).includes('node_modules'));
     if (own) return `chunks/${own.replace(/\.tsx?$/, '').split(path.sep).join('/')}`;
     const packages = new Set<string>();
     for (const id of chunk.moduleIds) {
@@ -114,6 +189,27 @@ function chunkName(module: ValdiModule) {
     return packages.size ? `npm/${[...packages].sort().join('+')}` : `chunks/${chunk.name}`;
   };
 }
+
+/**
+ * Resolves bare package imports with Node's resolver. Rolldown's own resolver needs the
+ * module tsconfig for that and fails with "Tsconfig not found: Could not resolve 'valibot'"
+ * when the tsconfig's `extends` target is not reachable from the bundling process; Node
+ * finds the same pnpm-linked package, and the resolved paths keep their `npm/<pkg>`
+ * archive names (sourcePath/chunkName). Valdi's own `valdi_core/…` imports are not
+ * resolvable here, so they still go through the plugin and the tsconfig paths.
+ */
+const nodePackageResolver = (): Plugin => ({
+  name: 'valdi-node-package-resolver',
+  resolveId(source, importer) {
+    if (!importer || !/^[A-Za-z@]/.test(source) || source.startsWith('node:')) return null;
+    if (source.startsWith('.') || source.startsWith('/')) return null;
+    try {
+      return createRequire(importer).resolve(source);
+    } catch {
+      return null;
+    }
+  },
+});
 
 /**
  * Valdi's require() returns a lazy proxy that loads the module on its first property read, so a bare `require("x");`
@@ -143,10 +239,16 @@ const eagerSideEffectRequires: Plugin = {
  * what several import goes into a shared chunk (`npm/dayjs.js`) they require.
  */
 export async function buildModule(module: ValdiModule, plugin: ValdiTsPlugin, minify: boolean): Promise<Built> {
-  const input = Object.fromEntries(sourceFiles(module).map(file => [path.relative(module.dir, file).replace(/\.tsx?$/, ''), file]));
+  // Archive and require names are Valdi's (`src/routes`), so they stay forward-slashed on
+  // Windows: rolldown writes every file name and inter-file require from this entry name.
+  const input = Object.fromEntries(
+    sourceFiles(module).map(file => [path.relative(module.dir, file).split(path.sep).join('/').replace(/\.(tsx?|js)$/, ''), file]),
+  );
+  // A native-only bridge (the official calculator template) has just .d.ts.
+  if (!Object.keys(input).length) return { entries: new Map(), maps: new Map() };
   const bundle = await rolldown({
     input,
-    plugins: [plugin],
+    plugins: [nodePackageResolver(), plugin],
     // Pages are required by path at run time, so every file keeps its exports.
     preserveEntrySignatures: 'strict',
   });

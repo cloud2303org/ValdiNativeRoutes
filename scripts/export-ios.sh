@@ -2,7 +2,9 @@
 # Rebuild the Valdi runtime into ios/Frameworks/ValdiRuntime.xcframework: the runtime, Valdi's own modules (valdi_core,
 # valdi_tsx, client_sql) and the app's C++ (valdi/native: @ExportModule implementations and their bindings). app_pages
 # and the npm packages are built by the app's Xcode build (tools/valdi-rolldown), its Objective-C bindings are
-# ios/Generated/valdi, so this is only needed when Valdi itself (MODULE.bazel, patches) or valdi/native changes.
+# ios/Generated/valdi, so this is only needed when the pinned Valdi fork/toolchain or valdi/native changes.
+# Builtin modules use the local Node backend by default; compiler changes also require a new export.
+# The old Swift Valdi compiler and its fallback have been removed.
 # Usage: scripts/export-ios.sh [debug|release] [output dir, default ios/Frameworks]
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -22,6 +24,7 @@ pnpm exec valdi export ios \
   --build_config "$config" \
   --bazel_args="${VALDI_BAZEL_ARGS:-}" \
   --output_path "$out/ValdiRuntime.xcframework"
+node "$root/scripts/package-swift-runtime.mjs" "$out/ValdiRuntime.xcframework"
 # What earlier versions of this script exported: the framework with app_pages in it.
 rm -rf "$out/ValdiPages.xcframework"
 

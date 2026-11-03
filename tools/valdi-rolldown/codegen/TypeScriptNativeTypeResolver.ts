@@ -34,6 +34,14 @@ const withoutExtension = (compilationPath: string) =>
 export class TypeScriptNativeTypeResolver {
   private typesByPath = new Map<string, Map<string, TypeScriptNativeType>>();
 
+  merge(other: TypeScriptNativeTypeResolver): void {
+    for (const [file, types] of other.typesByPath) {
+      const destination = this.typesByPath.get(file) ?? new Map();
+      for (const [name, type] of types) destination.set(name, type);
+      this.typesByPath.set(file, destination);
+    }
+  }
+
   private set(compilationPath: string, tsTypeName: string, type: TypeScriptNativeType): void {
     const types = this.typesByPath.get(compilationPath) ?? new Map<string, TypeScriptNativeType>();
     types.set(tsTypeName, type);

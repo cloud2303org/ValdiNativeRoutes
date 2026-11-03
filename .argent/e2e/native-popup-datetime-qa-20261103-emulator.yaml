@@ -1,0 +1,36 @@
+# Recorded live with selected-value NumberPicker checks, 2026-11-03.
+executionPrerequisite: Android io.valdiroutes.app sampling-location popup open with committed 进水口 on presentation page; date baseline 2026-10-02. Test restores location popup.
+steps:
+  - await: { visible: { role: NumberPicker, text: "选项，进水口，1/2" } }
+  - await: { idle: true }
+  - tap: { text: "取消" }
+  - await: { visible: { text: "采样时间（datetime）" } }
+  - await: { idle: true }
+  - tap: { text: "采样时间（datetime）" }
+  - await: { visible: { role: NumberPicker, text: "年份，2026年，7/11" } }
+  - await: { idle: true }
+  - await: { visible: { role: NumberPicker, text: "月份，10月，10/12" } }
+  - await: { visible: { role: NumberPicker, text: "日期，2日，2/31" } }
+  - echo: Change hour and minute and verify switching date/time preserves drafts.
+  - tap: { text: "时间  09:30" }
+  - await: { visible: { role: NumberPicker, text: "小时，09时，10/24" } }
+  - await: { idle: true }
+  - await: { visible: { role: NumberPicker, text: "分钟，30分，31/60" } }
+  - swipe: { from: { role: NumberPicker, text: "小时，" }, by: { y: -0.044 }, duration: 600, momentum: false }
+  - await: { visible: { role: NumberPicker, text: "小时，10时，11/24" } }
+  - swipe: { from: { role: NumberPicker, text: "分钟，" }, by: { y: -0.044 }, duration: 600, momentum: false }
+  - await: { visible: { role: NumberPicker, text: "分钟，31分，32/60" } }
+  - await: { visible: { role: Button, text: "时间  10:31" } }
+  - tap: { text: "日期  2026-10-02" }
+  - await: { visible: { role: NumberPicker, text: "日期，2日，2/31" } }
+  - await: { idle: true }
+  - tap: { text: "时间  10:31" }
+  - await: { visible: { role: NumberPicker, text: "小时，10时，11/24" } }
+  - await: { idle: true }
+  - await: { visible: { role: NumberPicker, text: "分钟，31分，32/60" } }
+  - tap: { text: "确定" }
+  - await: { visible: { text: '"confirm":true,"cancel":false,"value":"2026-10-02 10:31","errMsg":"showDatePicker:ok"' } }
+  - await: { idle: true }
+  - tap: { text: "采样位置：进水口" }
+  - await: { visible: { role: NumberPicker, text: "选项，进水口，1/2" } }
+  - await: { idle: true }

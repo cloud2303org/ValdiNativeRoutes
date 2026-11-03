@@ -7,7 +7,7 @@ import { Button } from './Button';
 import { PageContext, PageViewModel } from './Page';
 import { Page } from './PageComponent';
 import { PageHeader } from './PageHeader';
-import { NavigationOptions, Router, readParams } from './routes';
+import { NavigationOptions, Router, readParams } from './navigation';
 
 interface Example {
   title: string;
@@ -72,7 +72,7 @@ export class RouteAnimationPage extends Page<PageViewModel, {}, PageContext> {
   onRender(): void {
     const { insets } = this.viewModel;
     const { animation } = readParams<'animation'>(this.viewModel);
-    const example = EXAMPLES[animation];
+    const example = AVAILABLE.some(name => name === animation) ? EXAMPLES[animation] : undefined;
 
     <view style={styles.page}>
       <scroll style={styles.scroll}>

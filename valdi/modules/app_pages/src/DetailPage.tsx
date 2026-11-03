@@ -5,7 +5,7 @@ import { Button } from './Button';
 import { NavigationBar } from './NavigationBar';
 import { PageContext, PageViewModel } from './Page';
 import { Page, StatusBarStyle } from './PageComponent';
-import { Router, readParams, router } from './routes';
+import { Router, readParams, router } from './navigation';
 import { color } from './theme';
 
 interface State {
@@ -52,7 +52,7 @@ export class DetailPage extends Page<PageViewModel, State, PageContext> {
           <Button id="back2" title="back(2)" secondary={true} onTap={this.handleBack2} />
           <Button id="root" title="popToRoot" secondary={true} onTap={this.handlePopToRoot} />
           <Button id="tab" title="switchTab('device')" secondary={true} onTap={this.handleSwitchTab} />
-          <Button id="reset" title="reset('main', { tab: 'wheels' })" secondary={true} onTap={this.handleReset} />
+          <Button id="reset" title="resetToTabs('wheels')" secondary={true} onTap={this.handleReset} />
 
           <label style={styles.section} value="状态栏（只影响这一页）" />
           <Button id="light" title="setStatusBarStyle('light')" secondary={true} onTap={this.handleStatusBar} />
@@ -86,7 +86,7 @@ export class DetailPage extends Page<PageViewModel, State, PageContext> {
 
   private handleSwitchTab = () => router.switchTab('device');
 
-  private handleReset = () => router.reset('main', { tab: 'wheels' });
+  private handleReset = () => router.resetToTabs('wheels');
 
   private handleBack = () => {
     this.router.back();

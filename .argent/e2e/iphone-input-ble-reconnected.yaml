@@ -1,0 +1,159 @@
+steps:
+  - launch: io.valdiroutes.app
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: input-check
+      timeoutMs: 15000
+  - tap:
+      text: 输入自检（无需登录）
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: input-check-field
+      timeoutMs: 15000
+  - tap:
+      id: input-check-field
+  - tool: keyboard
+    args:
+      text: hello-valdi-123
+  - tap:
+      text: 提交输入
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: input-check-count
+      expectedText: 提交次数：1
+      textMatch: contains
+      timeoutMs: 10000
+  - tap:
+      text: 提交输入
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: input-check-count
+      expectedText: 提交次数：2
+      textMatch: contains
+      timeoutMs: 10000
+  - tap:
+      text: 清空输入
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: input-check-field
+      expectedText: hello-valdi-123
+      textMatch: equals
+      timeoutMs: 10000
+  - tap:
+      text: 提交输入
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: input-check-count
+      expectedText: 提交次数：3
+      textMatch: contains
+      timeoutMs: 10000
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: input-check-result
+      expectedText: 已提交：\"\"
+      textMatch: contains
+      timeoutMs: 10000
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: input-check-result
+      expectedText: 已提交
+      textMatch: contains
+      timeoutMs: 10000
+  - tap:
+      text: V
+  - tool: keyboard
+    args:
+      text: second-456
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: input-check-field
+      expectedText: second-456
+      textMatch: equals
+      timeoutMs: 10000
+  - tap:
+      text: 提交输入
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: input-check-count
+      expectedText: 提交次数：4
+      textMatch: contains
+      timeoutMs: 10000
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: input-check-result
+      expectedText: second-456
+      textMatch: contains
+      timeoutMs: 10000
+  - tap:
+      x: 0.0745
+      y: 0.0815
+  - tool: await-ui-element
+    args:
+      condition: hidden
+      selector:
+        identifier: input-check-field
+      timeoutMs: 10000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 输入自检（无需登录）
+      timeoutMs: 15000
+  - tap:
+      text: 输入自检（无需登录）
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: input-check-field
+      timeoutMs: 15000
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: input-check-count
+      expectedText: 提交次数：0
+      textMatch: contains
+      timeoutMs: 10000
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: input-check-result
+      expectedText: 尚未提交
+      textMatch: contains
+      timeoutMs: 10000
+  - tool: screenshot
+    args:
+      scale: 0.5
+      includeImageInContext: false
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: input-check-field
+      expectedText: second-456
+      textMatch: equals
+      timeoutMs: 3000

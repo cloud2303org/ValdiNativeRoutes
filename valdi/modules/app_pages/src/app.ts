@@ -1,9 +1,12 @@
 import { setCatchAllUncaughtErrorHandler, UncaughtErrorHandlerResult } from 'valdi_core/src/UncaughtErrorHandler';
+import { getModuleLoader } from 'valdi_core/src/ModuleLoaderGlobal';
+import { initializeBluetooth } from 'bluetooth/src/index';
+import * as permissions from './permissions/index';
 import { api } from './api';
-import { auth, installAuth, TokenStore } from './auth';
-import { getAppDb } from './db';
+import type { TokenStore } from './auth';
+import { initializeAppDb } from './db';
 import { installNavigation, NavigationHost } from './NavigationHost';
-import { hostRoutes, RouteName } from './routes';
+import type { RouteDeclaration } from './navigation/models';
 import { installTheme } from './theme';
 
 /**
@@ -16,23 +19,42 @@ import { installTheme } from './theme';
  *
  * @ExportFunction({ios: 'VRStartApp', android: 'io.valdiroutes.pages.StartApp'})
  */
-export function startApp(debug: boolean, navigation: NavigationHost, tokens: TokenStore): string {
+export function startApp(debug: boolean, navigation: NavigationHost, tokens: TokenStore): RouteDeclaration {
+  installErrorHandler(debug);
+  initializeBluetooth(permissions);
   installTheme();
-  installAuth(tokens);
+  getModuleLoader().load('app_pages/src/auth', true).installAuth(tokens);
   installDatabase();
   installApi();
   installNavigation(navigation);
-  installErrorHandler(debug);
-  return JSON.stringify({ ...hostRoutes(), root: rootRoute() });
+  if (debug && !disposeRouteReload) {
+    // The observer belongs to this app module; ModuleLoader disposes it when the
+    // observing module unloads. Load fresh exports after doUnload has completed.
+    disposeRouteReload = getModuleLoader().onHotReload(module, 'app_pages/src/routes', () => {
+      const routes = currentRoutes();
+      routes.publish(rootRoute(routes.home));
+    });
+  }
+  const routes = currentRoutes();
+  return routes.toHost(rootRoute(routes.home));
 }
 
-/** The first page: signed out, the login page; signing in resets the stack to `main` (auth.ts). */
-function rootRoute(): RouteName {
-  return auth.isSignedIn() ? 'main' : 'login';
+let disposeRouteReload: (() => void) | undefined;
+
+function currentRoutes(): typeof import('./routes')['routes'] {
+  // Global loader.load deliberately adds no app -> routes dependency. A route
+  // reload must leave this app-scope observer installed until it publishes.
+  return getModuleLoader().load('app_pages/src/routes', true).routes;
+}
+
+/** Consult the current auth module after token-store installation and after reload. */
+function rootRoute(home: string): string {
+  const { auth } = getModuleLoader().load('app_pages/src/auth', true) as typeof import('./auth');
+  return auth.isSignedIn() ? home : 'login';
 }
 
 function installDatabase(): void {
-  getAppDb();
+  initializeAppDb();
 }
 
 /**

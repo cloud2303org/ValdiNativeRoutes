@@ -1,72 +1,78 @@
-// Creates an app module, valdi/modules/<name>, in place of `valdi new_module` (Bazel): src/<Name>Component.tsx, from
-// Valdi's ui_component template; every module's tsconfig.json (tsconfig.ts), so they can import each other; and the
-// module's native bindings, as codegen.ts writes them for the apps' builds. The builds pick the module up from there:
-// it becomes <name>.valdimodule next to app_pages', which other modules import as `<name>/src/…`.
-//
-//   pnpm new-module <name>
-//
-// The name is snake_case: it names the module's Kotlin package (com.snap.modules.<name>), its Objective-C directory and
-// its C++ namespace, and starts its import paths.
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { createInterface } from 'node:readline/promises';
 import path from 'node:path';
-import { appModule, appModules, root, writeTsconfig } from './pipeline';
+import { syncNativeModuleRegistration } from '../../scripts/native-modules.mjs';
+import { appModule, appModules, root, valdiSourceRoot, writeTsconfig } from './pipeline';
+import { createModule, MODULE_TEMPLATES, type ModuleTemplate } from './scaffold';
 
-const name = process.argv[2];
-if (!name || process.argv.length > 3) {
-  console.error('Usage: pnpm new-module <name>');
-  process.exit(2);
-}
-const fail = (message: string): never => {
-  console.error(message);
-  process.exit(1);
-};
-if (!/^[a-z][a-z0-9_]*$/.test(name)) fail(`${name}: a module name is snake_case: a-z, 0-9 and _, starting with a letter`);
-const module = appModule(name);
-if (existsSync(module.dir)) fail(`${path.relative(process.cwd(), module.dir)} exists`);
-// An import of `<name>/…` would resolve to the npm package or to Valdi's module instead.
-if (existsSync(path.join(module.nodeModules!, name))) fail(`${name} is an npm package in valdi/node_modules`);
-if (['client_sql', 'coreutils', 'jasmine', 'source_map', 'valdi_core', 'valdi_tsx'].includes(name)) fail(`${name} is a Valdi module`);
+const help = `Usage: pnpm new-module [name] [--template <template>] [--ios-language objc|swift] [--swiftui] [--android-context] [--skip-checks]
 
-const component = `${name.replace(/(^|_)([a-z0-9])/g, (_, _sep, c: string) => c.toUpperCase())}Component`;
-mkdirSync(path.join(module.dir, 'src'), { recursive: true });
-writeFileSync(
-  path.join(module.dir, 'src', `${component}.tsx`),
-  `import { Component } from 'valdi_core/src/Component';
-import { Style } from 'valdi_core/src/Style';
-import { systemFont } from 'valdi_core/src/SystemFont';
-import { Label, View } from 'valdi_tsx/src/NativeTemplateElements';
+Templates (from the pinned official Valdi CLI):
+  ui_component             Valdi TSX component
+  polyglot_bridge_module   TypeScript API + Kotlin/Objective-C implementations
+  polyglot_view_module     custom-view + Kotlin/Objective-C native views
 
-export interface ${component}ViewModel {
-  title: string;
-}
+With no --template, an interactive terminal offers the official template choices.
+Without a terminal, the default remains ui_component.
+Web/macOS template sources are preserved; native App integration is Android/iOS.
+--android-context gives a bridge module factory the Application Context.
+`;
 
-/** Import it from another module as \`import { ${component} } from '${name}/src/${component}';\`. */
-export class ${component} extends Component<${component}ViewModel> {
-  onRender(): void {
-    <view style={styles.root}>
-      <label style={styles.label} value={this.viewModel.title} />
-    </view>;
+async function main() {
+  const args = process.argv.slice(2);
+  if (args.includes('--help') || args.includes('-h')) { console.log(help); return; }
+  let name: string | undefined;
+  let template: string | undefined;
+  let iosLanguage: 'objc' | 'swift' = 'objc';
+  let swiftUI = false;
+  let androidContext = false;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--template') {
+      template = args[++i];
+      if (!template) throw new Error('--template needs a value');
+    } else if (args[i] === '--ios-language') {
+      const value = args[++i];
+      if (value !== 'objc' && value !== 'swift') throw new Error('--ios-language must be objc or swift');
+      iosLanguage = value;
+    } else if (args[i] === '--swiftui') swiftUI = true;
+    else if (args[i] === '--android-context') androidContext = true;
+    else if (args[i].startsWith('--template=')) template = args[i].slice('--template='.length);
+    else if (args[i] === '--skip-checks') continue;
+    else if (args[i].startsWith('-') || name) throw new Error(`Unexpected argument: ${args[i]}`);
+    else name = args[i];
   }
+  if (template && !MODULE_TEMPLATES.includes(template as ModuleTemplate)) throw new Error(`Unknown template: ${template}`);
+  if (process.stdin.isTTY && (!name || !template)) {
+    const prompt = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      name ||= (await prompt.question('Module name: ')).trim();
+      if (!template) {
+        MODULE_TEMPLATES.forEach((value, index) => console.log(`  ${index + 1}. ${value}`));
+        const value = (await prompt.question('Module template [1]: ')).trim() || '1';
+        template = MODULE_TEMPLATES[Number(value) - 1];
+        if (!template) throw new Error('Choose a listed template number');
+      }
+    } finally { prompt.close(); }
+  }
+  if (!name) throw new Error(help);
+  const sources = valdiSourceRoot();
+  if (!sources) throw new Error('Pinned Valdi sources are missing. Run: node scripts/prepare-valdi.mjs');
+  const created = createModule({ root, sources, name, template: (template ?? 'ui_component') as ModuleTemplate, iosLanguage, swiftUI, androidContext });
+  const modules = appModules();
+  const enabled = modules.some(module => module.name === created.name);
+  if (!enabled) writeTsconfig(appModule(created.name), [...modules, appModule(created.name)]);
+  for (const module of modules) writeTsconfig(module, modules);
+  syncNativeModuleRegistration(root);
+  if (enabled && (template ?? 'ui_component') === 'ui_component') {
+    execFileSync(process.execPath, [
+      path.join(import.meta.dirname, 'node_modules/tsx/dist/cli.mjs'), 'codegen.ts', created.name,
+      '--kotlin-out', path.join(root, 'android/app/generated/valdi'),
+      '--objc-out', path.join(root, 'ios/Generated/valdi'), '--objc-framework', 'ValdiRuntime',
+      '--cpp-out', path.join(root, 'valdi/native/generated'),
+    ], { cwd: import.meta.dirname, stdio: 'inherit' });
+  }
+  console.log(`Created ${path.relative(root, created.directory)} (${template ?? 'ui_component'})`);
+  console.log(`Enable "${created.name}" in package.json valdi.modules, import its TS entry, then run pnpm android or pnpm ios.`);
 }
 
-const styles = {
-  root: new Style<View>({ padding: 16 }),
-  label: new Style<Label>({ font: systemFont(17), color: '#111827' }),
-};
-`,
-);
-
-const modules = appModules();
-for (const each of modules) writeTsconfig(each, modules);
-execFileSync(
-  'npx',
-  [
-    'tsx', 'codegen.ts', name,
-    '--kotlin-out', path.join(root, 'android/app/generated/valdi'),
-    '--objc-out', path.join(root, 'ios/Generated/valdi'), '--objc-framework', 'ValdiRuntime',
-    '--cpp-out', path.join(root, 'valdi/native/generated'),
-  ],
-  { cwd: import.meta.dirname, stdio: 'inherit' },
-);
-console.log(`Created ${path.relative(process.cwd(), module.dir)}: src/${component}.tsx, tsconfig.json`);
+main().catch(error => { console.error(error.message); process.exitCode = 1; });

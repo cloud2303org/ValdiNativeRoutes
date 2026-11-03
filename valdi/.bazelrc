@@ -1,5 +1,9 @@
-# Valdi custom Bazel registry (patched rules_swift, rules_kotlin, etc.)
-common --registry=https://raw.githubusercontent.com/Snapchat/Valdi/beta-0.2.1/registry
+try-import %workspace%/win.local.bazelrc
+
+# Registry from the same immutable Valdi fork commit as MODULE.bazel
+# Keep both registries in common: platform configs expand later and would let
+# BCR win over the patched fork rules if only the fork used common:<platform>.
+common --registry=https://raw.githubusercontent.com/cloud2303org/Valdi/51cec8ae3645c7e778c9f36fbe4b3bffba1ccddf/registry
 common --registry=https://bcr.bazel.build
 
 common --enable_platform_specific_config
@@ -19,7 +23,9 @@ common --experimental_enable_android_migration_apis=true
 common --incompatible_java_common_parameters=false
 
 # Flags for compilation
-common --define enable_web=true
+# This workspace exports native runtimes. Web has a separate TS build and is not
+# an output of the Node runtime-module backend.
+common --define enable_web=
 
 build --tool_java_language_version=17
 build --java_language_version=11
@@ -34,7 +40,9 @@ build --cxxopt=-Wno-ambiguous-reversed-operator
 build --cxxopt=-Wno-nullability-extension
 build --cxxopt=-D_LIBCPP_ENABLE_CXX20_REMOVED_TYPE_TRAITS
 build --host_cxxopt=-std=c++20
-build --host_cxxopt=-Wno-nullability-extension
+## MSVC does not accept Clang's -Wno-nullability-extension.
+build:macos --host_cxxopt=-Wno-nullability-extension
+build:linux --host_cxxopt=-Wno-nullability-extension
 
 ## we need to disable this due to a bug in bazel
 ## see https://github.com/bazelbuild/bazel/issues/12381
@@ -61,7 +69,7 @@ build --javacopt=-XepDisableAllChecks
 build --java_runtime_version=11
 build --tool_java_runtime_version=17
 
-build --flag_alias=snap_flavor=@snap_platforms//flavors:snap_flavor
+common --flag_alias=snap_flavor=@snap_platforms//flavors:snap_flavor
 build --snap_flavor=platform_development
 
 build --android_crosstool_top=@androidndk//:toolchain
@@ -105,3 +113,7 @@ build --@valdi//bzl/valdi:js_bytecode_format=hermes
 
 # Valdi Open Source Flags
 build --define=open_source_build=true
+
+# The Windows entry points (scripts/windows/lib.ps1) write win.cache.bazelrc to redirect shared caches for an
+# isolated build. Imported last so its options win over the defaults above.
+try-import %workspace%/win.cache.bazelrc

@@ -6,6 +6,7 @@ import { availableParallelism, tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import type { ArchiveEntries } from './archive';
+import { valdiSourceRoot } from './pipeline';
 
 const run = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -22,10 +23,13 @@ export function formatJsModule(source: string): string {
 
 /** Fail explicitly when an upstream upgrade changes the protocol this adapter implements. */
 export function validateRuntimeContract(directory = root): string {
-  const config = readFileSync(path.join(directory, 'valdi/third_party/hermes_v1/hermes.BUILD'), 'utf8');
+  const sources = process.env.VALDI_SOURCE_ROOT
+    ?? (directory === root ? valdiSourceRoot() : undefined)
+    ?? path.join(directory, 'valdi/bazel-valdi/external/valdi+');
+  const config = readFileSync(path.join(sources, 'third-party/hermes_v1/hermes.BUILD'), 'utf8');
   const version = /HERMES_RELEASE_VERSION=.*?(\d+\.\d+\.\d+)/.exec(config)?.[1];
-  if (!version) throw new Error('Cannot read the runtime Hermes version from third_party/hermes_v1/hermes.BUILD');
-  const source = readFileSync(path.join(directory, 'valdi/bazel-valdi/external/valdi+/valdi/src/valdi/runtime/JavaScript/JavaScriptUtils.cpp'), 'utf8');
+  if (!version) throw new Error('Cannot read the runtime Hermes version from the fork third-party/hermes_v1/hermes.BUILD');
+  const source = readFileSync(path.join(sources, 'valdi/src/valdi/runtime/JavaScript/JavaScriptUtils.cpp'), 'utf8');
   const stringValue = (name: string) => {
     const value = new RegExp(`${name}\\s*=\\s*("(?:\\\\.|[^"\\\\])*")`).exec(source)?.[1];
     return value ? JSON.parse(value) : undefined;
@@ -36,6 +40,21 @@ export function validateRuntimeContract(directory = root): string {
     throw new Error('Valdi precompiled-module protocol changed. Update hermes.ts against JavaScriptUtils.cpp before compiling Release modules.');
   }
   return version;
+}
+
+export function compilerBytecodeVersion(info: string, expectedRelease: string, platform = process.platform): number {
+  const release = /Hermes release version:\s*(\S+)/.exec(info)?.[1];
+  const bytecodeVersion = Number(/HBC bytecode version:\s*(\d+)/.exec(info)?.[1]);
+  // This exact pinned npm release ships Linux and Windows binaries with the upstream banner.
+  // Package/runtime version equality is still checked by hermesCompiler(); do
+  // not silently accept other mismatches when upgrading the compiler.
+  const knownPinnedBanner = ['linux', 'win32'].includes(platform) && expectedRelease === '260318099.0.4'
+    && release === '1.0.0' && bytecodeVersion === 99;
+  if ((release !== expectedRelease && !knownPinnedBanner)
+    || !Number.isSafeInteger(bytecodeVersion) || bytecodeVersion <= 0) {
+    throw new Error(`Unexpected Hermes compiler version: ${info.trim()}`);
+  }
+  return bytecodeVersion;
 }
 
 export function hermesCompiler(directory = root): { executable: string; bytecodeVersion: number } {
@@ -50,17 +69,26 @@ export function hermesCompiler(directory = root): { executable: string; bytecode
   const executable = path.join(path.dirname(packageFile), 'hermesc', platform, process.platform === 'win32' ? 'hermesc.exe' : 'hermesc');
   if (!existsSync(executable)) throw new Error(`Missing prebuilt Hermes compiler: ${executable}. Run pnpm install.`);
   const info = execFileSync(executable, ['-version'], { encoding: 'utf8' });
-  const release = /Hermes release version:\s*(\S+)/.exec(info)?.[1];
-  const bytecodeVersion = Number(/HBC bytecode version:\s*(\d+)/.exec(info)?.[1]);
-  if (release !== expected || !bytecodeVersion) throw new Error(`Unexpected Hermes compiler version: ${info.trim()}`);
+  const bytecodeVersion = compilerBytecodeVersion(info, expected);
   return { executable, bytecodeVersion };
 }
 
+function validateBytecode(bytecode: Buffer, bytecodeVersion: number, name: string): void {
+  if (bytecode.length < 12 || bytecode.readBigUInt64LE(0) !== HBC_MAGIC || bytecode.readUInt32LE(8) !== bytecodeVersion) {
+    throw new Error(`Unexpected Hermes bytecode format for ${name} (expected HBC version ${bytecodeVersion})`);
+  }
+}
+
 export async function precompile(entries: ArchiveEntries): Promise<void> {
-  const pending = [...entries].filter(([name, data]) => name.endsWith('.js')
-    && !(data.length >= 4 && data.readUInt32LE(0) === MODULE_MAGIC));
-  if (!pending.length) return;
+  const modules = [...entries].filter(([name]) => name.endsWith('.js'));
+  if (!modules.length) return;
   const { executable, bytecodeVersion } = hermesCompiler();
+  const pending = modules.filter(([name, data]) => {
+    if (data.length < 4 || data.readUInt32LE(0) !== MODULE_MAGIC) return true;
+    validateBytecode(data.subarray(4), bytecodeVersion, name);
+    return false;
+  });
+  if (!pending.length) return;
   const dir = mkdtempSync(path.join(tmpdir(), 'valdi-hermes-'));
   try {
     let next = 0;
@@ -72,12 +100,14 @@ export async function precompile(entries: ArchiveEntries): Promise<void> {
         const output = path.join(dir, `${index}.hbc`);
         writeFileSync(input, formatJsModule(source.toString('utf8')));
         // Same strict/block-scoping/optimization and stripping settings as HermesJavaScriptCompiler.cpp.
-        await run(executable, ['-emit-binary', '-O', '-strict', '-Xes6-block-scoping', '-fno-static-builtins',
-          '-fstrip-function-names', '-g0', '-emit-async-break-check', '-out', output, input]);
-        const bytecode = readFileSync(output);
-        if (bytecode.length < 12 || bytecode.readBigUInt64LE(0) !== HBC_MAGIC || bytecode.readUInt32LE(8) !== bytecodeVersion) {
-          throw new Error(`Unexpected Hermes bytecode format for ${name}`);
+        try {
+          await run(executable, ['-emit-binary', '-O', '-strict', '-Xes6-block-scoping', '-fno-static-builtins',
+            '-fstrip-function-names', '-g0', '-emit-async-break-check', '-out', output, input]);
+        } catch (cause) {
+          throw new Error(`Hermes compilation failed for ${name}: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
         }
+        const bytecode = readFileSync(output);
+        validateBytecode(bytecode, bytecodeVersion, name);
         const header = Buffer.alloc(4);
         header.writeUInt32LE(MODULE_MAGIC);
         entries.set(name, Buffer.concat([header, bytecode]));
@@ -85,6 +115,7 @@ export async function precompile(entries: ArchiveEntries): Promise<void> {
     }));
     for (const result of results) if (result.status === 'rejected') throw result.reason;
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    // Windows can keep a short-lived lock on the bytecode the compiler just wrote.
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 }

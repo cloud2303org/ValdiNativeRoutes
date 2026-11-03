@@ -1,5 +1,7 @@
 import { Device } from 'valdi_core/src/Device';
 import * as v from 'valibot';
+import type { ResolvedNavigation } from './models';
+export type { ResolvedNavigation } from './models';
 
 /** Android presets, as ExpoNativeRoutes' NativeRouteAnimations; iOS has only the system push and none. */
 export const ANDROID_ANIMATIONS = ['default', 'none', 'slideRight', 'slideUp', 'fade', 'zoom'] as const;
@@ -21,12 +23,6 @@ interface AnimationSettings<A extends string> {
 export interface NavigationOptions extends AnimationSettings<IosAnimation> {
   android?: AnimationSettings<AndroidAnimation>;
   ios?: AnimationSettings<IosAnimation> & { presentation?: 'push' | 'fullScreen' };
-}
-
-export interface ResolvedNavigation {
-  animation: string;
-  durationMs: number;
-  presentation: 'push' | 'fullScreen';
 }
 
 const unknownOption = 'Unknown navigation option';

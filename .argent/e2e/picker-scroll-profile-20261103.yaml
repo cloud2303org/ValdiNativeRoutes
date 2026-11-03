@@ -1,0 +1,13 @@
+# Profile the parent page scroll, not the wheels. Region-label drags keep the
+# pointer outside the nested pickers. Signed-in demo session required.
+steps:
+  - launch: io.valdiroutes.app
+  - await: { visible: { text: "push 详情页" } }
+  - await: { idle: true }
+  - tap: { text: "组件" }
+  - await: { visible: { text: "页面内滚轮" } }
+  - await: { idle: true }
+  - swipe: { from: { text: "地区：" }, by: { y: -0.418 }, duration: 900, momentum: false }
+  - swipe: { from: { text: "地区：" }, by: { y: 0.418 }, duration: 900, momentum: false }
+  - swipe: { from: { text: "地区：" }, by: { y: -0.418 }, duration: 900, momentum: false }
+  - await: { visible: { text: "采样时间：" } }

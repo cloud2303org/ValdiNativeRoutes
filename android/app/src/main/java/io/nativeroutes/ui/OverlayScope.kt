@@ -25,7 +25,7 @@ class OverlayScope(
 @Composable
 internal fun NotifyOverlayWindowAttached(id: String) {
     val view = LocalView.current
-    val scope = LocalOverlayScope.current
+    val scope = checkNotNull(LocalOverlayScope.current) { "Install ProvideOverlays around the native page" }
     val notify by rememberUpdatedState(scope.windowShown)
     DisposableEffect(view, id) {
         var notified = false
@@ -47,7 +47,8 @@ enum class SheetDismissReason { Gesture, Back, Navigation, CloseButton, Cancel, 
 enum class DialogDismissReason { Backdrop, Back, Navigation, Cancel, Confirm }
 enum class OverlayCloseReason { Dismissed, Navigation, Unmount }
 
-internal val LocalOverlayScope = staticCompositionLocalOf<OverlayScope> { error("Install ProvideOverlays around the native page") }
+// The standalone ActionSheet may supply its own instance scope; other overlays still require a page scope.
+internal val LocalOverlayScope = staticCompositionLocalOf<OverlayScope?> { null }
 /** Page-scoped imperative overlays, e.g. `LocalOverlays.current.confirm(...)`. */
 val LocalOverlays = staticCompositionLocalOf<Overlays> { error("Install ProvideOverlays around the native page") }
 
@@ -105,7 +106,7 @@ internal class Presentation<R>(private val scope: OverlayScope, private val back
 @Composable
 internal fun <R> rememberPresentation(open: Boolean, dismissible: Boolean, back: R, navigation: R,
     onOpenChange: (Boolean, R) -> Unit, onClosed: (OverlayCloseReason) -> Unit): Presentation<R> {
-    val scope = LocalOverlayScope.current
+    val scope = checkNotNull(LocalOverlayScope.current) { "Install ProvideOverlays around the native page" }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val dismissInputs = rememberUpdatedState<() -> Unit>({ focusManager.clearFocus(force = true); keyboard?.hide() })

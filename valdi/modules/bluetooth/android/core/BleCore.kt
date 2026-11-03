@@ -8,51 +8,149 @@ import android.os.Looper
 class BleCore private constructor(context: Context) {
     private val engine = BleEngine(context.applicationContext)
     private val handler = Handler(Looper.getMainLooper())
-    private data class Work(val session: BleSession, val run: () -> Unit)
+    private data class ConnectKey(val device: String, val timeout: Double)
+    private abstract class Work(
+        val key: String?, val adapter: Long, val device: Long?, val adapterClose: Boolean,
+    ) {
+        val id = Any()
+        var started = false
+        var run: (() -> Unit)? = null
+        abstract val hasWaiters: Boolean
+        abstract fun reject(error: Throwable)
+        abstract fun take(session: BleSession): () -> Unit
+    }
+    private class Operation<T>(key: String?, adapter: Long, device: Long?, adapterClose: Boolean) :
+        Work(key, adapter, device, adapterClose) {
+        private val waiters = mutableMapOf<BleSession, MutableList<BleFuture<T>>>()
+        fun add(session: BleSession, output: BleFuture<T>) {
+            waiters.getOrPut(session) { mutableListOf() }.add(output)
+        }
+        override val hasWaiters: Boolean get() = waiters.isNotEmpty()
+        fun finish(result: Result<T>) {
+            val pending = waiters.map { it.key to it.value.toList() }
+            waiters.clear()
+            pending.forEach { (session, outputs) ->
+                outputs.forEach { output ->
+                    if (session.released) output.reject(session.releaseError())
+                    else result.fold(output::resolve, output::reject)
+                }
+            }
+        }
+        override fun reject(error: Throwable) = finish(Result.failure(error))
+        override fun take(session: BleSession): () -> Unit {
+            val outputs = waiters.remove(session).orEmpty()
+            return { outputs.forEach { it.reject(session.releaseError()) } }
+        }
+    }
     private var adapterGeneration = 0L
     private val deviceGenerations = mutableMapOf<String, Long>()
     private val queues = mutableMapOf<String, ArrayDeque<Work>>()
+    private val work = mutableMapOf<Any, Work>()
+    private val connects = mutableMapOf<ConnectKey, Work>()
+    private val pairingFences = mutableMapOf<String, Any>()
+    private var fences = 0
+    private var pumping = false
+    init {
+        engine.willInvalidate = { deviceId, error -> beginInvalidation(deviceId, error) }
+        engine.didInvalidate = { fences--; pump() }
+        engine.pairingStarted = { deviceId, attempt -> pairingFences[deviceId.lowercase()] = attempt }
+        engine.pairingDrained = { deviceId, attempt ->
+            val key = deviceId.lowercase()
+            if (pairingFences[key] === attempt) {
+                pairingFences.remove(key)
+                pump()
+            }
+        }
+    }
     internal fun dispatch(action: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) action() else handler.post(action)
     }
-    internal fun <T> submit(session: BleSession, key: String?, action: (BleEngine) -> BleFuture<T>): BleFuture<T> {
+    @Suppress("UNCHECKED_CAST")
+    internal fun <T> submit(session: BleSession, key: String?, connectTimeout: Double? = null,
+        adapterClose: Boolean = false, action: (BleEngine) -> BleFuture<T>): BleFuture<T> {
         val output = BleFuture<T>()
         dispatch {
-            if (session.released) { output.reject(IllegalStateException("E_BLE_SESSION_RELEASED:Session released")); return@dispatch }
-            val capturedAdapter = adapterGeneration
-            val capturedDevice = key?.lowercase()?.let { deviceGenerations[it] ?: 0L }
-            val operationId = Any()
-            session.pending[operationId] = { output.reject(IllegalStateException("E_BLE_SESSION_RELEASED:Session released")) }
-            val run = {
-                if (session.released || adapterGeneration != capturedAdapter || (key != null && (deviceGenerations[key.lowercase()] ?: 0L) != capturedDevice)) {
-                    output.reject(IllegalStateException("E_BLE_NOT_INITIALIZED:Operation session ended"))
-                    session.pending.remove(operationId)
-                    if (key != null) complete(key)
-                } else {
-                    try { action(engine).observe { result -> dispatch {
-                        session.pending.remove(operationId)
-                        result.fold(output::resolve, output::reject)
-                        if (key != null) complete(key)
-                    } } } catch (error: Throwable) {
-                        session.pending.remove(operationId)
-                        output.reject(error)
-                        if (key != null) complete(key)
+            if (session.released) { output.reject(session.releaseError()); return@dispatch }
+            val normalized = key?.trim()?.lowercase()
+            val connect = if (normalized != null && connectTimeout != null) ConnectKey(normalized, connectTimeout) else null
+            val active = connect?.let { connects[it] } as? Operation<T>
+            if (active != null) {
+                active.add(session, output)
+                return@dispatch
+            }
+            val task = Operation<T>(normalized, adapterGeneration, normalized?.let { deviceGenerations[it] ?: 0L }, adapterClose)
+            task.add(session, output)
+            task.run = {
+                try { action(engine).observe { result -> dispatch {
+                    if (work[task.id] === task) {
+                        fences++
+                        detach(task)
+                        if (current(task)) task.finish(result) else task.reject(staleError())
+                        fences--
+                        pump()
+                    }
+                } } } catch (error: Throwable) {
+                    if (work[task.id] === task) {
+                        fences++
+                        detach(task)
+                        task.reject(error)
+                        fences--
+                        pump()
                     }
                 }
             }
-            if (key == null) run() else {
-                val queue = queues.getOrPut(key.lowercase()) { ArrayDeque() }
-                queue.add(Work(session, run))
-                if (queue.size == 1) run()
-            }
+            work[task.id] = task
+            if (connect != null) connects[connect] = task
+            if (normalized != null) queues.getOrPut(normalized) { ArrayDeque() }.add(task)
+            pump()
         }
         return output
     }
-    private fun complete(key: String) {
-        val normalized = key.lowercase()
-        val queue = queues[normalized] ?: return
-        queue.removeFirstOrNull()
-        if (queue.isEmpty()) queues.remove(normalized) else queue.first().run()
+    private fun staleError() = IllegalStateException("E_BLE_NOT_INITIALIZED:Operation session ended")
+    private fun current(task: Work): Boolean = task.adapterClose ||
+        (task.adapter == adapterGeneration && task.key?.let { deviceGenerations[it] ?: 0L } == task.device)
+    private fun detach(task: Work) {
+        work.remove(task.id)
+        task.run = null
+        task.key?.let { key ->
+            queues[key]?.remove(task)
+            if (queues[key]?.isEmpty() == true) queues.remove(key)
+        }
+        connects.entries.removeAll { it.value === task }
+    }
+    private fun pump() {
+        if (fences != 0 || pumping) return
+        pumping = true
+        try {
+            while (fences == 0) {
+                val task = work.values.firstOrNull {
+                    !it.started && (it.key == null ||
+                        (queues[it.key]?.firstOrNull() === it && pairingFences[it.key] == null))
+                } ?: break
+                if (!current(task)) {
+                    detach(task)
+                    task.reject(staleError())
+                    continue
+                }
+                task.started = true
+                val run = task.run
+                task.run = null
+                run?.invoke()
+            }
+        } finally { pumping = false }
+    }
+    internal fun release(session: BleSession) {
+        fences++
+        val cancel = work.values.toList().map { task ->
+            val callback = task.take(session)
+            // An active OS request keeps its device slot until its actual completion.
+            if (!task.started && !task.hasWaiters) detach(task)
+            callback
+        }
+        releaseResources(session)
+        cancel.forEach { it() }
+        fences--
+        pump()
     }
     private val leases = mutableMapOf<String, MutableSet<BleSession>>()
     private val leaseCleanup = mutableMapOf<String, Pair<String, (BleEngine) -> BleFuture<Unit>>>()
@@ -68,17 +166,23 @@ class BleCore private constructor(context: Context) {
             owners.remove(session)
             if (owners.isNotEmpty()) return@submit BleFuture.async { }
         }
+        val capturedAdapter = adapterGeneration
+        val key = queue.trim().lowercase()
+        val capturedDevice = deviceGenerations[key] ?: 0L
         val result = action(engine)
         result.observe { outcome -> dispatch {
+            if (adapterGeneration != capturedAdapter || (deviceGenerations[key] ?: 0L) != capturedDevice) return@dispatch
             if (outcome.isSuccess) {
                 if (enable && !session.released) {
-                    owners.add(session)
+                    // Engine events can synchronously release the last owner
+                    // and remove the pre-action set from the lease map.
+                    leases.getOrPut(resource) { mutableSetOf() }.add(session)
                     leaseCleanup[resource] = queue to cleanup
                     if (resource == "@scan") scanSignature = signature
                 } else if (owners.isEmpty()) {
                     leases.remove(resource); leaseCleanup.remove(resource)
                     if (resource == "@scan") scanSignature = null
-                    if (enable) submit(maintenance, queue, cleanup)
+                    if (enable) scheduleCleanup(resource, queue, cleanup)
                 }
             }
         } }
@@ -92,19 +196,35 @@ class BleCore private constructor(context: Context) {
                 leases.remove(resource)
                 val cleanup = leaseCleanup.remove(resource)
                 if (resource == "@scan") scanSignature = null
-                if (cleanup != null) submit(maintenance, cleanup.first, cleanup.second)
+                if (cleanup != null) scheduleCleanup(resource, cleanup.first, cleanup.second)
             }
         }
     }
-    internal fun invalidate(deviceId: String? = null) {
+    private fun scheduleCleanup(resource: String, queue: String, cleanup: (BleEngine) -> BleFuture<Unit>) {
+        submit(maintenance, queue) { engine ->
+            // A different session may acquire this resource ahead of queued
+            // cleanup. Decide at execution, while still holding its FIFO slot.
+            if (leases[resource]?.isNotEmpty() == true) BleFuture.async {}
+            else cleanup(engine)
+        }
+    }
+    private fun beginInvalidation(deviceId: String?, error: Throwable) {
+        fences++
+        val key = deviceId?.trim()?.lowercase()
         if (deviceId == null) {
             adapterGeneration += 1
+            pairingFences.clear()
             leases.clear(); leaseCleanup.clear(); scanSignature = null
         } else {
             val key = deviceId.trim().lowercase()
+            pairingFences.remove(key)
             deviceGenerations[key] = (deviceGenerations[key] ?: 0L) + 1
             leases.keys.filter { it.startsWith("notify:$key:") }.forEach { leases.remove(it); leaseCleanup.remove(it) }
         }
+        val cancelled = work.values.filter { !it.adapterClose && (key == null || it.key == key) }
+        // Remove the whole old generation before any rejection can reenter.
+        cancelled.forEach(::detach)
+        cancelled.forEach { it.reject(error) }
     }
     fun createSession(): BleSession = BleSession(this)
     internal fun engine(): BleEngine = engine
@@ -120,27 +240,26 @@ class BleCore private constructor(context: Context) {
 /** Release cancels this caller's work/listeners; explicit closes retain application-wide meaning. */
 class BleSession internal constructor(private val core: BleCore) {
     @Volatile internal var released = false
-    internal val pending = mutableMapOf<Any, () -> Unit>()
+    internal fun releaseError() = IllegalStateException("E_BLE_SESSION_RELEASED:Session released")
     private val cleanup = mutableMapOf<String, () -> Unit>()
     fun release() = core.dispatch {
         if (!released) {
             synchronized(cleanup) { released = true }
-            core.releaseResources(this)
+            core.release(this)
             core.engine().peripheral.release(this)
-            pending.values.toList().forEach { it() }; pending.clear()
             synchronized(cleanup) { cleanup.values.toList().also { cleanup.clear() } }.forEach { it() }
         }
     }
     fun openBluetoothAdapter(mode: String? = null): BleFuture<Unit> = core.submit(this, "@adapter") { it.openBluetoothAdapter(mode) }
-    fun closeBluetoothAdapter(): BleFuture<Unit> = core.submit(this, null) { core.invalidate(); it.closeBluetoothAdapter() }
+    fun closeBluetoothAdapter(): BleFuture<Unit> = core.submit(this, null, adapterClose = true) { it.closeBluetoothAdapter() }
     fun getBluetoothAdapterState(): BleFuture<BleAdapterState> = core.submit(this, "@adapter") { it.getBluetoothAdapterState() }
     fun startBluetoothDevicesDiscovery(params: BleScanParams): BleFuture<Unit> = core.resource(this, "@scan", "@adapter", listOf(params.services?.map { it.lowercase() }?.sorted(), params.allowDuplicatesKey, params.interval, params.powerLevel).toString(), action = { it.startBluetoothDevicesDiscovery(params) }, cleanup = { it.stopBluetoothDevicesDiscovery() })
     fun startBluetoothDevicesDiscoveryWithNames(params: BleScanWithNameParams): BleFuture<Unit> = core.resource(this, "@scan", "@adapter", "names:" + params.peripheralNames.sorted().joinToString(), action = { it.startBluetoothDevicesDiscoveryWithNames(params) }, cleanup = { it.stopBluetoothDevicesDiscovery() })
     fun startBluetoothDevicesDiscoveryWithAddresses(params: BleScanWithAddressesParams): BleFuture<Unit> = core.resource(this, "@scan", "@adapter", "addresses:" + params.peripheralAddresses.map { it.lowercase() }.sorted().joinToString(), action = { it.startBluetoothDevicesDiscoveryWithAddresses(params) }, cleanup = { it.stopBluetoothDevicesDiscovery() })
     fun stopBluetoothDevicesDiscovery(): BleFuture<Unit> = core.resource(this, "@scan", "@adapter", enable = false, action = { it.stopBluetoothDevicesDiscovery() }, cleanup = { it.stopBluetoothDevicesDiscovery() })
     fun getBluetoothDevices(): BleFuture<BleDeviceList> = core.submit(this, "@adapter") { it.getBluetoothDevices() }
-    fun createBLEConnection(deviceId: String, timeout: Double = 15_000.0): BleFuture<Unit> = core.submit(this, deviceId.trim()) { it.createBLEConnection(deviceId, timeout) }
-    fun closeBLEConnection(deviceId: String): BleFuture<Unit> = core.submit(this, null) { core.invalidate(deviceId); it.closeBLEConnection(deviceId) }
+    fun createBLEConnection(deviceId: String, timeout: Double = 15_000.0): BleFuture<Unit> = core.submit(this, deviceId.trim(), connectTimeout = timeout) { it.createBLEConnection(deviceId, timeout) }
+    fun closeBLEConnection(deviceId: String): BleFuture<Unit> = core.submit(this, null) { it.closeBLEConnection(deviceId) }
     fun makeBluetoothPair(params: BlePairParams): BleFuture<Unit> = core.submit(this, params.deviceId.trim()) { it.makeBluetoothPair(params) }
     fun isBluetoothDevicePaired(deviceId: String): BleFuture<Unit> = core.submit(this, deviceId.trim()) { it.isBluetoothDevicePaired(deviceId) }
     fun getBLEDeviceServices(deviceId: String): BleFuture<BleServiceList> = core.submit(this, deviceId.trim()) { it.getBLEDeviceServices(deviceId) }

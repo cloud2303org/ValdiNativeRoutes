@@ -1,0 +1,3 @@
+executionPrerequisite: Android embedded wheels page after first location wheel swipe; screenshot shows 出水口.
+steps:
+  - assert: { visible: { text: '采样位置：出水口' } }

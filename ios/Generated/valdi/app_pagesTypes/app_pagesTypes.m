@@ -31,90 +31,6 @@
 
 
 //
-// VRAppUIHost.m
-//
-
-#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
-#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
-
-#import "app_pagesTypes.h"
-
-static SCValdiFieldValue SCValdiFunctionInvokeOODOO_v(const void *function, SCValdiFieldValue* fields) {
-    ((void (*) (const void *, const void *, double, const void *, const void * ))function)(SCValdiFieldValueGetPtr(fields[0]), SCValdiFieldValueGetPtr(fields[1]), SCValdiFieldValueGetDouble(fields[2]), SCValdiFieldValueGetPtr(fields[3]), SCValdiFieldValueGetPtr(fields[4]));
-    return SCValdiFieldValueMakeNull();
-}
-
-static id SCValdiBlockCreateOODOO_v(SCValdiBlockTrampoline trampoline) {
-    return ^void(const void * p0, double p1, const void * p2, const void * p3) {
-        trampoline(nil, SCValdiFieldValueMakePtr(p0), SCValdiFieldValueMakeDouble(p1), SCValdiFieldValueMakePtr(p2), SCValdiFieldValueMakePtr(p3));
-    };
-}
-
-@implementation VRAppUIHost
-
-@dynamic showModal;
-@dynamic showActionSheet;
-@dynamic showPicker;
-@dynamic showDatePicker;
-@dynamic showBottomSheet;
-@dynamic previewImage;
-@dynamic scanCode;
-@dynamic pickAttachments;
-@dynamic clearAttachmentCache;
-@dynamic showToast;
-@dynamic hideToast;
-@dynamic showLoading;
-@dynamic hideLoading;
-
-- (instancetype _Nonnull)initWithShowModal:(VRAppUIHostShowModalBlock _Nonnull)showModal showActionSheet:(VRAppUIHostShowActionSheetBlock _Nonnull)showActionSheet showPicker:(VRAppUIHostShowPickerBlock _Nonnull)showPicker showDatePicker:(VRAppUIHostShowDatePickerBlock _Nonnull)showDatePicker showBottomSheet:(VRAppUIHostShowBottomSheetBlock _Nonnull)showBottomSheet previewImage:(VRAppUIHostPreviewImageBlock _Nonnull)previewImage scanCode:(VRAppUIHostScanCodeBlock _Nonnull)scanCode pickAttachments:(VRAppUIHostPickAttachmentsBlock _Nonnull)pickAttachments clearAttachmentCache:(VRAppUIHostClearAttachmentCacheBlock _Nonnull)clearAttachmentCache showToast:(VRAppUIHostShowToastBlock _Nonnull)showToast hideToast:(VRAppUIHostHideToastBlock _Nonnull)hideToast showLoading:(VRAppUIHostShowLoadingBlock _Nonnull)showLoading hideLoading:(VRAppUIHostHideLoadingBlock _Nonnull)hideLoading
-{
-    return [super initWithFieldValues:nil, showModal, showActionSheet, showPicker, showDatePicker, showBottomSheet, previewImage, scanCode, pickAttachments, clearAttachmentCache, showToast, hideToast, showLoading, hideLoading];
-}
-
-+ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
-{
-    static const SCValdiMarshallableObjectBlockSupport kBlocks[] = {
-        { .typeEncoding = "oodoo:v", .invoker = &SCValdiFunctionInvokeOODOO_v, .factory = &SCValdiBlockCreateOODOO_v },
-        { .typeEncoding = nil },
-    };
-    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
-        {.name = "showModal", .selName = nil, .type = "f(r:'[0]', f(s, r:'[1]'))"},
-        {.name = "showActionSheet", .selName = nil, .type = "f(r:'[2]', f(s, r:'[3]'))"},
-        {.name = "showPicker", .selName = nil, .type = "f(r:'[4]', f(s, r:'[3]'))"},
-        {.name = "showDatePicker", .selName = nil, .type = "f(r:'[5]', f(s, r:'[3]'))"},
-        {.name = "showBottomSheet", .selName = nil, .type = "f(r:'[6]', f(s, r:'[3]'))"},
-        {.name = "previewImage", .selName = nil, .type = "f(r:'[7]', f(s, r:'[3]'))"},
-        {.name = "scanCode", .selName = nil, .type = "f(f(s, r:'[8]'))"},
-        {.name = "pickAttachments", .selName = nil, .type = "f(s, d, a<s>, f(s, r:'[9]'))"},
-        {.name = "clearAttachmentCache", .selName = nil, .type = "f(f(s))"},
-        {.name = "showToast", .selName = nil, .type = "f(r:'[10]', f(s))"},
-        {.name = "hideToast", .selName = nil, .type = "f(f(s))"},
-        {.name = "showLoading", .selName = nil, .type = "f(r:'[11]', f(s))"},
-        {.name = "hideLoading", .selName = nil, .type = "f(f(s))"},
-        {.name = nil},
-    };
-    static const char *const kIdentifiers[] = {
-        "VRModalRequest",
-        "VRModalReply",
-        "VRActionSheetRequest",
-        "VRPresentationReply",
-        "VRPickerRequest",
-        "VRDatePickerRequest",
-        "VRBottomSheetRequest",
-        "VRImagePreviewRequest",
-        "VRScanCodeReply",
-        "VRAttachmentSelection",
-        "VRToastRequest",
-        "VRLoadingRequest",
-        nil
-    };
-    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, kBlocks, SCValdiMarshallableObjectTypeClass);
-}
-
-@end
-
-
-//
 // VRAttachmentAsset.m
 //
 
@@ -223,6 +139,42 @@ static id SCValdiBlockCreateOODOO_v(SCValdiBlockTrampoline trampoline) {
         {.name = nil},
     };
     return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRColumnWheelConfig.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+@implementation VRColumnWheelConfig
+
+@dynamic options;
+@dynamic value;
+
+- (instancetype _Nonnull)initWithOptions:(NSArray<VRPickerOption *> * _Nonnull)options value:(NSString * _Nonnull)value
+{
+    return [super initWithFieldValues:nil, options, value];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "options", .selName = nil, .type = "a<r:'[0]'>"},
+        {.name = "value", .selName = nil, .type = "s"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRPickerOption",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
 }
 
 @end
@@ -594,19 +546,25 @@ static id SCValdiBlockCreateOD_v(SCValdiBlockTrampoline trampoline) {
         { .typeEncoding = nil },
     };
     static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
-        {.name = "push", .selName = nil, .type = "f(s, s, s, s)"},
-        {.name = "pushForResult", .selName = nil, .type = "f(s, s, s, s, f(s, b))"},
-        {.name = "replace", .selName = nil, .type = "f(s, s, s)"},
+        {.name = "push", .selName = nil, .type = "f(s, m<s,u>, s, r:'[0]')"},
+        {.name = "pushForResult", .selName = nil, .type = "f(s, m<s,u>, s, r:'[0]', f(m<s,u>, b))"},
+        {.name = "replace", .selName = nil, .type = "f(s, m<s,u>, r:'[0]')"},
         {.name = "back", .selName = nil, .type = "f(d)"},
         {.name = "popToRoot", .selName = nil, .type = "f()"},
-        {.name = "reset", .selName = nil, .type = "f(s, s)"},
+        {.name = "reset", .selName = nil, .type = "f(s, m<s,u>)"},
         {.name = "switchTab", .selName = nil, .type = "f(s)"},
         {.name = "setStatusBarStyle", .selName = nil, .type = "f(s)"},
-        {.name = "currentPages", .selName = nil, .type = "f(f(s))"},
-        {.name = "updateRoutes", .selName = nil, .type = "f(s)"},
+        {.name = "currentPages", .selName = nil, .type = "f(f(a<r:'[1]'>))"},
+        {.name = "updateRoutes", .selName = nil, .type = "f(r:'[2]')"},
         {.name = nil},
     };
-    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, kBlocks, SCValdiMarshallableObjectTypeClass);
+    static const char *const kIdentifiers[] = {
+        "VRResolvedNavigation",
+        "VRStackPage",
+        "VRRouteDeclaration",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, kBlocks, SCValdiMarshallableObjectTypeClass);
 }
 
 @end
@@ -829,7 +787,7 @@ static id SCValdiBlockCreateOB_v(SCValdiBlockTrampoline trampoline) {
 + (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
 {
     static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
-        {.name = "finish", .selName = nil, .type = "f(s)"},
+        {.name = "finish", .selName = nil, .type = "f(m<s,u>)"},
         {.name = "back", .selName = nil, .type = "f()"},
         {.name = nil},
     };
@@ -888,15 +846,15 @@ static id SCValdiBlockCreateOB_v(SCValdiBlockTrampoline trampoline) {
 
 @dynamic pageId;
 @dynamic route;
-@dynamic paramsJson;
+@dynamic params;
 @dynamic presentation;
 @dynamic insets;
 @dynamic visible;
 @dynamic visibilityReason;
 
-- (instancetype _Nonnull)initWithPageId:(NSString * _Nonnull)pageId route:(NSString * _Nonnull)route paramsJson:(NSString * _Nonnull)paramsJson presentation:(NSString * _Nonnull)presentation insets:(VRPageInsets * _Nonnull)insets visible:(BOOL)visible visibilityReason:(NSString * _Nonnull)visibilityReason
+- (instancetype _Nonnull)initWithPageId:(NSString * _Nonnull)pageId route:(NSString * _Nonnull)route params:(NSDictionary <NSString *, id> * _Nonnull)params presentation:(NSString * _Nonnull)presentation insets:(VRPageInsets * _Nonnull)insets visible:(BOOL)visible visibilityReason:(NSString * _Nonnull)visibilityReason
 {
-    return [super initWithFieldValues:nil, pageId, route, paramsJson, presentation, insets, visible, visibilityReason];
+    return [super initWithFieldValues:nil, pageId, route, params, presentation, insets, visible, visibilityReason];
 }
 
 + (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
@@ -904,7 +862,7 @@ static id SCValdiBlockCreateOB_v(SCValdiBlockTrampoline trampoline) {
     static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
         {.name = "pageId", .selName = nil, .type = "s"},
         {.name = "route", .selName = nil, .type = "s"},
-        {.name = "paramsJson", .selName = nil, .type = "s"},
+        {.name = "params", .selName = nil, .type = "m<s,u>"},
         {.name = "presentation", .selName = nil, .type = "s"},
         {.name = "insets", .selName = nil, .type = "r:'[0]'"},
         {.name = "visible", .selName = nil, .type = "b"},
@@ -1064,6 +1022,199 @@ static id SCValdiBlockCreateOB_v(SCValdiBlockTrampoline trampoline) {
 
 
 //
+// VRResolvedNavigation.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+@implementation VRResolvedNavigation
+
+@dynamic animation;
+@dynamic durationMs;
+@dynamic presentation;
+
+- (instancetype _Nonnull)initWithAnimation:(NSString * _Nonnull)animation durationMs:(double)durationMs presentation:(NSString * _Nonnull)presentation
+{
+    return [super initWithFieldValues:nil, animation, durationMs, presentation];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "animation", .selName = nil, .type = "s"},
+        {.name = "durationMs", .selName = nil, .type = "d"},
+        {.name = "presentation", .selName = nil, .type = "s"},
+        {.name = nil},
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRRouteDeclaration.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+@implementation VRRouteDeclaration
+
+@dynamic routes;
+@dynamic tabBar;
+@dynamic root;
+
+- (instancetype _Nonnull)initWithRoutes:(NSArray<VRRouteEntry *> * _Nonnull)routes root:(NSString * _Nonnull)root
+{
+    return [super initWithFieldValues:nil, routes, nil, root];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "routes", .selName = nil, .type = "a<r:'[0]'>"},
+        {.name = "tabBar", .selName = nil, .type = "r?:'[1]'"},
+        {.name = "root", .selName = nil, .type = "s"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRRouteEntry",
+        "VRRouteTabBar",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRRouteEntry.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+@implementation VRRouteEntry
+
+@dynamic route;
+@dynamic kind;
+@dynamic title;
+@dynamic component;
+@dynamic nativeName;
+
+- (instancetype _Nonnull)initWithRoute:(NSString * _Nonnull)route kind:(NSString * _Nonnull)kind title:(NSString * _Nonnull)title
+{
+    return [super initWithFieldValues:nil, route, kind, title, nil, nil];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "route", .selName = nil, .type = "s"},
+        {.name = "kind", .selName = nil, .type = "s"},
+        {.name = "title", .selName = nil, .type = "s"},
+        {.name = "component", .selName = nil, .type = "s?"},
+        {.name = "nativeName", .selName = nil, .type = "s?"},
+        {.name = nil},
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRRouteTab.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+@implementation VRRouteTab
+
+@dynamic route;
+@dynamic text;
+@dynamic icon;
+@dynamic selectedIcon;
+@dynamic iconData;
+@dynamic selectedIconData;
+
+- (instancetype _Nonnull)initWithRoute:(NSString * _Nonnull)route text:(NSString * _Nonnull)text icon:(NSString * _Nonnull)icon selectedIcon:(NSString * _Nonnull)selectedIcon
+{
+    return [super initWithFieldValues:nil, route, text, icon, selectedIcon, nil, nil];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "route", .selName = nil, .type = "s"},
+        {.name = "text", .selName = nil, .type = "s"},
+        {.name = "icon", .selName = nil, .type = "s"},
+        {.name = "selectedIcon", .selName = nil, .type = "s"},
+        {.name = "iconData", .selName = nil, .type = "s?"},
+        {.name = "selectedIconData", .selName = nil, .type = "s?"},
+        {.name = nil},
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRRouteTabBar.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+@implementation VRRouteTabBar
+
+@dynamic route;
+@dynamic initial;
+@dynamic tabs;
+@dynamic mode;
+@dynamic component;
+
+- (instancetype _Nonnull)initWithRoute:(NSString * _Nonnull)route initial:(NSString * _Nonnull)initial tabs:(NSArray<VRRouteTab *> * _Nonnull)tabs
+{
+    return [super initWithFieldValues:nil, route, initial, tabs, nil, nil];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "route", .selName = nil, .type = "s"},
+        {.name = "initial", .selName = nil, .type = "s"},
+        {.name = "tabs", .selName = nil, .type = "a<r:'[0]'>"},
+        {.name = "mode", .selName = nil, .type = "s?"},
+        {.name = "component", .selName = nil, .type = "s?"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRRouteTab",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
 // VRScanCodeReply.m
 //
 
@@ -1087,6 +1238,40 @@ static id SCValdiBlockCreateOB_v(SCValdiBlockTrampoline trampoline) {
     static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
         {.name = "result", .selName = nil, .type = "s"},
         {.name = "scanType", .selName = nil, .type = "s"},
+        {.name = nil},
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRStackPage.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+@implementation VRStackPage
+
+@dynamic pageId;
+@dynamic route;
+@dynamic params;
+
+- (instancetype _Nonnull)initWithPageId:(NSString * _Nonnull)pageId route:(NSString * _Nonnull)route params:(NSDictionary <NSString *, id> * _Nonnull)params
+{
+    return [super initWithFieldValues:nil, pageId, route, params];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "pageId", .selName = nil, .type = "s"},
+        {.name = "route", .selName = nil, .type = "s"},
+        {.name = "params", .selName = nil, .type = "m<s,u>"},
         {.name = nil},
     };
     return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
@@ -1128,10 +1313,185 @@ static id SCValdiBlockCreateOB_v(SCValdiBlockTrampoline trampoline) {
 + (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
 {
     static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
-        {.name = "get", .selName = nil, .type = "f(s): s"},
-        {.name = "set", .selName = nil, .type = "f(s, s): b"},
+        {.name = "get", .selName = nil, .type = "f(s): r:'[0]'"},
+        {.name = "set", .selName = nil, .type = "f(r:'[1]'): b"},
         {.name = "remove", .selName = nil, .type = "f(s)"},
         {.name = "clear", .selName = nil, .type = "f()"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRStorageReadReply",
+        "VRStorageWriteRequest",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRStorageReadReply.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+@implementation VRStorageReadReply
+
+@dynamic found;
+@dynamic payload;
+@dynamic error;
+
+- (instancetype _Nonnull)initWithFound:(BOOL)found payload:(NSDictionary <NSString *, id> * _Nonnull)payload error:(NSString * _Nonnull)error
+{
+    return [super initWithFieldValues:nil, found, payload, error];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "found", .selName = nil, .type = "b"},
+        {.name = "payload", .selName = nil, .type = "m<s,u>"},
+        {.name = "error", .selName = nil, .type = "s"},
+        {.name = nil},
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRStorageWriteRequest.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+@implementation VRStorageWriteRequest
+
+@dynamic key;
+@dynamic payload;
+
+- (instancetype _Nonnull)initWithKey:(NSString * _Nonnull)key payload:(NSDictionary <NSString *, id> * _Nonnull)payload
+{
+    return [super initWithFieldValues:nil, key, payload];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "key", .selName = nil, .type = "s"},
+        {.name = "payload", .selName = nil, .type = "m<s,u>"},
+        {.name = nil},
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRTabBarContext.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+@implementation VRTabBarContext
+
+@dynamic selectTab;
+
+- (instancetype _Nonnull)initWithSelectTab:(VRTabBarContextSelectTabBlock _Nonnull)selectTab
+{
+    return [super initWithFieldValues:nil, selectTab];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "selectTab", .selName = nil, .type = "f(s)"},
+        {.name = nil},
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRTabBarViewModel.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+@implementation VRTabBarViewModel
+
+@dynamic items;
+@dynamic selectedRoute;
+@dynamic safeAreaBottom;
+
+- (instancetype _Nonnull)initWithItems:(NSArray<VRRouteTab *> * _Nonnull)items selectedRoute:(NSString * _Nonnull)selectedRoute safeAreaBottom:(double)safeAreaBottom
+{
+    return [super initWithFieldValues:nil, items, selectedRoute, safeAreaBottom];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "items", .selName = nil, .type = "a<r:'[0]'>"},
+        {.name = "selectedRoute", .selName = nil, .type = "s"},
+        {.name = "safeAreaBottom", .selName = nil, .type = "d"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRRouteTab",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRTimeWheelConfig.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+@implementation VRTimeWheelConfig
+
+@dynamic mode;
+@dynamic value;
+@dynamic minYear;
+@dynamic maxYear;
+
+- (instancetype _Nonnull)initWithMode:(NSString * _Nonnull)mode value:(NSString * _Nonnull)value minYear:(double)minYear maxYear:(double)maxYear
+{
+    return [super initWithFieldValues:nil, mode, value, minYear, maxYear];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "mode", .selName = nil, .type = "s"},
+        {.name = "value", .selName = nil, .type = "s"},
+        {.name = "minYear", .selName = nil, .type = "d"},
+        {.name = "maxYear", .selName = nil, .type = "d"},
         {.name = nil},
     };
     return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
@@ -1207,6 +1567,44 @@ static id SCValdiBlockCreateOB_v(SCValdiBlockTrampoline trampoline) {
         {.name = nil},
     };
     return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRTreeWheelConfig.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+@implementation VRTreeWheelConfig
+
+@dynamic data;
+@dynamic value;
+@dynamic columns;
+
+- (instancetype _Nonnull)initWithData:(NSArray<VRWheelTreeNode *> * _Nonnull)data value:(NSArray<NSString *> * _Nonnull)value columns:(double)columns
+{
+    return [super initWithFieldValues:nil, data, value, columns];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "data", .selName = nil, .type = "a<r:'[0]'>"},
+        {.name = "value", .selName = nil, .type = "a<s>"},
+        {.name = "columns", .selName = nil, .type = "d"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRWheelTreeNode",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
 }
 
 @end
@@ -1299,6 +1697,44 @@ static id SCValdiBlockCreateOB_v(SCValdiBlockTrampoline trampoline) {
         {.name = nil},
     };
     return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRWheelTreeNode.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+@implementation VRWheelTreeNode
+
+@dynamic value;
+@dynamic label;
+@dynamic children;
+
+- (instancetype _Nonnull)initWithValue:(NSString * _Nonnull)value label:(NSString * _Nonnull)label
+{
+    return [super initWithFieldValues:nil, value, label, nil];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "value", .selName = nil, .type = "s"},
+        {.name = "label", .selName = nil, .type = "s"},
+        {.name = "children", .selName = nil, .type = "a?<r:'[0]'>"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRWheelTreeNode",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
 }
 
 @end
@@ -1480,6 +1916,16 @@ static id SCValdiBlockCreateOB_v(SCValdiBlockTrampoline trampoline) {
 }
 
 @end
+
+
+//
+// VRAppUIHost.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
 
 
 //

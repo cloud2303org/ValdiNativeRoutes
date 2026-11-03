@@ -5,8 +5,8 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.snap.valdi.views.ValdiRootView
-import org.json.JSONArray
-import org.json.JSONObject
+import io.valdiroutes.pages.ResolvedNavigation
+import io.valdiroutes.pages.StackPage
 
 enum class Presentation(val value: String) {
     Push("push"),
@@ -25,27 +25,31 @@ enum class Presentation(val value: String) {
     }
 }
 
-typealias ResultCallback = (resultJson: String, canceled: Boolean) -> Unit
+typealias ResultCallback = (result: Map<String, Any?>, canceled: Boolean) -> Unit
 
 class PageEntry(
     val id: String,
     val route: String,
     val definition: RouteDefinition,
-    val paramsJson: String,
+    params: Map<String, Any?>,
     val presentation: Presentation,
-    val navigation: NavigationOptions,
+    val navigation: ResolvedNavigation,
     private val onResult: ResultCallback?,
 ) {
+    /** Copied at creation and recursively immutable, including through NativePage and stack/view-model getters. */
+    val params: Map<String, Any?> = snapshotRouteData(params)
+
     /** Owned here, not by Compose: Nav3 disposes covered pages, and a remount would lose their state. */
     var rootView: ValdiRootView? = null
     var appliedInsets: Insets? = null
     var removed = false
         private set
-    private var result: Pair<String, Boolean>? = null
+    private var result: Pair<Map<String, Any?>, Boolean>? = null
 
     /** A tab shell's pages by tab, created when first selected. */
     val tabPages = mutableMapOf<String, PageEntry>()
     var selectedTab by mutableStateOf<String?>(null)
+    internal var customTabBar: CustomTabBar? = null
     /** For a tab page, the shell it is in. */
     var shell: PageEntry? = null
 
@@ -60,24 +64,27 @@ class PageEntry(
         visibilityReason = reason
     }
 
-    fun close(resultJson: String?, canceled: Boolean) {
-        if (result == null) result = (resultJson ?: "") to canceled
+    fun close(value: Map<String, Any?>, canceled: Boolean) {
+        if (result == null) result = snapshotRouteData(value) to canceled
     }
 
     /** Runs once the page has left the stack; a tab shell's pages go with it. */
     fun remove() {
         if (removed) return
         removed = true
-        val (json, canceled) = result ?: ("" to true)
-        onResult?.invoke(json, canceled)
+        customTabBar?.deactivate()
+        val (value, canceled) = result ?: (emptyMap<String, Any?>() to true)
+        onResult?.invoke(value, canceled)
         tabPages.values.forEach { it.remove() }
         // A page still on screen (exit animation) is destroyed when its view is released.
-        if (rootView?.parent == null) destroy()
+        if (rootView?.parent == null && customTabBar?.rootView?.parent == null) destroy()
     }
 
     fun destroy() {
         rootView?.destroy()
         rootView = null
+        customTabBar?.destroy()
+        customTabBar = null
     }
 }
 
@@ -101,20 +108,19 @@ class Navigator(private var routes: RouteTable) {
         val selected = oldRoot?.selectedTab?.takeIf { name -> table.tabBar?.tabs?.any { it.route == name } == true }
         routes = table
         val params = if (root == table.tabBar?.route) {
-            selected?.let { JSONObject().put("tab", it).toString() } ?: "{}"
-        } else oldRoot?.paramsJson ?: "{}"
+            selected?.let { mapOf("tab" to it) } ?: emptyMap()
+        } else oldRoot?.params ?: emptyMap()
         reset(root, params)
     }
 
     private fun entry(
-        route: String, paramsJson: String, presentation: Presentation, navigation: NavigationOptions, onResult: ResultCallback?,
+        route: String, params: Map<String, Any?>, presentation: Presentation, navigation: ResolvedNavigation, onResult: ResultCallback?,
     ): PageEntry {
-        val entry = PageEntry("page-${nextId++}", route, routes[route], paramsJson, presentation,
+        val entry = PageEntry("page-${nextId++}", route, routes[route], params, presentation,
             NativeRouteAnimations.validated(navigation), onResult)
         if (entry.definition.kind == "tabs") {
-            val params = JSONObject(paramsJson.ifEmpty { "{}" })
-            val requested = params.optString("tab")
-            require(!params.has("tab") || (params.opt("tab") is String && tabBar?.tabs?.any { it.route == requested } == true)) {
+            val requested = entry.params["tab"]
+            require(!entry.params.containsKey("tab") || (requested is String && tabBar?.tabs?.any { it.route == requested } == true)) {
                 "Unknown tab: $requested"
             }
             entry.selectedTab = tabBar?.tabs?.firstOrNull { it.route == requested }?.route ?: tabBar?.initial
@@ -123,10 +129,10 @@ class Navigator(private var routes: RouteTable) {
     }
 
     fun open(
-        route: String, paramsJson: String = "{}", presentation: Presentation = Presentation.Push,
-        navigation: NavigationOptions = NavigationOptions.Default, onResult: ResultCallback? = null,
+        route: String, params: Map<String, Any?> = emptyMap(), presentation: Presentation = Presentation.Push,
+        navigation: ResolvedNavigation = NativeRouteAnimations.Default, onResult: ResultCallback? = null,
     ) {
-        val entry = entry(route, paramsJson, presentation, navigation, onResult)
+        val entry = entry(route, params, presentation, navigation, onResult)
         if (presentation == Presentation.Push || sheet != null) {
             stack.add(entry)
         } else {
@@ -138,7 +144,7 @@ class Navigator(private var routes: RouteTable) {
     /** The page shown in a tab shell's `tab`, created the first time. */
     fun tabPage(shell: PageEntry, tab: String): PageEntry = shell.tabPages.getOrPut(tab) {
         val route = requireNotNull(tabBar?.tabs?.firstOrNull { it.route == tab }) { "Unknown tab: $tab" }.route
-        entry(route, "{}", Presentation.Tab, NavigationOptions.Default, null).also { it.shell = shell }
+        entry(route, emptyMap(), Presentation.Tab, NativeRouteAnimations.Default, null).also { it.shell = shell }
     }
 
     /** The page the user sees under any sheet: the stack's top, or for a tab shell its selected page. */
@@ -193,25 +199,25 @@ class Navigator(private var routes: RouteTable) {
         }
     }
 
-    fun finish(pageId: String, resultJson: String) = close(pageId, resultJson, canceled = false)
+    fun finish(pageId: String, result: Map<String, Any?>) = close(pageId, result, canceled = false)
 
-    fun cancel(pageId: String) = close(pageId, null, canceled = true)
+    fun cancel(pageId: String) = close(pageId, emptyMap(), canceled = true)
 
     /** Back from the system (gesture, key, Nav3's onBack): cancels the top page. */
     fun back() {
         stack.lastOrNull()?.takeIf { stack.size > 1 }?.let { cancel(it.id) }
     }
 
-    private fun close(pageId: String, resultJson: String?, canceled: Boolean) {
+    private fun close(pageId: String, result: Map<String, Any?>, canceled: Boolean) {
         val current = sheet
         if (current?.id == pageId) {
-            current.close(resultJson, canceled)
+            current.close(result, canceled)
             sheetClosing = true // SheetHost animates it out, then calls onSheetHidden().
             return
         }
         val entry = stack.firstOrNull { it.id == pageId } ?: return
         if (stack.size == 1) return
-        entry.close(resultJson, canceled)
+        entry.close(result, canceled)
         stack.remove(entry)
         entry.remove()
     }
@@ -225,7 +231,7 @@ class Navigator(private var routes: RouteTable) {
 
     /** Animates the sheet out, cancelled. */
     private fun dismissSheet() {
-        sheet?.takeIf { !sheetClosing }?.let { it.close(null, true); sheetClosing = true }
+        sheet?.takeIf { !sheetClosing }?.let { it.close(emptyMap(), true); sheetClosing = true }
     }
 
     /** Keeps the bottom `count` pages, removing the rest at once (one Nav3 transition), top first. */
@@ -236,10 +242,10 @@ class Navigator(private var routes: RouteTable) {
         removed.asReversed().forEach { it.remove() }
     }
 
-    fun replace(route: String, paramsJson: String, navigation: NavigationOptions) {
+    fun replace(route: String, params: Map<String, Any?>, navigation: ResolvedNavigation) {
         dismissSheet()
         val old = stack.lastOrNull() ?: return
-        stack[stack.lastIndex] = entry(route, paramsJson, Presentation.Push, navigation, null)
+        stack[stack.lastIndex] = entry(route, params, Presentation.Push, navigation, null)
         old.remove()
     }
 
@@ -258,13 +264,13 @@ class Navigator(private var routes: RouteTable) {
         keep(1)
     }
 
-    fun reset(route: String, paramsJson: String) {
+    fun reset(route: String, params: Map<String, Any?>) {
         val removed = stack.toList()
         val oldSheet = sheet
         sheet = null
         sheetClosing = false
         stack.clear()
-        stack.add(entry(route, paramsJson, Presentation.Push, NavigationOptions.Default, null))
+        stack.add(entry(route, params, Presentation.Push, NativeRouteAnimations.Default, null))
         oldSheet?.remove()
         removed.asReversed().forEach { it.remove() }
     }
@@ -274,16 +280,23 @@ class Navigator(private var routes: RouteTable) {
         val bar = requireNotNull(tabBar) { "No tabs declared" }
         require(bar.tabs.any { it.route == tab }) { "Unknown tab: $tab" }
         val index = stack.indexOfLast { it.route == bar.route }
-        if (index < 0) return reset(bar.route, JSONObject().put("tab", tab).toString())
+        if (index < 0) return reset(bar.route, mapOf("tab" to tab))
         dismissSheet()
         keep(index + 1)
         stack[index].selectedTab = tab
     }
 
+    /** Bar taps belong to this shell only; they do not pop pages or target a replacement shell. */
+    internal fun selectTab(shell: PageEntry, tab: String) {
+        if (shell.removed || shell !in stack) return
+        require(tabBar?.tabs?.any { it.route == tab } == true) { "Unknown tab: $tab" }
+        shell.selectedTab = tab
+    }
+
     /** Root first, the sheet last; the pages in a tab shell are not on the stack. */
-    fun currentPages(): String = JSONArray((stack + listOfNotNull(sheet)).map { page ->
-        JSONObject().put("pageId", page.id).put("route", page.route).put("params", JSONObject(page.paramsJson.ifEmpty { "{}" }))
-    }).toString()
+    fun currentPages(): List<StackPage> = (stack + listOfNotNull(sheet)).map { page ->
+        StackPage(page.id, page.route, page.params)
+    }
 
     fun destroyAll() {
         (stack + listOfNotNull(sheet)).forEach { page -> page.tabPages.values.forEach { it.destroy() }; page.destroy() }

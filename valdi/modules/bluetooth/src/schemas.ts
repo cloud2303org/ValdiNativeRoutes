@@ -137,7 +137,8 @@ export const notifyOptions = fields(
 );
 export const writeOptions = fields(
   {
-    value: v.instance(ArrayBuffer, 'value must be an ArrayBuffer'),
+    // Snapshot at public admission, before any scheduling or native async wait.
+    value: v.pipe(v.instance(ArrayBuffer, 'value must be an ArrayBuffer'), v.transform(value => value.slice(0))),
     ...characteristic,
     writeType: v.optional(writeType, 'write'),
   },

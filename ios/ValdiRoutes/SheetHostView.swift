@@ -15,6 +15,22 @@ final class SheetHostView: UIView {
     /// Called once the sheet has settled closed. `byUser` is false for `dismiss()`.
     var onClosed: ((_ byUser: Bool) -> Void)?
 
+    /// Optional controlled owner. It must call dismiss() to accept a user close.
+    /// Without an owner, navigation sheets retain their original autonomous dismissal.
+    var onCloseRequested: (() -> Void)?
+    /// Navigation opens on its first layout; controlled overlays opt in with present().
+    var presentsAutomatically = true
+    var dismissible = true { didSet { updateInteraction() } }
+    var interactionEnabled = true { didSet { updateInteraction() } }
+    var showsHandle = true {
+        didSet { handle.isHidden = !showsHandle; setNeedsLayout() }
+    }
+    var surfaceColor: UIColor = .white { didSet { surface.backgroundColor = surfaceColor } }
+    var scrimColor: UIColor = UIColor(white: 0, alpha: 0x66 / 255) {
+        didSet { scrimView.backgroundColor = scrimColor }
+    }
+    var cornerRadius: CGFloat = 20 { didSet { surface.layer.cornerRadius = cornerRadius } }
+
     /// Height of the open detent, before clamping to the space below the status bar. Changes apply immediately.
     var openHeight: CGFloat = 0 {
         didSet {
@@ -40,6 +56,7 @@ final class SheetHostView: UIView {
     private var hasLaidOut = false
     private var closeRequested = false
     private var closedNotified = false
+    private var presentationRequested = false
     private var lastAppliedMaxHeight = CGFloat.nan
 
     private var activeSpring: CriticalSpring?
@@ -99,14 +116,56 @@ final class SheetHostView: UIView {
     }
 
     /// Animates the sheet closed; `onClosed` fires with byUser = false once it settles.
-    func dismiss() {
-        guard !closeRequested, !closedNotified else { return }
+    func dismiss(animated: Bool = true) {
+        guard !closedNotified, !closeRequested || !animated else { return }
         closeRequested = true
+        updateInteraction()
+        if !animated {
+            cancelActiveSpring()
+            targetIndex = Self.closed
+            setTranslation(translationY(for: Self.closed))
+            emitPosition()
+            notifyClosed()
+            return
+        }
         guard hasLaidOut else {
             notifyClosed()
             return
         }
         snapToIndex(Self.closed, velocity: 0)
+    }
+
+    /// Reuses the shell for another presentation, including an interrupted exit.
+    func present() {
+        let wasClosing = closeRequested || closedNotified
+        presentationRequested = true
+        closeRequested = false
+        closedNotified = false
+        updateInteraction()
+        if hasLaidOut && wasClosing { snapToIndex(Self.open, velocity: 0) }
+        setNeedsLayout()
+    }
+
+    private func updateInteraction() {
+        let enabled = interactionEnabled && dismissible && !closeRequested && !closedNotified
+        // Reset an in-flight gesture before disabling it; it must not dismiss a covered sheet.
+        if !enabled && (isPanning || panHasSheetDrag) {
+            isPanning = false
+            clearPanState()
+            setContentInteractionEnabled(true)
+            if !closeRequested && !closedNotified { snapToIndex(Self.open, velocity: 0) }
+        }
+        panGesture.isEnabled = enabled
+    }
+
+    private func requestUserClose(velocity: CGFloat) {
+        guard interactionEnabled, dismissible, !closeRequested, !closedNotified else { return }
+        if let onCloseRequested {
+            onCloseRequested()
+            if !closeRequested && !closedNotified { snapToIndex(Self.open, velocity: 0) }
+        } else {
+            snapToIndex(Self.closed, velocity: velocity)
+        }
     }
 
     // MARK: - Geometry
@@ -137,6 +196,7 @@ final class SheetHostView: UIView {
         layoutContainer()
 
         if !hasLaidOut {
+            guard (presentsAutomatically || presentationRequested), !closeRequested, !closedNotified else { return }
             guard detents[Self.open] > 0 else { return }
             // Animate in from closed to the open detent.
             hasLaidOut = true
@@ -158,8 +218,9 @@ final class SheetHostView: UIView {
         sheetContainer.center = CGPoint(x: bounds.width / 2, y: bounds.height - maxHeight / 2)
         surface.frame = sheetContainer.bounds
         handle.frame = CGRect(x: (bounds.width - 36) / 2, y: 10, width: 36, height: 4)
-        contentFrame.frame = CGRect(x: 0, y: Self.handleHeight, width: bounds.width,
-                                    height: max(0, detents[Self.open] - Self.handleHeight))
+        let handleHeight = showsHandle ? Self.handleHeight : 0
+        contentFrame.frame = CGRect(x: 0, y: handleHeight, width: bounds.width,
+                                    height: max(0, detents[Self.open] - handleHeight))
     }
 
     private func refreshDetents() {
@@ -202,11 +263,17 @@ final class SheetHostView: UIView {
     }
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard !isHidden, isUserInteractionEnabled, alpha > 0.01, interactionEnabled,
+              !closedNotified else { return nil }
+        if closeRequested { return bounds.contains(point) ? self : nil }
         guard self.point(inside: point, with: event) else { return nil }
         if !scrimView.isHidden, !presentedSheetFrame.contains(point) {
             return scrimView.hitTest(convert(point, to: scrimView), with: event)
         }
-        let containerPoint = convert(point, to: sheetContainer)
+        var containerPoint = convert(point, to: sheetContainer)
+        // The model transform is already at the destination while Core Animation
+        // displays the spring. Hit-test against that same visible translation.
+        containerPoint.y += sheetContainer.transform.ty - currentTranslationY
         guard sheetContainer.bounds.contains(containerPoint) else { return nil }
         return sheetContainer.hitTest(containerPoint, with: event)
     }
@@ -258,7 +325,7 @@ final class SheetHostView: UIView {
 
     @objc private func handleScrimPress() {
         guard targetIndex != Self.closed, activeSpring == nil || currentSheetHeight > 0.5 else { return }
-        snapToIndex(Self.closed, velocity: 0)
+        requestUserClose(velocity: 0)
     }
 
     private func snapToIndex(_ index: Int, velocity: CGFloat) {
@@ -323,6 +390,7 @@ final class SheetHostView: UIView {
     private func notifyClosed() {
         guard !closedNotified else { return }
         closedNotified = true
+        updateInteraction()
         onClosed?(!closeRequested)
     }
 
@@ -397,7 +465,11 @@ final class SheetHostView: UIView {
             let velocity = gesture.velocity(in: self).y
             let index = bestSnapIndex(for: sheetContainerHeight - sheetContainer.transform.ty, velocity: velocity)
             clearPanState()
-            snapToIndex(index, velocity: velocity)
+            if index == Self.closed && gesture.state == .ended {
+                requestUserClose(velocity: velocity)
+            } else {
+                snapToIndex(Self.open, velocity: velocity)
+            }
 
         case .failed:
             isPanning = false
@@ -500,6 +572,7 @@ final class SheetHostView: UIView {
 
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard gestureRecognizer === panGesture else { return super.gestureRecognizerShouldBegin(gestureRecognizer) }
+        guard interactionEnabled, dismissible, !closeRequested, !closedNotified else { return false }
         panScrollViews = []
         let velocity = panGesture.velocity(in: self)
         guard abs(velocity.y) > abs(velocity.x) else { return false }

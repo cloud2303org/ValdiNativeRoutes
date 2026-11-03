@@ -72,7 +72,7 @@ export class RouteAnimationPage extends Page<PageViewModel, {}, PageContext> {
   onRender(): void {
     const { insets } = this.viewModel;
     const { animation } = readParams<'animation'>(this.viewModel);
-    const example = EXAMPLES[animation];
+    const example = AVAILABLE.some(name => name === animation) ? EXAMPLES[animation] : undefined;
 
     <view style={styles.page}>
       <scroll style={styles.scroll}>

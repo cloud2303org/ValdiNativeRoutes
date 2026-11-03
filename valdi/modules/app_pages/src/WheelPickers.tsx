@@ -3,17 +3,19 @@ import { Style } from 'valdi_core/src/Style';
 import { View } from 'valdi_tsx/src/NativeTemplateElements';
 import * as v from 'valibot';
 import type { PickerOption } from './AppUIHost';
+import type { ColumnWheelConfig, TimeWheelConfig, TreeWheelConfig } from './WheelHost';
 import type { DatePickMode, TreeNode } from './schemas';
 import * as schema from './schemas';
 
 export type { TreeNode } from './schemas';
 
 /**
- * Wheels inside a page, as opposed to api.showPicker / showDatePicker, which present them in a sheet. They are the same
- * native wheels (io.nativeroutes.ui on Android, NativeRoutesUI on iOS; WheelViews.kt / WheelViews.swift host them),
+ * Wheels inside a page, as opposed to api.showPicker / showDatePicker, which present them in a sheet.
+ * Android uses lightweight native Views; iOS uses NativeRoutesUI (WheelViews.kt / WheelViews.swift host them),
  * five 40-point rows tall. A wheel owns its vertical drags, so it scrolls inside a scroll view or a sheet without
  * moving either.
  *
+ * Their native configurations are typed data objects (WheelHost.ts); tree selections return arrays directly.
  * Their view models are checked by the valibot schemas in schemas.ts (columnWheel, timeWheel, treeWheel): invalid
  * options or years throw, as they do for api.showPicker. A value the wheel can't show (empty, not among the options, out
  * of range) is shown as columnPickerValue / timePickerValue / treePickerValue make it, without telling the page: start
@@ -45,11 +47,12 @@ export interface ColumnPickerViewModel {
 export class ColumnPicker extends Component<ColumnPickerViewModel> {
   onRender(): void {
     const { options, value } = this.viewModel;
+    const config: ColumnWheelConfig = v.parse(schema.columnWheel, { options, value });
     <custom-view
       iosClass="VRColumnWheelView"
       androidClass="io.valdiroutes.app.ColumnWheelView"
       style={styles.wheel}
-      config={JSON.stringify(v.parse(schema.columnWheel, { options, value }))}
+      config={config}
       onChange={this.handleChange}
     />;
   }
@@ -71,13 +74,13 @@ export interface TimePickerViewModel {
 export class TimePicker extends Component<TimePickerViewModel> {
   onRender(): void {
     const { mode, value, minYear, maxYear } = this.viewModel;
-    const config = v.parse(schema.timeWheel, { mode, value, minYear, maxYear });
+    const config: TimeWheelConfig = v.parse(schema.timeWheel, { mode, value, minYear, maxYear });
     // 'datetime' adds the date / time switch above the wheels.
     <custom-view
       iosClass="VRTimeWheelView"
       androidClass="io.valdiroutes.app.TimeWheelView"
       style={config.mode === 'datetime' ? styles.dateTimeWheel : styles.wheel}
-      config={JSON.stringify(config)}
+      config={config}
       onChange={this.handleChange}
     />;
   }
@@ -98,16 +101,17 @@ export interface TreePickerViewModel {
 export class TreePicker extends Component<TreePickerViewModel> {
   onRender(): void {
     const { data, value, columns } = this.viewModel;
+    const config: TreeWheelConfig = v.parse(schema.treeWheel, { data, value, columns });
     <custom-view
       iosClass="VRTreeWheelView"
       androidClass="io.valdiroutes.app.TreeWheelView"
       style={styles.wheel}
-      config={JSON.stringify(v.parse(schema.treeWheel, { data, value, columns }))}
+      config={config}
       onChange={this.handleChange}
     />;
   }
 
-  private handleChange = (json: string) => this.viewModel.onChange(JSON.parse(json) as string[]);
+  private handleChange = (value: string[]) => this.viewModel.onChange(value);
 }
 
 const styles = {

@@ -14,6 +14,9 @@ steps:
   - when: { platform: android }
     steps:
       - swipe: { from: { text: "地区：" }, by: { y: -0.45 }, momentum: false, duration: 600 }
+      # On Meizu the final button is still below the viewport after the first drag.
+      # Continue from the time label, outside the wheels, until it clears the tab bar.
+      - swipe: { from: { text: "采样时间：" }, by: { y: -0.341 }, momentum: false, duration: 600 }
   - tap: { text: "在 Sheet 里打开" }
   - await: { visible: { text: "Sheet 里的滚轮" } }
   - await: { idle: true }

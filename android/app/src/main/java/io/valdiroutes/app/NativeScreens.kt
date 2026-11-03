@@ -20,14 +20,13 @@ import io.valdiroutes.app.appui.ModalOptions
 import io.valdiroutes.app.appui.NativeApp
 import io.valdiroutes.app.appui.ToastOptions
 import kotlinx.coroutines.launch
-import org.json.JSONObject
 
 /** What a native page gets: its params, and the navigator it shares with the Valdi pages. */
 class NativePage(val entry: PageEntry, val navigator: Navigator, val insets: Insets) {
-    val params = JSONObject(entry.paramsJson.ifEmpty { "{}" })
+    val params: Map<String, Any?> get() = entry.params
 
     /** Closes this page and delivers the result to whoever opened it with pushForResult. */
-    fun finish(result: JSONObject) = navigator.finish(entry.id, result.toString())
+    fun finish(result: Map<String, Any?>) = navigator.finish(entry.id, result)
 
     fun back() = navigator.cancel(entry.id)
 
@@ -86,14 +85,14 @@ private fun PickerPage(page: NativePage) {
                     fruit,
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.fillMaxWidth()
-                        .clickable { page.finish(JSONObject().put("value", fruit)) }
+                        .clickable { page.finish(mapOf("value" to fruit)) }
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                 )
                 HorizontalDivider()
             }
             item {
                 TextButton(
-                    onClick = { page.navigator.open("detail", JSONObject().put("id", 100).put("from", "原生页").toString()) },
+                    onClick = { page.navigator.open("detail", mapOf("id" to 100.0, "from" to "原生页")) },
                     modifier = Modifier.padding(8.dp),
                 ) { Text("从原生页 push Valdi 详情页") }
             }

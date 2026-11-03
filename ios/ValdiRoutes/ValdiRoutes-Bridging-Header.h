@@ -2,6 +2,7 @@
 #import <ValdiRuntime/ValdiRuntime.h>
 #import "Vision/VisionCoreBridge.h"
 #import "AppUI/ValdiImageBridge.h"
+#import "WheelObjectBinding.h"
 #import "Ota/ValdiOtaModules.h"
 #import "../Generated/valdi/ValdiNativeModules.h"
 #import <Calculator/Calculator.h>

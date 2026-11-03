@@ -1,0 +1,10 @@
+# Recorded on the Windows 1080x2400 AVD at the bottom of the pushed wheel page.
+# Valdi's discovery tree exposes the section labels but not the native column
+# children. Province-row centre is derived from the region label frame and the
+# fixed 200dp/three-column layout; the result label proves the array callback.
+executionPrerequisite: Android pushed inline wheel page at its bottom on a 1080x2400 display; region label at y=0.278 and value 浙江 / 杭州 / 西湖; no sheet open.
+steps:
+  - swipe: { from: { x: 0.216, y: 0.427 }, by: { y: 0.045 }, duration: 600, momentum: false }
+  - await: { visible: { text: "地区：广东 / 广州 / 天河" } }
+  - swipe: { from: { x: 0.216, y: 0.427 }, by: { y: -0.045 }, duration: 600, momentum: false }
+  - await: { visible: { text: "地区：浙江 / 杭州 / 西湖" } }

@@ -55,8 +55,12 @@ router.switchTab('home');
 - 页面声明及 Tabs 使用静态对象/数组，页面必须用 `valdiPage()` / `nativePage()` 声明。
 - `pnpm dev` 有类型错误时拒绝这次更新，连接中的 App 保留上一份有效代码；修正后继续更新。
 - 动态导航在调用处检查路由/Tab；宿主解析表时检查原生注册，并对未知路由明确报错。
-- 原生参数/返回值仍通过 JSON 传递。TS 泛型约束调用方，不替代 Kotlin/Swift 编译，
-  也不会验证原生实际返回的 JSON 字段。
+- 启动声明、路由更新、导航选项、参数、返回值和当前页面栈通过 Valdi 生成模型与字典
+  marshaller 传递，路由协议不再编码/解析 JSON 字符串。公开 router 保留页面特定泛型，
+  它约束调用方，不替代 Kotlin/Swift 编译或原生返回字段的业务校验。
+- 参数/结果在边界递归校验并复制，只允许普通字典、数组、字符串、有限数字、布尔值和
+  `null`；可选字典字段的 `undefined` 被省略。函数、访问器、实例和循环引用会明确报错，
+  调用方后续修改原对象不会修改已提交的数据。
 
 组件引用在 Node 编译时转成 canonical 路径，消费引用后移除无用的组件导入。
 路由表不会为了注册页面提前执行所有页面，页面仍由 Valdi loader 按需加载。
@@ -78,7 +82,8 @@ iOS 的 `NativeScreens.registerDefaults()` 返回页面工厂字典：
 ["picker": { UIHostingController(rootView: PickerScreen(page: $0)) }]
 ```
 
-页面接收 `NativePage`，读取 `params`，使用 `finish(result)` 返回 JSON 或用 `back()` 取消。
+页面接收 `NativePage`，读取结构化字典 `params`，使用 `finish(result)` 返回字典或用
+`back()` 取消。取消回调传空字典加 `canceled=true`，JS 调用方得到 `undefined`。
 可以注册多个页面；新增/修改原生 UI 和注册代码后需要重新构建 App。
 这里没有新增原生页面脚手架、npm 原生自动发现或独立 module 页面工厂自动注册协议。
 
@@ -94,6 +99,17 @@ Tab 图标直接写 `app_pages/res` 的 `res.xxx`。编译器解析真实文件�
 放进生成的路由描述，修改图片会重新生成描述并通知原生底栏，不需要重新编译原生资源。
 路由/Tab/图标配置变化时，开发宿主重建当前根页面、清除被覆盖的导航栈，并尽量保留
 当前根路由和已选中的 Tab；普通页面 TS 热重载不触发这次配置重建。
+
+`defineRoutes()` 仅构建和校验声明，没有原生发布副作用；`routes.toHost(root?)` 返回
+固定的 `RouteDeclaration`，其中 `routes` 为 `RouteEntry[]`。同步 `startApp` 先安装错误
+处理器，再初始化服务/数据库和 token store，最后选择登录页或 Tab 根并返回声明。
+开发启动在 App 作用域使用官方 `ModuleLoader.onHotReload` 监听路由模块；模块卸载后
+重新读取 routes/auth 并调用 `routes.publish(root?)`。观察 App 模块卸载时官方 loader
+清理监听器。需要手动更新配置时同样显式调用 `publish`。
+
+固定模型、原生构造器、schema 和当前导出器动态字典类型的限制见
+[typed-routing-contract.md](typed-routing-contract.md)。公开参数/结果类型仍为严格的
+页面泛型；仅生成绑定的 ABI 处使用当前官方导出器支持的 `any` 字典拼写。
 
 SQLite 连接由 `startApp` 初始化并保存在当前 JS runtime 中，跨模块热重载继续使用，
 不会在页面重建时重新打开到页面作用域。修改数据库接口或 schema 后应重新启动 App。

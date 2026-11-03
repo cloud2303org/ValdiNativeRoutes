@@ -20,13 +20,15 @@ export interface PageInsets {
 export interface PageViewModel {
   pageId: string;
   route: string;
-  paramsJson: string;
+  params: any;
   /** 'push', 'sheet' or 'compactSheet'; 'tab' for a page shown in the tab shell (routes.tabs), which has nothing to close. */
   presentation: string;
   /**
    * Areas the page must keep its content out of. The host already subtracts whatever it handles itself:
-   * a sheet gets no top inset, the bottom inset drops to 0 while the keyboard covers the navigation bar, and a tab page's
-   * bottom inset includes the tab bar drawn over it.
+   * a sheet gets no top inset and the bottom inset drops to 0 while the keyboard covers the navigation bar.
+   * Default tabs retain the official platform container's insets. A custom tab root absolutely overlays pages:
+   * only system safe area goes to pages; the host never measures or adds the custom bar's height.
+   * Business code shares its chosen bar height and content padding.
    */
   insets: PageInsets;
   /**
@@ -50,7 +52,7 @@ export interface PageViewModel {
  */
 export interface PageContext {
   /** Closes this page and delivers the result to whoever opened it with pushForResult. */
-  finish: (resultJson: string) => void;
+  finish: (result: any) => void;
   /** Closes this page without a result. */
   back: () => void;
 }

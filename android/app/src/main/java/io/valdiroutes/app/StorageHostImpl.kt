@@ -3,20 +3,21 @@ package io.valdiroutes.app
 import android.content.Context
 import com.tencent.mmkv.MMKV
 import io.valdiroutes.pages.StorageHost
+import io.valdiroutes.pages.StorageReadReply
 
 /**
- * `api.*StorageSync` (storage.ts): one MMKV instance in MMKV's default directory (files/mmkv), as ExpoNativeRoutes'
- * stores. Called on the JS thread; MMKV is thread safe. Values are JSON text, stored as strings.
+ * `api.*StorageSync` (storage.ts): a dedicated structured store in MMKV's default directory (files/mmkv).
+ * Called on the JS thread; MMKV is thread safe. Only the persistence layer handles JSON text.
  */
 class StorageHostImpl(context: Context) {
     private val mmkv: MMKV = run {
         MMKV.initialize(context)
-        MMKV.mmkvWithID("app")
+        MMKV.mmkvWithID("app-structured")
     }
 
     val host = StorageHost(
-        { key -> mmkv.decodeString(key) ?: "" },
-        { key, json -> mmkv.encode(key, json) },
+        { key -> StorageCodec.decode(mmkv.decodeString(key)).let { StorageReadReply(it.found, it.payload, it.error) } },
+        { request -> mmkv.encode(request.key, StorageCodec.encode(request.payload)) },
         { key -> mmkv.removeValueForKey(key) },
         { mmkv.clearAll() },
     )

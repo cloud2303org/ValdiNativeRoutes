@@ -31,14 +31,26 @@ export interface DevicePermissionResult {
   canAskAgain: boolean | null;
 }
 
-const check = (permission: AndroidPermission): Promise<boolean> =>
-  nativeCall(() => installedPermissionHost().host.check(permission));
+const check = async (permission: string): Promise<boolean> => {
+  const result = await nativeCall(() => installedPermissionHost().host.check(permission));
+  if (typeof result !== 'boolean') throw new Error('native permissions returned an invalid check result');
+  return result;
+};
 
-/** permission -> 'granted' | 'denied' | 'never_ask_again'. */
-async function requestMultiple(permissions: AndroidPermission[]): Promise<Record<AndroidPermission, string>> {
+type PermissionGrantResult = 'granted' | 'denied' | 'never_ask_again';
+
+/** Hosts normalize OS-specific results at their boundary; unknown values are host errors. */
+async function requestMultiple(permissions: string[]): Promise<Record<string, PermissionGrantResult>> {
   const results = await nativeCall(() => installedPermissionHost().host.requestMultiple(permissions));
-  const map: Record<AndroidPermission, string> = {};
-  results.forEach(grant => (map[grant.permission] = grant.result));
+  const map: Record<string, PermissionGrantResult> = {};
+  results.forEach(grant => {
+    const result = grant.result;
+    if (result !== 'granted' && result !== 'denied' && result !== 'never_ask_again')
+      throw new Error('native permissions returned an invalid grant result');
+    map[grant.permission] = result;
+  });
+  for (const permission of permissions)
+    if (map[permission] === undefined) throw new Error('native permissions omitted a grant result');
   return map;
 }
 

@@ -2,7 +2,7 @@ import UIKit
 
 /// The UIKit renderers of AppUI's presentations, after ExpoNativeRoutes' AppUIPresenters: the same NativeRoutesUI
 /// components with the same replies. Instead of the page view, each one goes on its own layer over the whole window (so
-/// it covers the in-window sheet, like AppDialogView); the action sheet is a UIAlertController presented in that window.
+/// it covers the in-window sheet, like AppDialogView); NativeActionSheet likewise mounts the shared sheet in that window.
 /// `complete` runs once, after the close animation; the returned closure cancels (AppUI's queue owns the page).
 @MainActor
 enum AppPresenters {

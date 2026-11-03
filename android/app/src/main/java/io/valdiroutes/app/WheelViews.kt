@@ -2,215 +2,202 @@ package io.valdiroutes.app
 
 import android.content.Context
 import android.view.MotionEvent
-import android.widget.FrameLayout
 import androidx.annotation.Keep
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.ComposeView
 import com.snap.valdi.attributes.AttributesBinder
 import com.snap.valdi.attributes.AttributesBindingContext
 import com.snap.valdi.callable.ValdiFunction
+import com.snap.valdi.utils.ValdiMarshallableObject
 import com.snap.valdi.utils.ValdiMarshaller
+import com.snap.valdi.views.ValdiRecyclableView
 import com.snap.valdi.views.ValdiTouchEventResult
 import com.snap.valdi.views.ValdiTouchTarget
-import io.nativeroutes.ui.ColumnPicker
-import io.nativeroutes.ui.LocalUiAppearance
-import io.nativeroutes.ui.PickerOption
-import io.nativeroutes.ui.PickerPresentation
-import io.nativeroutes.ui.TimePickMode
-import io.nativeroutes.ui.TimePicker
-import io.nativeroutes.ui.TreeNode
-import io.nativeroutes.ui.TreePicker
-import io.nativeroutes.ui.UiAppearance
-import org.json.JSONArray
-import org.json.JSONObject
+import io.valdiroutes.pages.ColumnWheelConfig
+import io.valdiroutes.pages.TimeWheelConfig
+import io.valdiroutes.pages.TreeWheelConfig
+import io.valdiroutes.pages.WheelTreeNode
 
-/**
- * The native wheels a Valdi page embeds with `<custom-view>` (WheelPickers.tsx), drawn by io.nativeroutes.ui as
- * in the presented pickers. `config` is JSON, checked and normalized in TS (schemas.ts); `onChange` gets the selection as a
- * string only when the user settles the wheel. The Compose wheels also report their first selection, so nothing is
- * sent before a touch. A value the page passes back unchanged leaves the wheel as is, and so does one it passes back
- * late, after the wheel has moved on (isEcho).
- * Created by class name, so @Keep for R8; their binders are registered in ValdiHost.init.
- *
- * Valdi's root view dispatches touches itself: a native view only gets them as a ValdiTouchTarget. A wheel takes every
- * touch that starts on it, so neither a Valdi scroll view nor the sheet around the page (OwnsVerticalDrags) moves with it.
- */
-abstract class ValdiWheelView(context: Context) : FrameLayout(context), ValdiTouchTarget, OwnsVerticalDrags {
+/** Native children own their drags, including at the ends of a wheel, inside Valdi and sheet scroll hosts. */
+abstract class ValdiWheelView(context: Context) : NativeWheelBody(context), ValdiTouchTarget,
+    ValdiRecyclableView {
     var onChange: ValdiFunction? = null
-    /** Set by the first touch; until then a change is the wheel showing its config, not the user's choice. */
-    private var touched = false
-    /**
-     * What emit sent that the page hasn't rendered back yet. The page passes each one back a JS round trip later; a
-     * wheel turned through several rows meanwhile would be sent back to an earlier row by it.
-     */
-    private val unechoed = ArrayDeque<String>()
-    private var echoed: String? = null
-    private val compose = ComposeView(context).also { addView(it) }
+    private val echo = WheelEcho<Any>()
+    override fun onWheelInteraction() { echo.touch() }
 
-    /** Valdi pages are light only. */
-    protected fun setWheel(content: @Composable () -> Unit) {
-        compose.setContent { CompositionLocalProvider(LocalUiAppearance provides UiAppearance.Light, content = content) }
+    /** The binder delegates to the actual view, so existing ValdiHost registrations remain valid. */
+    abstract fun applyUntyped(config: Any?)
+    protected abstract fun resetSelection()
+
+    protected fun <T> applyDecoded(type: Class<T>, value: Any?, apply: (T) -> Unit) {
+        applyWheelConfigOrReset(reset = {
+            onChange = null
+            resetConfig()
+        }) {
+            apply(ValdiMarshallableObject.fromUntyped(type, value))
+        }
     }
 
-    abstract fun apply(config: JSONObject)
-
-    protected fun emit(value: String) {
-        if (!touched) return
+    protected fun isEcho(value: Any): Boolean = echo.isEcho(value)
+    protected fun emit(value: String) = emitValue(value) { it.pushString(value) }
+    protected fun emit(value: List<String>) {
+        val snapshot = value.toList()
+        emitValue(snapshot) { marshaller -> marshaller.pushList(snapshot) { marshaller.pushString(it) } }
+    }
+    private fun emitValue(value: Any, push: (ValdiMarshaller) -> Unit) {
+        if (!echo.touched) return
         val function = onChange ?: return
-        unechoed.addLast(value)
-        ValdiMarshaller.use {
-            it.pushString(value)
-            function.perform(it)
-        }
+        echo.sent(value)
+        ValdiMarshaller.use { push(it); function.perform(it) }
     }
 
-    /**
-     * Whether [value] (as emit sends it) is the page rendering back one of the wheel's own selections, which the wheel
-     * shows already or has turned past; apply then leaves the wheel as is. Any other value is the page's own, which the
-     * wheel follows.
-     */
-    protected fun isEcho(value: String): Boolean {
-        val index = unechoed.indexOf(value)
-        if (index >= 0) {
-            repeat(index + 1) { unechoed.removeFirst() }
-            echoed = value
-            return true
-        }
-        // The page rendering again, for another reason, the last value it took from the wheel, while newer ones are on
-        // their way.
-        if (value == echoed && unechoed.isNotEmpty()) return true
-        unechoed.clear()
-        echoed = null
-        return false
+    fun resetConfig() {
+        clearBody()
+        echo.reset()
+        resetSelection()
+        parent?.requestDisallowInterceptTouchEvent(false)
+    }
+
+    override fun prepareForRecycling() {
+        resetConfig()
+        onChange = null
+    }
+
+    override fun onDetachedFromWindow() {
+        stopWheels()
+        parent?.requestDisallowInterceptTouchEvent(false)
+        // A temporary detach is not necessarily reuse. The recycler/config-reset clears echo state.
+        super.onDetachedFromWindow()
     }
 
     override fun processTouchEvent(event: MotionEvent): ValdiTouchEventResult {
-        // Valdi cancels its own gestures; the views outside it (Compose's sheet) are told here.
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-            touched = true
+            echo.touch()
             parent?.requestDisallowInterceptTouchEvent(true)
         }
         dispatchTouchEvent(event)
+        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+            parent?.requestDisallowInterceptTouchEvent(false)
+        }
         return ValdiTouchEventResult.ConsumeEventAndCancelOtherGestures
     }
 
-    // Valdi sets this view's frame; the wheel fills it.
-    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
-        val width = right - left
-        val height = bottom - top
-        compose.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY))
-        compose.layout(0, 0, width, height)
-    }
 }
 
 class ValdiWheelBinder<T : ValdiWheelView>(override val viewClass: Class<T>) : AttributesBinder<T> {
     override fun bindAttributes(attributesBindingContext: AttributesBindingContext<T>) {
-        attributesBindingContext.bindStringAttribute("config", false, { view, value, _ -> view.apply(JSONObject(value)) }, { _, _ -> })
+        attributesBindingContext.bindUntypedAttribute("config", false,
+            { view, value -> view.applyUntyped(value) }, { view -> view.resetConfig() })
         attributesBindingContext.bindFunctionAttribute("onChange", { view, function -> view.onChange = function }, { view -> view.onChange = null })
     }
 }
 
-/** `{options: [{value, label}], value}`; reports the chosen value. */
 @Keep
 class ColumnWheelView(context: Context) : ValdiWheelView(context) {
-    private var options by mutableStateOf(emptyList<PickerOption>())
-    private var value by mutableStateOf("")
+    private var options = emptyList<WheelItem>()
+    private var value = ""
+    private var configured = false
 
-    init {
-        setWheel {
-            ColumnPicker(true, options, value, { _, _ -> }, {}, presentation = PickerPresentation.Content, onValueChange = ::changed)
+    override fun applyUntyped(config: Any?) = applyDecoded(ColumnWheelConfig::class.java, config, ::apply)
+    fun apply(config: ColumnWheelConfig) {
+        val next = config.options.map { WheelItem(it.value, it.label) }
+        val echoed = isEcho(config.value)
+        if (configured && options == next && (value == config.value || echoed)) return
+        stopWheels()
+        options = next
+        configured = true
+        val requested = if (echoed) value else config.value
+        value = options.getOrNull(wheelSelection(options, requested))?.value.orEmpty()
+        showColumns(listOf(options), listOf(value), listOf("选项")) { _, nextValue ->
+            if (nextValue != value) { value = nextValue; emit(value) }
         }
     }
-
-    private fun changed(next: String) {
-        if (next == value) return
-        value = next
-        emit(next)
-    }
-
-    override fun apply(config: JSONObject) {
-        val items = config.optJSONArray("options") ?: JSONArray()
-        val options = (0 until items.length()).map { items.getJSONObject(it) }.map {
-            val value = it.getString("value")
-            PickerOption(value, it.optString("label", value))
-        }
-        val requested = config.optString("value")
-        val echo = isEcho(requested)
-        if (options == this.options && (requested == value || echo)) return
-        this.options = options
-        if (!echo) value = requested
-    }
+    override fun resetSelection() { options = emptyList(); value = ""; configured = false }
 }
 
-/** `{mode, value, minYear, maxYear}` with the modes of api.showDatePicker; reports the formatted value. */
 @Keep
 class TimeWheelView(context: Context) : ValdiWheelView(context) {
-    private var mode by mutableStateOf(TimePickMode.Date)
-    private var minYear by mutableStateOf<Int?>(null)
-    private var maxYear by mutableStateOf<Int?>(null)
-    private var value by mutableStateOf("")
+    private var mode = "date"
+    private var start = 1
+    private var end = 9999
+    private var parts = WheelDate.now()
+    private var timeTab = false
+    private var configured = false
 
-    init {
-        setWheel {
-            TimePicker(true, mode, value, { _, _ -> }, {}, minYear = minYear, maxYear = maxYear,
-                presentation = PickerPresentation.Content, onValueChange = ::changed)
-        }
+    override fun applyUntyped(config: Any?) = applyDecoded(TimeWheelConfig::class.java, config, ::apply)
+    fun apply(config: TimeWheelConfig) {
+        val nextMode = config.mode.takeIf { it in setOf("year", "year-month", "date", "time", "datetime") } ?: "date"
+        val nextStart = config.minYear.toInt().coerceIn(1, 9999)
+        val nextEnd = config.maxYear.toInt().coerceIn(nextStart, 9999)
+        val echoed = isEcho(config.value)
+        if (configured && mode == nextMode && start == nextStart && end == nextEnd &&
+            (echoed || config.value == parts.format(mode))) return
+        stopWheels()
+        if (mode != nextMode) timeTab = false
+        mode = nextMode
+        start = nextStart
+        end = nextEnd
+        parts = (if (echoed) parts else WheelDate.parse(config.value, parts)).clamp(start, end)
+        configured = true
+        render()
     }
 
-    private fun changed(next: String) {
-        if (next == value) return
-        value = next
-        emit(next)
-    }
-
-    override fun apply(config: JSONObject) {
-        mode = when (config.optString("mode")) {
-            "year" -> TimePickMode.Year
-            "year-month" -> TimePickMode.YearMonth
-            "time" -> TimePickMode.Time
-            "datetime" -> TimePickMode.DateTime
-            else -> TimePickMode.Date
+    private fun render() {
+        val wheelMode = if (mode == "datetime") { if (timeTab) "time" else "date" } else mode
+        showSegments(if (mode == "datetime") listOf("日期  ${parts.format("date")}", "时间  ${parts.format("time")}") else emptyList(),
+            if (timeTab) 1 else 0) { tab ->
+            if (timeTab != (tab == 1)) {
+                val values = visibleValues()
+                stopWheels()
+                val next = parts.settle(wheelMode, values, start, end)
+                val changed = next != parts
+                parts = next
+                timeTab = tab == 1
+                render()
+                if (changed) emit(parts.format(mode))
+            }
         }
-        minYear = if (config.has("minYear")) config.getInt("minYear") else null
-        maxYear = if (config.has("maxYear")) config.getInt("maxYear") else null
-        val requested = config.optString("value")
-        if (!isEcho(requested)) value = requested
+        val descriptions = if (wheelMode == "time") listOf("小时", "分钟") else listOf("年份", "月份", "日期")
+        showColumns(parts.columns(wheelMode, start, end), parts.selected(wheelMode), descriptions) { index, value ->
+            val next = parts.change(wheelMode, index, value.toInt(), start, end)
+            if (next != parts) {
+                parts = next
+                render()
+                emit(parts.format(mode))
+            }
+        }
+    }
+    override fun resetSelection() {
+        mode = "date"; start = 1; end = 9999; parts = WheelDate.now(); timeTab = false; configured = false
     }
 }
 
-/** `{data: [{value, label, children}], value: [String], columns}`; reports the path as a JSON array. */
 @Keep
 class TreeWheelView(context: Context) : ValdiWheelView(context) {
-    private var data by mutableStateOf(emptyList<TreeNode>())
-    private var columns by mutableStateOf(3)
-    private var path by mutableStateOf(emptyList<String>())
+    private var data = emptyList<WheelNode>()
+    private var columns = 3
+    private var path = emptyList<String>()
+    private var configured = false
 
-    init {
-        setWheel {
-            TreePicker(true, data, path, { _, _ -> }, {}, columns = columns, presentation = PickerPresentation.Content,
-                onValueChange = { next, _ -> changed(next) })
+    override fun applyUntyped(config: Any?) = applyDecoded(TreeWheelConfig::class.java, config, ::apply)
+    fun apply(config: TreeWheelConfig) {
+        fun snapshot(node: WheelTreeNode): WheelNode = WheelNode(node.value, node.label, node.children?.map(::snapshot).orEmpty())
+        val nextData = config.data.map(::snapshot)
+        val nextColumns = config.columns.toInt().coerceAtLeast(1)
+        val echoed = isEcho(config.value)
+        if (configured && data == nextData && columns == nextColumns && (path == config.value || echoed)) return
+        stopWheels()
+        data = nextData
+        columns = nextColumns
+        path = normalizeWheelPath(data, if (echoed) path else config.value, columns)
+        configured = true
+        render()
+    }
+
+    private fun render() {
+        val options = wheelTreeColumns(data, path, columns)
+        showColumns(options, path, options.indices.map { "第${it + 1}级" }) { index, value ->
+            val next = replaceWheelPath(data, path, index, value, columns)
+            if (next != path) { path = next; render(); emit(path) }
         }
     }
-
-    private fun changed(next: List<String>) {
-        if (next == path) return
-        path = next
-        emit(JSONArray(next).toString())
-    }
-
-    override fun apply(config: JSONObject) {
-        fun nodes(items: JSONArray?): List<TreeNode> = (0 until (items?.length() ?: 0)).map { items!!.getJSONObject(it) }.map {
-            val value = it.getString("value")
-            TreeNode(value, it.optString("label", value), nodes(it.optJSONArray("children")))
-        }
-        data = nodes(config.optJSONArray("data"))
-        columns = config.optInt("columns", 3)
-        val values = config.optJSONArray("value") ?: JSONArray()
-        val requested = (0 until values.length()).map { values.getString(it) }
-        if (!isEcho(JSONArray(requested).toString())) path = requested
-    }
+    override fun resetSelection() { data = emptyList(); columns = 3; path = emptyList(); configured = false }
 }

@@ -1,0 +1,18 @@
+{
+  "recordedAt": "2026-11-03T02:40:36.683Z",
+  "purpose": "Identical regression source frozen before production P2 edit",
+  "entries": [
+    {
+      "path": "scripts/harmony/tests/sheet-surface-p2-native.cpp",
+      "sha256": "d21ec4ee05ea4195b0d931946199d828da231cd7c9663ba810e6a51c4078c5c4"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-p2-boundary.hpp",
+      "sha256": "b88cd6bb7ecf00d9416dfe99e948076ea7e4c6cff9f67cd25d0d19518b56bc48"
+    }
+  ],
+  "headerSelector": "SHEET_SURFACE_HEADER",
+  "accessorGate": "SHEET_SURFACE_TEST_INTERACTION_NODE",
+  "nativeCompilerInvoked": false,
+  "nativeFixtureExecuted": false
+}

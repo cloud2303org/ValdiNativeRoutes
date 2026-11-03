@@ -1,0 +1,82 @@
+--- a/harmony/entry/src/main/cpp/host/HarmonySheetSurface.hpp
++++ b/harmony/entry/src/main/cpp/host/HarmonySheetSurface.hpp
+@@ -49,6 +49,10 @@
+     // Existing open/drag offset is preserved; Navigator decides whether to reset
+     // an uncommitted drag before resuming.
+     void setActive(bool active);
++    // Independent input gate, initially enabled. Does not hide the carrier or
++    // cancel/restart a settle. Background remains hidden and noninteractive;
++    // returning to foreground preserves this gate.
++    void setInputEnabled(bool enabled);
+     // Terminal and idempotent; removes the carrier (and thus panel/scrim) from
+     // NodeContent synchronously. retire also queues SDK/node disposal.
+     void detach() noexcept;
+@@ -64,6 +68,7 @@
+     ArkUI_NodeHandle makeStack();
+     void append(ArkUI_NodeHandle parent, ArkUI_NodeHandle child);
+     void applyOffset(float value);
++    void applyInputState();
+     void startAnimation(float closedwardOffset, float velocityVpPerSecond, Completion completion, bool closing);
+     void finishAnimation(bool settled) noexcept;
+     void releaseAnimation(std::shared_ptr<Animation> animation) noexcept;
+@@ -95,6 +100,7 @@
+     float _offset = 0;
+     bool _attached = false;
+     bool _active = false;
++    bool _inputEnabled = true;
+     bool _laidOut = false;
+     bool _detached = false;
+     bool _retired = false;
+--- a/harmony/entry/src/main/cpp/host/HarmonySheetSurface.cpp
++++ b/harmony/entry/src/main/cpp/host/HarmonySheetSurface.cpp
+@@ -380,7 +380,8 @@
+     auto owner = token->owner.lock();
+     if (!owner) return;
+     owner->enqueue([owner] {});
+-    if (owner->_detached || !owner->_active || !owner->_laidOut || owner->_offset >= owner->_geometry.panelHeight) return;
++    if (owner->_detached || !owner->_active || !owner->_inputEnabled ||
++        !owner->_laidOut || owner->_offset >= owner->_geometry.panelHeight) return;
+     try {
+         auto callback = owner->_onScrim; // Reentrant retire may clear the member.
+         if (callback) callback();
+@@ -392,12 +393,24 @@
+     auto keepAlive = shared_from_this();
+     if (!active) cancelAnimation();
+     _active = active;
+-    integer(_nodes, _root, NODE_ENABLED, active ? 1 : 0);
+-    integer(_nodes, _root, NODE_HIT_TEST_BEHAVIOR,
+-            active ? ARKUI_HIT_TEST_MODE_DEFAULT : ARKUI_HIT_TEST_MODE_BLOCK_DESCENDANTS);
++    applyInputState();
+     integer(_nodes, _root, NODE_VISIBILITY, active ? ARKUI_VISIBILITY_VISIBLE : ARKUI_VISIBILITY_HIDDEN);
+ }
+ 
++void HarmonySheetSurface::setInputEnabled(bool enabled) {
++    if (_detached || _retired) return;
++    auto keepAlive = shared_from_this();
++    _inputEnabled = enabled;
++    applyInputState();
++}
++
++void HarmonySheetSurface::applyInputState() {
++    const bool enabled = _active && _inputEnabled;
++    integer(_nodes, _root, NODE_ENABLED, enabled ? 1 : 0);
++    integer(_nodes, _root, NODE_HIT_TEST_BEHAVIOR,
++            enabled ? ARKUI_HIT_TEST_MODE_DEFAULT : ARKUI_HIT_TEST_MODE_BLOCK_DESCENDANTS);
++}
++
+ void HarmonySheetSurface::detach() noexcept {
+     if (_detached) return;
+     // Also called from the destructor, where weak_from_this is already expired.
+--- a/scripts/harmony/tests/sheet-surface-input-native.cpp
++++ b/scripts/harmony/tests/sheet-surface-input-native.cpp
+@@ -102,7 +102,9 @@
+     int canceledCompletions = 0;
+     s->animateTo(600, 0, [&](bool) { ++canceledCompletions; });
+     auto initial = animators.back();
+-    sample(initial, 0.2f);
++    // Stay short of the resized 280vp terminal so re-enabled scrim admission
++    // below is checked while there is still a visible panel.
++    sample(initial, 0.1f);
+     const float interrupted = s->currentOffset();
+     s->setActive(false);
+     assertInput(root, false, false);

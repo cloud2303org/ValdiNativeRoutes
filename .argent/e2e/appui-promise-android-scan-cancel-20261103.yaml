@@ -1,0 +1,24 @@
+# Android regression recorded against the signed-in demo fixture.
+steps:
+  - launch: io.valdiroutes.app
+  - await: { visible: { text: "push 详情页" }, timeout: 20000 }
+  - await: { idle: true, timeout: 10000 }
+  - run: presentation-action-sheet
+  - echo: Open the native scanner from the presentation page.
+  - scroll-to: { target: { text: "scanCode 扫码" } }
+  - await: { visible: { text: "scanCode 扫码" } }
+  - tap:
+      text: scanCode 扫码
+  - await: { visible: { text: "扫一扫" }, timeout: 10000 }
+  - await: { idle: true }
+  - echo: Cancel and require the exact public Promise rejection.
+  - tap:
+      text: 返回
+  - await: { visible: { text: "scanCode 扫码" }, timeout: 10000 }
+  - await: { idle: true }
+  - scroll-to: { target: { text: "选择与展示" }, direction: up }
+  - await:
+      text:
+        in: { text: "结果：" }
+        equals: "结果：scanCode:fail cancel"
+      timeout: 10000

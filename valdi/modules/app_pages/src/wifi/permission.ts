@@ -4,8 +4,12 @@ import {
   androidSdk,
   type DevicePermissionResult,
   getAndroidPermissionState,
+  getHarmonyPermissionState,
+  HARMONY_PERMISSIONS,
   isAndroid,
+  isHarmony,
   requestAndroidPermissions,
+  requestHarmonyPermissions,
   serializePermissionRequest,
 } from '../permissions/index';
 import { nativeWifi } from './native';
@@ -17,6 +21,11 @@ export interface WifiPermissionOptions {
   partialInfo?: boolean;
 }
 export type WifiPermissionResult = DevicePermissionResult;
+
+function harmonyWifiPermissions(operation: WifiPermissionOperation): string[] {
+  const p = HARMONY_PERMISSIONS;
+  return operation === 'info' ? [p.GET_WIFI_INFO] : [p.GET_WIFI_INFO, p.SET_WIFI_INFO];
+}
 
 export function androidWifiPermissions(operation: WifiPermissionOperation, partialInfo = false): AndroidPermission[] {
   const sdk = androidSdk();
@@ -36,6 +45,7 @@ export async function readWifiPermission({
   operation,
   partialInfo,
 }: WifiPermissionOptions): Promise<WifiPermissionResult> {
+  if (isHarmony()) return getHarmonyPermissionState(harmonyWifiPermissions(operation));
   if (isAndroid()) {
     return getAndroidPermissionState(androidWifiPermissions(operation, partialInfo));
   }
@@ -51,6 +61,7 @@ export async function askWifiPermission(
 ): Promise<WifiPermissionResult> {
   checkActive?.();
   const { operation, partialInfo } = options;
+  if (isHarmony()) return requestHarmonyPermissions(harmonyWifiPermissions(operation), checkActive);
   if (isAndroid()) {
     return requestAndroidPermissions(androidWifiPermissions(operation, partialInfo), checkActive);
   }

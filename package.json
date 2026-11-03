@@ -13,6 +13,8 @@
     "build": "node scripts/project.mjs modules",
     "build:android": "node scripts/project.mjs android",
     "build:ios": "node scripts/project.mjs ios",
+    "build:harmony": "node scripts/harmony/build.mjs",
+    "build:harmony:business": "node scripts/harmony/build.mjs --business",
     "test": "node scripts/project.mjs test",
     "new-module": "node tools/valdi-rolldown/node_modules/tsx/dist/cli.mjs tools/valdi-rolldown/new-module.ts",
     "tsconfig": "node tools/valdi-rolldown/node_modules/tsx/dist/cli.mjs tools/valdi-rolldown/tsconfig.ts",

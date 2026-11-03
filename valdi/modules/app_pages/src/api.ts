@@ -1,6 +1,5 @@
 import * as v from 'valibot';
 import {
-  AttachmentSelection,
   appUIHost,
   BottomSheetRequest,
   ModalReply,
@@ -95,15 +94,8 @@ async function invoke<T extends object>(method: string, run: () => Promise<T>): 
   }
 }
 
-/** Wraps one host call: `done(error)` with '' for success. */
-function call<T>(start: (done: (error: string, value?: T) => void) => void): Promise<T> {
-  return new Promise((resolve, reject) => {
-    start((error, value) => (error ? reject(new Error(error)) : resolve(value as T)));
-  });
-}
-
 async function pick(source: 'photos' | 'camera' | 'files', limit: number, mimeTypes: string[]) {
-  const reply = await call<AttachmentSelection>(done => appUIHost().pickAttachments(source, limit, mimeTypes, done));
+  const reply = await appUIHost().pickAttachments(source, limit, mimeTypes);
   if (reply.canceled || !reply.assets.length) throw new Error('cancel');
   return reply.assets;
 }
@@ -113,7 +105,7 @@ const uiApi = {
   showModal(options: ShowModalOptions = {}): Promise<ModalResult> {
     return invoke('showModal', async () => {
       const request = v.parse(schema.modalRequest, options);
-      const { confirm, cancel, content } = await call<ModalReply>(done => appUIHost().showModal(request, done));
+      const { confirm, cancel, content } = await appUIHost().showModal(request);
       return { confirm, cancel, content };
     });
   },
@@ -122,7 +114,7 @@ const uiApi = {
   scanCode(options: ScanCodeOptions = {}): Promise<ScanCodeResult> {
     return invoke('scanCode', async () => {
       v.parse(schema.scanCodeRequest, options);
-      const { result, scanType } = await call<ScanCodeReply>(done => appUIHost().scanCode(done));
+      const { result, scanType } = await appUIHost().scanCode();
       return { result, scanType };
     });
   },
@@ -133,11 +125,8 @@ const uiApi = {
       const { count, sourceType } = v.parse(schema.chooseImageRequest, options);
       let source = sourceType[0];
       if (sourceType.length > 1) {
-        const reply = await call<PresentationReply>(done =>
-          appUIHost().showActionSheet(
-            { title: '', itemList: sourceType.map(value => (value === 'album' ? '从相册选择' : '拍照')) },
-            done,
-          ),
+        const reply = await appUIHost().showActionSheet(
+          { title: '', itemList: sourceType.map(value => (value === 'album' ? '从相册选择' : '拍照')) },
         );
         if (reply.cancel) throw new Error('cancel');
         source = sourceType[reply.index];
@@ -164,7 +153,7 @@ const uiApi = {
   /** Clears only picker-owned copies; call when no page still uses their paths. */
   clearAttachmentCache(): Promise<ApiSuccess> {
     return invoke('clearAttachmentCache', async () => {
-      await call<void>(done => appUIHost().clearAttachmentCache(done));
+      await appUIHost().clearAttachmentCache();
       return {};
     });
   },
@@ -173,7 +162,7 @@ const uiApi = {
   showActionSheet(options: ShowActionSheetOptions): Promise<ActionSheetResult> {
     return invoke('showActionSheet', async () => {
       const request = v.parse(schema.actionSheetRequest, options);
-      const reply = await call<PresentationReply>(done => appUIHost().showActionSheet(request, done));
+      const reply = await appUIHost().showActionSheet(request);
       if (reply.cancel) throw new Error('cancel');
       return { tapIndex: reply.index };
     });
@@ -183,9 +172,7 @@ const uiApi = {
   showPicker(options: ShowPickerOptions): Promise<PickerResult> {
     return invoke('showPicker', async () => {
       const request = v.parse(schema.pickerRequest, options);
-      const { confirm, cancel, value, index } = await call<PresentationReply>(done =>
-        appUIHost().showPicker(request, done),
-      );
+      const { confirm, cancel, value, index } = await appUIHost().showPicker(request);
       // A cancel carries no selection, whatever was highlighted or passed in.
       return cancel ? { confirm: false, cancel: true, value: '', index: -1 } : { confirm, cancel, value, index };
     });
@@ -194,9 +181,7 @@ const uiApi = {
   showDatePicker(options: ShowDatePickerOptions = {}): Promise<DatePickerResult> {
     return invoke('showDatePicker', async () => {
       const request = v.parse(schema.datePickerRequest, options);
-      const { confirm, cancel, value } = await call<PresentationReply>(done =>
-        appUIHost().showDatePicker(request, done),
-      );
+      const { confirm, cancel, value } = await appUIHost().showDatePicker(request);
       return { confirm, cancel, value: cancel ? '' : value };
     });
   },
@@ -204,7 +189,7 @@ const uiApi = {
   showBottomSheet(options: ShowBottomSheetOptions = {}): Promise<BottomSheetResult> {
     return invoke('showBottomSheet', async () => {
       const request = v.parse(schema.bottomSheetRequest, options);
-      const { confirm, cancel } = await call<PresentationReply>(done => appUIHost().showBottomSheet(request, done));
+      const { confirm, cancel } = await appUIHost().showBottomSheet(request);
       return { confirm, cancel };
     });
   },
@@ -213,7 +198,7 @@ const uiApi = {
   previewImage(options: PreviewImageOptions): Promise<ApiSuccess> {
     return invoke('previewImage', async () => {
       const request = v.parse(schema.imagePreviewRequest, options);
-      await call<PresentationReply>(done => appUIHost().previewImage(request, done));
+      await appUIHost().previewImage(request);
       return {};
     });
   },
@@ -222,14 +207,14 @@ const uiApi = {
   showToast(options: ShowToastOptions): Promise<ApiSuccess> {
     return invoke('showToast', async () => {
       const request = v.parse(schema.toastRequest, options);
-      await call<void>(done => appUIHost().showToast(request, done));
+      await appUIHost().showToast(request);
       return {};
     });
   },
 
   hideToast(): Promise<ApiSuccess> {
     return invoke('hideToast', async () => {
-      await call<void>(done => appUIHost().hideToast(done));
+      await appUIHost().hideToast();
       return {};
     });
   },
@@ -238,14 +223,14 @@ const uiApi = {
   showLoading(options: ShowLoadingOptions): Promise<ApiSuccess> {
     return invoke('showLoading', async () => {
       const request = v.parse(schema.loadingRequest, options);
-      await call<void>(done => appUIHost().showLoading(request, done));
+      await appUIHost().showLoading(request);
       return {};
     });
   },
 
   hideLoading(): Promise<ApiSuccess> {
     return invoke('hideLoading', async () => {
-      await call<void>(done => appUIHost().hideLoading(done));
+      await appUIHost().hideLoading();
       return {};
     });
   },

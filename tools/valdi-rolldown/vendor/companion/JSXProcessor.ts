@@ -148,6 +148,7 @@ export class JSXProcessor {
           (attribute) =>
             attribute.name === 'iosClass' ||
             attribute.name === 'androidClass' ||
+            attribute.name === 'harmonyClass' ||
             attribute.name === 'macosClass' ||
             attribute.name === 'linuxClass' ||
             attribute.name === 'webClass',

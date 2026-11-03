@@ -1,11 +1,11 @@
 import { nativeCall } from '../nativeCall';
-import { isAndroid } from '../permissions/index';
+import { isAndroid, isHarmony } from '../permissions/index';
 import { nfcError, WECHAT_NFC_ERROR_CODES } from './errors';
 import { NfcHost, type NfcHostEvents, NfcRecordModel, NfcTagModel, nfcHost } from './NfcHost';
 import type { NativeNFCTag, NFCDiscoveryState, NFCRecord, NFCTechHandle } from './types';
 
 // The NFC object adapter.ts expects, on top of the host's NfcHost; its Promises go through nativeCall. Native holds one
-// NfcHostEvents for the app's lifetime; listeners subscribe here, so they never cross the bridge. NFC is Android-only:
+// NfcHostEvents for the app's lifetime; listeners subscribe here, so they never cross the bridge. NFC uses Android/Harmony hosts:
 // on iOS every call fails with NOT_SUPPORTED before a host is looked up (none is installed there).
 
 const bytes = (value: ArrayBuffer): Uint8Array => new Uint8Array(value.slice(0));
@@ -22,7 +22,8 @@ const record = (value: NfcRecordModel): NFCRecord => ({
 });
 
 function host(): NfcHost {
-  if (!isAndroid()) throw nfcError(WECHAT_NFC_ERROR_CODES.NOT_SUPPORTED, 'NFC is Android-only');
+  if (!isAndroid() && !isHarmony())
+    throw nfcError(WECHAT_NFC_ERROR_CODES.NOT_SUPPORTED, 'NFC requires an Android or Harmony host');
   return nfcHost();
 }
 

@@ -1,0 +1,82 @@
+{
+  "recordedAt": "2026-11-03T02:25:55.942Z",
+  "workspace": "/Users/cloud/project/ValdiNativeRoutes/",
+  "command": [
+    "/Users/cloud/.nvm/versions/node/v24.14.0/bin/node",
+    "--test",
+    "scripts/harmony/tests/sheet-geometry.test.mjs"
+  ],
+  "nodeVersion": "v24.14.0",
+  "validationKind": "production-scalar-statements-translated-to-JavaScript",
+  "status": 0,
+  "stdout": "✔ fixed reference detent has 24vp handle, real viewport and page-owned safe insets (0.544875ms)\n✔ fixed keyboard shrink counts full, partial and absent shell resize once (0.091042ms)\n✔ viewport smaller for an independent reason is never blindly added to keyboard (0.046459ms)\n✔ compact keeps 340vp plus unobscured bottom and rides keyboard across resize policies (0.072333ms)\n✔ system-top cap shrinks content rather than covering status/cutout area (0.047166ms)\n✔ tiny/zero viewports and oversized safe areas remain bounded (0.044375ms)\n✔ invalid or incoherent observations fail before reaching native attributes (0.287292ms)\n✔ geometry bounds hold over a deterministic viewport/keyboard/safe-area sweep (0.778625ms)\nℹ tests 8\nℹ suites 0\nℹ pass 8\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 35.076542\n",
+  "stderr": "",
+  "processError": null,
+  "sources": [
+    {
+      "path": "harmony/entry/src/main/cpp/host/HarmonySheetGeometry.hpp",
+      "sha256": "33aa26a36dff14b0149bd27ff665d35f9e8d24ed0f8e17601e3c5c7f242c04ed"
+    },
+    {
+      "path": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.hpp",
+      "sha256": "db1d579da95c9d8b623da4c4774b47415eda2ad91d4534ef1880c3e570d376da"
+    },
+    {
+      "path": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.cpp",
+      "sha256": "2f1d5127a2f941238165087c87f04c19d3ce7826f48c39ff38185e0d24422f8f"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-geometry-extract.mjs",
+      "sha256": "0da3915be482b95e3738ee04d97d75df07711eec7f2ea16ad7f28e8805030b79"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-geometry.test.mjs",
+      "sha256": "e2ff478cc661fc3ce77892b601d638d6a72c5c115203eb08b93ca78e55fb3794"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-geometry-check.mjs",
+      "sha256": "95969c53341ad4ba5364576c019ed5a5a6c3871ff0ca12c2207ae4ffa8842013"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-native.cpp",
+      "sha256": "9fe6341fc27a5e550faa10ff560a3e314c58c641c7dde56b533dc0bf914ad179"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface.md",
+      "sha256": "ce1c148a19a798c6af9b94a2efa8a229e9b068c691e060baf8214ba4f3ed60d8"
+    }
+  ],
+  "sdkDeclarations": [
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/native_node.h",
+      "sha256": "d09d34af254902afc2e0daa382ecf273c6b2934881ba995ea3cf5fb520c05a6a"
+    },
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/native_animate.h",
+      "sha256": "85ee9f53f37906c6ae0b675a10ec9dde48002b461ec0569e2b832c5efc23b432"
+    },
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/native_interface.h",
+      "sha256": "624f2d2f105f27fc93543d2de6b07df5732c2d8ccf29c6e29640704bde1552be"
+    },
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/common_type.h",
+      "sha256": "60ffff8e5cd91cf0c6f2cef34d7255c86e660235fe68d87d856b1b1ef606f9ac"
+    },
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/node_attributes/common_attributes.h",
+      "sha256": "e589de9672a920d87087f8a097a6905fce789d06c341551b477e41a06ed8798c"
+    },
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/node_attributes/layout.h",
+      "sha256": "d64b3fa17ef856cee03f4343913dd150430eda0eb622e7b4efce81fc646a7f45"
+    }
+  ],
+  "nativeCompilerInvoked": false,
+  "nativeFixture": "source-only-uncompiled-unexecuted",
+  "cppSdkCompile": "pending-parent-slot",
+  "arkuiRendering": "unverified",
+  "sdkCallbackOrdering": "unverified",
+  "integratedBuildAndDevice": "not-run",
+  "historicalNative14Media14Receipts": "untouched"
+}

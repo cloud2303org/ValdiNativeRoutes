@@ -1,0 +1,163 @@
+{
+  "recordedAt": "2026-11-03T02:43:48.260Z",
+  "workspace": "/Users/cloud/project/ValdiNativeRoutes/",
+  "change": "Preserve original terminal intent across collapsed layout restart; expose explicit interactionNode",
+  "historicalReceipt": {
+    "path": "scripts/harmony/tests/sheet-geometry-20261103-source-receipt.json",
+    "sha256": "9018356eda3ae58554fc289ca78e0e06382ecf978a01775b529fa517382eaf1d",
+    "verifiedUnchanged": true
+  },
+  "prefixSnapshotManifest": {
+    "path": "scripts/harmony/tests/sheet-surface-p2-prefix-20261103/manifest.json",
+    "sha256": "2d232f7d95de9b8c0ea34ed42981a8d19767d07f55c59f10c594bddd98db9bec",
+    "verified": true
+  },
+  "regressionSnapshotManifest": {
+    "path": "scripts/harmony/tests/sheet-surface-p2-regression-frozen-20261103/manifest.json",
+    "sha256": "67f9228c74c8ed33be5e25c564a3e4cff134be2c04734c724da07f5da60d335e",
+    "verified": true
+  },
+  "originalHelperSources": [
+    {
+      "originalPath": "harmony/entry/src/main/cpp/host/HarmonySheetGeometry.hpp",
+      "snapshotRelativePath": "harmony/entry/src/main/cpp/host/HarmonySheetGeometry.hpp",
+      "sha256": "33aa26a36dff14b0149bd27ff665d35f9e8d24ed0f8e17601e3c5c7f242c04ed"
+    },
+    {
+      "originalPath": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.hpp",
+      "snapshotRelativePath": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.hpp",
+      "sha256": "db1d579da95c9d8b623da4c4774b47415eda2ad91d4534ef1880c3e570d376da"
+    },
+    {
+      "originalPath": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.cpp",
+      "snapshotRelativePath": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.cpp",
+      "sha256": "2f1d5127a2f941238165087c87f04c19d3ce7826f48c39ff38185e0d24422f8f"
+    }
+  ],
+  "helperSources": [
+    {
+      "path": "harmony/entry/src/main/cpp/host/HarmonySheetGeometry.hpp",
+      "sha256": "33aa26a36dff14b0149bd27ff665d35f9e8d24ed0f8e17601e3c5c7f242c04ed"
+    },
+    {
+      "path": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.hpp",
+      "sha256": "67a805577758775b3a258a1d18319bac82b663f8129154c28dca552f2055697b"
+    },
+    {
+      "path": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.cpp",
+      "sha256": "c6d0390b9c49887c699637a5c7a8e9a8476f5cec89965ea5dda3188ad5b3da18"
+    }
+  ],
+  "sources": [
+    {
+      "path": "harmony/entry/src/main/cpp/host/HarmonySheetGeometry.hpp",
+      "sha256": "33aa26a36dff14b0149bd27ff665d35f9e8d24ed0f8e17601e3c5c7f242c04ed"
+    },
+    {
+      "path": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.hpp",
+      "sha256": "67a805577758775b3a258a1d18319bac82b663f8129154c28dca552f2055697b"
+    },
+    {
+      "path": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.cpp",
+      "sha256": "c6d0390b9c49887c699637a5c7a8e9a8476f5cec89965ea5dda3188ad5b3da18"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-geometry-extract.mjs",
+      "sha256": "0da3915be482b95e3738ee04d97d75df07711eec7f2ea16ad7f28e8805030b79"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-geometry.test.mjs",
+      "sha256": "e2ff478cc661fc3ce77892b601d638d6a72c5c115203eb08b93ca78e55fb3794"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-geometry-check.mjs",
+      "sha256": "95969c53341ad4ba5364576c019ed5a5a6c3871ff0ca12c2207ae4ffa8842013"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-native.cpp",
+      "sha256": "9fe6341fc27a5e550faa10ff560a3e314c58c641c7dde56b533dc0bf914ad179"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface.md",
+      "sha256": "ce1c148a19a798c6af9b94a2efa8a229e9b068c691e060baf8214ba4f3ed60d8"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-p2-native.cpp",
+      "sha256": "d21ec4ee05ea4195b0d931946199d828da231cd7c9663ba810e6a51c4078c5c4"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-p2-boundary.hpp",
+      "sha256": "b88cd6bb7ecf00d9416dfe99e948076ea7e4c6cff9f67cd25d0d19518b56bc48"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-p2.md",
+      "sha256": "64921bb955cd2d4a8e7be40dbfc4e4be7a95f46f2d36babf0675450a0009e2c6"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-p2-check.mjs",
+      "sha256": "0ab68aae6abffbe1515e05d8bab4cd5f3ffb559797abe5190273b116b3520eb1"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-p2-20261103.patch",
+      "sha256": "35c547ab97c8ea6357e45ba67557f372bf33436401e9868385aad8ee340872f7"
+    }
+  ],
+  "identicalRegressionSources": [
+    {
+      "path": "scripts/harmony/tests/sheet-surface-p2-native.cpp",
+      "sha256": "d21ec4ee05ea4195b0d931946199d828da231cd7c9663ba810e6a51c4078c5c4"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-p2-boundary.hpp",
+      "sha256": "b88cd6bb7ecf00d9416dfe99e948076ea7e4c6cff9f67cd25d0d19518b56bc48"
+    }
+  ],
+  "baselineHeaderSelector": "SHEET_SURFACE_HEADER",
+  "baselineAccessorOnlyGate": "SHEET_SURFACE_TEST_INTERACTION_NODE=0",
+  "fixedAccessorOnlyGate": "SHEET_SURFACE_TEST_INTERACTION_NODE=1 (default)",
+  "javaScriptGeometry": {
+    "command": [
+      "/Users/cloud/.nvm/versions/node/v24.14.0/bin/node",
+      "--test",
+      "scripts/harmony/tests/sheet-geometry.test.mjs"
+    ],
+    "nodeVersion": "v24.14.0",
+    "validationKind": "production-scalar-statements-translated-to-JavaScript",
+    "status": 0,
+    "stdout": "✔ fixed reference detent has 24vp handle, real viewport and page-owned safe insets (0.534958ms)\n✔ fixed keyboard shrink counts full, partial and absent shell resize once (0.1135ms)\n✔ viewport smaller for an independent reason is never blindly added to keyboard (0.056375ms)\n✔ compact keeps 340vp plus unobscured bottom and rides keyboard across resize policies (0.084875ms)\n✔ system-top cap shrinks content rather than covering status/cutout area (0.051708ms)\n✔ tiny/zero viewports and oversized safe areas remain bounded (0.044667ms)\n✔ invalid or incoherent observations fail before reaching native attributes (0.320375ms)\n✔ geometry bounds hold over a deterministic viewport/keyboard/safe-area sweep (0.817ms)\nℹ tests 8\nℹ suites 0\nℹ pass 8\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 32.442167\n",
+    "stderr": ""
+  },
+  "sdkDeclarations": [
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/native_node.h",
+      "sha256": "d09d34af254902afc2e0daa382ecf273c6b2934881ba995ea3cf5fb520c05a6a"
+    },
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/native_animate.h",
+      "sha256": "85ee9f53f37906c6ae0b675a10ec9dde48002b461ec0569e2b832c5efc23b432"
+    },
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/native_interface.h",
+      "sha256": "624f2d2f105f27fc93543d2de6b07df5732c2d8ccf29c6e29640704bde1552be"
+    },
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/common_type.h",
+      "sha256": "60ffff8e5cd91cf0c6f2cef34d7255c86e660235fe68d87d856b1b1ef606f9ac"
+    },
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/node_attributes/common_attributes.h",
+      "sha256": "e589de9672a920d87087f8a097a6905fce789d06c341551b477e41a06ed8798c"
+    },
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/node_attributes/layout.h",
+      "sha256": "d64b3fa17ef856cee03f4343913dd150430eda0eb622e7b4efce81fc646a7f45"
+    }
+  ],
+  "nativeCompilerInvoked": false,
+  "nativeFixtureExecuted": false,
+  "nativeRedGreen": "pending-parent-serial-slot",
+  "independentRoundTwoReview": "parent-owned-pending-after-freeze",
+  "cppSdkCompile": "pending-parent-serial-slot",
+  "integratedBuildAndDevice": "not-run",
+  "historicalNative14Media14Receipts": "untouched"
+}

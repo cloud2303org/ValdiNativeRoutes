@@ -1,0 +1,39 @@
+{
+  "apiType": "stageMode",
+  "buildOption": {
+    "externalNativeOptions": {
+      "path": "./src/main/cpp/CMakeLists.txt",
+      "arguments": "-DVALDI_HARMONY_LINK_CHECK=OFF -DVALDI_HARMONY_USE_FORK_UI_ASSETS=OFF",
+      "cppFlags": "",
+      "abiFilters": ["x86_64"]
+    },
+    "resOptions": {
+      "copyCodeResource": {
+        "enable": false
+      }
+    }
+  },
+  "buildOptionSet": [
+    {
+      "name": "release",
+      "arkOptions": {
+        "obfuscation": {
+          "ruleOptions": {
+            "enable": false,
+            "files": [
+              "./obfuscation-rules.txt"
+            ]
+          }
+        }
+      }
+    },
+  ],
+  "targets": [
+    {
+      "name": "default"
+    },
+    {
+      "name": "ohosTest",
+    }
+  ]
+}

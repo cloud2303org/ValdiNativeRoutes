@@ -1,0 +1,73 @@
+--- a/harmony/entry/src/main/cpp/host/HarmonySheetSurface.hpp
++++ b/harmony/entry/src/main/cpp/host/HarmonySheetSurface.hpp
+@@ -28,11 +28,15 @@
+     ~HarmonySheetSurface();
+ 
+     ArkUI_NodeHandle viewport() const noexcept;
++    // Explicit carrier for root-scoped backend interaction binding. Background
++    // remains attached; terminal detach/retire revokes the handle immediately.
++    ArkUI_NodeHandle interactionNode() const noexcept;
+     float currentOffset() const noexcept { return _offset; }
+     float offset() const noexcept { return _offset; }
+     // Positive offset/velocity move downward toward closed; closed=panelHeight.
+     // An active animation ignores the caller offset, preserves its current
+     // closedward fraction and retargets on resize to its terminal target.
++    // Its original open/closed intent survives zero-height layout restarts.
+     // For direct drag, cancelAnimation() first, then supply its logical offset.
+     void layout(const HarmonySheetGeometry& geometry, float closedwardOffset);
+     // Drives the entire panel (including handle/page) AND scrim. Completion is
+@@ -60,6 +64,7 @@
+     ArkUI_NodeHandle makeStack();
+     void append(ArkUI_NodeHandle parent, ArkUI_NodeHandle child);
+     void applyOffset(float value);
++    void startAnimation(float closedwardOffset, float velocityVpPerSecond, Completion completion, bool closing);
+     void finishAnimation(bool settled) noexcept;
+     void releaseAnimation(std::shared_ptr<Animation> animation) noexcept;
+     void enqueue(std::function<void()> work) noexcept;
+--- a/harmony/entry/src/main/cpp/host/HarmonySheetSurface.cpp
++++ b/harmony/entry/src/main/cpp/host/HarmonySheetSurface.cpp
+@@ -177,6 +177,10 @@
+ 
+ ArkUI_NodeHandle HarmonySheetSurface::viewport() const noexcept {
+     return _detached ? nullptr : _viewport;
++}
++
++ArkUI_NodeHandle HarmonySheetSurface::interactionNode() const noexcept {
++    return _attached && !_detached && !_retired ? _panel : nullptr;
+ }
+ 
+ void HarmonySheetSurface::layout(const HarmonySheetGeometry& geometry, float closedwardOffset) {
+@@ -224,7 +228,9 @@
+     check(_nodes.setAttribute(_panel, NODE_CLIP_SHAPE, &clipItem));
+     // Preserve the currently visible fraction while retargeting an animation.
+     applyOffset(animation && oldHeight > 0 ? oldOffset / oldHeight * geometry.panelHeight : directOffset);
+-    if (animation) animateTo(target, velocity, std::move(completion));
++    // Numeric open/closed coordinates coincide when panelHeight is zero.
++    // Restart with the original intent rather than reclassifying that zero.
++    if (animation) startAnimation(target, velocity, std::move(completion), animation->closing);
+ }
+ 
+ void HarmonySheetSurface::applyOffset(float value) {
+@@ -260,6 +266,13 @@
+ 
+ void HarmonySheetSurface::animateTo(float closedwardOffset, float velocityVpPerSecond, Completion completion) {
+     if (_detached || !_active || !_laidOut) throw std::runtime_error("Sheet animation requires active mounted layout");
++    const float target = boundedOffset(closedwardOffset, _geometry.panelHeight);
++    startAnimation(target, velocityVpPerSecond, std::move(completion), target == _geometry.panelHeight);
++}
++
++void HarmonySheetSurface::startAnimation(
++    float closedwardOffset, float velocityVpPerSecond, Completion completion, bool closing) {
++    if (_detached || !_active || !_laidOut) throw std::runtime_error("Sheet animation requires active mounted layout");
+     auto keepAlive = shared_from_this();
+     const float target = boundedOffset(closedwardOffset, _geometry.panelHeight);
+     if (!std::isfinite(velocityVpPerSecond)) throw std::invalid_argument("Sheet velocity must be finite vp/s");
+@@ -270,7 +283,7 @@
+     animation->generation = _generation;
+     animation->from = _offset;
+     animation->target = target;
+-    animation->closing = target == _geometry.panelHeight;
++    animation->closing = closing;
+     const float distance = target - _offset;
+     animation->velocity = distance == 0 ? 0 : std::clamp(velocityVpPerSecond / distance, -5.0f, 5.0f) * distance;
+     animation->currentVelocity = animation->velocity;

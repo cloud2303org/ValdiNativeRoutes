@@ -65,12 +65,13 @@ final class StackHostController: UIViewController {
     override var preferredStatusBarStyle: UIStatusBarStyle { navigator?.statusBarStyle ?? .default }
 }
 
-/**
- * The tab shell (routes.tabs): the system tab bar, Liquid Glass from iOS 26 and the classic blur before, over
- * pages that extend under it; their bottom safe area, and so their insets, includes it. Each tab's page loads when its
- * tab is first selected and stays.
- */
-final class TabsController: UITabBarController, UITabBarControllerDelegate {
+/// Both containers display PageEntry.selectedTab; neither owns a second navigation state.
+protocol TabsContainer: AnyObject {
+    func showSelectedTab()
+}
+
+/// UIKit owns the default tab bar's appearance and safe area. Each page loads on first selection and stays.
+final class SystemTabsController: UITabBarController, UITabBarControllerDelegate, TabsContainer {
     private let shell: PageEntry
     private let routeTabs: [Tab]
     private weak var navigator: Navigator?
@@ -84,20 +85,11 @@ final class TabsController: UITabBarController, UITabBarControllerDelegate {
         viewControllers = pages.map { tab, entry in
             let page = PageController(entry: entry, navigator: navigator)
             page.tabBarItem = UITabBarItem(title: tab.text, image: Self.image(tab.icon, data: tab.iconData),
-                                           selectedImage: Self.image(tab.selectedIcon ?? tab.icon, data: tab.selectedIconData ?? tab.iconData))
+                                           selectedImage: Self.image(tab.selectedIcon, data: tab.selectedIconData ?? tab.iconData))
             return page
         }
         delegate = self
         showSelectedTab()
-        tabBar.tintColor = UIColor(red: 0x25 / 255, green: 0x63 / 255, blue: 0xeb / 255, alpha: 1)
-        if #unavailable(iOS 26) {
-            // Blurred also when a page is scrolled to its end: from iOS 15 the bar turns clear there, and it can't see
-            // whether a Valdi page is.
-            let appearance = UITabBarAppearance()
-            appearance.configureWithDefaultBackground()
-            tabBar.standardAppearance = appearance
-            tabBar.scrollEdgeAppearance = appearance
-        }
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -116,8 +108,7 @@ final class TabsController: UITabBarController, UITabBarControllerDelegate {
     }
 
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
-        shell.selectedTab = routeTabs[selectedIndex].route
-        navigator?.updateVisibility()
+        navigator?.selectTab(routeTabs[selectedIndex].route, in: shell)
     }
 
     /// A res/ image of the app_pages module, as is: from the over-the-air package when it has one (ValdiOta.swift), as
@@ -131,18 +122,94 @@ final class TabsController: UITabBarController, UITabBarControllerDelegate {
     }
 }
 
+/// Pages occupy the system viewport. The business Valdi root overlays it, with no height measurement or extra inset.
+final class CustomTabsController: UIViewController, TabsContainer {
+    private let shell: PageEntry
+    private let bar: TabBar
+    private let pages: [PageController]
+    private weak var navigator: Navigator?
+    private var displayedPage: PageController?
+    private var safeAreaBottom: CGFloat?
+    private var renderedSelection: String?
+
+    init(shell: PageEntry, bar: TabBar, navigator: Navigator) {
+        self.shell = shell
+        self.bar = bar
+        self.navigator = navigator
+        pages = navigator.tabPages(of: shell).map { PageController(entry: $0.entry, navigator: navigator) }
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        showSelectedTab()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        showSelectedTab()
+    }
+
+    func showSelectedTab() {
+        guard isViewLoaded, !shell.removed,
+              let page = pages.first(where: { $0.entry.route == shell.selectedTab }) else { return }
+        if displayedPage !== page {
+            displayedPage?.willMove(toParent: nil)
+            displayedPage?.view.removeFromSuperview()
+            displayedPage?.removeFromParent()
+            addChild(page)
+            page.view.frame = view.bounds
+            page.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            view.insertSubview(page.view, at: 0)
+            page.didMove(toParent: self)
+            displayedPage = page
+        }
+        updateTabBar()
+        navigator?.updateVisibility()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        displayedPage?.view.frame = view.bounds
+        updateTabBar()
+    }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        updateTabBar()
+    }
+
+    private func updateTabBar() {
+        guard isViewLoaded, view.bounds.width > 0, view.bounds.height > 0,
+              !shell.removed, let navigator else { return }
+        let bottom = view.safeAreaInsets.bottom
+        if shell.rootView == nil {
+            shell.rootView = ValdiHost.shared.createTabBar(bar, shell: shell, safeAreaBottom: bottom, navigator: navigator)
+            safeAreaBottom = bottom
+            renderedSelection = shell.selectedTab
+        } else if bottom != safeAreaBottom || renderedSelection != shell.selectedTab {
+            ValdiHost.shared.updateTabBar(bar, shell: shell, safeAreaBottom: bottom)
+            safeAreaBottom = bottom
+            renderedSelection = shell.selectedTab
+        }
+        guard let root = shell.rootView else { return }
+        if root.superview !== view { view.addSubview(root) }
+        root.frame = view.bounds
+    }
+}
+
 /// What a native page gets: its params, and the navigator it shares with the Valdi pages.
 struct NativePage {
     let entry: PageEntry
     let navigator: Navigator
 
-    var params: [String: Any] {
-        (try? JSONSerialization.jsonObject(with: Data(entry.paramsJson.utf8))) as? [String: Any] ?? [:]
-    }
+    var params: [String: Any] { entry.params }
 
     /// Closes this page and delivers the result to whoever opened it with pushForResult.
     func finish(_ result: [String: Any]) {
-        navigator.finish(entry.id, resultJson: String(data: try! JSONSerialization.data(withJSONObject: result), encoding: .utf8)!)
+        navigator.finish(entry.id, result: result)
     }
 
     func back() { navigator.cancel(entry.id) }
@@ -192,7 +259,7 @@ private func embed(_ child: UIViewController, in parent: UIViewController) {
 final class PageController: UIViewController {
     let entry: PageEntry
     private let navigator: Navigator
-    private var tabs: TabsController?
+    private var tabs: (UIViewController & TabsContainer)?
 
     init(entry: PageEntry, navigator: Navigator) {
         self.entry = entry
@@ -215,7 +282,13 @@ final class PageController: UIViewController {
         case "valdi":
             break
         case "tabs":
-            let tabs = TabsController(shell: entry, navigator: navigator)
+            guard let bar = navigator.tabBar else { preconditionFailure("Missing tab declaration for \(entry.route)") }
+            let tabs: UIViewController & TabsContainer
+            if bar.mode == "custom" {
+                tabs = CustomTabsController(shell: entry, bar: bar, navigator: navigator)
+            } else {
+                tabs = SystemTabsController(shell: entry, navigator: navigator)
+            }
             self.tabs = tabs
             embed(tabs, in: self)
         default:
@@ -328,7 +401,7 @@ final class SheetLayerView: UIView {
         host.setContent(content)
         host.onClosed = { [entry] byUser in
             // Dragged down or scrim tapped: the page did not finish, so it is cancelled.
-            if byUser { entry.close(resultJson: nil, canceled: true) }
+            if byUser { entry.close(result: nil, canceled: true) }
             navigator.onSheetHidden()
         }
         addSubview(host)
@@ -376,7 +449,7 @@ struct PickerScreen: View {
                 }
             }
             Button("从原生页 push Valdi 详情页") {
-                page.navigator.open("detail", paramsJson: #"{"id":100,"from":"原生页"}"#)
+                page.navigator.open("detail", params: ["id": 100, "from": "原生页"])
             }
             Button("原生调用 switchTab('wheels')") { page.navigator.switchTab("wheels") }
             // Native pages call the same AppUI directly, without going through JS.

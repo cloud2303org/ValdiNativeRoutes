@@ -153,16 +153,6 @@ const success = <T extends object = object>(operation: OperationName, payload?: 
   ...(payload ?? ({} as T)),
 });
 
-interface QueuedOperation {
-  run: () => Promise<void>;
-  reject: (error: Error) => void;
-}
-
-interface DeviceQueue {
-  pending: QueuedOperation[];
-  active?: QueuedOperation;
-}
-
 export class WechatBleRuntime implements WechatBleApi {
   private readonly native = nativeBLE;
 
@@ -191,7 +181,8 @@ export class WechatBleRuntime implements WechatBleApi {
   private discoveryIntervalMs = 0;
   private discoveredDeviceIds = new Set<string>();
   private lastDeviceEmission = new Map<string, number>();
-  private deviceQueues = new Map<string, DeviceQueue>();
+  private powerEpoch = 0;
+  private deviceEpochs = new Map<string, number>();
   private disconnectedDevices = new Set<string>();
   private adapterAvailable = true;
 
@@ -280,7 +271,6 @@ export class WechatBleRuntime implements WechatBleApi {
       if (!this.closing) {
         const error = new Error('E_BLE_NOT_INITIALIZED:Bluetooth adapter closed');
         this.openEpoch++;
-        this.cancelAllQueues(error);
         invalidatePeripheralRuntimes(error);
         this.closing = (async () => {
           try {
@@ -313,8 +303,9 @@ export class WechatBleRuntime implements WechatBleApi {
     this.discoveredDeviceIds.clear();
     this.lastDeviceEmission.clear();
     this.disconnectedDevices.clear();
+    this.deviceEpochs.clear();
 
-    // These two subscriptions are created internally on open for queue cleanup.
+    // These two subscriptions maintain runtime state and lifecycle generations.
     // Public on/off subscriptions remain the caller's responsibility.
     const adapterSubscription = this.adapterStateSubscription;
     const connectionSubscription = this.connectionSubscription;
@@ -366,11 +357,21 @@ export class WechatBleRuntime implements WechatBleApi {
     try {
       this.ensureOpened();
       const { deviceId, timeout } = parseOptions(connectOptions, options);
+      const key = deviceId.toLowerCase();
+      const openEpoch = this.openEpoch;
+      const powerEpoch = this.powerEpoch;
+      const deviceEpoch = this.deviceEpochs.get(key) ?? 0;
       await this.native.createBLEConnection(deviceId, timeout);
-      if (session !== this.adapterSession || !this.opened || this.closing) {
+      if (session !== this.adapterSession || openEpoch !== this.openEpoch || !this.opened || this.closing) {
         throw new Error('E_BLE_NOT_INITIALIZED:Bluetooth adapter session ended');
       }
-      this.disconnectedDevices.delete(deviceId.toLowerCase());
+      if (powerEpoch !== this.powerEpoch || !this.adapterAvailable) {
+        throw new Error('E_BLE_ADAPTER_NOT_AVAILABLE:Bluetooth is unavailable');
+      }
+      if (deviceEpoch !== (this.deviceEpochs.get(key) ?? 0)) {
+        throw new Error(`E_BLE_NOT_CONNECTED:Device ${deviceId} disconnected`);
+      }
+      this.disconnectedDevices.delete(key);
       return success(operation);
     } catch (error) {
       return throwWechatBleError(operation, error);
@@ -380,7 +381,7 @@ export class WechatBleRuntime implements WechatBleApi {
   async closeBLEConnection(options: { deviceId: string }): Promise<BleResult> {
     return this.run('closeBLEConnection', () => {
       const { deviceId } = parseOptions(deviceOptions, options);
-      this.cancelDeviceQueue(deviceId);
+      this.markDisconnected(deviceId);
       return this.native.closeBLEConnection(deviceId);
     });
   }
@@ -400,7 +401,7 @@ export class WechatBleRuntime implements WechatBleApi {
     try {
       this.ensureOpened();
       const { deviceId } = parseOptions(deviceOptions, options);
-      const services = await this.enqueue(deviceId, () => this.native.getBLEDeviceServices(deviceId));
+      const services = await this.dispatchDevice(deviceId, () => this.native.getBLEDeviceServices(deviceId));
       return success(operation, {
         services: services.map(service => ({
           ...service,
@@ -420,7 +421,7 @@ export class WechatBleRuntime implements WechatBleApi {
     try {
       this.ensureOpened();
       const { deviceId, serviceId } = parseOptions(serviceOptions, options);
-      const characteristics = await this.enqueue(deviceId, () =>
+      const characteristics = await this.dispatchDevice(deviceId, () =>
         this.native.getBLEDeviceCharacteristics(deviceId, serviceId),
       );
       return success(operation, {
@@ -437,7 +438,7 @@ export class WechatBleRuntime implements WechatBleApi {
   async getBLEDeviceRSSI(options: { deviceId: string }): Promise<BleResult<{ RSSI: number }>> {
     return this.run('getBLEDeviceRSSI', () => {
       const { deviceId } = parseOptions(deviceOptions, options);
-      return this.enqueue(deviceId, async () => ({ RSSI: await this.native.getBLEDeviceRSSI(deviceId) }));
+      return this.dispatchDevice(deviceId, async () => ({ RSSI: await this.native.getBLEDeviceRSSI(deviceId) }));
     });
   }
 
@@ -450,7 +451,7 @@ export class WechatBleRuntime implements WechatBleApi {
   }): Promise<BleResult> {
     return this.run('notifyBLECharacteristicValueChange', () => {
       const request = parseOptions(notifyOptions, options);
-      return this.enqueue(request.deviceId, () => this.native.notifyBLECharacteristicValueChange(request));
+      return this.dispatchDevice(request.deviceId, () => this.native.notifyBLECharacteristicValueChange(request));
     });
   }
 
@@ -463,7 +464,7 @@ export class WechatBleRuntime implements WechatBleApi {
   }): Promise<BleResult> {
     return this.run('writeBLECharacteristicValue', () => {
       const request = parseOptions(writeOptions, options);
-      return this.enqueue(request.deviceId, () => this.native.writeBLECharacteristicValue(request));
+      return this.dispatchDevice(request.deviceId, () => this.native.writeBLECharacteristicValue(request));
     });
   }
 
@@ -474,14 +475,14 @@ export class WechatBleRuntime implements WechatBleApi {
   }): Promise<BleResult> {
     return this.run('readBLECharacteristicValue', () => {
       const request = parseOptions(characteristicOptions, options);
-      return this.enqueue(request.deviceId, () => this.native.readBLECharacteristicValue(request));
+      return this.dispatchDevice(request.deviceId, () => this.native.readBLECharacteristicValue(request));
     });
   }
 
   async setBLEMTU(options: { deviceId: string; mtu: number }): Promise<BleResult<{ mtu: number }>> {
     return this.run('setBLEMTU', () => {
       const { deviceId, mtu } = parseOptions(setMtuOptions, options);
-      return this.enqueue(deviceId, async () => ({
+      return this.dispatchDevice(deviceId, async () => ({
         mtu: await this.native.setBLEMTU(deviceId, mtu),
       }));
     });
@@ -545,7 +546,7 @@ export class WechatBleRuntime implements WechatBleApi {
           this.peripheral.invalidate(new Error('E_BLE_ADAPTER_NOT_AVAILABLE:Bluetooth is unavailable'));
         }
         if (!event.available) {
-          this.cancelAllQueues(new Error('E_BLE_ADAPTER_NOT_AVAILABLE:Bluetooth is unavailable'));
+          this.powerEpoch++;
         }
         this.emit(this.adapterStateCallbacks, { available: event.available, discovering: event.discovering });
       });
@@ -570,7 +571,7 @@ export class WechatBleRuntime implements WechatBleApi {
         if (event.connected) {
           this.disconnectedDevices.delete(event.deviceId.trim().toLowerCase());
         } else {
-          this.cancelDeviceQueue(event.deviceId);
+          this.markDisconnected(event.deviceId);
         }
         this.emit(this.connectionCallbacks, event);
       });
@@ -579,7 +580,7 @@ export class WechatBleRuntime implements WechatBleApi {
 
   offBLEConnectionStateChange(callback?: BLEConnectionStateChangeCallback): void {
     this.removeCallback(this.connectionCallbacks, callback);
-    // Public off() must not disable disconnect-driven queue cancellation.
+    // Public off() must not disable runtime connection state and generation tracking.
   }
 
   onBLECharacteristicValueChange(callback: BLECharacteristicValueChangeCallback): void {
@@ -642,7 +643,7 @@ export class WechatBleRuntime implements WechatBleApi {
     }
   }
 
-  private enqueue<T>(deviceId: string, operation: () => Promise<T>): Promise<T> {
+  private async dispatchDevice<T>(deviceId: string, operation: () => Promise<T>): Promise<T> {
     this.ensureOpened();
     const key = deviceId.trim().toLowerCase();
     if (!this.adapterAvailable) {
@@ -651,63 +652,32 @@ export class WechatBleRuntime implements WechatBleApi {
     if (this.disconnectedDevices.has(key)) {
       throw new Error(`E_BLE_NOT_CONNECTED:Device ${deviceId} disconnected`);
     }
-    let queue = this.deviceQueues.get(key);
-    const isNewQueue = queue === undefined;
-    if (!queue) {
-      queue = { pending: [] };
-      this.deviceQueues.set(key, queue);
-    }
-    const activeQueue = queue;
-    const result = new Promise<T>((resolve, reject) => {
-      activeQueue.pending.push({
-        reject,
-        run: async () => {
-          try {
-            resolve(await operation());
-          } catch (error) {
-            reject(error);
-          }
-        },
-      });
-    });
-    if (isNewQueue) void this.drainQueue(key, queue);
-    return result;
-  }
-
-  private async drainQueue(key: string, queue: DeviceQueue): Promise<void> {
-    // Give a synchronous close/disconnect a chance to cancel before dispatch.
+    const session = this.adapterSession;
+    const openEpoch = this.openEpoch;
+    const powerEpoch = this.powerEpoch;
+    const deviceEpoch = this.deviceEpochs.get(key) ?? 0;
+    // Each call independently reaches native after one checkpoint, in admission
+    // order. This allows same-turn close/disconnect to invalidate unsubmitted
+    // work without retaining tasks or waiting for any previous native result.
     await Promise.resolve();
-    while (this.deviceQueues.get(key) === queue) {
-      const task = queue.pending.shift();
-      if (!task) {
-        this.deviceQueues.delete(key);
-        return;
-      }
-      queue.active = task;
-      await task.run();
-      queue.active = undefined;
+    this.ensureOpened();
+    if (session !== this.adapterSession || openEpoch !== this.openEpoch) {
+      throw new Error('E_BLE_NOT_INITIALIZED:Bluetooth adapter session ended');
     }
+    if (powerEpoch !== this.powerEpoch || !this.adapterAvailable) {
+      throw new Error('E_BLE_ADAPTER_NOT_AVAILABLE:Bluetooth is unavailable');
+    }
+    if (deviceEpoch !== (this.deviceEpochs.get(key) ?? 0) || this.disconnectedDevices.has(key)) {
+      throw new Error(`E_BLE_NOT_CONNECTED:Device ${deviceId} disconnected`);
+    }
+    // Native owns serialization, completion and cancellation after submission.
+    return operation();
   }
 
-  private cancelDeviceQueue(deviceId: string): void {
+  private markDisconnected(deviceId: string): void {
     const key = deviceId.trim().toLowerCase();
     this.disconnectedDevices.add(key);
-    this.cancelQueue(key, new Error(`E_BLE_NOT_CONNECTED:Device ${deviceId} disconnected`));
-  }
-
-  private cancelAllQueues(error: Error): void {
-    for (const key of this.deviceQueues.keys()) {
-      this.disconnectedDevices.add(key);
-      this.cancelQueue(key, error);
-    }
-  }
-
-  private cancelQueue(key: string, error: Error): void {
-    const queue = this.deviceQueues.get(key);
-    if (!queue) return;
-    this.deviceQueues.delete(key);
-    // Native owns active work. Only reject tasks that were never submitted.
-    for (const task of queue.pending.splice(0)) task.reject(error);
+    this.deviceEpochs.set(key, (this.deviceEpochs.get(key) ?? 0) + 1);
   }
 
   private removeCallback<T>(callbacks: Set<T>, callback?: T): void {

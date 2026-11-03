@@ -1,0 +1,11 @@
+{
+  "recordedAt": "2026-11-03T04:08:03.508Z",
+  "status": 1,
+  "operation": "Node-only source receipt preparation",
+  "error": "Extraction input/output changed: scripts/harmony/tests/sheet-surface-navigation-live-source.json",
+  "historicalLiveSourceSha256": "8c98638cad086c066a94b0052bbaf755f0fb961951875fbb47453f234e5b90ab",
+  "currentHostSha256": "340b7ffdf245b01f0921aff5219eb74143c2922b38696ff9b7f4d2d06a0b09a0",
+  "causeReportedByParent": "typed bindSheetInput callback change outside six extracted methods",
+  "receiptCreated": false,
+  "childNativeCompilerInvoked": false
+}

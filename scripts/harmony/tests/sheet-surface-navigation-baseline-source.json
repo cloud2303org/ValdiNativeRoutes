@@ -1,0 +1,56 @@
+{
+  "source": "/private/tmp/valdi-sheets-20261103/host-closing-visibility-prefix/harmony/entry/src/main/cpp/host/HarmonyNavigator.cpp",
+  "sourceSha256": "3197a6b4f0f9891c30393af9b6c1052b6ca29eb40c9805d80348fe3ecb75ec26",
+  "extractor": "/Users/cloud/project/ValdiNativeRoutes/scripts/harmony/tests/sheet-surface-navigation-extract.py",
+  "extractorSha256": "f7be20c66b67442e070b44b84c2bb93087d1105c1c54c2ea12cf57d27a691192",
+  "output": "/Users/cloud/project/ValdiNativeRoutes/scripts/harmony/tests/sheet-surface-navigation-baseline-bodies.inc",
+  "outputSha256": "7b8bb886a9c900229263bcf387023ff8551403a5dcc34edab60eabc6aa843df9",
+  "methods": [
+    {
+      "name": "sheetGeometry",
+      "startLine": 913,
+      "endLine": 919,
+      "sha256": "5076b21c124949afd10a628dba5019f079a779aed2f180f9be971495208a076d",
+      "transformation": "none"
+    },
+    {
+      "name": "closeSheet",
+      "startLine": 1138,
+      "endLine": 1167,
+      "sha256": "1fbe58a0c0d9859ef62d9d3064c35b1bd98d5fcfdbc7c627d4f8b1874071eb8e",
+      "transformation": "none"
+    },
+    {
+      "name": "reconcileSheet",
+      "startLine": 1011,
+      "endLine": 1022,
+      "sha256": "b78da5d65fd7de56ddba3859a6a45b06a793a3cb5c3d015dacd1e2a4b005ef99",
+      "transformation": "none"
+    },
+    {
+      "name": "finishSheet",
+      "startLine": 1176,
+      "endLine": 1215,
+      "sha256": "4372d43c461a72cf1e0518f9b15810e513115bfb43fe5094bb27e6f593d4c328",
+      "transformation": "none"
+    },
+    {
+      "name": "setActive",
+      "startLine": 2063,
+      "endLine": 2082,
+      "sha256": "c95e6e6892e72b099bc8fc994bbd6d9d10ea5ec6fc15724bb075f15ad13ff427",
+      "transformation": "none"
+    },
+    {
+      "name": "layoutSheet",
+      "startLine": 989,
+      "endLine": 1009,
+      "sha256": "29b1ea9fcc53b9943a88dbedb6d8fade96d974ace704a5e134f147a04f5ef06a",
+      "transformation": "none"
+    }
+  ],
+  "methodBodiesChanged": false,
+  "surfaceSubstituted": false,
+  "nativeCompilerInvoked": false,
+  "nativeFixtureExecuted": false
+}

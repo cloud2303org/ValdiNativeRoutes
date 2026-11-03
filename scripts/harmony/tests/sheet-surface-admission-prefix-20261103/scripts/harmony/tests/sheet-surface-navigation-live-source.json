@@ -1,0 +1,56 @@
+{
+  "source": "/Users/cloud/project/ValdiNativeRoutes/harmony/entry/src/main/cpp/host/HarmonyNavigator.cpp",
+  "sourceSha256": "8c98638cad086c066a94b0052bbaf755f0fb961951875fbb47453f234e5b90ab",
+  "extractor": "/Users/cloud/project/ValdiNativeRoutes/scripts/harmony/tests/sheet-surface-navigation-extract.py",
+  "extractorSha256": "f7be20c66b67442e070b44b84c2bb93087d1105c1c54c2ea12cf57d27a691192",
+  "output": "/Users/cloud/project/ValdiNativeRoutes/scripts/harmony/tests/sheet-surface-navigation-bodies.inc",
+  "outputSha256": "68d3f551cc3e9fd082bd2392756511ed34c895f0441798788135bac3a3650c7c",
+  "methods": [
+    {
+      "name": "sheetGeometry",
+      "startLine": 913,
+      "endLine": 919,
+      "sha256": "5076b21c124949afd10a628dba5019f079a779aed2f180f9be971495208a076d",
+      "transformation": "none"
+    },
+    {
+      "name": "closeSheet",
+      "startLine": 1143,
+      "endLine": 1173,
+      "sha256": "0a192eda97bb0afce0fddc1d19e012f3c24d8a7a700f1daecea1a46512084c37",
+      "transformation": "none"
+    },
+    {
+      "name": "reconcileSheet",
+      "startLine": 1011,
+      "endLine": 1027,
+      "sha256": "559a8028a2fe39c3cd610d23ba6c606ed135b0c937cc27ae8166351b2b7f56bb",
+      "transformation": "none"
+    },
+    {
+      "name": "finishSheet",
+      "startLine": 1182,
+      "endLine": 1221,
+      "sha256": "4372d43c461a72cf1e0518f9b15810e513115bfb43fe5094bb27e6f593d4c328",
+      "transformation": "none"
+    },
+    {
+      "name": "setActive",
+      "startLine": 2069,
+      "endLine": 2088,
+      "sha256": "c95e6e6892e72b099bc8fc994bbd6d9d10ea5ec6fc15724bb075f15ad13ff427",
+      "transformation": "none"
+    },
+    {
+      "name": "layoutSheet",
+      "startLine": 989,
+      "endLine": 1009,
+      "sha256": "29b1ea9fcc53b9943a88dbedb6d8fade96d974ace704a5e134f147a04f5ef06a",
+      "transformation": "none"
+    }
+  ],
+  "methodBodiesChanged": false,
+  "surfaceSubstituted": false,
+  "nativeCompilerInvoked": false,
+  "nativeFixtureExecuted": false
+}

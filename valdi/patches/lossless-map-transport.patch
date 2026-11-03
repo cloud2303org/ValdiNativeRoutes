@@ -1,0 +1,180 @@
+diff --git a/valdi_core/src/valdi_core/ios/valdi_core/SCValdiObjCConversionUtils.mm b/valdi_core/src/valdi_core/ios/valdi_core/SCValdiObjCConversionUtils.mm
+index e26d9dd0a4867f6acd5de58b70b091fbbfd5a698..afcd5d1477e7e5eb3b35056f4c5b53c4a0bcab56 100644
+--- a/valdi_core/src/valdi_core/ios/valdi_core/SCValdiObjCConversionUtils.mm
++++ b/valdi_core/src/valdi_core/ios/valdi_core/SCValdiObjCConversionUtils.mm
+@@ -35,6 +35,7 @@
+ #import "valdi_core/SCValdiReferenceTable+CPP.h"
+ 
+ #import <utils/debugging/Assert.hpp>
++#import <CoreFoundation/CoreFoundation.h>
+ 
+ @implementation SCValdiCppObject
+ 
+@@ -424,6 +425,10 @@
+ 
+             return Valdi::Value(convertedString);
+         } else if ([object isKindOfClass:[NSNumber class]]) {
++            // NSNumber also boxes CFBoolean. Numeric 0/1 must remain numbers.
++            if (CFGetTypeID((__bridge CFTypeRef)object) == CFBooleanGetTypeID()) {
++                return Valdi::Value(static_cast<bool>([object boolValue]));
++            }
+             return Valdi::Value([object doubleValue]);
+         } else if ([object isKindOfClass:[NSDictionary class]]) {
+             return ValueFromNSDictionary(object);
+diff --git a/valdi/src/valdi/runtime/Interfaces/IJavaScriptContext.hpp b/valdi/src/valdi/runtime/Interfaces/IJavaScriptContext.hpp
+index b742d5354b8eaac90861b3e6fabfe8d5a86c18b9..5750ff3e1e5a70c278e78cbb47e657efb0f5322e 100644
+--- a/valdi/src/valdi/runtime/Interfaces/IJavaScriptContext.hpp
++++ b/valdi/src/valdi/runtime/Interfaces/IJavaScriptContext.hpp
+@@ -235,6 +235,17 @@
+                                    bool enumerable,
+                                    JSExceptionTracker& exceptionTracker) = 0;
+ 
++    // Populate fresh map objects without invoking the legacy __proto__ setter.
++    // Ordinary keys keep the native setter fast path.
++    void setMapProperty(const JSValue& object,
++                        const std::string_view& propertyName,
++                        const JSValue& propertyValue,
++                        JSExceptionTracker& exceptionTracker);
++    void setMapProperty(const JSValue& object,
++                        const JSValue& propertyName,
++                        const JSValue& propertyValue,
++                        JSExceptionTracker& exceptionTracker);
++
+     virtual void setObjectPropertyIndex(const JSValue& object,
+                                         size_t index,
+                                         const JSValue& value,
+@@ -454,6 +465,10 @@
+ 
+     std::unique_ptr<JavaScriptValueMarshaller> _valueMarshaller;
+ 
++    JSValueRef _mapPrototypeKey;
++    JSValueRef _defineMapProperty;
++    JSValueRef _createMapDescriptor;
++
+     StashedJSValue* doGetStashedJSValue(const JSValueID& id);
+ 
+     JSValueRef newLongUncached(const JavaScriptLong& value, JSExceptionTracker& exceptionTracker);
+diff --git a/valdi/src/valdi/runtime/Interfaces/IJavaScriptContext.cpp b/valdi/src/valdi/runtime/Interfaces/IJavaScriptContext.cpp
+index 382cdd3fc2311489012a3675a1269cf2de3a44c8..712ff9884a781f836e48cbee11590b8518ae592d 100644
+--- a/valdi/src/valdi/runtime/Interfaces/IJavaScriptContext.cpp
++++ b/valdi/src/valdi/runtime/Interfaces/IJavaScriptContext.cpp
+@@ -53,6 +53,31 @@
+     }
+ 
+     _exportModePropertyName = newPropertyName("__exportMode__");
++
++    _mapPrototypeKey = ensureRetainedValue(newStringUTF8("__proto__", exceptionTracker));
++    if (!exceptionTracker) {
++        return;
++    }
++    // Capture intrinsics before application code can replace them. Do not evaluate
++    // source here: lean Hermes accepts only precompiled bytecode.
++    auto global = getGlobalObject(exceptionTracker);
++    if (!exceptionTracker) {
++        return;
++    }
++    auto objectConstructor = getObjectProperty(global.get(), "Object", exceptionTracker);
++    if (!exceptionTracker) {
++        return;
++    }
++    _defineMapProperty = ensureRetainedValue(
++        getObjectProperty(objectConstructor.get(), "defineProperty", exceptionTracker));
++    if (!exceptionTracker) {
++        return;
++    }
++    _createMapDescriptor = ensureRetainedValue(
++        getObjectProperty(objectConstructor.get(), "create", exceptionTracker));
++    if (!exceptionTracker) {
++        return;
++    }
+ 
+     if (!config.disableValueMarshaller) {
+         _valueMarshaller =
+@@ -83,8 +108,61 @@
+     _zeroValue = JSValueRef();
+     _longConstructor = JSValueRef();
+     _promiseConstructor = JSValueRef();
++    _mapPrototypeKey = JSValueRef();
++    _defineMapProperty = JSValueRef();
++    _createMapDescriptor = JSValueRef();
+ 
+     _exportModePropertyName = JSPropertyNameRef();
++}
++
++void IJavaScriptContext::setMapProperty(const JSValue& object,
++                                        const std::string_view& propertyName,
++                                        const JSValue& propertyValue,
++                                        JSExceptionTracker& exceptionTracker) {
++    if (propertyName != "__proto__") {
++        setObjectProperty(object, propertyName, propertyValue, exceptionTracker);
++        return;
++    }
++    setMapProperty(object, _mapPrototypeKey.get(), propertyValue, exceptionTracker);
++}
++
++void IJavaScriptContext::setMapProperty(const JSValue& object,
++                                        const JSValue& propertyName,
++                                        const JSValue& propertyValue,
++                                        JSExceptionTracker& exceptionTracker) {
++    // isValueEqual compares string identities in several engines, not contents.
++    auto name = valueToString(propertyName, exceptionTracker);
++    if (!exceptionTracker) {
++        return;
++    }
++    if (name.toStringView() != "__proto__") {
++        setObjectProperty(object, propertyName, propertyValue, exceptionTracker);
++        return;
++    }
++    auto nullValue = newNull();
++    JSFunctionCallContext createContext(*this, &nullValue, 1, exceptionTracker);
++    auto descriptor = callObjectAsFunction(_createMapDescriptor.get(), createContext);
++    if (!exceptionTracker) {
++        return;
++    }
++    // Object.create(null) prevents inherited setters and descriptor fields from
++    // affecting the data descriptor, even after Object.prototype is modified.
++    auto trueValue = newBool(true);
++    setObjectProperty(descriptor.get(), "value", propertyValue, exceptionTracker);
++    if (!exceptionTracker) {
++        return;
++    }
++    for (const char* flag : {"writable", "enumerable", "configurable"}) {
++        setObjectProperty(descriptor.get(), flag, trueValue.get(), exceptionTracker);
++        if (!exceptionTracker) {
++            return;
++        }
++    }
++    JSValueRef args[] = {JSValueRef::makeUnretained(*this, object),
++                         JSValueRef::makeUnretained(*this, propertyName),
++                         std::move(descriptor)};
++    JSFunctionCallContext callContext(*this, args, 3, exceptionTracker);
++    callObjectAsFunction(_defineMapProperty.get(), callContext);
+ }
+ 
+ JSValueRef IJavaScriptContext::newBool(bool boolean) {
+diff --git a/valdi/src/valdi/runtime/JavaScript/JavaScriptValueDelegate.cpp b/valdi/src/valdi/runtime/JavaScript/JavaScriptValueDelegate.cpp
+index aebd265bd4bc2811cc6df2a3ef22e91d52b01240..4935709a525efa49cf9570f8b7c70862554f3e42 100644
+--- a/valdi/src/valdi/runtime/JavaScript/JavaScriptValueDelegate.cpp
++++ b/valdi/src/valdi/runtime/JavaScript/JavaScriptValueDelegate.cpp
+@@ -619,7 +619,7 @@
+                                           const JSValueRef& key,
+                                           const JSValueRef& value,
+                                           ExceptionTracker& exceptionTracker) {
+-    _jsContext->setObjectProperty(map.get(), key.get(), value.get(), toJSExceptionTracker(exceptionTracker));
++    _jsContext->setMapProperty(map.get(), key.get(), value.get(), toJSExceptionTracker(exceptionTracker));
+ }
+ 
+ size_t JavaScriptValueDelegate::getMapEstimatedLength(const JSValueRef& map, ExceptionTracker& exceptionTracker) {
+diff --git a/valdi/src/valdi/runtime/JavaScript/JavaScriptUtils.cpp b/valdi/src/valdi/runtime/JavaScript/JavaScriptUtils.cpp
+index 6ee8ef75a9ebe7d043ea2ba67fbe1353b4132928..574a5afc88edbfcbfbf2881ec09762383842d358 100644
+--- a/valdi/src/valdi/runtime/JavaScript/JavaScriptUtils.cpp
++++ b/valdi/src/valdi/runtime/JavaScript/JavaScriptUtils.cpp
+@@ -308,7 +308,7 @@
+                     return jsContext.newUndefined();
+                 }
+ 
+-                jsContext.setObjectProperty(object.get(), it.first.toStringView(), value.get(), exceptionTracker);
++                jsContext.setMapProperty(object.get(), it.first.toStringView(), value.get(), exceptionTracker);
+                 if (!exceptionTracker) {
+                     return jsContext.newUndefined();
+                 }

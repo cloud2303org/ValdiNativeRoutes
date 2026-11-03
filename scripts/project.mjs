@@ -19,7 +19,7 @@ function main() {
     if (platform === 'modules') {
       runPnpm(['--dir', 'tools/valdi-rolldown', 'build', ...forwarded], root);
     } else {
-      run(process.execPath, ['--test', 'scripts/tests/prerequisites.test.mjs', 'scripts/tests/upstream.test.mjs', 'scripts/tests/cli.test.mjs', 'scripts/tests/dev-controls.test.mjs', 'scripts/tests/native-modules.test.mjs', 'scripts/tests/module-selection.test.mjs', 'scripts/tests/swift-runtime.test.mjs'], root);
+      run(process.execPath, ['--test', 'scripts/tests/prerequisites.test.mjs', 'scripts/tests/upstream.test.mjs', 'scripts/tests/upstream-runtime-patches.test.mjs', 'scripts/tests/android-promise-rejection.test.mjs', 'scripts/harmony/tests/bazel-cache.test.mjs', 'scripts/harmony/tests/profile-config.test.mjs', 'scripts/harmony/tests/development-host-admission.test.mjs', 'scripts/harmony/tests/fork-ui-assets.test.mjs', 'scripts/harmony/tests/device-display.test.mjs', 'scripts/harmony/tests/appui-media.test.mjs', 'scripts/harmony/tests/native-route.test.mjs', 'scripts/tests/cli.test.mjs', 'scripts/tests/dev-controls.test.mjs', 'scripts/tests/native-modules.test.mjs', 'scripts/tests/module-selection.test.mjs', 'scripts/tests/swift-runtime.test.mjs'], root);
       const valdiSource = sourceOption >= 0 ? forwarded[sourceOption + 1] : [
         path.join(root, 'valdi/.valdi-sources/external/valdi+'),
         path.join(root, 'valdi/bazel-valdi/external/valdi+'),
@@ -27,12 +27,14 @@ function main() {
       // runtime-module.test.ts and the declaration fixtures read the Valdi sources from here;
       // the workspace's bazel-valdi link can point at an execroot that no longer has them.
       process.env.VALDI_SOURCE_ROOT ||= valdiSource;
+      // Compiler fixtures read the app's tsconfigs, which must use this same source tree.
+      const rolldownDir = path.join(root, 'tools/valdi-rolldown');
+      const tsx = path.join(rolldownDir, 'node_modules/tsx/dist/cli.mjs');
+      run(process.execPath, [tsx, 'tsconfig.ts'], rolldownDir);
       run(process.execPath, ['--test', path.join(valdiSource, 'bzl/valdi/node_tools/rewrite_header.test.mjs')], root);
       // Run tsx's launcher with Node directly: `pnpm exec` resolves the binary differently on
       // Windows and can report `Command "tsx" not found` for the same install.
-      const rolldownDir = path.join(root, 'tools/valdi-rolldown');
-      const tsx = path.join(rolldownDir, 'node_modules/tsx/dist/cli.mjs');
-      run(process.execPath, [tsx, '--test', 'routes.test.ts', 'resources.test.ts', 'hermes.test.ts', 'module-build.test.ts', 'runtime-module.test.ts', 'scaffold.test.ts', 'swift.test.ts', 'bluetooth.test.ts', 'module-selection.test.ts', 'jsx-upstream.test.ts', 'lazy-import.test.ts', 'upstream-runtime.test.ts'], rolldownDir);
+      run(process.execPath, [tsx, '--test', 'routes.test.ts', 'typed-routing.test.ts', 'typed-storage.test.ts', 'appui-promise.test.ts', 'harmony-options.test.ts', 'route-animation-parity.test.ts', 'harmony-services.test.ts', 'harmony-service-adapters.test.ts', 'dev-protocol.test.ts', 'harmony-dev-transport.test.ts', 'harmony-dev-cdp.test.ts', 'harmony-development-packaging.test.ts', 'harmony-platform-overlay.test.ts', 'wheel-platform-compat.test.ts', 'resources.test.ts', 'hermes.test.ts', 'module-build.test.ts', 'runtime-module.test.ts', 'scaffold.test.ts', 'swift.test.ts', 'bluetooth.test.ts', 'bluetooth-execution.test.ts', 'module-selection.test.ts', 'jsx-upstream.test.ts', 'lazy-import.test.ts', 'upstream-runtime.test.ts'], rolldownDir);
       // The goldens compare against the same sources the tests used, whatever link holds them.
       const goldensArgs = ['codegen/goldens.ts', ...forwarded];
       if (sourceOption < 0) goldensArgs.push('--valdi', valdiSource);

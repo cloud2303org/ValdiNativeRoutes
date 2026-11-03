@@ -10,42 +10,29 @@ import android.os.Looper
 import androidx.annotation.Keep
 import com.snap.valdi.ValdiRuntimeManager
 import com.snap.valdi.ValdiTweaks
+import com.snap.valdi.RenderBackend
+import com.snap.valdi.ValdiContextConfiguration
 import com.snap.valdi.jsmodules.ValdiScopedJSRuntime
 import com.snap.valdi.modules.ModuleFactoryRegistry
 import com.snap.valdi.support.SupportValdiRuntimeManager
 import com.snap.valdi.views.ValdiRootView
-import io.valdiroutes.app.appui.ActionSheetOptions
-import io.valdiroutes.app.appui.AppPresentationOptions
-import io.valdiroutes.app.appui.AppUI
-import io.valdiroutes.app.appui.BottomSheetOptions
-import io.valdiroutes.app.appui.DatePickerMode
-import io.valdiroutes.app.appui.DatePickerOptions
-import io.valdiroutes.app.appui.ImagePreviewOptions
-import io.valdiroutes.app.appui.LoadingOptions
-import io.valdiroutes.app.appui.ModalOptions
-import io.valdiroutes.app.appui.PickerItem
-import io.valdiroutes.app.appui.PickerOptions
-import io.valdiroutes.app.appui.ToastOptions
-import io.nativeroutes.ui.AttachmentCache
-import io.valdiroutes.pages.AppUIHost
-import io.valdiroutes.pages.AttachmentAsset
-import io.valdiroutes.pages.AttachmentSelection
 import io.valdiroutes.pages.InstallNfcHost
 import io.valdiroutes.pages.InstallPermissionHost
 import io.valdiroutes.pages.InstallWifiHost
-import io.valdiroutes.pages.ScanCodeReply
 import io.valdiroutes.pages.InstallAppUI
 import io.valdiroutes.pages.NavigationHost
 import io.valdiroutes.pages.StartApp
 import io.valdiroutes.pages.InstallVisionHost
 import io.valdiroutes.pages.InstallStorageHost
-import io.valdiroutes.pages.ModalReply
-import io.valdiroutes.pages.PresentationReply
 import io.valdiroutes.pages.PageContext
 import io.valdiroutes.pages.PageInsets
 import io.valdiroutes.pages.PageViewModel
+import io.valdiroutes.pages.RouteDeclaration
+import io.valdiroutes.pages.RouteEntry
+import io.valdiroutes.pages.RouteTabBar
+import io.valdiroutes.pages.TabBarContext
+import io.valdiroutes.pages.TabBarViewModel
 import kotlin.concurrent.thread
-import org.json.JSONObject
 
 /** One Valdi runtime for the whole app; every page is a root view inside it. */
 object ValdiHost {
@@ -69,7 +56,7 @@ object ValdiHost {
         runtimeManager.registerGlobalAttributesBinder(ValdiWheelBinder(ColumnWheelView::class.java))
         runtimeManager.registerGlobalAttributesBinder(ValdiWheelBinder(TimeWheelView::class.java))
         runtimeManager.registerGlobalAttributesBinder(ValdiWheelBinder(TreeWheelView::class.java))
-        appContext = app
+        appUIHost = AppUIHostImpl(app)
         permissionHost = PermissionHostImpl(app)
         val visionHost = VisionHostImpl(app)
         // Both cores are app-owned and installed now: NFC must see the first activity resume to know the foreground.
@@ -87,7 +74,7 @@ object ValdiHost {
             InstallStorageHost.create(js).invoke(storageHost.host)
             // App-wide objects (the SQLite connection, api, the router) belong in this retained scope, not in a page.
             val debug = (app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-            val table = RouteTable.parse(StartApp.create(js).invoke(debug, navigationHost, tokenStore.store))
+            val table = RouteTable.from(StartApp.create(js).invoke(debug, navigationHost, tokenStore.store))
             // The modules loaded and ran: a newly installed package is good. Only then look for the next one.
             ValdiOta.confirmLaunch()
             thread(name = "ValdiOta") { ValdiOta.checkForUpdate() }
@@ -123,24 +110,22 @@ object ValdiHost {
     /** `router` (routes.ts) lands here on the JS thread; the navigator lives on the main thread. */
     private val navigationHost = NavigationHost(
         { route, params, presentation, navigation ->
-            onNavigator { it.open(route, params, Presentation.parse(presentation), NavigationOptions.parse(navigation)) }
+            onNavigator { it.open(route, params, Presentation.parse(presentation), navigation) }
         },
         { route, params, presentation, navigation, onResult ->
             onNavigator {
-                it.open(route, params, Presentation.parse(presentation), NavigationOptions.parse(navigation)) { json, canceled ->
-                    onResult(json, canceled)
-                }
+                it.open(route, params, Presentation.parse(presentation), navigation, onResult)
             }
         },
-        { route, params, navigation -> onNavigator { it.replace(route, params, NavigationOptions.parse(navigation)) } },
+        { route, params, navigation -> onNavigator { it.replace(route, params, navigation) } },
         { delta -> onNavigator { it.back(delta.toInt()) } },
         { onNavigator { it.popToRoot() } },
         { route, params -> onNavigator { it.reset(route, params) } },
         { tab -> onNavigator { it.switchTab(tab) } },
         { style -> onNavigator { it.statusBarStyle = style } },
-        { done -> main.post { done(navigator?.currentPages() ?: "[]") } },
-        { json ->
-            val table = RouteTable.parse(json)
+        { done -> main.post { done(navigator?.currentPages() ?: emptyList()) } },
+        { declaration ->
+            val table = RouteTable.from(declaration)
             main.post {
                 navigator?.reloadRoutes(table)
                 started = table.withRoot(navigator?.stack?.firstOrNull()?.route ?: table.root)
@@ -161,112 +146,13 @@ object ValdiHost {
     @Keep
     private var hostScope: ValdiScopedJSRuntime? = null
 
-    private lateinit var appContext: Context
+    /** Keep the exported proxy app-owned even after the installing callback and its calling page are gone. */
+    @Keep
+    private lateinit var appUIHost: AppUIHostImpl
 
     /** Runtime permissions for permissions/index.ts; the activity lends it the permission prompt. */
     lateinit var permissionHost: PermissionHostImpl
         private set
-
-    /**
-     * `api` in TS lands here; requests are already validated and defaulted there. Called on the JS thread.
-     */
-    private val appUIHost = AppUIHost(
-        { request, done ->
-            val options = ModalOptions(
-                request.title, request.content, request.showCancel, request.confirmText, request.cancelText,
-                request.editable, request.placeholderText, request.defaultText,
-            )
-            main.post {
-                AppUI.showModal(options) { result ->
-                    result.fold(
-                        { done("", ModalReply(it.confirm, it.cancel, it.content)) },
-                        { done(it.message ?: it.toString(), ModalReply(false, true, "")) },
-                    )
-                }
-            }
-        },
-        { request, done -> present(ActionSheetOptions(request.itemList, request.title), done) },
-        { request, done ->
-            val options = PickerOptions(
-                request.options.map { PickerItem(it.value, it.label) }, request.title, request.value,
-                request.confirmText, request.cancelText,
-            )
-            present(options, done)
-        },
-        { request, done ->
-            val mode = datePickerMode(request.mode)
-            if (mode == null) {
-                done("unsupported picker mode", PresentationReply(false, true, "", -1.0))
-            } else {
-                present(
-                    DatePickerOptions(
-                        request.title, mode, request.value, request.minYear.toInt(), request.maxYear.toInt(),
-                        request.confirmText, request.cancelText,
-                    ),
-                    done,
-                )
-            }
-        },
-        { request, done ->
-            val options = BottomSheetOptions(
-                request.title, request.content, request.confirmText, request.cancelText, request.showCancel, request.dismissible,
-            )
-            present(options, done)
-        },
-        { request, done -> present(ImagePreviewOptions(request.urls, request.current), done) },
-        { done ->
-            main.post {
-                AppUI.scanCode { result ->
-                    result.fold(
-                        { done("", ScanCodeReply(it.result, it.scanType)) },
-                        { done(it.message ?: it.toString(), ScanCodeReply("", "")) },
-                    )
-                }
-            }
-        },
-        { source, limit, mimeTypes, done ->
-            main.post {
-                AppUI.pickAttachments(source, limit.toInt(), mimeTypes) { result ->
-                    result.fold(
-                        { assets ->
-                            done("", AttachmentSelection(assets.isEmpty(), assets.map {
-                                AttachmentAsset(it.id, it.uri, it.name, it.mimeType, it.size)
-                            }))
-                        },
-                        { done(it.message ?: it.toString(), AttachmentSelection(true, emptyList())) },
-                    )
-                }
-            }
-        },
-        // File deletion stays off both the JS and the main thread.
-        { done -> thread(name = "attachment-cache") { done(runCatching { AttachmentCache.clear(appContext) }.exceptionOrNull()?.let { it.message ?: it.toString() } ?: "") } },
-        { request, done -> onMain(done) { AppUI.showToast(ToastOptions(request.title, request.icon, request.duration.toLong(), request.mask)) } },
-        { done -> onMain(done) { AppUI.hideToast() } },
-        { request, done -> onMain(done) { AppUI.showLoading(LoadingOptions(request.title, request.mask)) } },
-        { done -> onMain(done) { AppUI.hideLoading() } },
-    )
-
-    private fun present(options: AppPresentationOptions, done: (String, PresentationReply) -> Unit) = main.post {
-        AppUI.showPresentation(options) { result ->
-            result.fold(
-                { done("", PresentationReply(it.confirm, it.cancel, it.value, it.index.toDouble())) },
-                { done(it.message ?: it.toString(), PresentationReply(false, true, "", -1.0)) },
-            )
-        }
-    }
-
-    private fun datePickerMode(mode: String) = when (mode) {
-        "year" -> DatePickerMode.Year
-        "year-month" -> DatePickerMode.YearMonth
-        "date" -> DatePickerMode.Date
-        "time" -> DatePickerMode.Time
-        "datetime" -> DatePickerMode.DateTime
-        else -> null
-    }
-
-    private fun onMain(done: (String) -> Unit, action: () -> Unit) = main.post {
-        done(runCatching(action).exceptionOrNull()?.let { it.message ?: it.toString() } ?: "")
-    }
 
     /** The route table, tab bar and first page, from startApp (app.ts); on the main thread, once JS has started. */
     fun start(completion: (RouteTable) -> Unit) {
@@ -290,6 +176,32 @@ object ValdiHost {
         entry.rootView?.setViewModelUntyped(viewModel(entry, insets))
     }
 
+    internal fun createTabBar(
+        context: Context, shell: PageEntry, bar: TabBar, selected: String, safeAreaBottom: Double, navigator: Navigator,
+    ): CustomTabBar {
+        val selection = TabBarSelection(bar.tabs.map { it.route }) { navigator.selectTab(shell, it) }
+        val tabContext = TabBarContext { route -> main.post { selection.select(route) } }
+        val root = ValdiRootView(context).apply {
+            defaultFocusHighlightEnabled = false
+            isFocusable = false
+            isFocusableInTouchMode = false
+            // The legacy dispatcher returns false for empty space; the newer dispatcher always consumes DOWN.
+            useNewMultiTouchExperience = false
+        }
+        val owner = CustomTabBar(root, tabContext, selection)
+        runtimeManager.mainRuntime.inflateViewAsync(
+            root, requireNotNull(bar.component), TabBarViewModel(bar.tabs, selected, safeAreaBottom), tabContext,
+            null, null, ValdiContextConfiguration(renderBackend = RenderBackend.ANDROID),
+        )
+        return owner
+    }
+
+    internal fun updateTabBar(owner: CustomTabBar, bar: TabBar, selected: String, safeAreaBottom: Double) {
+        owner.update(selected, safeAreaBottom) {
+            owner.rootView.setViewModelUntyped(TabBarViewModel(bar.tabs, selected, safeAreaBottom))
+        }
+    }
+
     /** The page's visibility changed (Navigator.updateVisibility); a page without its view yet gets it on creation. */
     fun updateVisibility(entry: PageEntry) {
         val insets = entry.appliedInsets ?: return
@@ -297,7 +209,7 @@ object ValdiHost {
     }
 
     private fun viewModel(entry: PageEntry, insets: Insets) = PageViewModel(
-        entry.id, entry.route, entry.paramsJson, entry.presentation.value,
+        entry.id, entry.route, entry.params, entry.presentation.value,
         PageInsets(insets.top.toDouble(), insets.bottom.toDouble(), insets.left.toDouble(), insets.right.toDouble()),
         entry.visible, entry.visibilityReason,
     )
@@ -312,13 +224,8 @@ object ValdiHost {
 
 data class Insets(val top: Float, val bottom: Float, val left: Float, val right: Float)
 
-class RouteDefinition(val kind: String, val title: String, val component: String?, val nativeName: String?)
-
-/** One tab of routes.tabs; icons are the res/ images' drawable names without the module prefix. */
-class Tab(val route: String, val text: String, val icon: String, val selectedIcon: String?,
-          val iconData: String?, val selectedIconData: String?)
-
-class TabBar(val route: String, val tabs: List<Tab>, val initial: String)
+typealias RouteDefinition = RouteEntry
+typealias TabBar = RouteTabBar
 
 /** What startApp (app.ts) returns: the routes, the tab bar and the first page. */
 class RouteTable(private val routes: Map<String, RouteDefinition>, val tabBar: TabBar?, val root: String) {
@@ -328,29 +235,12 @@ class RouteTable(private val routes: Map<String, RouteDefinition>, val tabBar: T
     operator fun get(route: String): RouteDefinition = requireNotNull(routes[route]) { "Unknown route: $route" }
 
     companion object {
-        fun parse(json: String): RouteTable {
-            val start = JSONObject(json)
-            val routes = start.getJSONObject("routes")
-            val bar = start.optJSONObject("tabBar")
-            val tabs = bar?.getJSONArray("tabs")
-            val table = RouteTable(
-                routes.keys().asSequence().associateWith { key ->
-                    val route = routes.getJSONObject(key)
-                    RouteDefinition(route.getString("kind"), route.getString("title"), route.optString("component").ifEmpty { null },
-                        route.optString("nativeName").ifEmpty { null })
-                },
-                bar?.let {
-                    TabBar(it.getString("route"), (0 until tabs!!.length()).map { i ->
-                        val tab = tabs.getJSONObject(i)
-                        Tab(tab.getString("route"), tab.getString("text"), tab.getString("icon"),
-                            tab.optString("selectedIcon").ifEmpty { null },
-                            tab.optString("iconData").ifEmpty { null }, tab.optString("selectedIconData").ifEmpty { null })
-                    }, it.getString("initial"))
-                },
-                start.getString("root"),
-            )
+        fun from(declaration: RouteDeclaration): RouteTable {
+            val routes = declaration.routes.associateBy { it.route }
+            require(routes.size == declaration.routes.size) { "Duplicate routes" }
+            val table = RouteTable(routes, declaration.tabBar, declaration.root)
             table[table.root]
-            routes.keys().forEach { name ->
+            routes.keys.forEach { name ->
                 val definition = table[name]
                 require(definition.kind in listOf("valdi", "native", "tabs")) { "Invalid route kind: $name" }
                 if (definition.kind == "native") require(NativeScreens.contains(requireNotNull(definition.nativeName))) {
@@ -358,6 +248,7 @@ class RouteTable(private val routes: Map<String, RouteDefinition>, val tabBar: T
                 }
             }
             table.tabBar?.let { config ->
+                validateTabBar(config.mode, config.component)
                 require(config.tabs.isNotEmpty() && config.tabs.map { it.route }.distinct().size == config.tabs.size) { "Invalid tabs" }
                 require(table[config.route].kind == "tabs")
                 require(config.tabs.any { it.route == config.initial }) { "Unknown initial tab: ${config.initial}" }

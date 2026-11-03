@@ -9,6 +9,7 @@
     "valdi/.bazelrc",
     "valdi/.bazelversion",
     "valdi/bzl/patches",
+    "valdi/patches",
     "valdi/bzl/node_compiler",
     "tools/valdi-rolldown/runtime-module.ts",
     "tools/valdi-rolldown/valdiTs.ts",

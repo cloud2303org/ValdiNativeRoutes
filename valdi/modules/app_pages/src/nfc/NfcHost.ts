@@ -1,4 +1,4 @@
-/** The Valdi bridge to ExpoNativeRoutes' Android NFC core (NfcCore, reader mode). iOS answers "not supported". */
+/** The Valdi bridge to an Android or Harmony NFC host. iOS answers "not supported". */
 
 /** @ExportModel({ios: 'VRNfcHandle', android: 'io.valdiroutes.pages.NfcHandle'}) */
 export interface NfcHandleModel {
@@ -41,7 +41,7 @@ export interface NfcHostEvents {
 }
 
 /**
- * One app-wide NFC session, never released (Android only). Capability only: nfc/adapter.ts owns the mini-program
+ * One app-wide NFC session, never released (Android/Harmony). Capability only: nfc/adapter.ts owns the mini-program
  * rules. Errors keep the core's `E_NFC_…:message` form for errors.ts.
  *
  * @ExportProxy({ios: 'VRNfcHost', android: 'io.valdiroutes.pages.NfcHost'})

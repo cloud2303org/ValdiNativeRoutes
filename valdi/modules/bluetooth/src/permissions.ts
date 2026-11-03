@@ -4,8 +4,14 @@
  */
 export interface BluetoothPermissions {
   isAndroid(): boolean;
+  /** Optional so existing Android/iOS permission providers remain valid. */
+  isHarmony?(): boolean;
   androidSdk(): number;
   requestAndroidPermissions(
+    permissions: readonly string[],
+    checkActive?: () => void,
+  ): Promise<{ status: string }>;
+  requestHarmonyPermissions?(
     permissions: readonly string[],
     checkActive?: () => void,
   ): Promise<{ status: string }>;
@@ -33,10 +39,20 @@ export const ANDROID_PERMISSIONS = {
   BLUETOOTH_ADVERTISE: 'android.permission.BLUETOOTH_ADVERTISE',
 };
 
+export const HARMONY_PERMISSIONS = {
+  ACCESS_BLUETOOTH: 'ohos.permission.ACCESS_BLUETOOTH',
+};
+
+export const isHarmony = (): boolean => permissions().isHarmony?.() === true;
 export const isAndroid = (): boolean => permissions().isAndroid();
 export const androidSdk = (): number => permissions().androidSdk();
 export const requestAndroidPermissions = (values: readonly string[], checkActive?: () => void) =>
   permissions().requestAndroidPermissions(values, checkActive);
+export function requestHarmonyPermissions(values: readonly string[], checkActive?: () => void) {
+  const service = permissions();
+  if (!service.requestHarmonyPermissions) throw new Error('Harmony Bluetooth permissions are not configured');
+  return service.requestHarmonyPermissions(values, checkActive);
+}
 export function serializePermissionRequest<T>(request: () => Promise<T>, checkActive?: () => void): Promise<T> {
   return permissions().serializePermissionRequest(request, checkActive);
 }

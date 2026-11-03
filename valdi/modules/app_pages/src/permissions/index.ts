@@ -6,6 +6,7 @@ import { installedPermissionHost } from './PermissionHost';
 // granted/denied/blocked bookkeeping are after ExpoNativeRoutes' device-permissions.
 
 export type AndroidPermission = string;
+export type HarmonyPermission = string;
 
 const android = (name: string): AndroidPermission => `android.permission.${name}`;
 
@@ -19,9 +20,21 @@ export const ANDROID_PERMISSIONS = {
   CAMERA: android('CAMERA'),
 };
 
+export const HARMONY_PERMISSIONS = {
+  ACCESS_BLUETOOTH: 'ohos.permission.ACCESS_BLUETOOTH',
+  GET_WIFI_INFO: 'ohos.permission.GET_WIFI_INFO',
+  SET_WIFI_INFO: 'ohos.permission.SET_WIFI_INFO',
+  NFC_TAG: 'ohos.permission.NFC_TAG',
+};
+
+// Older Device declarations only list Android/iOS and may not expose either Harmony hook.
+export const isHarmony = (): boolean => {
+  const device = Device as { getSystemType?: () => string; isHarmony?: () => boolean };
+  return device.getSystemType?.() === 'harmony' || device.isHarmony?.() === true;
+};
 export const isAndroid = (): boolean => Device.isAndroid();
 
-/** Build.VERSION.SDK_INT; 0 on iOS. */
+/** Build.VERSION.SDK_INT; 0 on iOS/Harmony. */
 export const androidSdk = (): number => (isAndroid() ? installedPermissionHost().androidSdk : 0);
 
 export type DevicePermissionStatus = 'granted' | 'undetermined' | 'denied' | 'blocked' | 'unavailable';
@@ -31,19 +44,31 @@ export interface DevicePermissionResult {
   canAskAgain: boolean | null;
 }
 
-const check = (permission: AndroidPermission): Promise<boolean> =>
-  nativeCall(() => installedPermissionHost().host.check(permission));
+const check = async (permission: string): Promise<boolean> => {
+  const result = await nativeCall(() => installedPermissionHost().host.check(permission));
+  if (typeof result !== 'boolean') throw new Error('native permissions returned an invalid check result');
+  return result;
+};
 
-/** permission -> 'granted' | 'denied' | 'never_ask_again'. */
-async function requestMultiple(permissions: AndroidPermission[]): Promise<Record<AndroidPermission, string>> {
+type PermissionGrantResult = 'granted' | 'denied' | 'never_ask_again';
+
+/** Hosts normalize OS-specific results at their boundary; unknown values are host errors. */
+async function requestMultiple(permissions: string[]): Promise<Record<string, PermissionGrantResult>> {
   const results = await nativeCall(() => installedPermissionHost().host.requestMultiple(permissions));
-  const map: Record<AndroidPermission, string> = {};
-  results.forEach(grant => (map[grant.permission] = grant.result));
+  const map: Record<string, PermissionGrantResult> = {};
+  results.forEach(grant => {
+    const result = grant.result;
+    if (result !== 'granted' && result !== 'denied' && result !== 'never_ask_again')
+      throw new Error('native permissions returned an invalid grant result');
+    map[grant.permission] = result;
+  });
+  for (const permission of permissions)
+    if (map[permission] === undefined) throw new Error('native permissions omitted a grant result');
   return map;
 }
 
 let promptTail: Promise<void> = Promise.resolve();
-const lastResults = new Map<AndroidPermission, DevicePermissionStatus>();
+const lastResults = new Map<string, DevicePermissionStatus>();
 
 /** One prompt queue for Bluetooth, Wi-Fi and NFC, so concurrent callers cannot overlap system dialogs. */
 export function serializePermissionRequest<T>(request: () => Promise<T>, checkActive?: () => void): Promise<T> {
@@ -64,18 +89,40 @@ export async function getAndroidPermissionState(
   permissions: readonly AndroidPermission[],
 ): Promise<DevicePermissionResult> {
   if (!isAndroid()) return unavailable();
+  return getPermissionState(permissions, false);
+}
+
+const isHarmonyNormalPermission = (permission: string): boolean =>
+  permission === HARMONY_PERMISSIONS.GET_WIFI_INFO ||
+  permission === HARMONY_PERMISSIONS.SET_WIFI_INFO ||
+  permission === HARMONY_PERMISSIONS.NFC_TAG;
+
+export async function getHarmonyPermissionState(
+  permissions: readonly HarmonyPermission[],
+): Promise<DevicePermissionResult> {
+  if (!isHarmony()) return unavailable();
+  return getPermissionState(permissions, true);
+}
+
+async function getPermissionState(permissions: readonly string[], harmony: boolean): Promise<DevicePermissionResult> {
   const required = [...new Set(permissions)];
   const grants = await Promise.all(
     required.map(async permission => ({ permission, granted: await check(permission) })),
   );
   const missing = grants.filter(grant => !grant.granted).map(grant => grant.permission);
   for (const grant of grants) if (grant.granted) lastResults.set(grant.permission, 'granted');
-  if (missing.length === 0) return { status: 'granted', canAskAgain: true };
+  if (missing.length === 0)
+    return {
+      status: 'granted',
+      canAskAgain: !harmony || required.some(permission => !isHarmonyNormalPermission(permission)),
+    };
+  // system_grant permissions are declared by the host; a user dialog cannot repair a missing grant.
+  if (harmony && missing.some(isHarmonyNormalPermission)) return unavailable();
   if (missing.some(permission => lastResults.get(permission) === 'blocked'))
     return { status: 'blocked', canAskAgain: false };
   if (missing.some(permission => lastResults.get(permission) === 'denied'))
     return { status: 'denied', canAskAgain: true };
-  // Android's check cannot tell first use from a denial made before this process.
+  // A boolean host check cannot tell first use from a denial made before this process.
   return { status: 'undetermined', canAskAgain: null };
 }
 
@@ -83,18 +130,36 @@ export function requestAndroidPermissions(
   permissions: readonly AndroidPermission[],
   checkActive?: () => void,
 ): Promise<DevicePermissionResult> {
+  return requestPermissions(permissions, false, checkActive);
+}
+
+/** ACCESS_BLUETOOTH is user_grant; Wi-Fi and NFC normal permissions are checked without prompting. */
+export function requestHarmonyPermissions(
+  permissions: readonly HarmonyPermission[],
+  checkActive?: () => void,
+): Promise<DevicePermissionResult> {
+  return requestPermissions(permissions, true, checkActive);
+}
+
+function requestPermissions(
+  permissions: readonly string[],
+  harmony: boolean,
+  checkActive?: () => void,
+): Promise<DevicePermissionResult> {
   return serializePermissionRequest(async () => {
-    const before = await getAndroidPermissionState(permissions);
+    const read = harmony ? getHarmonyPermissionState : getAndroidPermissionState;
+    const before = await read(permissions);
     if (before.status === 'granted' || before.status === 'unavailable' || before.status === 'blocked') return before;
     const required = [...new Set(permissions)];
     const checked = await Promise.all(required.map(check));
     checkActive?.();
     const missing = required.filter((_, index) => !checked[index]);
-    if (missing.length === 0) return { status: 'granted', canAskAgain: true };
+    if (missing.length === 0) return read(required);
+    if (harmony && missing.some(isHarmonyNormalPermission)) return unavailable();
     // Android 12+ can ignore FINE requested without COARSE, including a precision upgrade.
     const fine = ANDROID_PERMISSIONS.ACCESS_FINE_LOCATION;
     const coarse = ANDROID_PERMISSIONS.ACCESS_COARSE_LOCATION;
-    if (androidSdk() >= 31 && missing.includes(fine) && !missing.includes(coarse)) missing.push(coarse);
+    if (!harmony && androidSdk() >= 31 && missing.includes(fine) && !missing.includes(coarse)) missing.push(coarse);
     const results = await requestMultiple(missing);
     for (const permission of missing) {
       const result = results[permission];
@@ -103,7 +168,7 @@ export function requestAndroidPermissions(
         result === 'granted' ? 'granted' : result === 'never_ask_again' ? 'blocked' : 'denied',
       );
     }
-    return getAndroidPermissionState(required);
+    return read(required);
   }, checkActive);
 }
 

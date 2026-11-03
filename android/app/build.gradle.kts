@@ -69,6 +69,10 @@ val valdiNativeModules = tasks.register<Exec>("valdiNativeModules") {
 tasks.named("preBuild") { dependsOn(valdiNativeModules) }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
+    // Exercise the storage persistence codec on the JVM; Android supplies org.json in production.
+    testImplementation("org.json:json:20250517")
+
     // The Valdi runtime and Valdi's own modules, produced by scripts/export-android.sh; app_pages and the npm packages
     // come from valdiModules below, their Kotlin bindings from generated/valdi.
     implementation(files("libs/valdi_runtime.aar"))
@@ -93,11 +97,10 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
+    implementation("dev.chrisbanes.haze:haze:1.7.2")
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.navigation3:navigation3-runtime:1.1.7")
     implementation("androidx.navigation3:navigation3-ui:1.1.7")
-    // The tab bar's blur over the pages under it (TabsScreen), as ExpoNativeRoutes.
-    implementation("dev.chrisbanes.haze:haze:1.7.2")
     // api.*StorageSync (StorageHostImpl.kt), as ExpoNativeRoutes' stores.
     implementation("com.tencent:mmkv:2.4.3")
     implementation("androidx.appcompat:appcompat:1.7.1")

@@ -1,0 +1,136 @@
+{
+  "recordedAt": "2026-11-03T04:37:04.292Z",
+  "purpose": "Exact original helper/input/navigation freeze before explicit new-admission intent overload",
+  "priorReceipt": {
+    "path": "scripts/harmony/tests/sheet-surface-input-20261103-source-receipt.json",
+    "sha256": "63266ec34e8c73327eaa6cddd74ee8059507ad9a528f92de82714fc212675791"
+  },
+  "entries": [
+    {
+      "originalPath": "harmony/entry/src/main/cpp/host/HarmonySheetGeometry.hpp",
+      "snapshotRelativePath": "harmony/entry/src/main/cpp/host/HarmonySheetGeometry.hpp",
+      "sha256": "33aa26a36dff14b0149bd27ff665d35f9e8d24ed0f8e17601e3c5c7f242c04ed"
+    },
+    {
+      "originalPath": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.hpp",
+      "snapshotRelativePath": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.hpp",
+      "sha256": "ee63f3b54e81a23ea83ee14fac21327705cb7a529431c0ac4d421c0b171a5846"
+    },
+    {
+      "originalPath": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.cpp",
+      "snapshotRelativePath": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.cpp",
+      "sha256": "8367f7aaf4a773cce454d51ffb8eca2e14efe2971e261167fe24ebc8c3a8b174"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-geometry-extract.mjs",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-geometry-extract.mjs",
+      "sha256": "0da3915be482b95e3738ee04d97d75df07711eec7f2ea16ad7f28e8805030b79"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-geometry.test.mjs",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-geometry.test.mjs",
+      "sha256": "e2ff478cc661fc3ce77892b601d638d6a72c5c115203eb08b93ca78e55fb3794"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-geometry-check.mjs",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-geometry-check.mjs",
+      "sha256": "95969c53341ad4ba5364576c019ed5a5a6c3871ff0ca12c2207ae4ffa8842013"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-native.cpp",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-native.cpp",
+      "sha256": "9fe6341fc27a5e550faa10ff560a3e314c58c641c7dde56b533dc0bf914ad179"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface.md",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface.md",
+      "sha256": "ce1c148a19a798c6af9b94a2efa8a229e9b068c691e060baf8214ba4f3ed60d8"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-p2-native.cpp",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-p2-native.cpp",
+      "sha256": "d21ec4ee05ea4195b0d931946199d828da231cd7c9663ba810e6a51c4078c5c4"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-p2-boundary.hpp",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-p2-boundary.hpp",
+      "sha256": "b88cd6bb7ecf00d9416dfe99e948076ea7e4c6cff9f67cd25d0d19518b56bc48"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-input-native.cpp",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-input-native.cpp",
+      "sha256": "787f11c5c6c5ac23e92cbb573b607f56146c03b31dca3fde4325da74474273ee"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-navigation-extract.py",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-navigation-extract.py",
+      "sha256": "f7be20c66b67442e070b44b84c2bb93087d1105c1c54c2ea12cf57d27a691192"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-navigation-boundary.hpp",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-navigation-boundary.hpp",
+      "sha256": "236ed22aad2c745b6a72d5c0600648cd84c95767751aac1070794c136e7ef193"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-navigation-native.cpp",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-navigation-native.cpp",
+      "sha256": "3829d06c8308a0f07656ca79982dee21700cf1a324c74c361dc6b35f48402996"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-navigation-baseline-bodies.inc",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-navigation-baseline-bodies.inc",
+      "sha256": "7b8bb886a9c900229263bcf387023ff8551403a5dcc34edab60eabc6aa843df9"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-navigation-bodies.inc",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-navigation-bodies.inc",
+      "sha256": "68d3f551cc3e9fd082bd2392756511ed34c895f0441798788135bac3a3650c7c"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-navigation-resumed-bodies.inc",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-navigation-resumed-bodies.inc",
+      "sha256": "68d3f551cc3e9fd082bd2392756511ed34c895f0441798788135bac3a3650c7c"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-navigation-live-source.json",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-navigation-live-source.json",
+      "sha256": "98be3a4ca83fbe9df341e4819658931bfbada1de31a74764ef09b20a53a49c1b"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-navigation-baseline-source.json",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-navigation-baseline-source.json",
+      "sha256": "47d4fbf6ffc328f4a7ea07df724f728762db76ffb04368319c858f0980e8a9c9"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-navigation-resumed-source.json",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-navigation-resumed-source.json",
+      "sha256": "a9b7a8f0db62f2e3260e9201c56e1cdd9afa282831872ea0ab00de7111825908"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-input-navigation.md",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-input-navigation.md",
+      "sha256": "ccbe750b47820163523ea0af4bdf2439acad0f8e59baeddc4928148f86f6dec4"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-input-check.mjs",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-input-check.mjs",
+      "sha256": "4b4ce1dce2774e563cff91ab61057e32d1ba8d5570cca63ff608f411775f5468"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-input-source-check-attempt1.json",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-input-source-check-attempt1.json",
+      "sha256": "a4ed9ea10c044cbc3b6ca52bd327cd9c276b034c575b0fafa992caaf261fe71b"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-input-20261103.patch",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-input-20261103.patch",
+      "sha256": "2ad976df3945f16c9591c89099ef1413754d0ebd5cfbe54efd8cbfbc73b614a9"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-input-20261103-source-receipt.json",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-input-20261103-source-receipt.json",
+      "sha256": "63266ec34e8c73327eaa6cddd74ee8059507ad9a528f92de82714fc212675791"
+    }
+  ],
+  "childNativeCompilerInvoked": false
+}

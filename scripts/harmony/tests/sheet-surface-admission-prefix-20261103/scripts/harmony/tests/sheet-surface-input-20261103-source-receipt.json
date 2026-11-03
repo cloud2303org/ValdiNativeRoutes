@@ -1,0 +1,428 @@
+{
+  "recordedAt": "2026-11-03T04:09:35.960Z",
+  "workspace": "/Users/cloud/project/ValdiNativeRoutes/",
+  "change": "Independent sheet input gate and actual surface plus unchanged Navigator visibility fixture",
+  "originalReceipts": [
+    {
+      "path": "scripts/harmony/tests/sheet-geometry-20261103-source-receipt.json",
+      "sha256": "9018356eda3ae58554fc289ca78e0e06382ecf978a01775b529fa517382eaf1d",
+      "verifiedUnchanged": true
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-p2-20261103-source-receipt.json",
+      "sha256": "a412dc50e0f8c470002f6ba596d3915ac9a063c5e3635080a62c054818a84d11",
+      "verifiedUnchanged": true
+    }
+  ],
+  "snapshots": [
+    {
+      "path": "scripts/harmony/tests/sheet-surface-p2-prefix-20261103/manifest.json",
+      "sha256": "2d232f7d95de9b8c0ea34ed42981a8d19767d07f55c59f10c594bddd98db9bec",
+      "verified": true
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-input-prefix-20261103/manifest.json",
+      "sha256": "77d02d471e964817467ecc581ef5d25be934436c8ee5676cca45aff54169fc77",
+      "verified": true
+    }
+  ],
+  "pauseAudit": {
+    "path": "/tmp/valdi-sheets-20261103/resume-20261103-partial-audit/receipt.json",
+    "sha256": "669871a4ad9d4d4725150fd45ff4bd6baeeeb4936df17aa7c345edb17a7cdb50",
+    "helperSourcesUnchangedSinceAudit": true,
+    "inputFixtureAdjustment": "one .2 to .1 sample before resized re-enabled scrim assertion"
+  },
+  "helperSources": [
+    {
+      "path": "harmony/entry/src/main/cpp/host/HarmonySheetGeometry.hpp",
+      "sha256": "33aa26a36dff14b0149bd27ff665d35f9e8d24ed0f8e17601e3c5c7f242c04ed"
+    },
+    {
+      "path": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.hpp",
+      "sha256": "ee63f3b54e81a23ea83ee14fac21327705cb7a529431c0ac4d421c0b171a5846"
+    },
+    {
+      "path": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.cpp",
+      "sha256": "8367f7aaf4a773cce454d51ffb8eca2e14efe2971e261167fe24ebc8c3a8b174"
+    }
+  ],
+  "sources": [
+    {
+      "path": "harmony/entry/src/main/cpp/host/HarmonySheetGeometry.hpp",
+      "sha256": "33aa26a36dff14b0149bd27ff665d35f9e8d24ed0f8e17601e3c5c7f242c04ed"
+    },
+    {
+      "path": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.hpp",
+      "sha256": "ee63f3b54e81a23ea83ee14fac21327705cb7a529431c0ac4d421c0b171a5846"
+    },
+    {
+      "path": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.cpp",
+      "sha256": "8367f7aaf4a773cce454d51ffb8eca2e14efe2971e261167fe24ebc8c3a8b174"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-geometry-extract.mjs",
+      "sha256": "0da3915be482b95e3738ee04d97d75df07711eec7f2ea16ad7f28e8805030b79"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-geometry.test.mjs",
+      "sha256": "e2ff478cc661fc3ce77892b601d638d6a72c5c115203eb08b93ca78e55fb3794"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-geometry-check.mjs",
+      "sha256": "95969c53341ad4ba5364576c019ed5a5a6c3871ff0ca12c2207ae4ffa8842013"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-native.cpp",
+      "sha256": "9fe6341fc27a5e550faa10ff560a3e314c58c641c7dde56b533dc0bf914ad179"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface.md",
+      "sha256": "ce1c148a19a798c6af9b94a2efa8a229e9b068c691e060baf8214ba4f3ed60d8"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-p2-native.cpp",
+      "sha256": "d21ec4ee05ea4195b0d931946199d828da231cd7c9663ba810e6a51c4078c5c4"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-p2-boundary.hpp",
+      "sha256": "b88cd6bb7ecf00d9416dfe99e948076ea7e4c6cff9f67cd25d0d19518b56bc48"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-input-native.cpp",
+      "sha256": "787f11c5c6c5ac23e92cbb573b607f56146c03b31dca3fde4325da74474273ee"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-navigation-extract.py",
+      "sha256": "f7be20c66b67442e070b44b84c2bb93087d1105c1c54c2ea12cf57d27a691192"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-navigation-boundary.hpp",
+      "sha256": "236ed22aad2c745b6a72d5c0600648cd84c95767751aac1070794c136e7ef193"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-navigation-native.cpp",
+      "sha256": "3829d06c8308a0f07656ca79982dee21700cf1a324c74c361dc6b35f48402996"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-navigation-baseline-bodies.inc",
+      "sha256": "7b8bb886a9c900229263bcf387023ff8551403a5dcc34edab60eabc6aa843df9"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-navigation-bodies.inc",
+      "sha256": "68d3f551cc3e9fd082bd2392756511ed34c895f0441798788135bac3a3650c7c"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-navigation-resumed-bodies.inc",
+      "sha256": "68d3f551cc3e9fd082bd2392756511ed34c895f0441798788135bac3a3650c7c"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-navigation-live-source.json",
+      "sha256": "98be3a4ca83fbe9df341e4819658931bfbada1de31a74764ef09b20a53a49c1b"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-navigation-baseline-source.json",
+      "sha256": "47d4fbf6ffc328f4a7ea07df724f728762db76ffb04368319c858f0980e8a9c9"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-navigation-resumed-source.json",
+      "sha256": "a9b7a8f0db62f2e3260e9201c56e1cdd9afa282831872ea0ab00de7111825908"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-input-navigation.md",
+      "sha256": "ccbe750b47820163523ea0af4bdf2439acad0f8e59baeddc4928148f86f6dec4"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-input-check.mjs",
+      "sha256": "4b4ce1dce2774e563cff91ab61057e32d1ba8d5570cca63ff608f411775f5468"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-input-source-check-attempt1.json",
+      "sha256": "a4ed9ea10c044cbc3b6ca52bd327cd9c276b034c575b0fafa992caaf261fe71b"
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-input-20261103.patch",
+      "sha256": "2ad976df3945f16c9591c89099ef1413754d0ebd5cfbe54efd8cbfbc73b614a9"
+    }
+  ],
+  "hostExtractions": [
+    {
+      "path": "scripts/harmony/tests/sheet-surface-navigation-baseline-source.json",
+      "sha256": "47d4fbf6ffc328f4a7ea07df724f728762db76ffb04368319c858f0980e8a9c9",
+      "source": "/private/tmp/valdi-sheets-20261103/host-closing-visibility-prefix/harmony/entry/src/main/cpp/host/HarmonyNavigator.cpp",
+      "sourceSha256": "3197a6b4f0f9891c30393af9b6c1052b6ca29eb40c9805d80348fe3ecb75ec26",
+      "extractor": "/Users/cloud/project/ValdiNativeRoutes/scripts/harmony/tests/sheet-surface-navigation-extract.py",
+      "extractorSha256": "f7be20c66b67442e070b44b84c2bb93087d1105c1c54c2ea12cf57d27a691192",
+      "output": "/Users/cloud/project/ValdiNativeRoutes/scripts/harmony/tests/sheet-surface-navigation-baseline-bodies.inc",
+      "outputSha256": "7b8bb886a9c900229263bcf387023ff8551403a5dcc34edab60eabc6aa843df9",
+      "methods": [
+        {
+          "name": "sheetGeometry",
+          "startLine": 913,
+          "endLine": 919,
+          "sha256": "5076b21c124949afd10a628dba5019f079a779aed2f180f9be971495208a076d",
+          "transformation": "none"
+        },
+        {
+          "name": "closeSheet",
+          "startLine": 1138,
+          "endLine": 1167,
+          "sha256": "1fbe58a0c0d9859ef62d9d3064c35b1bd98d5fcfdbc7c627d4f8b1874071eb8e",
+          "transformation": "none"
+        },
+        {
+          "name": "reconcileSheet",
+          "startLine": 1011,
+          "endLine": 1022,
+          "sha256": "b78da5d65fd7de56ddba3859a6a45b06a793a3cb5c3d015dacd1e2a4b005ef99",
+          "transformation": "none"
+        },
+        {
+          "name": "finishSheet",
+          "startLine": 1176,
+          "endLine": 1215,
+          "sha256": "4372d43c461a72cf1e0518f9b15810e513115bfb43fe5094bb27e6f593d4c328",
+          "transformation": "none"
+        },
+        {
+          "name": "setActive",
+          "startLine": 2063,
+          "endLine": 2082,
+          "sha256": "c95e6e6892e72b099bc8fc994bbd6d9d10ea5ec6fc15724bb075f15ad13ff427",
+          "transformation": "none"
+        },
+        {
+          "name": "layoutSheet",
+          "startLine": 989,
+          "endLine": 1009,
+          "sha256": "29b1ea9fcc53b9943a88dbedb6d8fade96d974ace704a5e134f147a04f5ef06a",
+          "transformation": "none"
+        }
+      ],
+      "methodBodiesChanged": false,
+      "surfaceSubstituted": false,
+      "nativeCompilerInvoked": false,
+      "nativeFixtureExecuted": false
+    },
+    {
+      "path": "scripts/harmony/tests/sheet-surface-navigation-resumed-source.json",
+      "sha256": "a9b7a8f0db62f2e3260e9201c56e1cdd9afa282831872ea0ab00de7111825908",
+      "source": "/private/tmp/valdi-sheets-20261103/surface-input-freeze-20261103/HarmonyNavigator.cpp",
+      "sourceSha256": "340b7ffdf245b01f0921aff5219eb74143c2922b38696ff9b7f4d2d06a0b09a0",
+      "extractor": "/Users/cloud/project/ValdiNativeRoutes/scripts/harmony/tests/sheet-surface-navigation-extract.py",
+      "extractorSha256": "f7be20c66b67442e070b44b84c2bb93087d1105c1c54c2ea12cf57d27a691192",
+      "output": "/Users/cloud/project/ValdiNativeRoutes/scripts/harmony/tests/sheet-surface-navigation-resumed-bodies.inc",
+      "outputSha256": "68d3f551cc3e9fd082bd2392756511ed34c895f0441798788135bac3a3650c7c",
+      "methods": [
+        {
+          "name": "sheetGeometry",
+          "startLine": 913,
+          "endLine": 919,
+          "sha256": "5076b21c124949afd10a628dba5019f079a779aed2f180f9be971495208a076d",
+          "transformation": "none"
+        },
+        {
+          "name": "closeSheet",
+          "startLine": 1145,
+          "endLine": 1175,
+          "sha256": "0a192eda97bb0afce0fddc1d19e012f3c24d8a7a700f1daecea1a46512084c37",
+          "transformation": "none"
+        },
+        {
+          "name": "reconcileSheet",
+          "startLine": 1011,
+          "endLine": 1027,
+          "sha256": "559a8028a2fe39c3cd610d23ba6c606ed135b0c937cc27ae8166351b2b7f56bb",
+          "transformation": "none"
+        },
+        {
+          "name": "finishSheet",
+          "startLine": 1184,
+          "endLine": 1223,
+          "sha256": "4372d43c461a72cf1e0518f9b15810e513115bfb43fe5094bb27e6f593d4c328",
+          "transformation": "none"
+        },
+        {
+          "name": "setActive",
+          "startLine": 2071,
+          "endLine": 2090,
+          "sha256": "c95e6e6892e72b099bc8fc994bbd6d9d10ea5ec6fc15724bb075f15ad13ff427",
+          "transformation": "none"
+        },
+        {
+          "name": "layoutSheet",
+          "startLine": 989,
+          "endLine": 1009,
+          "sha256": "29b1ea9fcc53b9943a88dbedb6d8fade96d974ace704a5e134f147a04f5ef06a",
+          "transformation": "none"
+        }
+      ],
+      "methodBodiesChanged": false,
+      "surfaceSubstituted": false,
+      "nativeCompilerInvoked": false,
+      "nativeFixtureExecuted": false
+    }
+  ],
+  "changedHostMethods": [
+    "closeSheet",
+    "reconcileSheet"
+  ],
+  "historicalLiveExtraction": {
+    "path": "scripts/harmony/tests/sheet-surface-navigation-live-source.json",
+    "sha256": "98be3a4ca83fbe9df341e4819658931bfbada1de31a74764ef09b20a53a49c1b",
+    "originalFullHostSha256": "8c98638cad086c066a94b0052bbaf755f0fb961951875fbb47453f234e5b90ab",
+    "currentSnapshotFullHostSha256": "340b7ffdf245b01f0921aff5219eb74143c2922b38696ff9b7f4d2d06a0b09a0",
+    "generatedMethodIdentityUnchanged": true
+  },
+  "fixedHostHeader": {
+    "path": "harmony/entry/src/main/cpp/host/HarmonyNavigator.hpp",
+    "sha256": "71c8c8fb16f7f9d95dfca4e7989130406759cfd774202a4f9c613371e3a1199e"
+  },
+  "reference": {
+    "path": "ios/ValdiRoutes/SheetHostView.swift",
+    "sha256": "717c45cbf28fd6f8c1fd90a7be839dba2f42b2e22c3bf5592fe1549f1cd2e31a",
+    "scope": "interaction and ownership reference, no platform physics equivalence"
+  },
+  "sourceVerification": "historical hashes, pause audit, generated method bytes and bounded host delta",
+  "javaScriptGeometry": {
+    "command": [
+      "/Users/cloud/.nvm/versions/node/v24.14.0/bin/node",
+      "--test",
+      "scripts/harmony/tests/sheet-geometry.test.mjs"
+    ],
+    "nodeVersion": "v24.14.0",
+    "validationKind": "production-scalar-statements-translated-to-JavaScript",
+    "status": 0,
+    "stdout": "✔ fixed reference detent has 24vp handle, real viewport and page-owned safe insets (3.067167ms)\n✔ fixed keyboard shrink counts full, partial and absent shell resize once (0.140541ms)\n✔ viewport smaller for an independent reason is never blindly added to keyboard (0.055041ms)\n✔ compact keeps 340vp plus unobscured bottom and rides keyboard across resize policies (0.083625ms)\n✔ system-top cap shrinks content rather than covering status/cutout area (0.050167ms)\n✔ tiny/zero viewports and oversized safe areas remain bounded (0.046167ms)\n✔ invalid or incoherent observations fail before reaching native attributes (0.329375ms)\n✔ geometry bounds hold over a deterministic viewport/keyboard/safe-area sweep (1.147958ms)\nℹ tests 8\nℹ suites 0\nℹ pass 8\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 48.31475\n",
+    "stderr": ""
+  },
+  "sdkDeclarations": [
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/native_node.h",
+      "sha256": "d09d34af254902afc2e0daa382ecf273c6b2934881ba995ea3cf5fb520c05a6a"
+    },
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/native_animate.h",
+      "sha256": "85ee9f53f37906c6ae0b675a10ec9dde48002b461ec0569e2b832c5efc23b432"
+    },
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/native_interface.h",
+      "sha256": "624f2d2f105f27fc93543d2de6b07df5732c2d8ccf29c6e29640704bde1552be"
+    },
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/common_type.h",
+      "sha256": "60ffff8e5cd91cf0c6f2cef34d7255c86e660235fe68d87d856b1b1ef606f9ac"
+    },
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/node_attributes/common_attributes.h",
+      "sha256": "e589de9672a920d87087f8a097a6905fce789d06c341551b477e41a06ed8798c"
+    },
+    {
+      "path": "/Users/cloud/Library/Huawei/26.0.0.865/command-line-tools/sdk/default/openharmony/native/sysroot/usr/include/arkui/node_attributes/layout.h",
+      "sha256": "d64b3fa17ef856cee03f4343913dd150430eda0eb622e7b4efce81fc646a7f45"
+    }
+  ],
+  "controllerNative": [
+    {
+      "mode": "baseline",
+      "path": "/tmp/valdi-sheets-20261103/surface-navigation-integration/baseline/receipt.json",
+      "sha256": "0772d9a46b1dc12e77775957600b84f060c2d0c83a722f8bb442d7d675bcc456",
+      "terminalExit": -6,
+      "runLog": {
+        "path": "/private/tmp/valdi-sheets-20261103/surface-navigation-integration/baseline/surface-run.log",
+        "sha256": "f364b228aa43341c053f85be053cf39692ba17b00effea51bda5791d5cec81e3",
+        "text": "Assertion failed: (item->value[0].i32 == ARKUI_VISIBILITY_VISIBLE && \"Foreground closing carrier must remain natively VISIBLE\"), function operator(), file sheet-surface-navigation-native.cpp, line 82.\n"
+      },
+      "sameFixtureAndHelperInputsVerified": [
+        {
+          "path": "harmony/entry/src/main/cpp/host/HarmonySheetGeometry.hpp",
+          "sha256": "33aa26a36dff14b0149bd27ff665d35f9e8d24ed0f8e17601e3c5c7f242c04ed"
+        },
+        {
+          "path": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.hpp",
+          "sha256": "ee63f3b54e81a23ea83ee14fac21327705cb7a529431c0ac4d421c0b171a5846"
+        },
+        {
+          "path": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.cpp",
+          "sha256": "8367f7aaf4a773cce454d51ffb8eca2e14efe2971e261167fe24ebc8c3a8b174"
+        },
+        {
+          "path": "scripts/harmony/tests/sheet-surface-navigation-native.cpp",
+          "sha256": "3829d06c8308a0f07656ca79982dee21700cf1a324c74c361dc6b35f48402996"
+        },
+        {
+          "path": "scripts/harmony/tests/sheet-surface-navigation-boundary.hpp",
+          "sha256": "236ed22aad2c745b6a72d5c0600648cd84c95767751aac1070794c136e7ef193"
+        },
+        {
+          "path": "scripts/harmony/tests/sheet-surface-p2-boundary.hpp",
+          "sha256": "b88cd6bb7ecf00d9416dfe99e948076ea7e4c6cff9f67cd25d0d19518b56bc48"
+        }
+      ],
+      "generatedBodies": {
+        "path": "/private/tmp/valdi-sheets-20261103/surface-navigation-integration/baseline.inc",
+        "sha256": "7b8bb886a9c900229263bcf387023ff8551403a5dcc34edab60eabc6aa843df9"
+      },
+      "executionOwner": "parent exclusive serial controller",
+      "serialNativeInvocations": true,
+      "maxJobs": 1,
+      "applicationOrFullRuntimeLinked": false,
+      "HAP": false,
+      "device": false
+    },
+    {
+      "mode": "fixed",
+      "path": "/tmp/valdi-sheets-20261103/surface-navigation-integration/fixed/receipt.json",
+      "sha256": "afbe92551c28383edd9b78eb8c20480e7fec2e47ebde3cd8fab140784c1368d8",
+      "terminalExit": 0,
+      "runLog": {
+        "path": "/private/tmp/valdi-sheets-20261103/surface-navigation-integration/fixed/surface-run.log",
+        "sha256": "19115b8ef443b5663e9bf3cc0ec67d89c9ee8cbc1f08023740fab9ee5ac445b2",
+        "text": "PASS actual surface + unchanged Navigator bodies: native visibility/input, panel/scrim frames, reconcile/resize, background, stale events, terminal once and result after detach\n"
+      },
+      "sameFixtureAndHelperInputsVerified": [
+        {
+          "path": "harmony/entry/src/main/cpp/host/HarmonySheetGeometry.hpp",
+          "sha256": "33aa26a36dff14b0149bd27ff665d35f9e8d24ed0f8e17601e3c5c7f242c04ed"
+        },
+        {
+          "path": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.hpp",
+          "sha256": "ee63f3b54e81a23ea83ee14fac21327705cb7a529431c0ac4d421c0b171a5846"
+        },
+        {
+          "path": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.cpp",
+          "sha256": "8367f7aaf4a773cce454d51ffb8eca2e14efe2971e261167fe24ebc8c3a8b174"
+        },
+        {
+          "path": "scripts/harmony/tests/sheet-surface-navigation-native.cpp",
+          "sha256": "3829d06c8308a0f07656ca79982dee21700cf1a324c74c361dc6b35f48402996"
+        },
+        {
+          "path": "scripts/harmony/tests/sheet-surface-navigation-boundary.hpp",
+          "sha256": "236ed22aad2c745b6a72d5c0600648cd84c95767751aac1070794c136e7ef193"
+        },
+        {
+          "path": "scripts/harmony/tests/sheet-surface-p2-boundary.hpp",
+          "sha256": "b88cd6bb7ecf00d9416dfe99e948076ea7e4c6cff9f67cd25d0d19518b56bc48"
+        }
+      ],
+      "generatedBodies": {
+        "path": "/private/tmp/valdi-sheets-20261103/surface-navigation-integration/fixed.inc",
+        "sha256": "68d3f551cc3e9fd082bd2392756511ed34c895f0441798788135bac3a3650c7c"
+      },
+      "executionOwner": "parent exclusive serial controller",
+      "serialNativeInvocations": true,
+      "maxJobs": 1,
+      "applicationOrFullRuntimeLinked": false,
+      "HAP": false,
+      "device": false
+    }
+  ],
+  "childNativeCompilerInvoked": false,
+  "childNativeFixtureExecuted": false,
+  "integratedNativeVisibility": "parent baseline native VISIBLE assertion RED -6 and fixed GREEN 0; exact inputs verified read-only",
+  "arkuiSiblingHitTestingAndOrdering": "unverified-device-behavior",
+  "fullRuntimeBackendAndJsVmIntegration": "not-executed-by-this-bounded-fixture",
+  "historicalNative14Media14AndNative566458": "untouched-by-child",
+  "independentReview": "parent-owned",
+  "heavyBuildHapAndDevice": "not-run"
+}

@@ -5,8 +5,10 @@
 //   pnpm dev            the Android emulators `adb devices` lists and the booted iOS simulator; a phone, or any
 //                       other device, only when $ANDROID_SERIAL names it (then only that one): the push replaces the
 //                       app's modules, which a device running another build of the app doesn't survive
+//   HARMONY_DEVICE=<exact HDC key> HARMONY_APPLICATION_ID=<exact configure ID> pnpm dev
+//                       Harmony only; HDC_PATH optionally selects the SDK CLI. See docs/harmony-development-transport.md.
 //
-// The protocol is the Valdi daemon's (compiler Reloader/, runtime Debugger/DaemonClient.cpp): the app listens on
+// The protocol is the Valdi daemon's (runtime Debugger/DaemonClient.cpp): the app listens on
 // device port 13592; on Android we `adb forward` to it and connect, the iOS simulator's is the Mac's own port. Packets are the archive's ValdiPacket framing (magic, length)
 // around JSON. The app sends a `configure` request; we answer it, then send every file once (`updated_resources`),
 // and afterwards the ones each build changes. The app replaces the files and unloads their modules, which re-renders.
@@ -16,7 +18,6 @@
 // renamed shows in Valdi pages. Route declarations inline their Tab icons in dev output, so the native bar reloads too.
 // Font files and their catalog entries go too; already-loaded platform fonts may require an app restart. A module
 // created while it runs is picked up on the next start.
-import { isUtf8 } from 'node:buffer';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, watch } from 'node:fs';
 import net from 'node:net';
@@ -30,17 +31,17 @@ import { assertEnabledImports } from './module-selection';
 import { availableModuleNames } from './modules.mjs';
 import { root } from './pipeline';
 import { sourceFiles } from './valdiTs';
+import { DEVICE_PORT, encodeDevPacket, updatedResources, type DevResource } from './dev-protocol';
+import { harmonyDevSelection } from './harmony-dev-device';
+import { HarmonyDevTransport } from './harmony-dev-transport';
 
-const DEVICE_PORT = 13592;
+// Fail before building/watching if Harmony was selected without an exact target and expected application identity.
+const harmonySelection = harmonyDevSelection(process.env);
 /** The name the booted iOS simulator goes by here; it is reached at 127.0.0.1:DEVICE_PORT, without a forward. */
 const IOS_SIMULATOR = 'ios-simulator';
 const MAGIC = 0x0100c633;
 
-interface Resource {
-  bundle: string;
-  file: string;
-  data: Buffer;
-}
+type Resource = DevResource;
 
 // ---- Building
 
@@ -172,27 +173,12 @@ class DeviceConnection {
 
   send(resources: Resource[]) {
     if (!this.configured || !resources.length) return;
-    this.write({
-      event: {
-        updated_resources: {
-          // As the Valdi daemon: text as is, anything else (images, the asset catalog) in base64.
-          resources: resources.map(({ bundle, file, data }) => ({
-            bundle_name: bundle,
-            file_path_within_bundle: file,
-            ...(isUtf8(data) ? { data_string: data.toString('utf8') } : { data_base64: data.toString('base64') }),
-          })),
-        },
-      },
-    });
+    this.write(updatedResources(resources));
     console.log(`[${this.serial}] Sent ${resources.map(({ bundle, file }) => `${bundle}:${file}`).join(', ')}`);
   }
 
   private write(payload: object) {
-    const body = Buffer.from(JSON.stringify(payload));
-    const header = Buffer.alloc(8);
-    header.writeUInt32LE(MAGIC, 0);
-    header.writeUInt32LE(body.length, 4);
-    this.socket?.write(Buffer.concat([header, body]));
+    this.socket?.write(encodeDevPacket(payload));
   }
 
   private receive(data: Buffer) {
@@ -227,6 +213,7 @@ class DeviceConnection {
 }
 
 const devices = new Map<string, DeviceConnection>();
+const harmony = harmonySelection ? new HarmonyDevTransport(harmonySelection, allResources) : undefined;
 
 function iosSimulatorBooted(): boolean {
   if (process.platform !== 'darwin') return false;
@@ -238,6 +225,11 @@ function iosSimulatorBooted(): boolean {
 }
 
 function pollDevices() {
+  // Harmony has its own discovery and forwarding implementation. Never feed an HDC key to DeviceConnection/ADB.
+  if (harmony) {
+    void harmony.poll();
+    return;
+  }
   let serials: string[];
   try {
     serials = execFileSync('adb', ['devices'], { encoding: 'utf8' })
@@ -300,6 +292,7 @@ watch(modulesDir, { recursive: true }, (_event, file) => {
         }
         const changed = await build(current.size ? batch.keys() : modules.keys());
         for (const device of devices.values()) device.send(changed);
+        harmony?.send(changed);
       } catch (error) {
         console.error(error instanceof Error ? error.message : error);
       }
@@ -314,18 +307,23 @@ building = build().catch(error => {
   console.log('Fix the errors above; watching for changes.');
 });
 await building;
-setInterval(pollDevices, 1000);
+const devicePoll = setInterval(pollDevices, 1000);
 pollDevices();
 
-const stopControls = startDevControls();
+// The existing a/i launcher menu probes other platforms; keep Harmony's explicitly selected session isolated.
+const stopControls = harmony ? () => {} : startDevControls();
 process.once('exit', stopControls);
 
-// The adb forwards outlive us otherwise.
+// The platform forwards outlive us otherwise. Wait for owned HDC/CDP cleanup before exiting.
+let stopping = false;
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
-  process.on(signal, () => {
+  process.on(signal, async () => {
+    if (stopping) return;
+    stopping = true;
+    clearInterval(devicePoll);
     stopControls();
     for (const device of devices.values()) device.close();
-    process.exit(0);
+    try { await harmony?.close(); } finally { process.exit(0); }
   });
 }
 console.log(`Watching src and res of ${[...modules.keys()].join(', ')}`);

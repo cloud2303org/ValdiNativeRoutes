@@ -1,7 +1,9 @@
 import { navigationHost } from '../NavigationHost';
 import type { PageContext, PageViewModel } from '../Page';
 import { routes } from '../routes';
-import { type JsonValue, TAB_SHELL } from './config';
+import { type JsonObject, TAB_SHELL } from './config';
+import { snapshotRouteData } from './data';
+import type { StackPage as HostStackPage, ResolvedNavigation } from './models';
 import { type NavigationOptions, resolveNavigation } from './options';
 
 export type { NavigationOptions } from './options';
@@ -17,13 +19,12 @@ type NavigateArgs<R extends RouteName> = {} extends RouteParams[R]
   : [params: RouteParams[R], presentation?: Presentation, options?: NavigationOptions];
 
 export function readParams<R extends RouteName>(viewModel: PageViewModel): RouteParams[R] {
-  return JSON.parse(viewModel.paramsJson || '{}') as RouteParams[R];
+  return snapshotRouteData(viewModel.params) as RouteParams[R];
 }
 
-export interface StackPage {
-  pageId: string;
+export interface StackPage extends HostStackPage {
   route: RouteName | typeof TAB_SHELL;
-  params: JsonValue;
+  params: JsonObject;
 }
 
 /**
@@ -35,21 +36,26 @@ export const router = {
   /** Throws on invalid options, before anything is pushed. */
   push<R extends RouteName>(route: R, ...args: NavigateArgs<R>) {
     const [params = {}, presentation = 'push', options] = args;
-    navigationHost().push(route, JSON.stringify(params), presentation, navigationJson(route, options));
+    navigationHost().push(route, snapshotRouteData(params), presentation, navigationOptions(route, options));
   },
 
   /** Resolves with the page's result, or undefined when it closes without one. */
   pushForResult<R extends RouteName>(route: R, ...args: NavigateArgs<R>): Promise<RouteResults[R] | undefined> {
     const [params = {}, presentation = 'push', options] = args;
-    const navigation = navigationJson(route, options);
-    return new Promise(resolve => {
+    const payload = snapshotRouteData(params);
+    const navigation = navigationOptions(route, options);
+    return new Promise((resolve, reject) => {
       navigationHost().pushForResult(
         route,
-        JSON.stringify(params),
+        payload,
         presentation,
         navigation,
-        (resultJson, canceled) => {
-          resolve(canceled ? undefined : (JSON.parse(resultJson) as RouteResults[R]));
+        (result, canceled) => {
+          try {
+            resolve(canceled ? undefined : snapshotRouteData(result) as RouteResults[R]);
+          } catch (error) {
+            reject(error);
+          }
         },
       );
     });
@@ -57,7 +63,7 @@ export const router = {
 
   /** Replaces the top page (closing a sheet over it first). */
   replace<R extends RouteName>(route: R, params: RouteParams[R], options?: NavigationOptions) {
-    navigationHost().replace(route, JSON.stringify(params), navigationJson(route, options));
+    navigationHost().replace(route, snapshotRouteData(params), navigationOptions(route, options));
   },
 
   /** Closes the top `delta` pages, sheets and full-screen pages included; never the root. */
@@ -72,13 +78,13 @@ export const router = {
   /** Clears the whole stack, root included, and opens `route` as the new root: after login or logout, for example. */
   reset<R extends RouteName>(route: R, params: RouteParams[R]) {
     routes.assertRoute(route);
-    navigationHost().reset(route, JSON.stringify(params));
+    navigationHost().reset(route, snapshotRouteData(params));
   },
 
   resetToTabs(tab?: TabName) {
     if (!routes.tabs) throw new Error('No tabs declared');
     if (tab) routes.assertTab(tab);
-    navigationHost().reset(TAB_SHELL, JSON.stringify(tab ? { tab } : {}));
+    navigationHost().reset(TAB_SHELL, tab ? { tab } : {});
   },
 
   /** Back to the tab shell (opening it as the root if the stack has none) with `tab` selected. */
@@ -89,7 +95,17 @@ export const router = {
 
   /** The stack from its root to the top page, sheet last; tab pages are not on it. */
   getCurrentPages(): Promise<StackPage[]> {
-    return new Promise(resolve => navigationHost().currentPages(json => resolve(JSON.parse(json) as StackPage[])));
+    return new Promise((resolve, reject) => navigationHost().currentPages(pages => {
+      try {
+        resolve(pages.map(page => ({
+          pageId: page.pageId,
+          route: page.route as StackPage['route'],
+          params: snapshotRouteData(page.params),
+        })));
+      } catch (error) {
+        reject(error);
+      }
+    }));
   },
 
   async canGoBack(): Promise<boolean> {
@@ -111,7 +127,7 @@ export class Router {
 
   /** Closes this page and delivers the result to whoever opened it with pushForResult. */
   finish<R extends RouteName>(result: RouteResults[R]): void {
-    this.context.finish(JSON.stringify(result));
+    this.context.finish(snapshotRouteData(result));
   }
 
   /** Closes this page without a result; a tab page has nothing to close. */
@@ -120,6 +136,6 @@ export class Router {
   }
 }
 
-function navigationJson(route: RouteName, options?: NavigationOptions): string {
-  return JSON.stringify(resolveNavigation(routes.navigation, routes.assertRoute(route).options, options));
+function navigationOptions(route: RouteName, options?: NavigationOptions): ResolvedNavigation {
+  return resolveNavigation(routes.navigation, routes.assertRoute(route).options, options);
 }

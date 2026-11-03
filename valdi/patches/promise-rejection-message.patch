@@ -1,0 +1,44 @@
+diff --git a/valdi/src/java/com/snap/valdi/exceptions/PromiseRejectionException.kt b/valdi/src/java/com/snap/valdi/exceptions/PromiseRejectionException.kt
+new file mode 100644
+index 0000000..d85defe
+--- /dev/null
++++ b/valdi/src/java/com/snap/valdi/exceptions/PromiseRejectionException.kt
+@@ -0,0 +1,15 @@
++package com.snap.valdi.exceptions
++
++import androidx.annotation.Keep
++
++/**
++ * An explicit Promise rejection whose message is already suitable for its consumer.
++ * CppPromiseCallback forwards this message verbatim, including an empty string, while
++ * other throwables retain their diagnostic class names and cause chains.
++ *
++ * [errorCode] keeps its existing native meaning; text alone does not imply cancellation.
++ * Callers are responsible for any public-message fallback or normalization.
++ */
++@Keep
++class PromiseRejectionException @JvmOverloads constructor(message: String, errorCode: Int = 0):
++    ValdiException(message, errorCode)
+diff --git a/valdi/src/java/com/snap/valdi/promise/CppPromiseCallback.kt b/valdi/src/java/com/snap/valdi/promise/CppPromiseCallback.kt
+index b48bb2f..6402ea6 100644
+--- a/valdi/src/java/com/snap/valdi/promise/CppPromiseCallback.kt
++++ b/valdi/src/java/com/snap/valdi/promise/CppPromiseCallback.kt
+@@ -1,6 +1,7 @@
+ package com.snap.valdi.promise
+ 
+ import androidx.annotation.Keep
++import com.snap.valdi.exceptions.PromiseRejectionException
+ import com.snap.valdi.exceptions.messageWithCauses
+ import com.snap.valdi.exceptions.valdiErrorCode
+ import com.snap.valdi.utils.CppNativeHandlePair
+@@ -20,7 +21,9 @@ class CppPromiseCallback<T>(nativeHandle: Long, valueMarshallerNativeHandle: Lon
+         nativeOnFailure(
+             this.swapNativeHandle1(),
+             this.swapNativeHandle2(),
+-            error.messageWithCauses(),
++            // Only an explicit rejection opts into verbatim text. An empty message is
++            // still a failure; ordinary exceptions keep their diagnostic cause chains.
++            if (error is PromiseRejectionException) error.message.orEmpty() else error.messageWithCauses(),
+             error.valdiErrorCode(),
+         )
+     }

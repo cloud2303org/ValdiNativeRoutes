@@ -1,4 +1,4 @@
-import { isAndroid } from '../permissions/index';
+import { isAndroid, isHarmony } from '../permissions/index';
 import { mapNFCError, nfcError, WECHAT_NFC_ERROR_CODES } from './errors';
 import { nativeNFC } from './native';
 import * as schema from './schemas';
@@ -80,6 +80,7 @@ export const NFC_TECH = Object.freeze({
   mifareUltralight: 'android.nfc.tech.MifareUltralight',
   ndef: 'android.nfc.tech.Ndef',
 });
+// These strings are the existing host ABI, including on Harmony; hosts map them to native technology types.
 
 export interface NFCAdapter {
   readonly tech: typeof NFC_TECH;
@@ -132,8 +133,8 @@ class AdapterRuntime {
   private readonly ndefListeners = new Set<NdefMessageCallback>();
 
   private checkOperation(): void {
-    if (!isAndroid()) {
-      throw nfcError(WECHAT_NFC_ERROR_CODES.NOT_SUPPORTED, 'NFC is Android-only');
+    if (!isAndroid() && !isHarmony()) {
+      throw nfcError(WECHAT_NFC_ERROR_CODES.NOT_SUPPORTED, 'NFC requires an Android or Harmony host');
     }
   }
 

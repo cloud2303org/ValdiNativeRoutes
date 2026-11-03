@@ -1,9 +1,11 @@
+import type { StructuredObject, StructuredValue } from '../structuredData';
 import type { Asset } from 'valdi_core/src/Asset';
 import { publishRoutes } from '../NavigationHost';
+import type { RouteDeclaration } from './models';
 import type { NavigationOptions } from './options';
 
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue | undefined };
-export type JsonObject = { [key: string]: JsonValue | undefined };
+export type JsonValue = StructuredValue;
+export type JsonObject = StructuredObject;
 export type EmptyParams = Record<string, never>;
 export type PageComponent = abstract new (...args: any[]) => { onRender(): void };
 
@@ -46,6 +48,11 @@ export interface TabItem<N extends string = string> {
   readonly selectedIcon?: Asset;
 }
 
+/** Custom components are compiled to canonical class paths, just like valdiPage.component. */
+export type TabBarDefinition =
+  | { readonly type: 'default' }
+  | { readonly type: 'custom'; readonly component: PageComponent };
+
 type NoInfer<T> = [T][T extends any ? 0 : never];
 
 export type Pages = Record<string, PageDefinition<any, any>>;
@@ -67,6 +74,23 @@ function imageReference(asset: Asset): ImageReference {
   return ref;
 }
 
+function tabBarReference(bar: TabBarDefinition | undefined): { mode: string; component?: string } {
+  if (bar === undefined) return { mode: 'default' };
+  if (!bar || (bar.type !== 'default' && bar.type !== 'custom')) {
+    throw new Error('tabs.bar.type must be default or custom');
+  }
+  if (bar.type === 'default') {
+    if ('component' in bar) throw new Error('tabs.bar.component is only allowed for custom bars');
+    return { mode: 'default' };
+  }
+  // The transformer consumes the class reference; no component implementation is loaded here.
+  const component = bar.component as unknown;
+  if (typeof component !== 'string' || !/^[^@\s]+@[^/\s]+\/src\/[^\s]+$/.test(component)) {
+    throw new Error('tabs.bar.component must be compiled to an exported @Component class path by the Node Valdi route transformer');
+  }
+  return { mode: 'custom', component };
+}
+
 export function defineRoutes<
   const P extends Pages,
   const T extends readonly TabItem<NoInfer<PageName<P>>>[] = readonly [],
@@ -74,7 +98,7 @@ export function defineRoutes<
   pages: P;
   navigation?: NavigationOptions;
   initial?: NoInfer<PageName<P>>;
-  tabs?: { initial?: NoInfer<T[number]['route']>; items: T };
+  tabs?: { initial?: NoInfer<T[number]['route']>; items: T; bar?: TabBarDefinition };
 }) {
   const names = Object.keys(config.pages);
   if (!names.length) throw new Error('pages must contain at least one page');
@@ -82,6 +106,7 @@ export function defineRoutes<
   const has = (name: string) => names.includes(name);
   const items = config.tabs?.items ?? [];
   if (config.tabs && !items.length) throw new Error('tabs.items must not be empty');
+  if (config.tabs) tabBarReference(config.tabs.bar);
   const seen = new Set<string>();
   for (const item of items) {
     if (!has(item.route)) throw new Error(`Unknown route in tabs: "${item.route}"`);
@@ -107,17 +132,27 @@ export function defineRoutes<
     assertTab(name: string): void {
       if (!seen.has(name)) throw new Error(`Unknown tab: "${name}"`);
     },
-    toHost(root = home) {
+    toHost(root = home): RouteDeclaration {
       if (root !== TAB_SHELL || !config.tabs) result.assertRoute(root);
       return {
-        routes: {
-          ...config.pages,
-          ...(config.tabs ? { [TAB_SHELL]: { kind: 'tabs', title: items[0].text } } : {}),
-        },
+        routes: [
+          ...names.map(route => {
+            const page = config.pages[route];
+            return {
+              route,
+              kind: page.kind,
+              title: page.title,
+              component: page.component,
+              nativeName: page.nativeName,
+            };
+          }),
+          ...(config.tabs ? [{ route: TAB_SHELL, kind: 'tabs', title: items[0].text }] : []),
+        ],
         tabBar: config.tabs
           ? {
               route: TAB_SHELL,
               initial: config.tabs.initial ?? items[0].route,
+              ...tabBarReference(config.tabs.bar),
               tabs: items.map(item => {
                 const icon = imageReference(item.icon);
                 const selected = item.selectedIcon ? imageReference(item.selectedIcon) : icon;
@@ -135,8 +170,10 @@ export function defineRoutes<
         root,
       };
     },
+    /** Explicit development reload/config update; defining routes never calls native. */
+    publish(root = home): void {
+      publishRoutes(result.toHost(root));
+    },
   };
-  // On hot reload the new declaration replaces the host table. Native preserves the current root/selected tab.
-  publishRoutes(JSON.stringify(result.toHost()));
   return result;
 }

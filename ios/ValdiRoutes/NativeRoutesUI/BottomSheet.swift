@@ -7,7 +7,7 @@ fileprivate enum SheetLayout { case content, scroll, list }
 /// Drag down or tap the scrim requests a close with `.gesture`.
 @MainActor
 public class BottomSheet: UIView {
-  public let content = UIStackView()
+  public let content: UIStackView = SheetContentStackView()
   public var title: String? { get { header.title } set { header.title = newValue; updateHeaderVisibility() } }
   public var message: String? { get { header.message } set { header.message = newValue; updateHeaderVisibility() } }
   public var iconName: String? { get { header.iconName } set { header.iconName = newValue } }
@@ -36,7 +36,10 @@ public class BottomSheet: UIView {
     get { presenter.onOpenChange } set { presenter.onOpenChange = newValue }
   }
   public var onClosed: (OverlayCloseReason) -> Void { get { presenter.onClosed } set { presenter.onClosed = newValue } }
-  public var dismissible: Bool { get { presenter.dismissible } set { presenter.dismissible = newValue } }
+  public var dismissible: Bool {
+    get { presenter.dismissible }
+    set { presenter.dismissible = newValue; shell.dismissible = newValue }
+  }
   public var open: Bool { get { presenter.open } set { presenter.setOpen(newValue) } }
 
   public var showHandle = true { didSet { header.showHandle = showHandle; updateHeaderVisibility() } }
@@ -46,21 +49,16 @@ public class BottomSheet: UIView {
 
   private let layout: SheetLayout
   private lazy var presenter = OverlayPresenter<SheetDismissReason>(view: self, back: .back, navigation: .navigation)
-  private let scrim = UIControl()
-  private let panel = UIView()
+  private let shell = SheetHostView()
+  private var closeCompletion: (() -> Void)?
+  private let panel = SheetContentView()
   private let header = SheetHeaderView()
   private let scroll = UIScrollView()
   private let footerSlot = UIView()
   private var footerInsets: [NSLayoutConstraint] = []
-  private var panelBottom: NSLayoutConstraint!
   private var columnBottom: NSLayoutConstraint!
   private var heightLimit: NSLayoutConstraint!
-  private var animator: UIViewPropertyAnimator?
   private var keyboardHeight: CGFloat = 0
-  private lazy var panGesture = UIPanGestureRecognizer(target: self, action: #selector(drag(_:)))
-  private var panScrollViews: [(view: UIScrollView, inverted: Bool)] = []
-  private var panScrollDistance: CGFloat = 0
-  private var panHasSheetDrag = false
 
   public convenience init(onOpenChange: @escaping (Bool, SheetDismissReason) -> Void = { _, _ in }) {
     self.init(layout: .content, onOpenChange: onOpenChange)
@@ -75,16 +73,32 @@ public class BottomSheet: UIView {
     presenter.render = { [weak self] animated, closed in self?.render(animated: animated, closed: closed) }
     presenter.coveredChanged = { [weak self] in self?.coveredChanged() }
 
-    scrim.translatesAutoresizingMaskIntoConstraints = false
-    scrim.backgroundColor = UiTheme.scrim
-    scrim.addAction(UIAction { [weak self] _ in self?.presenter.requestClose(.gesture) }, for: .touchUpInside)
-    addSubview(scrim)
-    panel.translatesAutoresizingMaskIntoConstraints = false
-    panel.backgroundColor = UiTheme.surface
-    panel.layer.cornerRadius = UiDesign.radius.sheet
-    panel.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
-    panel.clipsToBounds = true
-    addSubview(panel)
+    // SheetHostView owns the only surface, scrim, drag recognizer and spring.
+    // The existing header owns the optional handle so its public spacing stays intact.
+    shell.showsHandle = false
+    shell.presentsAutomatically = false
+    shell.surfaceColor = UiTheme.surface
+    shell.scrimColor = UiTheme.scrim
+    shell.cornerRadius = UiDesign.radius.sheet
+    shell.onCloseRequested = { [weak self] in self?.presenter.requestClose(.gesture) }
+    shell.onClosed = { [weak self] _ in
+      guard let self, !self.presenter.open else { return }
+      self.isHidden = true
+      let completion = self.closeCompletion
+      self.closeCompletion = nil
+      completion?()
+    }
+    addSubview(shell)
+    shell.setContent(panel)
+    panel.onLayout = { [weak self] in
+      guard let self, self.bounds.width > 0, self.heightLimit != nil else { return }
+      // Intrinsic content changes can lay out the column without laying out the
+      // full-screen owner. Refit its detent on the next owner layout in that case.
+      if abs(self.fittedHeight - self.shell.openHeight) > 0.5 { self.setNeedsLayout() }
+    }
+    // A scroll viewport can keep its frame while its content grows. That only
+    // lays out the inner stack, so observing the outer panel alone misses it.
+    (content as? SheetContentStackView)?.onLayout = panel.onLayout
 
     content.axis = .vertical
     content.translatesAutoresizingMaskIntoConstraints = false
@@ -122,19 +136,11 @@ public class BottomSheet: UIView {
     column.translatesAutoresizingMaskIntoConstraints = false
     panel.addSubview(column)
 
-    panelBottom = panel.bottomAnchor.constraint(equalTo: bottomAnchor)
     columnBottom = column.bottomAnchor.constraint(equalTo: panel.bottomAnchor)
     heightLimit = layout == .list ? panel.heightAnchor.constraint(equalToConstant: 0) : panel.heightAnchor.constraint(lessThanOrEqualToConstant: 0)
     heightLimit.priority = UILayoutPriority(999)
     NSLayoutConstraint.activate([
-      scrim.topAnchor.constraint(equalTo: topAnchor),
-      scrim.bottomAnchor.constraint(equalTo: bottomAnchor),
-      scrim.leadingAnchor.constraint(equalTo: leadingAnchor),
-      scrim.trailingAnchor.constraint(equalTo: trailingAnchor),
-      panel.leadingAnchor.constraint(equalTo: leadingAnchor),
-      panel.trailingAnchor.constraint(equalTo: trailingAnchor),
-      panel.topAnchor.constraint(greaterThanOrEqualTo: safeAreaLayoutGuide.topAnchor),
-      panelBottom, heightLimit,
+      heightLimit,
       column.topAnchor.constraint(equalTo: panel.topAnchor),
       column.leadingAnchor.constraint(equalTo: panel.leadingAnchor),
       column.trailingAnchor.constraint(equalTo: panel.trailingAnchor),
@@ -154,8 +160,6 @@ public class BottomSheet: UIView {
     panel.addSubview(closeButton)
     NSLayoutConstraint.activate([closeButton.topAnchor.constraint(equalTo: panel.topAnchor, constant: UiDesign.component.overlay.closeInset), closeButton.trailingAnchor.constraint(equalTo: panel.trailingAnchor, constant: -UiDesign.component.overlay.closeInset), closeButton.widthAnchor.constraint(equalToConstant: UiDesign.component.overlay.closeSize), closeButton.heightAnchor.constraint(equalToConstant: UiDesign.component.overlay.closeSize)])
     _ = actions
-    panGesture.delegate = self
-    panel.addGestureRecognizer(panGesture)
     let center = NotificationCenter.default
     center.addObserver(self, selector: #selector(keyboardChanged(_:)), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
     center.addObserver(self, selector: #selector(keyboardChanged(_:)), name: UIResponder.keyboardWillHideNotification, object: nil)
@@ -165,8 +169,10 @@ public class BottomSheet: UIView {
   }
 
   public override func layoutSubviews() {
-    applyMetrics()
     super.layoutSubviews()
+    shell.frame = bounds
+    applyMetrics()
+    shell.layoutIfNeeded()
   }
   public override func safeAreaInsetsDidChange() {
     super.safeAreaInsetsDidChange()
@@ -186,11 +192,24 @@ public class BottomSheet: UIView {
   private var keyboard: CGFloat { presenter.interactive && layout != .content ? keyboardHeight : 0 }
 
   private func applyMetrics() {
-    let available = bounds.height - safeAreaInsets.top
+    let available = max(0, bounds.height - safeAreaInsets.top)
     let limit = keyboard > 0 ? available : available * 0.85
     let bottom = keyboard > 0 ? keyboard + UiDesign.space.md : (edgeToEdge ? 0 : max(safeAreaInsets.bottom, UiDesign.space.lg))
     if heightLimit.constant != limit { heightLimit.constant = limit }
     if columnBottom.constant != -bottom { columnBottom.constant = -bottom }
+    guard bounds.width > 0, limit > 0 else { return }
+    // Fit the existing header/body/footer column at the real width. Scroll content
+    // hugs its natural height until the cap; list content always receives the cap.
+    shell.openHeight = fittedHeight
+  }
+
+  private var fittedHeight: CGFloat {
+    let limit = heightLimit.constant
+    if layout == .list { return limit }
+    let fitted = panel.systemLayoutSizeFitting(
+      CGSize(width: bounds.width, height: 0),
+      withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height
+    return min(limit, max(0, fitted))
   }
 
   private func updateHeaderVisibility() {
@@ -212,6 +231,7 @@ public class BottomSheet: UIView {
     if !presenter.top { endEditing(true) }
     isUserInteractionEnabled = presenter.top
     accessibilityElementsHidden = !presenter.interactive
+    shell.interactionEnabled = presenter.interactive
     setNeedsLayout()
   }
 
@@ -231,28 +251,18 @@ public class BottomSheet: UIView {
   }
 
   private func render(animated: Bool, closed: @escaping () -> Void) {
-    animator?.stopAnimation(true); animator = nil
-    let open = presenter.open
     coveredChanged()
-    if open {
-      let wasHidden = isHidden
+    if presenter.open {
+      closeCompletion = nil
       isHidden = false
+      shell.present()
+      setNeedsLayout()
       layoutIfNeeded()
-      if wasHidden { panelBottom.constant = panel.bounds.height + 24; scrim.alpha = 0; layoutIfNeeded() }
     } else {
       endEditing(true)
+      closeCompletion = closed
+      shell.dismiss(animated: animated)
     }
-    panelBottom.constant = open ? 0 : panel.bounds.height + 24
-    let changes = { self.scrim.alpha = open ? 1 : 0; self.layoutIfNeeded() }
-    let finish = { [weak self] in
-      guard let self, !self.presenter.open else { return }
-      self.isHidden = true
-      closed()
-    }
-    guard animated else { changes(); finish(); return }
-    let animation = UIViewPropertyAnimator(duration: 0.28, curve: .easeOut, animations: changes)
-    animation.addCompletion { position in if position == .end { finish() } }
-    animator = animation; animation.startAnimation()
   }
 
   @objc private func keyboardChanged(_ notification: Notification) {
@@ -275,112 +285,29 @@ public class BottomSheet: UIView {
     scroll.scrollRectToVisible(field.convert(field.bounds, to: scroll).insetBy(dx: 0, dy: -UiDesign.space.lg), animated: true)
   }
 
-  private func isVerticallyScrollable(_ scrollView: UIScrollView) -> Bool {
-    guard scrollView.isScrollEnabled else { return false }
-    let insets = scrollView.adjustedContentInset.top + scrollView.adjustedContentInset.bottom
-    return scrollView.alwaysBounceVertical || scrollView.contentSize.height > max(0, scrollView.bounds.height - insets)
-  }
-
-  private func scrollViewsForPan(at location: CGPoint) -> [(view: UIScrollView, inverted: Bool)] {
-    var chain: [UIView] = []
-    var node = panel.hitTest(location, with: nil)
-    while let view = node, view !== panel { chain.append(view); node = view.superview }
-    var inverted = false
-    var result: [(view: UIScrollView, inverted: Bool)] = []
-    for view in chain.reversed() {
-      inverted = inverted || view.transform.d < 0
-      if let scroll = view as? UIScrollView, isVerticallyScrollable(scroll) { result.append((scroll, inverted)) }
-    }
-    return result
-  }
-
-  private func startsOnPickerWheel(_ location: CGPoint) -> Bool {
-    var node = panel.hitTest(location, with: nil)
-    while let view = node, view !== panel {
-      if view is UIPickerView { return true }
-      node = view.superview
-    }
-    return false
-  }
-
-  private func scrollDistanceToEdge(_ candidate: (view: UIScrollView, inverted: Bool)) -> CGFloat {
-    let scroll = candidate.view
-    if candidate.inverted {
-      let edge = max(-scroll.adjustedContentInset.top,
-        scroll.contentSize.height - scroll.bounds.height + scroll.adjustedContentInset.bottom)
-      return max(0, edge - scroll.contentOffset.y)
-    }
-    return max(0, scroll.contentOffset.y + scroll.adjustedContentInset.top)
-  }
-
-  private func pinPanScrollViews() {
-    for candidate in panScrollViews {
-      let scroll = candidate.view
-      let top = -scroll.adjustedContentInset.top
-      let edge = candidate.inverted
-        ? max(top, scroll.contentSize.height - scroll.bounds.height + scroll.adjustedContentInset.bottom) : top
-      scroll.contentOffset = CGPoint(x: scroll.contentOffset.x, y: edge)
-    }
-  }
-
-  @objc private func drag(_ gesture: UIPanGestureRecognizer) {
-    guard presenter.interactive, presenter.dismissible else { return }
-    let translation = max(0, gesture.translation(in: self).y - panScrollDistance)
-    switch gesture.state {
-    case .began:
-      panScrollDistance = panScrollViews.reduce(0) { max($0, scrollDistanceToEdge($1)) }
-      panHasSheetDrag = panScrollViews.isEmpty || panScrollDistance <= 0.5
-      if panHasSheetDrag { endEditing(true) }
-      gesture.setTranslation(.zero, in: self)
-    case .changed:
-      if !panHasSheetDrag, panScrollViews.contains(where: { scrollDistanceToEdge($0) > 0.5 }) { return }
-      guard panHasSheetDrag || translation > 0 else { return }
-      if !panHasSheetDrag { endEditing(true); panHasSheetDrag = true }
-      if translation > 0 { pinPanScrollViews() }
-      panelBottom.constant = translation
-      scrim.alpha = 1 - (panel.bounds.height > 0 ? min(1, translation / panel.bounds.height) : 0)
-    case .ended, .cancelled:
-      let dragged = panHasSheetDrag
-      panScrollViews = []; panScrollDistance = 0; panHasSheetDrag = false
-      guard dragged else { return }
-      if gesture.state == .ended, translation > 80 || gesture.velocity(in: self).y > 800 { presenter.requestClose(.gesture) }
-      if presenter.open { render(animated: true) {} }
-    case .failed:
-      panScrollViews = []; panScrollDistance = 0; panHasSheetDrag = false
-    default:
-      break
-    }
-  }
-
-  public override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-    guard gestureRecognizer === panGesture, presenter.interactive, presenter.dismissible else { return false }
-    let velocity = panGesture.velocity(in: self)
-    guard velocity.y > 0, abs(velocity.y) > abs(velocity.x) else { return false }
-    let location = panGesture.location(in: panel)
-    // A picker wheel owns its drags: one that reaches its first row stops there instead of pulling the sheet down.
-    guard !startsOnPickerWheel(location) else { return false }
-    // Both recognizers begin together. The sheet waits until the body consumes
-    // its distance to the top, then uses the rest of this same gesture.
-    panScrollViews = scrollViewsForPan(at: location)
-    panGesture.cancelsTouchesInView = panScrollViews.isEmpty
-    return true
-  }
-
-
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("Use init(onOpenChange:)") }
 }
 
-extension BottomSheet: UIGestureRecognizerDelegate {
-
-  public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
-    shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-    guard gestureRecognizer === panGesture else { return false }
-    guard let scroll = other.view as? UIScrollView, scroll.panGestureRecognizer === other,
-          scroll.isDescendant(of: panel) else { return false }
-    return isVerticallyScrollable(scroll)
+/// Notify the full-screen owner when the embedded column changes intrinsic size.
+private final class SheetContentView: UIView {
+  var onLayout: (() -> Void)?
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    onLayout?()
   }
 }
+
+private final class SheetContentStackView: UIStackView {
+  var onLayout: (() -> Void)?
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    onLayout?()
+  }
+}
+
+// Preserve the public conformance; the shell now owns all gesture negotiation.
+extension BottomSheet: UIGestureRecognizerDelegate {}
 
 extension UIView {
   var firstResponderDescendant: UIView? {

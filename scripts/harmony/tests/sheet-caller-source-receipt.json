@@ -1,0 +1,61 @@
+{
+  "createdAt": "2026-11-03T03:00:16.939001+00:00",
+  "status": "SOURCE_ONLY_UNCOMPILED_UNLINKED_UNEXECUTED",
+  "sourceSHA256": {
+    "scripts/harmony/tests/sheet-caller-extract.py": "0c58a03e6d5afb1d4cc798238655422e1ecfb7b2227376d585f145453782529f",
+    "scripts/harmony/tests/sheet-caller-probe.py": "34d287ceb462298cf62995b276b27bbabbb9823d0a9efeb49c086959c922d0f9",
+    "scripts/harmony/tests/sheet-caller-native.cpp": "80844cc4113d60a9574a8b86c0ce9a29294e1bad898b1c4367048c14fc0cce7d",
+    "scripts/harmony/tests/sheet-caller-js.ts": "aadf76329a3dc5d3e74b627d1ee043e629817c2f1c4bd6a744267067300b42ac",
+    "scripts/harmony/tests/sheet-caller-js-prepare.mjs": "b0aa3feeb8308d7d264ba0e185800686e84a5228f36e8f6c788b254be58a629e",
+    "scripts/harmony/tests/sheet-caller.md": "3c7d4c02b5b31b768722c004cf498136c834daa978eb7d00cf647386e6a9ee2e"
+  },
+  "productionExtraction": {
+    "source": "/Users/cloud/project/ValdiNativeRoutes/harmony/entry/src/main/cpp/host/HarmonyNavigator.cpp",
+    "sourceSHA256": "05fc2c1db876a102aa85ac4793d8e6377c1d1a9fcac5c9bce755b4dc5c0d8e30",
+    "methods": [
+      "complete",
+      "enqueue",
+      "makeNavigationHost",
+      "captureResultCaller",
+      "cancelCallerResults",
+      "retirePage"
+    ],
+    "bodySubstitutions": [],
+    "chunkSHA256": [
+      "993e593e0923dd0b016fe4bb494c95f61d18be0bdd478d5e9de7abcfdda77198",
+      "35526aff2e0525398a87bbfdbed0292575b57f2d5745a9345b0010f844db699e",
+      "e77530d823b17e18b46019011c8f5df9f336746d675eaf2f0957ffaaa922d42c",
+      "8a54f087bba0ae8b297f9fe9671a403cc0b441215ae8c20971f622e5a8c61244",
+      "daab6a728a946d20e23f0a67f3d35faa46ace58a016cd158c3ed6b2e989d14fa",
+      "1c3eeae9a1b3e4dd100c1ede7a92aecd7f2b7a6a22ec1551781c837ede9fac8b",
+      "40f9ae0fd8fe1e538c1d60637450216fdbcb3b4f20faab806017fa47f1311507",
+      "e2af6b57ba4fc53bb4819916b3142dad1cf1b1711b624dcfda4b01e71b64974f"
+    ],
+    "realContextTypesPreserved": true,
+    "collaborators": [
+      "UI queue",
+      "Runtime destruction dispatch",
+      "tree getContext",
+      "destination attachment and rendering"
+    ],
+    "compiled": false,
+    "executed": false
+  },
+  "plannedFreshTranslationUnits": 166,
+  "plannedMaxNativeJobs": 1,
+  "validations": [
+    "Python AST parsing",
+    "node --check loader recipe",
+    "unchanged production body extraction",
+    "bounded compile/link plan inspection"
+  ],
+  "nativeCompilerInvocations": 0,
+  "nativeLinkInvocations": 0,
+  "nativeFixtureExecutions": 0,
+  "jsTranspilerInvocations": 0,
+  "existingFilesEdited": false,
+  "oldContextArchiveReused": false,
+  "HAP": false,
+  "device": false,
+  "boundary": "Real upstream Context/function classes and dedicated DispatchQueue planned; scheduler adapter, UI, tree and Runtime destruction collaborators; production Hermes/runtime/renderer proof remains open"
+}

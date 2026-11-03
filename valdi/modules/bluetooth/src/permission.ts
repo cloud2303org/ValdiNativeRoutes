@@ -3,14 +3,19 @@ import {
   type AndroidPermission,
   androidSdk,
   isAndroid,
+  isHarmony,
+  HARMONY_PERMISSIONS,
   requestAndroidPermissions,
+  requestHarmonyPermissions,
 } from './permissions';
 
-/** Android requests are serialized with other device APIs. iOS prompts on native adapter open. */
+/** Android/Harmony requests share the app's device permission queue. iOS prompts on native adapter open. */
 export async function requestBlePermissions(
   mode: 'central' | 'peripheral' = 'central',
   checkActive?: () => void,
 ): Promise<boolean> {
+  if (isHarmony())
+    return (await requestHarmonyPermissions([HARMONY_PERMISSIONS.ACCESS_BLUETOOTH], checkActive)).status === 'granted';
   if (!isAndroid()) return true;
   const apiLevel = androidSdk();
   const p = ANDROID_PERMISSIONS;

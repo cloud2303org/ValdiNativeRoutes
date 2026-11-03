@@ -2,11 +2,14 @@ import CoreBluetooth
 import Foundation
 
 final class BleEngine {
+  // The core fences admission before OS teardown settles promises or emits events.
+  var willInvalidate: ((String?, Error, Bool) -> Void)?
+  var didInvalidate: (() -> Void)?
   private var centralManager: CBCentralManager?
   private var peripherals: [DeviceId: CBPeripheral] = [:]
   private var discoveredDevices: [DeviceId: BleDevice] = [:]
   private lazy var centralDelegate = CentralManagerDelegate(owner: self)
-  private lazy var peripheralDelegate = PeripheralDelegate(owner: self)
+  private var peripheralDelegates: [DeviceId: PeripheralDelegate] = [:]
 
   private var openPromises: [BleFuture<Void>] = []
   private var connectPromises: [DeviceId: BleFuture<Void>] = [:]
@@ -47,30 +50,33 @@ final class BleEngine {
     return promise
   }
 
-  func closeBluetoothAdapter() throws -> BleFuture<Void> {
+  func closeBluetoothAdapter(closePeripheral: @escaping () -> Void = {}) throws -> BleFuture<Void> {
     let promise = BleFuture<Void>()
     runOnMain {
       let error = self.makeError("E_BLE_NOT_INITIALIZED:Bluetooth adapter closed")
-      self.centralManager?.stopScan()
-      let disconnectingPeripherals = self.peripherals.values.filter { $0.state != .disconnected }
-      for peripheral in disconnectingPeripherals {
-        self.centralManager?.cancelPeripheralConnection(peripheral)
+      self.withInvalidation(deviceId: nil, error: error) {
+        closePeripheral()
+        self.centralManager?.stopScan()
+        let disconnectingPeripherals = self.peripherals.values.filter { $0.state != .disconnected }
+        for peripheral in disconnectingPeripherals {
+          self.centralManager?.cancelPeripheralConnection(peripheral)
+        }
+        self.peripherals.values.forEach { $0.delegate = nil }
+        self.centralManager?.delegate = nil
+        self.centralManager = nil
+        self.peripherals.removeAll()
+        self.discoveredDevices.removeAll()
+        self.nameScanFilter = nil
+        self.addressScanFilter = nil
+        self.rejectAllPending(error: error)
+        // The delegate is detached above, so CoreBluetooth's asynchronous
+        // disconnect callbacks cannot deliver these final connection events.
+        for peripheral in disconnectingPeripherals {
+          self.emitConnectState(deviceId: peripheral.identifier.uuidString, connected: false)
+        }
+        self.notify(self.adapterStateListeners, value: BleAdapterState(available: false, discovering: false))
+        promise.resolve(withResult: ())
       }
-      self.peripherals.values.forEach { $0.delegate = nil }
-      self.centralManager?.delegate = nil
-      self.centralManager = nil
-      self.peripherals.removeAll()
-      self.discoveredDevices.removeAll()
-      self.nameScanFilter = nil
-      self.addressScanFilter = nil
-      self.rejectAllPending(error: error)
-      // The delegate is detached above, so CoreBluetooth's asynchronous
-      // disconnect callbacks cannot deliver these final connection events.
-      for peripheral in disconnectingPeripherals {
-        self.emitConnectState(deviceId: peripheral.identifier.uuidString, connected: false)
-      }
-      self.notify(self.adapterStateListeners, value: BleAdapterState(available: false, discovering: false))
-      promise.resolve(withResult: ())
     }
     return promise
   }
@@ -161,7 +167,7 @@ final class BleEngine {
         guard let peripheral = self.findPeripheral(deviceId: key) else {
           throw self.makeError("E_BLE_DEVICE_NOT_FOUND:BleDevice \(key) not found")
         }
-        peripheral.delegate = self.peripheralDelegate
+        self.attachDelegate(peripheral)
         switch peripheral.state {
         case .connected:
           throw self.makeError("E_BLE_ALREADY_CONNECTED:BleDevice \(key) is already connected")
@@ -182,9 +188,11 @@ final class BleEngine {
     DispatchQueue.main.asyncAfter(deadline: .now() + min(max(timeout, 1), 120_000) / 1000) {
       guard let key = self.canonicalDeviceId(deviceId), self.connectPromises[key] === promise else { return }
       let error = self.makeError("E_BLE_CONNECTION_TIMEOUT:Connection timed out")
-      if let peripheral = self.peripherals[key] { self.centralManager?.cancelPeripheralConnection(peripheral) }
-      self.connectPromises.removeValue(forKey: key)?.reject(withError: error)
-      self.rejectPendingRequests(for: key, error: error)
+      self.withInvalidation(deviceId: key, error: error) {
+        if let peripheral = self.peripherals[key] { self.centralManager?.cancelPeripheralConnection(peripheral) }
+        self.connectPromises.removeValue(forKey: key)?.reject(withError: error)
+        self.rejectPendingRequests(for: key, error: error)
+      }
     }
     return promise
   }
@@ -199,20 +207,25 @@ final class BleEngine {
           active.chain(to: promise)
           return
         }
-        guard let peripheral = self.findPeripheral(deviceId: key) else {
-          promise.resolve(withResult: ())
-          return
-        }
-        switch peripheral.state {
-        case .disconnected:
-          promise.resolve(withResult: ())
-        case .disconnecting:
-          self.disconnectPromises[key] = promise
-        case .connected, .connecting:
-          self.disconnectPromises[key] = promise
-          manager.cancelPeripheralConnection(peripheral)
-        @unknown default:
-          promise.resolve(withResult: ())
+        let error = self.makeError("E_BLE_NOT_CONNECTED:Device \(key) disconnected")
+        self.withInvalidation(deviceId: key, error: error) {
+          self.connectPromises.removeValue(forKey: key)?.reject(withError: error)
+          self.rejectPendingRequests(for: key, error: error)
+          guard let peripheral = self.findPeripheral(deviceId: key) else {
+            promise.resolve(withResult: ())
+            return
+          }
+          switch peripheral.state {
+          case .disconnected:
+            promise.resolve(withResult: ())
+          case .disconnecting:
+            self.disconnectPromises[key] = promise
+          case .connected, .connecting:
+            self.disconnectPromises[key] = promise
+            manager.cancelPeripheralConnection(peripheral)
+          @unknown default:
+            promise.resolve(withResult: ())
+          }
         }
       } catch {
         promise.reject(withError: error)
@@ -559,7 +572,7 @@ final class BleEngine {
     guard peripheral.state == .connected else {
       throw makeError("E_BLE_NOT_CONNECTED:BleDevice \(key) is not connected")
     }
-    peripheral.delegate = peripheralDelegate
+    attachDelegate(peripheral)
     return peripheral
   }
 
@@ -797,8 +810,24 @@ final class BleEngine {
     _ store: inout [Key: BleFuture<Value>],
     error: Error
   ) {
-    store.values.forEach { $0.reject(withError: error) }
+    let pending = Array(store.values)
     store.removeAll()
+    pending.forEach { $0.reject(withError: error) }
+  }
+
+  private func withInvalidation(deviceId: String?, error: Error, preserveOpen: Bool = false, _ action: () -> Void) {
+    // Retire the actual OS delivery objects before caller cancellation can reenter.
+    let keys = deviceId.map { [$0] } ?? Array(peripheralDelegates.keys)
+    for key in keys { peripheralDelegates.removeValue(forKey: key)?.owner = nil }
+    willInvalidate?(deviceId, error, preserveOpen)
+    defer { didInvalidate?() }
+    action()
+  }
+
+  private func attachDelegate(_ peripheral: CBPeripheral) {
+    let key = peripheral.identifier.uuidString
+    if peripheralDelegates[key] == nil { peripheralDelegates[key] = PeripheralDelegate(owner: self) }
+    peripheral.delegate = peripheralDelegates[key]
   }
 
   fileprivate func makeError(_ message: String) -> Error {
@@ -872,15 +901,26 @@ final class BleEngine {
 
 extension BleEngine {
   func centralManagerDidUpdateState(_ central: CBCentralManager) {
-    resolveOpenPromises(for: central)
-    emitAdapterState()
+    guard centralManager === central else { return }
     if central.state != .poweredOn {
-      let error = makeError("E_BLE_ADAPTER_NOT_AVAILABLE:Bluetooth is unavailable")
-      rejectAll(&connectPromises, error: error)
-      rejectAll(&disconnectPromises, error: error)
-      for deviceId in peripherals.keys {
-        rejectPendingRequests(for: deviceId, error: error)
+      let error: Error
+      switch central.state {
+      case .unauthorized: error = makeError("E_BLE_PERMISSION:bluetooth")
+      case .unsupported: error = makeError("E_BLE_SYSTEM_NOT_SUPPORTED:Bluetooth is unsupported")
+      default: error = makeError("E_BLE_ADAPTER_NOT_AVAILABLE:Bluetooth is unavailable")
       }
+      withInvalidation(deviceId: nil, error: error, preserveOpen: central.state == .unknown || central.state == .resetting) {
+        resolveOpenPromises(for: central)
+        rejectAll(&connectPromises, error: error)
+        rejectAll(&disconnectPromises, error: error)
+        for deviceId in peripherals.keys {
+          rejectPendingRequests(for: deviceId, error: error)
+        }
+        emitAdapterState()
+      }
+    } else {
+      resolveOpenPromises(for: central)
+      emitAdapterState()
     }
   }
 
@@ -890,6 +930,7 @@ extension BleEngine {
     advertisementData: [String: Any],
     rssi RSSI: NSNumber
   ) {
+    guard centralManager === central else { return }
     let deviceId = peripheral.identifier.uuidString
     if let filter = addressScanFilter, !filter.contains(deviceId) { return }
     if let filter = nameScanFilter {
@@ -907,9 +948,13 @@ extension BleEngine {
   }
 
   func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+    guard centralManager === central, peripherals[peripheral.identifier.uuidString] === peripheral else { return }
     let deviceId = peripheral.identifier.uuidString
-    peripheral.delegate = peripheralDelegate
+    attachDelegate(peripheral)
+    let delivery = peripheralDelegates[deviceId]
     connectPromises.removeValue(forKey: deviceId)?.resolve(withResult: ())
+    guard centralManager === central, peripheral.state == .connected,
+          let delivery, peripheralDelegates[deviceId] === delivery else { return }
     emitConnectState(deviceId: deviceId, connected: true)
   }
 
@@ -918,15 +963,18 @@ extension BleEngine {
     didFailToConnect peripheral: CBPeripheral,
     error: Error?
   ) {
+    guard centralManager === central, peripherals[peripheral.identifier.uuidString] === peripheral else { return }
     let deviceId = peripheral.identifier.uuidString
     let failure = operationError(
       "E_BLE_CONNECTION_FAILED",
       error,
       "Failed to connect to \(deviceId)"
     )
-    connectPromises.removeValue(forKey: deviceId)?.reject(withError: failure)
-    rejectPendingRequests(for: deviceId, error: failure)
-    emitConnectState(deviceId: deviceId, connected: false)
+    withInvalidation(deviceId: deviceId, error: failure) {
+      connectPromises.removeValue(forKey: deviceId)?.reject(withError: failure)
+      rejectPendingRequests(for: deviceId, error: failure)
+      emitConnectState(deviceId: deviceId, connected: false)
+    }
   }
 
   func centralManager(
@@ -934,25 +982,28 @@ extension BleEngine {
     didDisconnectPeripheral peripheral: CBPeripheral,
     error: Error?
   ) {
+    guard centralManager === central, peripherals[peripheral.identifier.uuidString] === peripheral else { return }
     let deviceId = peripheral.identifier.uuidString
-    connectPromises.removeValue(forKey: deviceId)?.reject(
-      withError: operationError("E_BLE_CONNECTION_FAILED", error, "Connection cancelled")
-    )
-    if let promise = disconnectPromises.removeValue(forKey: deviceId) {
-      if error != nil {
-        promise.reject(
-          withError: operationError("E_BLE_CONNECTION_FAILED", error, "Failed to disconnect")
-        )
-      }
-      else { promise.resolve(withResult: ()) }
-    }
     let disconnectError = operationError(
       "E_BLE_NOT_CONNECTED",
       error,
       "BleDevice \(deviceId) disconnected"
     )
-    rejectPendingRequests(for: deviceId, error: disconnectError)
-    emitConnectState(deviceId: deviceId, connected: false)
+    withInvalidation(deviceId: deviceId, error: disconnectError) {
+      connectPromises.removeValue(forKey: deviceId)?.reject(
+        withError: operationError("E_BLE_CONNECTION_FAILED", error, "Connection cancelled")
+      )
+      if let promise = disconnectPromises.removeValue(forKey: deviceId) {
+        if error != nil {
+          promise.reject(
+            withError: operationError("E_BLE_CONNECTION_FAILED", error, "Failed to disconnect")
+          )
+        }
+        else { promise.resolve(withResult: ()) }
+      }
+      rejectPendingRequests(for: deviceId, error: disconnectError)
+      emitConnectState(deviceId: deviceId, connected: false)
+    }
   }
 }
 
@@ -1017,6 +1068,7 @@ extension BleEngine {
     didUpdateValueFor characteristic: CBCharacteristic,
     error: Error?
   ) {
+    let delivery = peripheralDelegates[peripheral.identifier.uuidString]
     let key = characteristicKey(peripheral, characteristic)
     if let promise = readPromises.removeValue(forKey: key) {
       if error != nil {
@@ -1024,7 +1076,8 @@ extension BleEngine {
       }
       else { promise.resolve(withResult: ()) }
     }
-    guard error == nil, let data = characteristic.value,
+    guard error == nil, peripheral.state == .connected, let delivery,
+          peripheralDelegates[peripheral.identifier.uuidString] === delivery, let data = characteristic.value,
           let buffer = Optional(data) else { return }
     notify(
       characteristicListeners,
@@ -1120,7 +1173,8 @@ private extension CBUUID {
   }
 }
 
-private func canonicalBluetoothUUID(_ value: String) -> String {
+// Shared with lease keys so ownership uses exactly the engine's UUID matching.
+func canonicalBluetoothUUID(_ value: String) -> String {
   let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
   switch normalized.count {
   case 4:

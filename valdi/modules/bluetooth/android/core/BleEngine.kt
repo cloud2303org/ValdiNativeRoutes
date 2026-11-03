@@ -31,21 +31,39 @@ import java.util.Locale
 
 @SuppressLint("MissingPermission")
 internal class BleEngine(private val context: Context) {
+    internal var willInvalidate: ((String?, Throwable) -> Unit)? = null
+    internal var didInvalidate: (() -> Unit)? = null
+    internal var pairingStarted: ((String, Any) -> Unit)? = null
+    internal var pairingDrained: ((String, Any) -> Unit)? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val managerLock = Any()
     internal val peripheral = BlePeripheralEngine(context) { available -> emitAdapterState(available) }
 
     @Volatile
     private var centralManager: BluetoothCentralManager? = null
+    private var managerGeneration = 0L
+    private val peripheralTokens = mutableMapOf<String, Any>()
+    private val peripheralInstances = mutableMapOf<String, BluetoothPeripheral>()
 
     private val connectPromises = PromiseStore<Unit>()
-    private val disconnectPromises = PromiseStore<Unit>()
+    // Main-lane close waiters belong to the exact SDK peripheral, including
+    // retired instances whose central callback is still queued after eviction.
+    private val disconnectPromises = java.util.IdentityHashMap<BluetoothPeripheral, BleFuture<Unit>>()
     private val rssiPromises = PromiseStore<BleDeviceRSSI>()
     private val readPromises = PromiseStore<Unit>()
     private val writePromises = PromiseStore<Unit>()
     private val notifyPromises = PromiseStore<Unit>()
     private val mtuPromises = PromiseStore<BleMTU>()
     private val pairPromises = PromiseStore<Unit>()
+    private class PairAttempt(
+        val deviceId: String,
+        val peripheral: BluetoothPeripheral,
+        val promise: BleFuture<Unit>,
+    ) {
+        var terminal = false
+    }
+    private val pairAttempts = mutableMapOf<String, PairAttempt>()
+    private val retiredPairAttempts = java.util.IdentityHashMap<BluetoothPeripheral, PairAttempt>()
     private val pairingPins = java.util.concurrent.ConcurrentHashMap<String, ByteArray>()
     private val notifyTargets = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
     private val discoveredDevices = java.util.concurrent.ConcurrentHashMap<String, BleDevice>()
@@ -81,176 +99,214 @@ internal class BleEngine(private val context: Context) {
         }
     }
 
-    private val centralCallback = object : BluetoothCentralManagerCallback() {
+    private fun centralCallback(generation: Long) = object : BluetoothCentralManagerCallback() {
         override fun onDiscovered(peripheral: BluetoothPeripheral, scanResult: ScanResult) {
+            if (generation != managerGeneration) return
             val device = peripheral.toDevice(scanResult)
             discoveredDevices[device.deviceId.normalizedDeviceId()] = device
             deviceFoundListeners.notify(device)
         }
 
         override fun onConnected(peripheral: BluetoothPeripheral) {
+            if (generation != managerGeneration) return
             val deviceId = peripheral.address.normalizedDeviceId()
+            if (peripheralInstances[deviceId]?.let { it !== peripheral } == true) return
+            val token = peripheralTokens[deviceId]
             connectPromises.resolve(deviceId, Unit)
+            if (generation != managerGeneration || token == null || peripheralTokens[deviceId] !== token ||
+                peripheral.getState() != ConnectionState.CONNECTED) return
             emitConnectState(deviceId, true)
         }
 
         override fun onDisconnected(peripheral: BluetoothPeripheral, status: HciStatus) {
+            if (generation != managerGeneration) return
+            retiredPairAttempts.remove(peripheral)
             val deviceId = peripheral.address.normalizedDeviceId()
             val error = BleOperationException(
                 "E_BLE_NOT_CONNECTED:BleDevice $deviceId disconnected ($status)",
             )
-            connectPromises.reject(deviceId, error)
-            if (status == HciStatus.SUCCESS) {
-                disconnectPromises.resolve(deviceId, Unit)
-            } else {
-                disconnectPromises.reject(deviceId, error)
+            val closeError = if (status == HciStatus.SUCCESS) null else error
+            if (peripheralInstances[deviceId]?.let { it !== peripheral } == true) {
+                settleDisconnect(peripheral, closeError)
+                return
             }
-            rejectDeviceOperations(deviceId, error)
-            emitConnectState(deviceId, false)
+            withInvalidation(deviceId, error) {
+                retiredPairAttempts.remove(peripheral)
+                connectPromises.reject(deviceId, error)
+                settleDisconnect(peripheral, closeError)
+                rejectDeviceOperations(deviceId, error)
+                emitConnectState(deviceId, false)
+            }
         }
 
         override fun onConnectionFailed(peripheral: BluetoothPeripheral, status: HciStatus) {
+            if (generation != managerGeneration) return
+            retiredPairAttempts.remove(peripheral)
             val deviceId = peripheral.address.normalizedDeviceId()
             val error = BleOperationException(
                 "E_BLE_CONNECTION_FAILED:Failed to connect to $deviceId ($status)",
             )
-            connectPromises.reject(deviceId, error)
-            disconnectPromises.reject(deviceId, error)
-            rejectDeviceOperations(deviceId, error)
-            emitConnectState(deviceId, false)
+            if (peripheralInstances[deviceId]?.let { it !== peripheral } == true) {
+                settleDisconnect(peripheral, error)
+                return
+            }
+            withInvalidation(deviceId, error) {
+                retiredPairAttempts.remove(peripheral)
+                connectPromises.reject(deviceId, error)
+                settleDisconnect(peripheral, error)
+                rejectDeviceOperations(deviceId, error)
+                emitConnectState(deviceId, false)
+            }
         }
 
         override fun onBluetoothAdapterStateChanged(state: Int) {
+            if (generation != managerGeneration) return
             if (state != BluetoothAdapter.STATE_ON) {
-                rejectAllOperations(
-                    BleOperationException("E_BLE_ADAPTER_NOT_AVAILABLE:Bluetooth is off"),
-                )
-            }
-            emitAdapterState(state == BluetoothAdapter.STATE_ON)
+                val error = BleOperationException("E_BLE_ADAPTER_NOT_AVAILABLE:Bluetooth is off")
+                withInvalidation(null, error) {
+                    rejectAllOperations(error)
+                    emitAdapterState(false)
+                }
+            } else emitAdapterState(true)
         }
     }
 
-    private val peripheralCallback = object : BluetoothPeripheralCallback() {
-        override fun onCharacteristicUpdate(
-            peripheral: BluetoothPeripheral,
-            value: ByteArray,
-            characteristic: BluetoothGattCharacteristic,
-            status: GattStatus,
-        ) {
-            val key = characteristicKey(peripheral, characteristic)
-            if (status == GattStatus.SUCCESS) {
-                readPromises.resolve(key, Unit)
-                characteristicListeners.notify(
-                    BleCharacteristicValue(
-                        deviceId = peripheral.address,
-                        serviceId = characteristic.service.uuid.toNormalizedString(),
-                        characteristicId = characteristic.uuid.toNormalizedString(),
-                        value = value.copyOf(),
-                    ),
-                )
-            } else {
-                readPromises.reject(
-                    key,
-                    BleOperationException("E_BLE_READ_FAILED:Read failed ($status)"),
-                )
-            }
-        }
-
-        override fun onCharacteristicWrite(
-            peripheral: BluetoothPeripheral,
-            value: ByteArray,
-            characteristic: BluetoothGattCharacteristic,
-            status: GattStatus,
-        ) {
-            val key = characteristicKey(peripheral, characteristic)
-            if (status == GattStatus.SUCCESS) {
-                writePromises.resolve(key, Unit)
-            } else {
-                writePromises.reject(
-                    key,
-                    BleOperationException("E_BLE_WRITE_FAILED:Write failed ($status)"),
-                )
-            }
-        }
-
-        override fun onNotificationStateUpdate(
-            peripheral: BluetoothPeripheral,
-            characteristic: BluetoothGattCharacteristic,
-            status: GattStatus,
-        ) {
-            val key = characteristicKey(peripheral, characteristic)
-            val expectedState = notifyTargets.remove(key)
-            if (
-                status == GattStatus.SUCCESS &&
-                expectedState != null &&
-                peripheral.isNotifying(characteristic) == expectedState
+    private fun peripheralCallback(
+        peripheral: BluetoothPeripheral,
+        pairing: PairAttempt? = retiredPairAttempts[peripheral],
+    ): BluetoothPeripheralCallback {
+        // Reconnect replaces Blessed's mutable callback. Keep terminal routing
+        // for this exact SDK object's retired attempt, never a later address owner.
+        val deviceId = peripheral.address.normalizedDeviceId()
+        val token = peripheralTokens.getOrPut(deviceId) { Any() }
+        return object : BluetoothPeripheralCallback() {
+            private fun accepts(peripheral: BluetoothPeripheral): Boolean =
+                peripheral.address.normalizedDeviceId() == deviceId && peripheralTokens[deviceId] === token
+            override fun onCharacteristicUpdate(
+                peripheral: BluetoothPeripheral,
+                value: ByteArray,
+                characteristic: BluetoothGattCharacteristic,
+                status: GattStatus,
             ) {
-                notifyPromises.resolve(key, Unit)
-            } else {
-                notifyPromises.reject(
-                    key,
-                    BleOperationException("E_BLE_NOTIFY_FAILED:Notify update failed ($status)"),
-                )
+                if (!accepts(peripheral)) return
+                val key = characteristicKey(peripheral, characteristic)
+                if (status == GattStatus.SUCCESS) {
+                    readPromises.resolve(key, Unit)
+                    if (!accepts(peripheral)) return
+                    characteristicListeners.notify(
+                        BleCharacteristicValue(
+                            deviceId = peripheral.address,
+                            serviceId = characteristic.service.uuid.toNormalizedString(),
+                            characteristicId = characteristic.uuid.toNormalizedString(),
+                            value = value.copyOf(),
+                        ),
+                    )
+                } else {
+                    readPromises.reject(
+                        key,
+                        BleOperationException("E_BLE_READ_FAILED:Read failed ($status)"),
+                    )
+                }
             }
-        }
 
-        override fun onReadRemoteRssi(
-            peripheral: BluetoothPeripheral,
-            rssi: Int,
-            status: GattStatus,
-        ) {
-            val deviceId = peripheral.address.normalizedDeviceId()
-            if (status == GattStatus.SUCCESS) {
-                rssiPromises.resolve(deviceId, BleDeviceRSSI(rssi.toDouble()))
-            } else {
-                rssiPromises.reject(
-                    deviceId,
-                    BleOperationException("E_BLE_RSSI_FAILED:RSSI read failed ($status)"),
-                )
+            override fun onCharacteristicWrite(
+                peripheral: BluetoothPeripheral,
+                value: ByteArray,
+                characteristic: BluetoothGattCharacteristic,
+                status: GattStatus,
+            ) {
+                if (!accepts(peripheral)) return
+                val key = characteristicKey(peripheral, characteristic)
+                if (status == GattStatus.SUCCESS) {
+                    writePromises.resolve(key, Unit)
+                } else {
+                    writePromises.reject(
+                        key,
+                        BleOperationException("E_BLE_WRITE_FAILED:Write failed ($status)"),
+                    )
+                }
             }
-        }
 
-        override fun onMtuChanged(
-            peripheral: BluetoothPeripheral,
-            mtu: Int,
-            status: GattStatus,
-        ) {
-            val deviceId = peripheral.address.normalizedDeviceId()
-            if (status == GattStatus.SUCCESS) {
-                val result = BleMTU(mtu.toDouble())
-                mtuPromises.resolve(deviceId, result)
-                mtuListeners.notify(BleMTUChange(deviceId = deviceId, mtu = mtu.toDouble()))
-            } else {
-                mtuPromises.reject(
-                    deviceId,
-                    BleOperationException("E_BLE_MTU_FAILED:BleMTU request failed ($status)"),
-                )
+            override fun onNotificationStateUpdate(
+                peripheral: BluetoothPeripheral,
+                characteristic: BluetoothGattCharacteristic,
+                status: GattStatus,
+            ) {
+                if (!accepts(peripheral)) return
+                val key = characteristicKey(peripheral, characteristic)
+                val expectedState = notifyTargets.remove(key)
+                if (
+                    status == GattStatus.SUCCESS &&
+                    expectedState != null &&
+                    peripheral.isNotifying(characteristic) == expectedState
+                ) {
+                    notifyPromises.resolve(key, Unit)
+                } else {
+                    notifyPromises.reject(
+                        key,
+                        BleOperationException("E_BLE_NOTIFY_FAILED:Notify update failed ($status)"),
+                    )
+                }
             }
-        }
 
-        override fun onBondingSucceeded(peripheral: BluetoothPeripheral) {
-            val key = peripheral.address.normalizedDeviceId()
-            pairingPins.remove(key)
-            pairPromises.resolve(key, Unit)
-        }
+            override fun onReadRemoteRssi(
+                peripheral: BluetoothPeripheral,
+                rssi: Int,
+                status: GattStatus,
+            ) {
+                if (!accepts(peripheral)) return
+                val deviceId = peripheral.address.normalizedDeviceId()
+                if (status == GattStatus.SUCCESS) {
+                    rssiPromises.resolve(deviceId, BleDeviceRSSI(rssi.toDouble()))
+                } else {
+                    rssiPromises.reject(
+                        deviceId,
+                        BleOperationException("E_BLE_RSSI_FAILED:RSSI read failed ($status)"),
+                    )
+                }
+            }
 
-        override fun onBondingFailed(peripheral: BluetoothPeripheral) {
-            val key = peripheral.address.normalizedDeviceId()
-            pairingPins.remove(key)
-            pairPromises.reject(
-                key,
-                BleOperationException("E_BLE_PAIR_FAILED:Bluetooth pairing failed"),
-            )
-        }
+            override fun onMtuChanged(
+                peripheral: BluetoothPeripheral,
+                mtu: Int,
+                status: GattStatus,
+            ) {
+                if (!accepts(peripheral)) return
+                val deviceId = peripheral.address.normalizedDeviceId()
+                if (status == GattStatus.SUCCESS) {
+                    val result = BleMTU(mtu.toDouble())
+                    mtuPromises.resolve(deviceId, result)
+                    if (!accepts(peripheral)) return
+                    mtuListeners.notify(BleMTUChange(deviceId = deviceId, mtu = mtu.toDouble()))
+                } else {
+                    mtuPromises.reject(
+                        deviceId,
+                        BleOperationException("E_BLE_MTU_FAILED:BleMTU request failed ($status)"),
+                    )
+                }
+            }
 
-        override fun onBondLost(peripheral: BluetoothPeripheral) {
-            val key = peripheral.address.normalizedDeviceId()
-            pairingPins.remove(key)
-            pairPromises.reject(
-                key,
-                BleOperationException("E_BLE_PAIR_FAILED:Bluetooth bond was lost"),
-            )
-        }
+            override fun onBondingSucceeded(peripheral: BluetoothPeripheral) {
+                if (!accepts(peripheral) && (pairing == null || retiredPairAttempts[peripheral] !== pairing)) return
+                if (pairing != null && peripheral === pairing.peripheral && peripheral.bondState != BondState.BONDING) {
+                    finishPairing(pairing)
+                }
+            }
+
+            override fun onBondingFailed(peripheral: BluetoothPeripheral) {
+                if (!accepts(peripheral) && (pairing == null || retiredPairAttempts[peripheral] !== pairing)) return
+                if (pairing != null && peripheral === pairing.peripheral && peripheral.bondState != BondState.BONDING) {
+                    finishPairing(pairing, BleOperationException("E_BLE_PAIR_FAILED:Bluetooth pairing failed"))
+                }
+            }
+
+            override fun onBondLost(peripheral: BluetoothPeripheral) {
+                if (!accepts(peripheral) && (pairing == null || retiredPairAttempts[peripheral] !== pairing)) return
+                if (pairing != null && peripheral === pairing.peripheral && peripheral.bondState != BondState.BONDING) {
+                    finishPairing(pairing, BleOperationException("E_BLE_PAIR_FAILED:Bluetooth bond was lost"))
+                }
+            }
+    }
     }
 
     fun openBluetoothAdapter(mode: String? = null): BleFuture<Unit> = BleFuture.async {
@@ -269,7 +325,7 @@ internal class BleEngine(private val context: Context) {
         synchronized(managerLock) {
             if (centralManager == null) {
                 discoveredDevices.clear()
-                centralManager = BluetoothCentralManager(context, centralCallback, mainHandler)
+                centralManager = BluetoothCentralManager(context, centralCallback(++managerGeneration), mainHandler)
             }
         }
         requireReadyManager()
@@ -277,20 +333,25 @@ internal class BleEngine(private val context: Context) {
     }
 
     fun closeBluetoothAdapter(): BleFuture<Unit> = BleFuture.async {
-        peripheral.close()
-        val manager = synchronized(managerLock) {
-            val current = centralManager
-            centralManager = null
-            current
+        val error = BleOperationException("E_BLE_NOT_INITIALIZED:Bluetooth adapter closed")
+        withInvalidation(null, error) {
+            peripheral.close()
+            val manager = synchronized(managerLock) {
+                val current = centralManager
+                centralManager = null
+                managerGeneration++
+                current
+            }
+            manager?.stopScan()
+            manager?.getConnectedPeripherals()?.forEach { manager.cancelConnection(it) }
+            manager?.close()
+            retiredPairAttempts.clear()
+            unregisterPairingReceiver()
+            discoveredDevices.clear()
+            pairingPins.clear()
+            rejectAllOperations(error)
+            emitAdapterState(false)
         }
-        manager?.stopScan()
-        manager?.getConnectedPeripherals()?.forEach { manager.cancelConnection(it) }
-        manager?.close()
-        unregisterPairingReceiver()
-        discoveredDevices.clear()
-        pairingPins.clear()
-        rejectAllOperations(BleOperationException("E_BLE_NOT_INITIALIZED:Bluetooth adapter closed"))
-        emitAdapterState(false)
     }
 
     fun getBluetoothAdapterState(): BleFuture<BleAdapterState> = BleFuture.async {
@@ -372,16 +433,19 @@ internal class BleEngine(private val context: Context) {
         val active = connectPromises.putIfAbsent(key, promise)
         if (active !== promise) return active
         try {
-            manager.connect(peripheral, peripheralCallback)
+            peripheralTokens[key] = Any()
+            manager.connect(peripheral, peripheralCallback(peripheral))
         } catch (error: Throwable) {
             connectPromises.reject(key, error)
         }
         mainHandler.postDelayed({
             if (connectPromises.get(key) === promise) {
                 val error = BleOperationException("E_BLE_CONNECTION_TIMEOUT:Connection timed out")
-                runCatching { manager.cancelConnection(peripheral) }
-                connectPromises.reject(key, error)
-                rejectDeviceOperations(key, error)
+                withInvalidation(key, error) {
+                    runCatching { manager.cancelConnection(peripheral) }
+                    connectPromises.reject(key, error)
+                    rejectDeviceOperations(key, error)
+                }
             }
         }, timeout.coerceAtLeast(1.0).coerceAtMost(120_000.0).toLong())
         return promise
@@ -392,29 +456,31 @@ internal class BleEngine(private val context: Context) {
         val manager = requireManager()
         val peripheral = getPeripheral(deviceId)
         val key = peripheral.address.normalizedDeviceId()
-        when (peripheral.getState()) {
-            ConnectionState.DISCONNECTED -> return BleFuture.async { }
-            ConnectionState.DISCONNECTING -> {
-                disconnectPromises.get(key)?.let { return it }
-            }
-            ConnectionState.CONNECTED, ConnectionState.CONNECTING -> Unit
-        }
+        disconnectPromises[peripheral]?.let { return it }
         val promise = BleFuture<Unit>()
-        val active = disconnectPromises.putIfAbsent(key, promise)
-        if (active !== promise) return active
-        try {
-            manager.cancelConnection(peripheral)
-        } catch (error: Throwable) {
-            disconnectPromises.reject(key, error)
+        disconnectPromises[peripheral] = promise
+        val error = BleOperationException("E_BLE_NOT_CONNECTED:Device $key disconnected")
+        withInvalidation(key, error) {
+            connectPromises.reject(key, error)
+            rejectDeviceOperations(key, error)
+            try {
+                if (peripheral.getState() == ConnectionState.DISCONNECTED) settleDisconnect(peripheral)
+                else manager.cancelConnection(peripheral)
+            } catch (error: Throwable) {
+                settleDisconnect(peripheral, error)
+            }
         }
         return promise
     }
 
     fun makeBluetoothPair(params: BlePairParams): BleFuture<Unit> {
         ensureConnectPermission()
-        val manager = requireReadyManager()
+        requireReadyManager()
         val peripheral = getPeripheral(params.deviceId)
         val key = peripheral.address.normalizedDeviceId()
+        if (retiredPairAttempts.containsKey(peripheral)) return BleFuture.async {
+            throw BleOperationException("E_BLE_PAIR_FAILED:Previous pairing is awaiting terminal delivery")
+        }
         if (peripheral.bondState == BondState.BONDED) return BleFuture.async { }
         if (peripheral.bondState == BondState.BONDING) {
             pairPromises.get(key)?.let { return it }
@@ -433,23 +499,62 @@ internal class BleEngine(private val context: Context) {
         val promise = BleFuture<Unit>()
         val active = pairPromises.putIfAbsent(key, promise)
         if (active !== promise) return active
+        val attempt = PairAttempt(key, peripheral, promise)
+        pairAttempts[key] = attempt
+        pairingStarted?.invoke(key, attempt)
         try {
-            manager.createBond(peripheral, peripheralCallback)
+            val generation = managerGeneration
+            val callback = peripheralCallback(peripheral, attempt)
+            val token = peripheralTokens[key]
+            // The central manager ignores createBond for a connected device.
+            // This public peripheral API also reports immediate SDK refusal.
+            peripheral.peripheralCallback = callback
+            if (!peripheral.createBond()) {
+                finishPairing(attempt, BleOperationException("E_BLE_PAIR_FAILED:Pairing request was not accepted"))
+                return promise
+            }
             mainHandler.postDelayed(
                 {
-                    pairPromises.reject(
-                        key,
-                        BleOperationException("E_BLE_PAIR_TIMEOUT:Bluetooth pairing timed out"),
-                    )
-                    pairingPins.remove(key)
+                    if (generation == managerGeneration && peripheralTokens[key] === token &&
+                        pairAttempts[key] === attempt && !attempt.terminal && pairPromises.get(key) === promise) {
+                        // Rejecting can synchronously admit another pair. Remove
+                        // this attempt's PIN before its observers can install one.
+                        pairingPins.remove(key)
+                        pairPromises.reject(
+                            key,
+                            BleOperationException("E_BLE_PAIR_TIMEOUT:Bluetooth pairing timed out"),
+                        )
+                    }
                 },
                 params.timeout.toLong(),
             )
         } catch (error: Throwable) {
-            pairingPins.remove(key)
-            pairPromises.reject(key, error)
+            finishPairing(attempt, error)
         }
         return promise
+    }
+
+    private fun finishPairing(attempt: PairAttempt, error: Throwable? = null) {
+        val key = attempt.deviceId
+        val current = pairAttempts[key] === attempt
+        if ((!current && retiredPairAttempts[attempt.peripheral] !== attempt) || attempt.terminal) return
+        attempt.terminal = true
+        if (current) {
+            pairingPins.remove(key)
+            if (pairPromises.get(key) === attempt.promise) {
+                if (error == null) pairPromises.resolve(key, Unit) else pairPromises.reject(key, error)
+            }
+        }
+        // Blessed's posted bond lambdas read the mutable callback at delivery.
+        // Drain already-posted terminals while this attempt still owns the pin.
+        mainHandler.post {
+            if (pairAttempts[key] === attempt) {
+                pairAttempts.remove(key)
+                pairingDrained?.invoke(key, attempt)
+            } else if (retiredPairAttempts[attempt.peripheral] === attempt) {
+                retiredPairAttempts.remove(attempt.peripheral)
+            }
+        }
     }
 
     fun isBluetoothDevicePaired(deviceId: String): BleFuture<Unit> = BleFuture.async {
@@ -666,7 +771,7 @@ internal class BleEngine(private val context: Context) {
         if (!ANDROID_DEVICE_ID.matches(normalized)) {
             throw BleOperationException("E_BLE_INVALID_DATA:Invalid Android device id $deviceId")
         }
-        return requireManager().getPeripheral(normalized)
+        return requireManager().getPeripheral(normalized).also { peripheralInstances[normalized] = it }
     }
 
     private fun requireConnectedPeripheral(deviceId: String): BluetoothPeripheral {
@@ -733,6 +838,13 @@ internal class BleEngine(private val context: Context) {
         characteristic.uuid.toNormalizedString(),
     ).joinToString("|")
 
+    private fun settleDisconnect(peripheral: BluetoothPeripheral, error: Throwable? = null) {
+        // Detach before notifying: an observer may immediately close a new
+        // peripheral at the same address. Never consume that replacement waiter.
+        val promise = disconnectPromises.remove(peripheral) ?: return
+        if (error == null) promise.resolve(Unit) else promise.reject(error)
+    }
+
     private fun rejectDeviceOperations(deviceId: String, error: Throwable) {
         val prefix = "${deviceId.normalizedDeviceId()}|"
         readPromises.rejectMatching({ it.startsWith(prefix) }, error)
@@ -747,7 +859,9 @@ internal class BleEngine(private val context: Context) {
 
     private fun rejectAllOperations(error: Throwable) {
         connectPromises.clear(error)
-        disconnectPromises.clear(error)
+        val closing = disconnectPromises.values.toList()
+        disconnectPromises.clear()
+        closing.forEach { it.reject(error) }
         rssiPromises.clear(error)
         readPromises.clear(error)
         writePromises.clear(error)
@@ -756,6 +870,26 @@ internal class BleEngine(private val context: Context) {
         pairPromises.clear(error)
         pairingPins.clear()
         notifyTargets.clear()
+    }
+
+    private fun withInvalidation(deviceId: String?, error: Throwable, action: () -> Unit) {
+        // Blessed delivers callbacks through mainHandler, the same lane as BleCore.
+        val retiring = if (deviceId == null) pairAttempts.values.toList() else listOfNotNull(pairAttempts[deviceId])
+        retiring.forEach {
+            pairAttempts.remove(it.deviceId)
+            retiredPairAttempts[it.peripheral] = it
+        }
+        if (deviceId == null) {
+            peripheralTokens.clear()
+            peripheralInstances.clear()
+        } else {
+            // Keep the last instance through explicit close: Blessed can evict
+            // it before delivering its central callback. A reconnect replaces
+            // this identity before any old callback may invalidate that address.
+            peripheralTokens.remove(deviceId)
+        }
+        willInvalidate?.invoke(deviceId, error)
+        try { action() } finally { didInvalidate?.invoke() }
     }
 
     private fun emitAdapterState(available: Boolean) {

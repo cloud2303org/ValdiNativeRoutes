@@ -1,0 +1,57 @@
+{
+  "recordedAt": "2026-11-03T02:36:40.027Z",
+  "purpose": "Exact pre-P2 source and test snapshot before terminal-intent edit",
+  "historicalReceipt": {
+    "path": "scripts/harmony/tests/sheet-geometry-20261103-source-receipt.json",
+    "sha256": "9018356eda3ae58554fc289ca78e0e06382ecf978a01775b529fa517382eaf1d"
+  },
+  "entries": [
+    {
+      "originalPath": "harmony/entry/src/main/cpp/host/HarmonySheetGeometry.hpp",
+      "snapshotRelativePath": "harmony/entry/src/main/cpp/host/HarmonySheetGeometry.hpp",
+      "sha256": "33aa26a36dff14b0149bd27ff665d35f9e8d24ed0f8e17601e3c5c7f242c04ed"
+    },
+    {
+      "originalPath": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.hpp",
+      "snapshotRelativePath": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.hpp",
+      "sha256": "db1d579da95c9d8b623da4c4774b47415eda2ad91d4534ef1880c3e570d376da"
+    },
+    {
+      "originalPath": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.cpp",
+      "snapshotRelativePath": "harmony/entry/src/main/cpp/host/HarmonySheetSurface.cpp",
+      "sha256": "2f1d5127a2f941238165087c87f04c19d3ce7826f48c39ff38185e0d24422f8f"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-geometry-extract.mjs",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-geometry-extract.mjs",
+      "sha256": "0da3915be482b95e3738ee04d97d75df07711eec7f2ea16ad7f28e8805030b79"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-geometry.test.mjs",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-geometry.test.mjs",
+      "sha256": "e2ff478cc661fc3ce77892b601d638d6a72c5c115203eb08b93ca78e55fb3794"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-geometry-check.mjs",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-geometry-check.mjs",
+      "sha256": "95969c53341ad4ba5364576c019ed5a5a6c3871ff0ca12c2207ae4ffa8842013"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface-native.cpp",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface-native.cpp",
+      "sha256": "9fe6341fc27a5e550faa10ff560a3e314c58c641c7dde56b533dc0bf914ad179"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-surface.md",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-surface.md",
+      "sha256": "ce1c148a19a798c6af9b94a2efa8a229e9b068c691e060baf8214ba4f3ed60d8"
+    },
+    {
+      "originalPath": "scripts/harmony/tests/sheet-geometry-20261103-source-receipt.json",
+      "snapshotRelativePath": "scripts/harmony/tests/sheet-geometry-20261103-source-receipt.json",
+      "sha256": "9018356eda3ae58554fc289ca78e0e06382ecf978a01775b529fa517382eaf1d"
+    }
+  ],
+  "nativeCompilerInvoked": false,
+  "nativeFixtureExecuted": false
+}

@@ -1,0 +1,95 @@
+# Recorded live with Argent on Mate 90 Pro, 1280x2832, portrait.
+# Harmony runner has no selector tree: coordinates are from fresh uitest trees;
+# raw await-ui-element steps retain the live tree source that passed.
+# The HAP must be installed. Pass --device with the connected Harmony id.
+steps:
+  - launch: io.valdiroutes.harmony
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Harmony routes / Home
+      condition: visible
+      timeoutMs: 10000
+  - tap:
+      x: 0.5
+      y: 0.6114999999999999
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Native gesture contracts
+      condition: visible
+      timeoutMs: 10000
+  - tap:
+      x: 0.5
+      y: 0.5085
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Tap=1 Double=0 Long=0
+      condition: visible
+      timeoutMs: 10000
+  - tap:
+      on:
+        x: 0.5
+        y: 0.5085
+      times: 2
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Tap=1 Double=1 Long=0
+      condition: visible
+      timeoutMs: 10000
+  - tap:
+      x: 0.5
+      y: 0.2785
+  - tool: await-ui-element
+    args:
+      selector:
+        text: "Disabled: true"
+      condition: visible
+      timeoutMs: 10000
+  - tap:
+      x: 0.5
+      y: 0.5085
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Tap=1 Double=1 Long=0
+      condition: visible
+      timeoutMs: 10000
+  - tap:
+      x: 0.5
+      y: 0.2785
+  - tool: await-ui-element
+    args:
+      selector:
+        text: "Disabled: false"
+      condition: visible
+      timeoutMs: 10000
+  - tap:
+      x: 0.5
+      y: 0.3225
+  - tool: await-ui-element
+    args:
+      selector:
+        text: "Predicate allows: false"
+      condition: visible
+      timeoutMs: 10000
+  - tap:
+      x: 0.5
+      y: 0.5085
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Tap=1 Double=1 Long=0
+      condition: visible
+      timeoutMs: 10000
+  - tap:
+      x: 0.5
+      y: 0.3225
+  - tool: await-ui-element
+    args:
+      selector:
+        text: "Predicate allows: true"
+      condition: visible
+      timeoutMs: 10000

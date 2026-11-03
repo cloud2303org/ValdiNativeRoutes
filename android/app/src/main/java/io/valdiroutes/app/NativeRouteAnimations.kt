@@ -16,21 +16,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
-import org.json.JSONObject
-
-/** A page's resolved transition; Valdi pages resolve the global, route and call layers in routes.ts. */
-data class NavigationOptions(val animation: String = "default", val durationMs: Int = 300) {
-    companion object {
-        /** routes.ts NAVIGATION on Android, for pages opened natively. */
-        val Default = NavigationOptions("slideRight", 300)
-
-        fun parse(json: String): NavigationOptions {
-            if (json.isEmpty()) return Default
-            val value = JSONObject(json)
-            return NavigationOptions(value.optString("animation", Default.animation), value.optInt("durationMs", Default.durationMs))
-        }
-    }
-}
+import io.valdiroutes.pages.ResolvedNavigation
 
 /**
  * ExpoNativeRoutes' NativeRouteAnimations: named presets run by Nav3 on push, pop and predictive pop. 'default'
@@ -38,6 +24,9 @@ data class NavigationOptions(val animation: String = "default", val durationMs: 
  * with them, and add their names to routes.ts ANDROID_ANIMATIONS.
  */
 object NativeRouteAnimations {
+    /** routes.ts NAVIGATION on Android, for pages opened natively. */
+    val Default = ResolvedNavigation("slideRight", 300.0, "push")
+
     private val presets = mutableMapOf<String, AnimatedContentTransitionScope<Scene<*>>.(Int, Boolean) -> ContentTransform?>()
 
     init {
@@ -64,17 +53,19 @@ object NativeRouteAnimations {
     }
 
     /** routes.ts already rejected unknown names; one registered only natively and never added there falls back. */
-    fun validated(options: NavigationOptions): NavigationOptions {
-        require(options.durationMs in 0..2000) { "durationMs must be an integer from 0 to 2000" }
-        return if (options.animation in presets) options else NavigationOptions.Default
+    fun validated(options: ResolvedNavigation): ResolvedNavigation {
+        require(options.durationMs in 0.0..2000.0 && options.durationMs % 1.0 == 0.0) {
+            "durationMs must be an integer from 0 to 2000"
+        }
+        return if (options.animation in presets) options else Default
     }
 
-    private fun AnimatedContentTransitionScope<Scene<*>>.transform(options: NavigationOptions, back: Boolean): ContentTransform? =
-        if (options.durationMs == 0) presets.getValue("none")(this, 0, back)
-        else presets.getValue(options.animation)(this, options.durationMs, back)
+    private fun AnimatedContentTransitionScope<Scene<*>>.transform(options: ResolvedNavigation, back: Boolean): ContentTransform? =
+        if (options.durationMs == 0.0) presets.getValue("none")(this, 0, back)
+        else presets.getValue(options.animation)(this, options.durationMs.toInt(), back)
 
     /** NavEntry metadata: a page enters and leaves (also by predictive back) with its own options. */
-    fun metadata(options: NavigationOptions): Map<String, Any> =
+    fun metadata(options: ResolvedNavigation): Map<String, Any> =
         NavDisplay.transitionSpec { transform(options, false) } +
             NavDisplay.popTransitionSpec { transform(options, true) } +
             NavDisplay.predictivePopTransitionSpec { _ -> transform(options, true) }

@@ -8,6 +8,7 @@ import { PageContext, PageViewModel } from './Page';
 import { Page } from './PageComponent';
 import { PageHeader } from './PageHeader';
 import { NavigationOptions, Router, readParams } from './navigation';
+import { HARMONY_ANIMATIONS } from './navigation/options';
 
 interface Example {
   title: string;
@@ -20,32 +21,44 @@ const EXAMPLES: Record<string, Example> = {
   default: {
     title: '系统默认',
     description: '使用平台导航的默认效果，让页面自然衔接。',
-    options: { animation: 'default', android: { animation: 'default' } },
+    options: { animation: 'default', android: { animation: 'default' }, harmony: { animation: 'default' } },
   },
   none: {
     title: '无动画',
     description: '直接打开下一页，立即完成页面切换。',
-    options: { animation: 'none', android: { animation: 'none' } },
+    options: { animation: 'none', android: { animation: 'none' }, harmony: { animation: 'none' } },
   },
   slideRight: {
     title: '右侧推进',
     description: '下一页从右侧进入，当前页面向左退让。',
-    options: { android: { animation: 'slideRight', durationMs: 300 } },
+    options: {
+      android: { animation: 'slideRight', durationMs: 300 },
+      harmony: { animation: 'slideRight', durationMs: 300 },
+    },
   },
   slideUp: {
     title: '底部进入',
     description: '下一页从下方向上进入，适合临时打开的内容。',
-    options: { android: { animation: 'slideUp', durationMs: 300 } },
+    options: {
+      android: { animation: 'slideUp', durationMs: 300 },
+      harmony: { animation: 'slideUp', durationMs: 300 },
+    },
   },
   fade: {
     title: '淡入淡出',
     description: '两页以透明度变化柔和交接，视线停留在原处。',
-    options: { android: { animation: 'fade', durationMs: 300 } },
+    options: {
+      android: { animation: 'fade', durationMs: 300 },
+      harmony: { animation: 'fade', durationMs: 300 },
+    },
   },
   zoom: {
     title: '缩放',
     description: '下一页从稍小的尺寸展开，逐渐填满视野。',
-    options: { android: { animation: 'zoom', durationMs: 300 } },
+    options: {
+      android: { animation: 'zoom', durationMs: 300 },
+      harmony: { animation: 'zoom', durationMs: 300 },
+    },
   },
   fullScreen: {
     title: '全屏覆盖',
@@ -54,7 +67,8 @@ const EXAMPLES: Record<string, Example> = {
   },
 };
 
-const AVAILABLE = Device.isAndroid()
+const IS_HARMONY = String(Device.getSystemType()) === 'harmony';
+const AVAILABLE = IS_HARMONY ? HARMONY_ANIMATIONS : Device.isAndroid()
   ? ['default', 'none', 'slideRight', 'slideUp', 'fade', 'zoom']
   : ['default', 'none', 'fullScreen'];
 
@@ -72,7 +86,7 @@ export class RouteAnimationPage extends Page<PageViewModel, {}, PageContext> {
   onRender(): void {
     const { insets } = this.viewModel;
     const { animation } = readParams<'animation'>(this.viewModel);
-    const example = EXAMPLES[animation];
+    const example = AVAILABLE.some(name => name === animation) ? EXAMPLES[animation] : undefined;
 
     <view style={styles.page}>
       <scroll style={styles.scroll}>
@@ -85,7 +99,8 @@ export class RouteAnimationPage extends Page<PageViewModel, {}, PageContext> {
         >
           <PageHeader
             title={example ? example.title : '路由动画'}
-            subtitle={Device.isAndroid() ? 'Compose Nav3 · 进入、返回、预测性返回' : 'UINavigationController'}
+            subtitle={IS_HARMONY ? 'ArkUI'
+              : Device.isAndroid() ? 'Compose Nav3 · 进入、返回、预测性返回' : 'UINavigationController'}
             onBack={this.handleBack}
           />
           {example ? this.renderExample(animation, example) : this.renderList()}

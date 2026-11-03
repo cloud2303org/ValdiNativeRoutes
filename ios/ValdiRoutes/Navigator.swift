@@ -20,53 +20,48 @@ enum Presentation: String {
 
 /// A page's resolved transition (routes.ts resolves the global, route and call layers). iOS has the system push and
 /// none, and 'fullScreen' covers the stack, as in ExpoNativeRoutes.
-struct NavigationOptions {
-    var animation = "default"
-    var durationMs = 300
-    var fullScreen = false
+extension VRResolvedNavigation {
+    static var defaultOptions: VRResolvedNavigation {
+        VRResolvedNavigation(animation: "default", durationMs: 300, presentation: "push")
+    }
 
     var animated: Bool { animation != "none" && durationMs > 0 }
-
-    init() {}
-
-    init(json: String) {
-        let value = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] ?? [:]
-        animation = value["animation"] as? String ?? "default"
-        durationMs = value["durationMs"] as? Int ?? 300
-        fullScreen = value["presentation"] as? String == "fullScreen"
-    }
+    var fullScreen: Bool { presentation == "fullScreen" }
 }
 
-typealias ResultCallback = (_ resultJson: String, _ canceled: Bool) -> Void
+typealias ResultCallback = (_ result: [String: Any], _ canceled: Bool) -> Void
 
 final class PageEntry: Equatable {
     let id: String
     let route: String
     let definition: RouteDefinition
-    let paramsJson: String
+    private let payload: RoutePayload
+    var params: [String: Any] { payload.value }
     let presentation: Presentation
-    let navigation: NavigationOptions
+    let navigation: VRResolvedNavigation
     private let onResult: ResultCallback?
 
     /// Owned here, not by its container, so a page outlives the views that show it.
     var rootView: SCValdiRootView?
     var appliedInsets: UIEdgeInsets?
+    /// Custom tab callbacks live as long as the shell, including while another tab or page is shown.
+    var tabBarContext: VRTabBarContext?
     private(set) var removed = false
-    private var result: (json: String, canceled: Bool)?
+    private var completion = RouteResultState()
 
-    init(id: String, route: String, definition: RouteDefinition, paramsJson: String, presentation: Presentation,
-         navigation: NavigationOptions = NavigationOptions(), onResult: ResultCallback?) {
+    init(id: String, route: String, definition: RouteDefinition, params: [String: Any], presentation: Presentation,
+         navigation: VRResolvedNavigation = .defaultOptions, onResult: ResultCallback?) {
         self.id = id
         self.route = route
         self.definition = definition
-        self.paramsJson = paramsJson
+        payload = RoutePayload(params)
         self.presentation = presentation
         self.navigation = navigation
         self.onResult = onResult
     }
 
     /// A tab shell's pages, which leave with it, and the tab it shows: switchTab sets it, also while the shell is
-    /// covered, and the shell shows it when it appears (TabsController).
+    /// covered, and the shell shows it when it appears (TabsContainer).
     var tabPages: [PageEntry] = []
     var selectedTab: String?
     /// For a tab page, the shell it is in.
@@ -82,16 +77,16 @@ final class PageEntry: Equatable {
     }
 
 
-    func close(resultJson: String?, canceled: Bool) {
-        if result == nil { result = (resultJson ?? "", canceled) }
+    func close(result: [String: Any]?, canceled: Bool) {
+        completion.accept(result, canceled: canceled)
     }
 
     /// Runs once the page has left the stack, also when the user swiped it away.
     func remove() {
         guard !removed else { return }
         removed = true
-        let (json, canceled) = result ?? ("", true)
-        onResult?(json, canceled)
+        let (value, canceled) = completion.result
+        onResult?(value, canceled)
         tabPages.forEach { $0.remove() }
         // A page still on screen (pop or dismiss animation) is destroyed once it has disappeared (PageController).
         if rootView?.window == nil { destroy() }
@@ -100,6 +95,7 @@ final class PageEntry: Equatable {
     func destroy() {
         rootView?.valdiContext?.destroy()
         rootView = nil
+        tabBarContext = nil
     }
 
     static func == (lhs: PageEntry, rhs: PageEntry) -> Bool { lhs.id == rhs.id }
@@ -240,11 +236,18 @@ final class Navigator {
         let route = oldRoot.map { table.contains($0.route) ? $0.route : table.root } ?? table.root
         let selected = oldRoot?.selectedTab
         routes = table
-        let params: String
-        if let selected, table.tabBar?.tabs.contains(where: { $0.route == selected }) == true {
-            params = String(data: try! JSONSerialization.data(withJSONObject: ["tab": selected]), encoding: .utf8)!
-        } else { params = route == table.tabBar?.route ? "{}" : oldRoot?.paramsJson ?? "{}" }
-        reset(route, paramsJson: params)
+        let params: [String: Any]
+        if route == table.tabBar?.route {
+            if let selected, table.tabBar?.tabs.contains(where: { $0.route == selected }) == true {
+                params = ["tab": selected]
+            } else {
+                params = [:]
+            }
+        } else {
+            params = oldRoot?.route == route ? oldRoot?.params ?? [:] : [:]
+        }
+        // A published declaration rebuilds the root; pages removed above it complete as canceled.
+        reset(route, params: params)
     }
 
     // MARK: Visibility and status bar
@@ -263,7 +266,7 @@ final class Navigator {
     private var frontPage: PageEntry? {
         guard let top = cover?.entries.last ?? stack.entries.last else { return nil }
         guard top.definition.kind == "tabs" else { return top }
-        return top.tabPages.first { $0.route == tabBar?.tabs.first { $0.route == top.selectedTab }?.route } ?? top
+        return top.tabPages.first { $0.route == top.selectedTab } ?? top
     }
 
     /**
@@ -324,18 +327,17 @@ final class Navigator {
     /// where a navigation bar shown later would land above the sheet.
     private var front: UIView? { coverHost?.view ?? host?.view }
 
-    private func entry(_ route: String, paramsJson: String = "{}", presentation: Presentation = .push,
-                       navigation: NavigationOptions = NavigationOptions(), onResult: ResultCallback? = nil) -> PageEntry {
-        let entry = PageEntry(id: "page-\(nextId)", route: route, definition: routes[route], paramsJson: paramsJson,
+    private func entry(_ route: String, params: [String: Any] = [:], presentation: Presentation = .push,
+                       navigation: VRResolvedNavigation = .defaultOptions, onResult: ResultCallback? = nil) -> PageEntry {
+        let entry = PageEntry(id: "page-\(nextId)", route: route, definition: routes[route], params: params,
                               presentation: presentation, navigation: navigation, onResult: onResult)
         nextId += 1
         if entry.definition.kind == "tabs" {
-            let params = (try? JSONSerialization.jsonObject(with: Data(paramsJson.utf8))) as? [String: Any]
             let tabs = tabBar?.tabs ?? []
-            if let requested = params?["tab"] {
+            if let requested = params["tab"] {
                 precondition(tabs.contains { $0.route == requested as? String }, "Unknown tab: \(requested)")
             }
-            entry.selectedTab = tabs.first { $0.route == params?["tab"] as? String }?.route ?? tabBar?.initial
+            entry.selectedTab = tabs.first { $0.route == params["tab"] as? String }?.route ?? tabBar?.initial
         }
         return entry
     }
@@ -348,9 +350,9 @@ final class Navigator {
         return pages
     }
 
-    func open(_ route: String, paramsJson: String = "{}", presentation: Presentation = .push,
-              navigation: NavigationOptions = NavigationOptions(), onResult: ResultCallback? = nil) {
-        let entry = entry(route, paramsJson: paramsJson, presentation: presentation, navigation: navigation,
+    func open(_ route: String, params: [String: Any] = [:], presentation: Presentation = .push,
+              navigation: VRResolvedNavigation = .defaultOptions, onResult: ResultCallback? = nil) {
+        let entry = entry(route, params: params, presentation: presentation, navigation: navigation,
                           onResult: onResult)
         if presentation != .push && sheet == nil {
             showSheet(entry)
@@ -388,26 +390,26 @@ final class Navigator {
         reportTopPage()
     }
 
-    func finish(_ pageId: String, resultJson: String) { close(pageId, resultJson: resultJson, canceled: false) }
+    func finish(_ pageId: String, result: [String: Any]) { close(pageId, result: result, canceled: false) }
 
-    func cancel(_ pageId: String) { close(pageId, resultJson: nil, canceled: true) }
+    func cancel(_ pageId: String) { close(pageId, result: nil, canceled: true) }
 
     /// A page leaves with its own options: one opened without animation also closes without.
-    private func close(_ pageId: String, resultJson: String?, canceled: Bool) {
+    private func close(_ pageId: String, result: [String: Any]?, canceled: Bool) {
         if let sheet, sheet.entry.id == pageId {
-            sheet.entry.close(resultJson: resultJson, canceled: canceled)
+            sheet.entry.close(result: result, canceled: canceled)
             sheet.layer.host.dismiss() // Animates out, then onSheetHidden().
             return
         }
         if let cover, let entry = cover.entries.first, entry.id == pageId {
-            entry.close(resultJson: resultJson, canceled: canceled)
+            entry.close(result: result, canceled: canceled)
             closeCover(animated: entry.navigation.animated)
             return
         }
         for stack in [cover, stack].compactMap({ $0 }) {
             // The root page, and a cover's first page (above), can't be popped.
             guard let entry = stack.entries.dropFirst().first(where: { $0.id == pageId }) else { continue }
-            entry.close(resultJson: resultJson, canceled: canceled)
+            entry.close(result: result, canceled: canceled)
             stack.pop(entry)
             return
         }
@@ -427,14 +429,14 @@ final class Navigator {
     /// Animates the sheet out, cancelled.
     private func dismissSheet() {
         guard let sheet else { return }
-        sheet.entry.close(resultJson: nil, canceled: true)
+        sheet.entry.close(result: nil, canceled: true)
         sheet.layer.host.dismiss()
     }
 
     /// Replaces the top page of the front stack (the cover's when there is one), after closing a sheet over it.
-    func replace(_ route: String, paramsJson: String, navigation: NavigationOptions) {
+    func replace(_ route: String, params: [String: Any], navigation: VRResolvedNavigation) {
         dismissSheet()
-        (cover ?? stack).replaceTop(with: PageController(entry: entry(route, paramsJson: paramsJson, navigation: navigation),
+        (cover ?? stack).replaceTop(with: PageController(entry: entry(route, params: params, navigation: navigation),
                                                          navigator: self))
     }
 
@@ -464,14 +466,14 @@ final class Navigator {
     }
 
     /// Clears everything, root included; `route` is the new root.
-    func reset(_ route: String, paramsJson: String) {
+    func reset(_ route: String, params: [String: Any]) {
         if let current = sheet {
             sheet = nil
             current.layer.removeFromSuperview()
             current.entry.remove()
         }
         closeCover(animated: false)
-        stack.reset(to: PageController(entry: entry(route, paramsJson: paramsJson), navigator: self))
+        stack.reset(to: PageController(entry: entry(route, params: params), navigator: self))
     }
 
     /// Back to the tab shell with `tab` selected; a new root shell when the stack has none.
@@ -479,8 +481,7 @@ final class Navigator {
         guard let tabBar else { preconditionFailure("No tabs declared") }
         precondition(tabBar.tabs.contains { $0.route == tab }, "Unknown tab: \(tab)")
         guard let index = stack.entries.lastIndex(where: { $0.route == tabBar.route }) else {
-            let params = String(data: try! JSONSerialization.data(withJSONObject: ["tab": tab]), encoding: .utf8)!
-            return reset(tabBar.route, paramsJson: params)
+            return reset(tabBar.route, params: ["tab": tab])
         }
         let shell = stack.entries[index]
         shell.selectedTab = tab
@@ -491,14 +492,22 @@ final class Navigator {
         stack.viewControllers.lazy.compactMap { $0 as? PageController }.first { $0.entry == shell }?.showSelectedTab()
     }
 
-    /// Root first, the sheet last; the pages in a tab shell are not on the stack.
-    func currentPages() -> String {
-        let pages = stack.entries + (cover?.entries ?? []) + (sheet.map { [$0.entry] } ?? [])
-        let json = pages.map { page -> [String: Any] in
-            let params = (try? JSONSerialization.jsonObject(with: Data(page.paramsJson.utf8))) ?? [String: Any]()
-            return ["pageId": page.id, "route": page.route, "params": params]
+    /// A tap in a shell changes only that shell. A callback queued before its removal cannot revive it.
+    func selectTab(_ tab: String, in shell: PageEntry) {
+        guard !shell.removed else { return }
+        precondition(shell.tabPages.contains { $0.route == tab }, "Unknown tab: \(tab)")
+        shell.selectedTab = tab
+        for container in [stack, cover].compactMap({ $0 }) {
+            container.viewControllers.lazy.compactMap { $0 as? PageController }
+                .first { $0.entry === shell }?.showSelectedTab()
         }
-        return String(data: try! JSONSerialization.data(withJSONObject: json), encoding: .utf8)!
+        updateVisibility()
+    }
+
+    /// Root first, the sheet last; the pages in a tab shell are not on the stack.
+    func currentPages() -> [VRStackPage] {
+        let pages = stack.entries + (cover?.entries ?? []) + (sheet.map { [$0.entry] } ?? [])
+        return pages.map { VRStackPage(pageId: $0.id, route: $0.route, params: $0.params) }
     }
 
     /// The sheet finished animating out; a drag down or a tap on the scrim closed it as cancelled.

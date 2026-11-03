@@ -13,8 +13,73 @@ public final class BleCore {
   let engine = BleEngine()
   private var adapterGeneration: UInt64 = 0
   private var deviceGenerations: [String: UInt64] = [:]
-  private var queues: [String: [() -> Void]] = [:]
-  private init() {}
+  private struct ConnectKey: Hashable {
+    let device: String
+    let timeout: Double
+  }
+  private class Work {
+    let id = UUID()
+    var sequence: UInt64 = 0
+    let key: String?
+    var adapter: UInt64
+    let device: UInt64?
+    let adapterClose: Bool
+    let adapterOpen: Bool
+    var started = false
+    var run: (() -> Void)?
+    init(key: String?, adapter: UInt64, device: UInt64?, adapterClose: Bool, adapterOpen: Bool) {
+      self.key = key; self.adapter = adapter; self.device = device
+      self.adapterClose = adapterClose; self.adapterOpen = adapterOpen
+    }
+    var hasWaiters: Bool { fatalError("abstract") }
+    func reject(_ error: Error) { fatalError("abstract") }
+    func take(_ session: BleSession) -> (() -> Void) { fatalError("abstract") }
+  }
+  private final class Operation<T>: Work {
+    private var waiters: [ObjectIdentifier: (BleSession, [BleFuture<T>])] = [:]
+    func add(_ session: BleSession, _ output: BleFuture<T>) {
+      let id = ObjectIdentifier(session)
+      if waiters[id] == nil { waiters[id] = (session, []) }
+      waiters[id]!.1.append(output)
+    }
+    override var hasWaiters: Bool { !waiters.isEmpty }
+    func finish(_ result: Result<T, Error>) {
+      let pending = Array(waiters.values)
+      waiters.removeAll()
+      for (session, outputs) in pending {
+        for output in outputs {
+          if session.released { output.reject(withError: session.releaseError) }
+          else {
+            switch result {
+            case .success(let value): output.resolve(withResult: value)
+            case .failure(let error): output.reject(withError: error)
+            }
+          }
+        }
+      }
+    }
+    override func reject(_ error: Error) { finish(.failure(error)) }
+    override func take(_ session: BleSession) -> (() -> Void) {
+      let outputs = waiters.removeValue(forKey: ObjectIdentifier(session))?.1 ?? []
+      return { outputs.forEach { $0.reject(withError: session.releaseError) } }
+    }
+  }
+  private var queues: [String: [Work]] = [:]
+  private var work: [UUID: Work] = [:]
+  private var connects: [ConnectKey: Work] = [:]
+  private var fences = 0
+  private var pumping = false
+  private var nextSequence: UInt64 = 0
+  private init() {
+    engine.willInvalidate = { [weak self] deviceId, error, preserveOpen in
+      self?.beginInvalidation(deviceId: deviceId, error: error, preserveOpen: preserveOpen)
+    }
+    engine.didInvalidate = { [weak self] in
+      guard let self else { return }
+      self.fences -= 1
+      self.pump()
+    }
+  }
   func main(_ action: @escaping () -> Void) {
     if Thread.isMainThread { action() } else { DispatchQueue.main.async(execute: action) }
   }
@@ -22,46 +87,97 @@ public final class BleCore {
     if Thread.isMainThread { return try action() }
     return try DispatchQueue.main.sync(execute: action)
   }
-  func submit<T>(_ session: BleSession, key: String?, _ action: @escaping (BleEngine) throws -> BleFuture<T>) -> BleFuture<T> {
+  func submit<T>(_ session: BleSession, key: String?, connectTimeout: Double? = nil,
+                 adapterClose: Bool = false, adapterOpen: Bool = false,
+                 _ action: @escaping (BleEngine) throws -> BleFuture<T>) -> BleFuture<T> {
     let output = BleFuture<T>()
-    main {
+    main { [self] in
       guard !session.released else { output.reject(withError: session.releaseError); return }
-      let operationId = UUID()
-      session.pending[operationId] = { output.reject(withError: session.releaseError) }
       let normalized = key?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-      let capturedAdapter = self.adapterGeneration
-      let capturedDevice = normalized.map { self.deviceGenerations[$0] ?? 0 }
-      let run = {
-        guard !session.released, self.adapterGeneration == capturedAdapter, normalized.map({ self.deviceGenerations[$0] ?? 0 }) == capturedDevice else {
-          output.reject(withError: NSError(domain: "BLE", code: 10000, userInfo: [NSLocalizedDescriptionKey: "E_BLE_NOT_INITIALIZED:Operation session ended"]))
-          session.pending.removeValue(forKey: operationId); if let normalized { self.complete(normalized) }; return }
+      let connect = normalized.flatMap { device in connectTimeout.map { ConnectKey(device: device, timeout: $0) } }
+      if let connect, let active = self.connects[connect] as? Operation<T> {
+        active.add(session, output)
+        return
+      }
+      let task = Operation<T>(key: normalized, adapter: self.adapterGeneration,
+        device: normalized.map { self.deviceGenerations[$0] ?? 0 }, adapterClose: adapterClose, adapterOpen: adapterOpen)
+      self.nextSequence += 1
+      task.sequence = self.nextSequence
+      task.add(session, output)
+      task.run = { [weak self, weak task] in
+        guard let self, let task else { return }
         do {
-          try action(self.engine).observe { result in self.main {
-            session.pending.removeValue(forKey: operationId)
-            switch result {
-            case .success(let value): output.resolve(withResult: value)
-            case .failure(let error): output.reject(withError: error)
-            }
-            if let normalized { self.complete(normalized) }
+          try action(self.engine).observe { [weak self, weak task] result in self?.main {
+            guard let self, let task, self.work[task.id] === task else { return }
+            self.fences += 1
+            self.detach(task)
+            if self.current(task) { task.finish(result) }
+            else { task.reject(self.staleError) }
+            self.fences -= 1
+            self.pump()
           } }
         } catch {
-          session.pending.removeValue(forKey: operationId)
-          output.reject(withError: error)
-          if let normalized { self.complete(normalized) }
+          guard self.work[task.id] === task else { return }
+          self.fences += 1
+          self.detach(task)
+          task.reject(error)
+          self.fences -= 1
+          self.pump()
         }
       }
-      if let normalized {
-        self.queues[normalized, default: []].append(run)
-        if self.queues[normalized]?.count == 1 { run() }
-      } else { run() }
+      self.work[task.id] = task
+      if let connect { self.connects[connect] = task }
+      if let normalized { self.queues[normalized, default: []].append(task) }
+      self.pump()
     }
     return output
   }
-  private func complete(_ key: String) {
-    guard var queue = queues[key], !queue.isEmpty else { return }
-    queue.removeFirst()
-    queues[key] = queue.isEmpty ? nil : queue
-    queue.first?()
+  private var staleError: Error {
+    NSError(domain: "BLE", code: 10000, userInfo: [NSLocalizedDescriptionKey: "E_BLE_NOT_INITIALIZED:Operation session ended"])
+  }
+  private func current(_ task: Work) -> Bool {
+    task.adapterClose || (task.adapter == adapterGeneration &&
+      task.key.map { deviceGenerations[$0] ?? 0 } == task.device)
+  }
+  private func detach(_ task: Work) {
+    work.removeValue(forKey: task.id)
+    task.run = nil
+    if let key = task.key {
+      queues[key]?.removeAll { $0 === task }
+      if queues[key]?.isEmpty == true { queues.removeValue(forKey: key) }
+    }
+    for key in Array(connects.keys) where connects[key] === task { connects.removeValue(forKey: key) }
+  }
+  private func pump() {
+    guard fences == 0, !pumping else { return }
+    pumping = true
+    defer { pumping = false }
+    while fences == 0, let task = work.values.filter({
+      !$0.started && ($0.key == nil || queues[$0.key!]?.first === $0)
+    }).min(by: { $0.sequence < $1.sequence }) {
+      if !current(task) {
+        detach(task)
+        task.reject(staleError)
+        continue
+      }
+      task.started = true
+      let run = task.run
+      task.run = nil
+      run?()
+    }
+  }
+  fileprivate func release(_ session: BleSession) {
+    fences += 1
+    var cancel: [() -> Void] = []
+    for task in Array(work.values) {
+      cancel.append(task.take(session))
+      // An active OS request still owns the device slot until it finishes.
+      if !task.started && !task.hasWaiters { detach(task) }
+    }
+    releaseResources(session)
+    cancel.forEach { $0() }
+    fences -= 1
+    pump()
   }
   private var leases: [String: Set<ObjectIdentifier>] = [:]
   private var leaseCleanup: [String: (String, (BleEngine) throws -> BleFuture<Void>)] = [:]
@@ -80,8 +196,12 @@ public final class BleCore {
           let result = BleFuture<Void>(); result.resolve(withResult: ()); return result
         }
       }
+      let adapter = self.adapterGeneration
+      let key = queue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+      let device = self.deviceGenerations[key] ?? 0
       let result = try action(engine)
       result.observe { outcome in self.main {
+        guard self.adapterGeneration == adapter, (self.deviceGenerations[key] ?? 0) == device else { return }
         if case .success = outcome {
           if enable && !session.released {
             self.leases[resource, default: []].insert(id)
@@ -91,7 +211,7 @@ public final class BleCore {
             self.leases.removeValue(forKey: resource)
             self.leaseCleanup.removeValue(forKey: resource)
             if resource == "@scan" { self.scanSignature = nil }
-            if enable { _ = self.submit(self.maintenance, key: queue, cleanup) }
+            if enable { self.scheduleCleanup(resource: resource, queue: queue, cleanup: cleanup) }
           }
         }
       } }
@@ -106,11 +226,24 @@ public final class BleCore {
         leases.removeValue(forKey: resource)
         let cleanup = leaseCleanup.removeValue(forKey: resource)
         if resource == "@scan" { scanSignature = nil }
-        if let cleanup { _ = submit(maintenance, key: cleanup.0, cleanup.1) }
+        if let cleanup { scheduleCleanup(resource: resource, queue: cleanup.0, cleanup: cleanup.1) }
       }
     }
   }
-  fileprivate func invalidate(deviceId: String? = nil) {
+  private func scheduleCleanup(resource: String, queue: String,
+                               cleanup: @escaping (BleEngine) throws -> BleFuture<Void>) {
+    _ = submit(maintenance, key: queue) { engine in
+      // Another session may acquire the resource before queued cleanup enters
+      // the engine. Recheck owners while still holding the resource's FIFO slot.
+      if self.leases[resource]?.isEmpty == false {
+        let result = BleFuture<Void>(); result.resolve(withResult: ()); return result
+      }
+      return try cleanup(engine)
+    }
+  }
+  private func beginInvalidation(deviceId: String?, error: Error, preserveOpen: Bool) {
+    fences += 1
+    let key = deviceId?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     if let deviceId {
       let key = deviceId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
       deviceGenerations[key, default: 0] += 1
@@ -121,6 +254,15 @@ public final class BleCore {
       adapterGeneration += 1
       leases.removeAll(); leaseCleanup.removeAll(); scanSignature = nil
     }
+    // CoreBluetooth may reset while first authorization/open is still pending.
+    let opening = preserveOpen ? work.values.filter { $0.adapterOpen && $0.started } : []
+    opening.forEach { $0.adapter = adapterGeneration }
+    let cancelled = work.values.filter {
+      !$0.adapterClose && !(preserveOpen && $0.adapterOpen && $0.started) && (key == nil || $0.key == key)
+    }
+    // Detach the entire old generation before any rejection can reenter.
+    cancelled.forEach { detach($0) }
+    cancelled.forEach { $0.reject(error) }
   }
   public func createSession() -> BleSession { BleSession(core: self) }
 }
@@ -128,23 +270,24 @@ public final class BleCore {
 public final class BleSession {
   let core: BleCore
   var released = false
-  fileprivate var pending: [UUID: () -> Void] = [:]
   private var cleanup: [String: () -> Void] = [:]
   var releaseError: Error { NSError(domain: "BLE", code: 0, userInfo: [NSLocalizedDescriptionKey: "E_BLE_SESSION_RELEASED:Session released"]) }
   fileprivate init(core: BleCore) { self.core = core }
   public func release() { core.main {
     guard !self.released else { return }
     self.released = true
+    self.core.release(self)
     self.core.peripheralLifecycle?.release(owner: ObjectIdentifier(self))
-    self.core.releaseResources(self)
-    self.pending.values.forEach { $0() }; self.pending.removeAll()
-    self.cleanup.values.forEach { $0() }; self.cleanup.removeAll()
+    let cleanup = Array(self.cleanup.values); self.cleanup.removeAll()
+    cleanup.forEach { $0() }
   } }
   public func openBluetoothAdapter() -> BleFuture<Void> {
-    core.submit(self, key: "@adapter") { try $0.openBluetoothAdapter() }
+    core.submit(self, key: "@adapter", adapterOpen: true) { try $0.openBluetoothAdapter() }
   }
   public func closeBluetoothAdapter() -> BleFuture<Void> {
-    core.submit(self, key: nil) { self.core.invalidate(); self.core.peripheralLifecycle?.close(); return try $0.closeBluetoothAdapter() }
+    core.submit(self, key: nil, adapterClose: true) {
+      try $0.closeBluetoothAdapter { self.core.peripheralLifecycle?.close() }
+    }
   }
   public func getBluetoothAdapterState() -> BleFuture<BleAdapterState> {
     core.submit(self, key: "@adapter") { engine in
@@ -182,10 +325,10 @@ public final class BleSession {
     core.submit(self, key: "@adapter") { try $0.getBluetoothDevices() }
   }
   public func createBLEConnection(deviceId: String, timeout: Double = 15_000) -> BleFuture<Void> {
-    core.submit(self, key: deviceId) { try $0.createBLEConnection(deviceId: deviceId, timeout: timeout) }
+    core.submit(self, key: deviceId, connectTimeout: timeout) { try $0.createBLEConnection(deviceId: deviceId, timeout: timeout) }
   }
   public func closeBLEConnection(deviceId: String) -> BleFuture<Void> {
-    core.submit(self, key: nil) { self.core.invalidate(deviceId: deviceId); return try $0.closeBLEConnection(deviceId: deviceId) }
+    core.submit(self, key: nil) { try $0.closeBLEConnection(deviceId: deviceId) }
   }
   public func makeBluetoothPair(params: BlePairParams) -> BleFuture<Void> {
     core.submit(self, key: params.deviceId) { try $0.makeBluetoothPair(params: params) }
@@ -203,7 +346,7 @@ public final class BleSession {
     core.submit(self, key: params.deviceId) { try $0.getBLEDeviceCharacteristics(params: params) }
   }
   public func notifyBLECharacteristicValueChange(params: BleNotifyParams) -> BleFuture<Void> {
-    let resource = "notify:\(params.deviceId.lowercased()):\(params.serviceId.lowercased()):\(params.characteristicId.lowercased())"
+    let resource = "notify:\(params.deviceId.lowercased()):\(canonicalBluetoothUUID(params.serviceId)):\(canonicalBluetoothUUID(params.characteristicId))"
     return core.resource(self, resource: resource, queue: params.deviceId, enable: params.state,
       action: { try $0.notifyBLECharacteristicValueChange(params: params) },
       cleanup: { try $0.notifyBLECharacteristicValueChange(params: BleNotifyParams(deviceId: params.deviceId, serviceId: params.serviceId, characteristicId: params.characteristicId, state: false, type: params.type)) })

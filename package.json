@@ -2,7 +2,7 @@
   "private": true,
   "packageManager": "pnpm@10.32.1",
   "valdi": {
-    "modules": ["app_pages", "bluetooth", "calculator"]
+    "modules": ["app_pages", "bluetooth", "calculator", "valdi_webview"]
   },
   "scripts": {
     "postinstall": "node scripts/install.mjs",

@@ -9,9 +9,10 @@ object ValdiNativeModules {
     fun registerFactories(context: Context) {
         ModuleFactoryRegistry.registerModuleFactory { io.valdiroutes.bluetooth.BluetoothModuleFactoryImpl(context.applicationContext) }
         ModuleFactoryRegistry.registerModuleFactory { com.snap.modules.calculator.CalculatorModuleFactoryImpl() }
+        ModuleFactoryRegistry.registerModuleFactory { com.snap.valdi.modules.webview.WebViewNativeModuleFactoryImpl() }
     }
 
     fun registerViewBinders(context: Context, runtime: ValdiRuntimeManager) {
-
+        runtime.registerGlobalAttributesBinder(com.snap.valdi.modules.webview.ValdiWebViewAttributesBinder(context))
     }
 }

@@ -15,11 +15,13 @@ test('native modules are discovered, registered and included in platform compati
   writeFileSync(config, JSON.stringify({
     nativeBuild: 'bazel', name: 'unrelated',
     androidModuleFactory: 'com.example.Factory', androidViewBinder: 'com.example.Binder',
+    androidClassPath: 'com.example.webview',
     androidModuleFactoryContext: true,
     androidDependencies: ['com.example:native:1.2.3'],
     iosModuleFactory: 'HelloCreateModuleFactory',
   }));
   assert.equal(nativeModules(root)[0].name, 'hello');
+  assert.equal(nativeModules(root)[0].androidClassPath, 'com.example.webview');
   syncNativeModuleRegistration(root);
   assert.match(readFileSync(path.join(root, 'android/app/generated/valdi/ValdiNativeModules.kt'), 'utf8'), /com.example.Binder\(context\)/);
   assert.match(readFileSync(path.join(root, 'android/app/generated/valdi/ValdiNativeModules.kt'), 'utf8'), /com.example.Factory\(context.applicationContext\)/);
@@ -39,4 +41,6 @@ test('native modules are discovered, registered and included in platform compati
   assert.throws(() => syncNativeModuleRegistration(root), /requires androidModuleFactory/);
   writeFileSync(config, JSON.stringify({ nativeBuild: 'bazel', androidDependencies: ['not-a-coordinate'] }));
   assert.throws(() => syncNativeModuleRegistration(root), /invalid androidDependencies/);
+  writeFileSync(config, JSON.stringify({ nativeBuild: 'bazel', androidClassPath: 'invalid/package' }));
+  assert.throws(() => syncNativeModuleRegistration(root), /invalid androidClassPath/);
 });

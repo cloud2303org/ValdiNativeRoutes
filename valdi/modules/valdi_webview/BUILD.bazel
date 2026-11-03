@@ -1,0 +1,13 @@
+load("//bzl/node_module:module.bzl", "node_valdi_module")
+
+# Official valdi_webview (MIT), compiled through the local Node module pipeline.
+node_valdi_module(
+    name = "valdi_webview",
+    srcs = glob(["src/**/*.ts", "src/**/*.tsx"]),
+    config = "module.json",
+    ios_module_name = "SCCValdiWebView",
+    ios_frameworks = ["WebKit"],
+    android_srcs = glob(["android/**/*.kt"]),
+    ios_srcs = glob(["ios/**/*.m"]),
+    ios_hdrs = glob(["ios/**/*.h"]),
+)

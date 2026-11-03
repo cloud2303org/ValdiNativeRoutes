@@ -1,0 +1,8 @@
+{
+  "nativeBuild": "bazel",
+  "iosModuleName": "SCCValdiWebView",
+  "androidClassPath": "com.snap.valdi.modules.webview",
+  "androidModuleFactory": "com.snap.valdi.modules.webview.WebViewNativeModuleFactoryImpl",
+  "androidViewBinder": "com.snap.valdi.modules.webview.ValdiWebViewAttributesBinder",
+  "iosModuleFactory": "ValdiWebViewCreateModuleFactory"
+}

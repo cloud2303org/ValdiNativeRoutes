@@ -2,9 +2,11 @@
 #import "ValdiNativeModules.h"
 #import <ValdiRuntime/SCNValdiCoreModuleFactory.h>
 extern id<SCNValdiCoreModuleFactory> CalculatorCreateModuleFactory(void);
+extern id<SCNValdiCoreModuleFactory> ValdiWebViewCreateModuleFactory(void);
 
 void VRRegisterNativeModules(SCValdiRuntime *runtime) {
     [runtime registerNativeModuleFactory:CalculatorCreateModuleFactory()];
+    [runtime registerNativeModuleFactory:ValdiWebViewCreateModuleFactory()];
     {
         Class factoryClass = NSClassFromString(@"VRBluetoothModuleFactory");
         if (!factoryClass || ![factoryClass conformsToProtocol:@protocol(SCNValdiCoreModuleFactory)])

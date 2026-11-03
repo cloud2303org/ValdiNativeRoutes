@@ -58,6 +58,7 @@ export function codegenModules(): Record<string, CodegenModule> {
           asyncStrictMode: false,
           iosModuleName: moduleConfig(module.name).iosModuleName ?? module.name,
           iosLanguage: moduleConfig(module.name).iosLanguage ?? 'objc',
+          androidClassPath: moduleConfig(module.name).androidClassPath,
         },
       },
     ]),

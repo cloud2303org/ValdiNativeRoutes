@@ -73,6 +73,7 @@ _node_valdi_compiled = rule(
 def node_valdi_module(name, srcs, config, ios_module_name = None, res = [], deps = [],
                       android_srcs = [], android_deps = [], ios_srcs = [], ios_hdrs = [], ios_deps = [],
                       ios_language = "objc", swift_srcs = [], swift_deps = [],
+                      ios_frameworks = [],
                       visibility = ["//visibility:public"]):
     """Create debug/release Node artifacts and standalone Android/iOS libraries.
 
@@ -111,7 +112,7 @@ def node_valdi_module(name, srcs, config, ios_module_name = None, res = [], deps
                     name + "_compiled/ios/" + ios_name + "Types"],
         module_name = ios_name + ("_ObjC" if ios_language == "swift" else ""),
         enable_modules = True,
-        sdk_frameworks = ["Foundation", "UIKit"],
+        sdk_frameworks = ["Foundation", "UIKit"] + ios_frameworks,
         alwayslink = True,
         deps = ["@node_valdi_local//:ios_runtime"] + ios_deps,
         visibility = visibility,

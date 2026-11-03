@@ -34,7 +34,7 @@ function main() {
       run(process.execPath, ['--test', path.join(valdiSource, 'bzl/valdi/node_tools/rewrite_header.test.mjs')], root);
       // Run tsx's launcher with Node directly: `pnpm exec` resolves the binary differently on
       // Windows and can report `Command "tsx" not found` for the same install.
-      run(process.execPath, [tsx, '--test', 'routes.test.ts', 'navigation-options.test.ts', 'mobile-services.test.ts', 'typed-routing.test.ts', 'typed-storage.test.ts', 'appui-promise.test.ts', 'route-animation-parity.test.ts', 'dev-protocol.test.ts', 'wheel-platform-compat.test.ts', 'resources.test.ts', 'hermes.test.ts', 'module-build.test.ts', 'runtime-module.test.ts', 'scaffold.test.ts', 'swift.test.ts', 'bluetooth.test.ts', 'bluetooth-execution.test.ts', 'module-selection.test.ts', 'jsx-upstream.test.ts', 'lazy-import.test.ts', 'upstream-runtime.test.ts'], rolldownDir);
+      run(process.execPath, [tsx, '--test', 'routes.test.ts', 'navigation-options.test.ts', 'mobile-services.test.ts', 'typed-routing.test.ts', 'typed-storage.test.ts', 'appui-promise.test.ts', 'route-animation-parity.test.ts', 'dev-protocol.test.ts', 'wheel-platform-compat.test.ts', 'webview-module.test.ts', 'webview-page.test.ts', 'resources.test.ts', 'hermes.test.ts', 'module-build.test.ts', 'runtime-module.test.ts', 'scaffold.test.ts', 'swift.test.ts', 'bluetooth.test.ts', 'bluetooth-execution.test.ts', 'module-selection.test.ts', 'jsx-upstream.test.ts', 'lazy-import.test.ts', 'upstream-runtime.test.ts'], rolldownDir);
       // The goldens compare against the same sources the tests used, whatever link holds them.
       const goldensArgs = ['codegen/goldens.ts', ...forwarded];
       if (sourceOption < 0) goldensArgs.push('--valdi', valdiSource);

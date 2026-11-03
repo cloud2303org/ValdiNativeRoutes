@@ -78,6 +78,7 @@ export async function compileNodeModule(
         return { module, bundleInfo: {
           ...VALDI_PROJECT_CONFIG, name: module.name, iosModuleName: config.iosModuleName ?? module.name,
           iosLanguage: config.iosLanguage ?? 'objc', asyncStrictMode: false,
+          androidClassPath: config.androidClassPath,
         } };
       }),
       bundleInfo: {
@@ -85,6 +86,7 @@ export async function compileNodeModule(
         name,
         iosModuleName: iosName,
         iosLanguage,
+        androidClassPath: moduleConfig(name).androidClassPath,
         asyncStrictMode: false,
       },
     };

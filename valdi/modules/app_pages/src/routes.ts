@@ -13,6 +13,7 @@ import { PresentationPage } from './PresentationPage';
 import { RouteAnimationPage } from './RouteAnimationPage';
 import { VisionPage } from './VisionPage';
 import { WheelPage } from './WheelPage';
+import { WebViewPage } from './WebViewPage';
 
 export const routes = defineRoutes({
   navigation: {
@@ -33,6 +34,7 @@ export const routes = defineRoutes({
     device: valdiPage({ component: DevicePage, title: 'Wi-Fi 与 NFC' }),
     wheels: valdiPage({ component: WheelPage, title: '页面内滚轮' }),
     calculator: valdiPage({ component: CalculatorComponent, title: 'Calculator' }),
+    webview: valdiPage({ component: WebViewPage, title: 'WebView' }),
   },
   tabs: {
     initial: 'home',

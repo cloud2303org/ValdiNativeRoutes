@@ -25,6 +25,7 @@ export interface ModuleConfig {
   nativeBuild?: 'bazel';
   iosModuleName?: string;
   iosLanguage?: 'objc' | 'swift' | 'both';
+  androidClassPath?: string;
   androidModuleFactory?: string;
   androidModuleFactoryContext?: boolean;
   androidDependencies?: string[];
@@ -47,6 +48,11 @@ export function moduleConfig(name: string): ModuleConfig {
   }
   if (config.iosLanguage !== undefined && !['objc', 'swift', 'both'].includes(config.iosLanguage))
     throw new Error(`${file}: invalid iosLanguage`);
+  if (config.androidClassPath !== undefined &&
+      (typeof config.androidClassPath !== 'string' ||
+       !/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/.test(config.androidClassPath))) {
+    throw new Error(`${file}: invalid androidClassPath`);
+  }
   return config;
 }
 

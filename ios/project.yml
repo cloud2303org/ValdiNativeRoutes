@@ -43,6 +43,7 @@ targets:
         embed: false
         link: true
       - sdk: libc++.tbd
+      - sdk: WebKit.framework
       # Built by our module-only workspace, against the unchanged ValdiRuntime.
       - framework: ../module-build/out/ios/libvaldi_modules_ios.a
         embed: false

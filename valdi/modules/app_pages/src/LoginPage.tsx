@@ -80,6 +80,7 @@ export class LoginPage extends Page<PageViewModel, State, PageContext> {
         <view style={styles.actions}>
           <Button id="sign-in" title="登录" onTap={this.handleSignIn} />
           <Button id="input-check" title="输入自检（无需登录）" secondary={true} onTap={this.handleInputCheck} />
+          <Button id="webview-check" title="WebView 自检（无需登录）" secondary={true} onTap={this.handleWebView} />
         </view>
       </view>
     </view>;
@@ -89,6 +90,7 @@ export class LoginPage extends Page<PageViewModel, State, PageContext> {
 
   private handlePassword = (event: { text: string }) => this.setState({ password: event.text });
   private handleInputCheck = () => new Router(this.context).push('inputCheck', {});
+  private handleWebView = () => new Router(this.context).push('webview', {});
 
   private handleSignIn = async () => {
     const account = this.state.account.trim();

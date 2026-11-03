@@ -17,7 +17,7 @@ export function nativeModules(root = defaultRoot) {
     if (config.nativeBuild !== 'bazel') return [];
     validatePlatformConfig(config, file);
     if (!/^[a-z][a-z0-9_]*$/.test(name)) throw new Error(`Invalid native module name: ${name}`);
-    for (const field of ['androidModuleFactory', 'androidViewBinder']) {
+    for (const field of ['androidModuleFactory', 'androidViewBinder', 'androidClassPath']) {
       if (config[field] !== undefined && (typeof config[field] !== 'string' || !qualifiedName.test(config[field]))) throw new Error(`${file}: invalid ${field}`);
     }
     for (const field of ['iosModuleName', 'iosModuleFactory', 'iosModuleFactoryClass']) {

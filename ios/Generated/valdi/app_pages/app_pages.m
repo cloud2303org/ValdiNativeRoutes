@@ -1470,6 +1470,38 @@ NSInteger VRWifiHostMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRWif
 
 
 //
+// VRWebViewPage.m
+//
+
+#import <app_pages/app_pages.h>
+#import <ValdiRuntime/SCValdiRuntimeProtocol.h>
+#import <ValdiRuntime/SCValdiContextProtocol.h>
+@implementation VRWebViewPage
+
++ (NSString *)componentPath
+{
+    return @"WebViewPage@app_pages/src/WebViewPage";
+}
+
+- (instancetype)initWithViewModel:(VRPageViewModel *)viewModel componentContext:(VRPageContext *)componentContext runtime:(id<SCValdiRuntimeProtocol>)runtime
+{
+    return [super initWithViewModelUntyped:viewModel componentContextUntyped:componentContext runtime:runtime];
+}
+
+- (void)setViewModel:(VRPageViewModel *)viewModel
+{
+    self.valdiContext.viewModel = viewModel;
+}
+
+- (VRPageViewModel *)viewModel
+{
+    return self.valdiContext.viewModel;
+}
+
+@end
+
+
+//
 // VRWheelPage.m
 //
 

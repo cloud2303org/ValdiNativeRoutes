@@ -14,6 +14,11 @@ import { JSXProcessor } from './vendor/companion/JSXProcessor';
 
 const sourceRoot = valdiSourceRoot();
 assert.ok(sourceRoot, 'Prepare Valdi sources or set VALDI_SOURCE_ROOT');
+const runtimeMode = process.env.WHEEL_RUNTIME ?? 'source';
+assert.ok(['source', 'android', 'ios'].includes(runtimeMode),
+  'WHEEL_RUNTIME must be source, android or ios');
+const platforms = runtimeMode === 'android' ? [1] : runtimeMode === 'ios' ? [2] : [1, 2];
+const runtimeLabel = runtimeMode === 'source' ? 'selected-source Android/iOS' : `packaged ${runtimeMode}`;
 const proof = process.env.WHEEL_PROOF_DIR ?? mkdtempSync(path.join(tmpdir(), 'wheel-js-proof-'));
 mkdirSync(proof, { recursive: true });
 const modulePrefix = 'src/valdi_modules/src/valdi';
@@ -74,11 +79,12 @@ function packaged(platform: number) {
   return entries;
 }
 
-// Execute the actual packaged bootstrap, Renderer, prototype and PropertyList
-// implementations. Only native DeviceBridge/runtime/debug services are supplied
-// by the host; RendererTestDelegate is the unmodified official native boundary.
+// Source checks run before native exports. Explicit packaged checks run the same
+// assertions against the matching platform's exported modules after export.
+// Only native DeviceBridge/runtime/debug services are supplied by the host;
+// RendererTestDelegate is the unmodified official native boundary.
 function host(platform: number, application: Map<string, Buffer>, typesRoot: string) {
-  const entries = packaged(platform);
+  const entries = runtimeMode === 'source' ? new Map<string, Buffer>() : packaged(platform);
   const modulesRoot = path.join(typesRoot, modulePrefix);
   const cache = new Map<string, { exports: any }>();
   const context = vm.createContext({
@@ -105,6 +111,8 @@ function host(platform: number, application: Map<string, Buffer>, typesRoot: str
     const bytes = application.get(appId + '.js') ?? entries.get(id + '.js');
     let code = bytes?.toString();
     if (!code) {
+      assert.ok(runtimeMode === 'source' || !['valdi_core', 'valdi_tsx', 'coreutils'].includes(id.split('/')[0]),
+        `Missing exported runtime module ${id}; packaged checks cannot fall back to source`);
       const base = path.join(modulesRoot, id);
       const file = [base + '.ts', base + '.js', base + '.d.ts'].find(existsSync);
       assert.ok(file, `Missing real module ${id}`);
@@ -128,7 +136,7 @@ function host(platform: number, application: Map<string, Buffer>, typesRoot: str
   return { load, jsx, renderer, delegate };
 }
 
-test('actual shared wheels typecheck against selected sources; packaged Android/iOS retain class identity', async t => {
+test(`actual shared wheels typecheck against selected sources; ${runtimeLabel} retain class identity`, async t => {
   for (const typesRoot of [sourceRoot]) {
     const { module, plugin } = fixture(typesRoot);
     const emitted = plugin.emit(path.join(module.dir, 'src/WheelPickers.tsx'));
@@ -148,7 +156,7 @@ test('actual shared wheels typecheck against selected sources; packaged Android/
         writeFileSync(file, bytes);
         hash(file);
       }
-      for (const platform of [1, 2]) {
+      for (const platform of platforms) {
         const h = host(platform, entries, typesRoot);
         const exports = h.load('wheel_fixture/src/WheelPickers');
         for (const [name, model, next, native] of [
@@ -190,7 +198,7 @@ test('actual shared wheels typecheck against selected sources; packaged Android/
           assert.ok(!second.some((e: any) => ['CreateElement', 'DestroyElement'].includes(e.type)), 'controlled rerender replaces native view');
           h.renderer.begin(); h.renderer.end(); // independent next component
         }
-        t.diagnostic(`types=${typesRoot} platform=${platform} minify=${minify}`);
+        t.diagnostic(`types=${typesRoot} runtime=${runtimeMode} platform=${platform} minify=${minify}`);
       }
     }
   }
@@ -216,7 +224,7 @@ export function render(holder: IRenderedElementHolder<View>, callback: (value: s
     const code = application.get('src/fixture.js')!.toString();
     assert.match(code, /beginRenderIfNeeded/);
     assert.match(code, /wheel-key/);
-    for (const platform of [1, 2]) {
+    for (const platform of platforms) {
       const h = host(platform, application, sourceRoot);
       let attached = 0;
       const holder = { onElementCreated() { ++attached; }, onElementDestroyed() {}, setElements() {} };
@@ -245,7 +253,7 @@ export function render(holder: IRenderedElementHolder<View>, callback: (value: s
 });
 
 test.after(() => {
-  writeFileSync(path.join(proof, 'inputs.json'), JSON.stringify({ sourceRoot, hashes: Object.fromEntries(hashes) }, null, 2));
+  writeFileSync(path.join(proof, 'inputs.json'), JSON.stringify({ sourceRoot, runtimeMode, platforms, hashes: Object.fromEntries(hashes) }, null, 2));
   console.log(`Wheel JS proof: ${proof}`);
   if (!process.env.WHEEL_PROOF_DIR) rmSync(proof, { recursive: true, force: true });
 });

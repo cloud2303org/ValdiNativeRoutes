@@ -93,6 +93,13 @@ VALDI_SOURCE_ROOT=/path/to/selected/Valdi WHEEL_PROOF_DIR=/tmp/valdi-mobile-whee
   tools/valdi-rolldown/wheel-platform-compat.test.ts
 ```
 
+The default wheel suite executes the selected Valdi runtime sources for both
+mobile platforms, so it also runs before native runtime export on a clean
+checkout. To repeat the same assertions against an exported AAR or XCFramework,
+set `WHEEL_RUNTIME=android` or `WHEEL_RUNTIME=ios` respectively. Packaged mode
+requires that platform's artifacts and never substitutes source runtime modules
+when an exported module is missing. CI runs this mode after runtime export.
+
 The recorded `picker-scroll-profile-20261103` and `wheel-selection` flows cover
 the parent scroll and selection. `native-wheel-tree-array-20261103` is a fragment
 with an explicit pushed-page/display prerequisite; it retains documented raw

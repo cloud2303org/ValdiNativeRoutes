@@ -106,6 +106,11 @@ jobs:
         if: matrix.target != 'npm'
         id: runtime-output
         run: node scripts/ci.mjs runtime-key "${{ matrix.target }}"
+      - name: Verify wheels against the exported runtime
+        working-directory: tools/valdi-rolldown
+        env:
+          WHEEL_RUNTIME: ${{ matrix.target }}
+        run: node node_modules/tsx/dist/cli.mjs --test wheel-platform-compat.test.ts 2>&1 | tee ../../.ci/wheel-runtime.log
       - name: Save matching runtime
         if: matrix.target != 'npm' && steps.runtime.outputs.valid != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6

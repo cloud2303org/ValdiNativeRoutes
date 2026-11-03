@@ -31,6 +31,7 @@ async function fixture(t: TestContext, dev = false) {
   symlinkSync(original.nodeModules!, path.join(dir, 'node_modules'), 'junction');
   writeFileSync(path.join(dir, 'tsconfig.json'), JSON.stringify(config));
   const plugin = valdiTs(module, ts.ModuleKind.CommonJS, dev);
+  t.after(() => plugin.dispose());
   const routeFile = path.join(dir, 'src/routes.ts');
   const change = (file: string, transform: (text: string) => string) => {
     writeFileSync(file, transform(readFileSync(file, 'utf8')));

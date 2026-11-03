@@ -55,6 +55,8 @@ export interface ValdiTsPlugin extends Plugin {
   diagnostics(): string;
   /** The module's program, as the plugin compiles it: codegen reads its declarations. */
   program(): ts.Program;
+  /** Release the language service when the module's compilation lifetime ends. */
+  dispose(): void;
 }
 
 export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, inlineRouteIcons = false): ValdiTsPlugin {
@@ -214,6 +216,13 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
     },
 
     program: () => service.getProgram()!,
+
+    dispose() {
+      service.dispose();
+      located.clear();
+      versions.clear();
+      rootNames = [];
+    },
 
     resolveId(source, importer) {
       // npm packages, and what their files import, resolve as Node does.

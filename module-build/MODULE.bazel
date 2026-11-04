@@ -6,11 +6,11 @@ bazel_dep(name = "apple_support", version = "1.22.1")
 bazel_dep(name = "rules_swift", version = "3.1.2", repo_name = "build_bazel_rules_swift")
 single_version_override(module_name = "rules_apple", version = "4.0.0")
 
-# -- Maintained Valdi fork (upstream main: 4aa98f01) -----------------------
+# -- Maintained Valdi fork (upstream main: 9b7a20d5) -----------------------
 # Framework customizations and Hermes build inputs live in the pinned Valdi fork source.
 # Pin immutable commits; scripts/upstream.mjs updates this and the matching registry together.
 VALDI_REPOSITORY = "cloud2303org/Valdi"
-VALDI_COMMIT = "51cec8ae3645c7e778c9f36fbe4b3bffba1ccddf"
+VALDI_COMMIT = "f5b41aed4780dab6899d74ca755acb411879a315"
 VALDI_URL = "https://github.com/" + VALDI_REPOSITORY + "/archive/" + VALDI_COMMIT + ".tar.gz"
 VALDI_PREFIX = "Valdi-" + VALDI_COMMIT
 

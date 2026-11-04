@@ -11,6 +11,7 @@
     "ios": "node scripts/cli.mjs ios",
     "dev": "node scripts/cli.mjs dev",
     "build": "node scripts/project.mjs modules",
+    "build:web": "node tools/valdi-rolldown/node_modules/tsx/dist/cli.mjs tools/valdi-rolldown/web/build.ts",
     "build:android": "node scripts/project.mjs android",
     "build:ios": "node scripts/project.mjs ios",
     "test": "node scripts/project.mjs test",

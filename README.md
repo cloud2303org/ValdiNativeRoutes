@@ -34,6 +34,7 @@ pnpm dev                           # Node 热重载；按 a / i 选择设备并�
 pnpm build:android                 # 只构建 Android Debug APK，不安装/启动
 pnpm build:ios                     # 只构建 iOS Simulator Debug App（自动 XcodeGen）
 pnpm build                         # TS 模块、图片和字体；输出 tools/valdi-rolldown/out/
+pnpm build:web                     # 打包固定框架版本的官方 Web HelloWorld 示例
 pnpm test                          # 构建前置检查测试 + Kotlin / Objective-C / C++ golden 对比
 pnpm test:e2e:android          # 已安装 Android App 的 UI 测试
 pnpm test:e2e:ios              # 已安装 iOS App 的 UI 测试
@@ -90,6 +91,10 @@ iOS 运行 `node vision/scripts/prepare-native.cjs --target ios`。iOS 构建需
 之后使用根目录 `pnpm build`。图片处理使用预编译 `sharp`，Release 字节码使用固定版本的官方 `hermes-compiler`；
 应用构建不再需要 toolbox、ClientSQL Python 生成器或 SQLite 3.16 校验器。
 `pnpm test` 包含图片与 Hermes 适配测试和绑定 golden 对比，只需要类型源码与 npm 依赖。
+
+`pnpm build:web` 使用同一份已准备的框架源码和官方 Web 实现，输出
+`tools/valdi-rolldown/web/.local/dist/`。这是官方示例的浏览器入口；当前业务 App 的硬件服务仍由原生宿主提供。
+Web 测试、浏览器验证与通用 Bazel Web 导出的接入边界见 [Node Web 入口](tools/valdi-rolldown/web/README.md)。
 
 改 TS、图片不用再导出：Gradle 和 Xcode 构建时调用 `tools/valdi-rolldown` 编译页面（见“构建”）。开发时 `scripts/hotreload.sh` 把改动直接推到正在运行的 debug 包。
 

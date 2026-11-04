@@ -6,11 +6,13 @@
 不跟随浮动分支，也不再从应用仓库应用框架补丁。
 应用自己的 rules_python 依赖规则补丁和 npm CLI patch 仍在应用仓库，继续计入相应构建输入。
 
-当前上游基线为 `Snapchat/Valdi` 的 `beta-0.2.1`（`f26bee4dc170b6c929f71d4dd07d44e033f47176`）。
-初次迁移对应 fork 提交 `4fb1c1af7aacc8b77d2fdb2fc0c38752ae847ef3`；11 项框架修改和 Hermes 构建输入已迁入 fork。
-当前固定提交 `02dbebc2969c32607de6aaeac888d28435ec669c` 已删除旧 Swift Valdi 编译器及回退实现、C++ toolbox；
-模块规则固定调用应用的 Node 后端，导出头文件也改用 Node。该提交同时补全了原生 Windows 的
-hermetic Android SDK/NDK、宿主 C++/Java 工具、归档路径和 `_virtual_includes` 去重支持。
+当前上游基线为 `Snapchat/Valdi/main` 的 `9b7a20d5bc690492d9fc15e0977a3fa9d1834f5e`
+（2026-11-04）；对应 fork 合并提交为 `f5b41aed4780dab6899d74ca755acb411879a315`。
+本次完整合入上一基线 `4aa98f01a46e65ead03a8fc8cc1c21e04f2a465d` 之后的 21 项提交，
+包括官方 Web renderer、浏览器开发工具和 Web 测试更新。
+框架继续使用 Hermes `260318099.0.4`，保留原生 Promise/字节码边界、OTA 资源钩子和 Windows 工具链修复。
+旧 Swift Valdi 编译器、回退实现及 C++ toolbox 继续删除；模块编译和导出头文件使用应用的 Node 后端。
+TGFX 实验单独保存在 fork 的 `experiment/tgfx-prototype-20261104` 分支，未合入维护分支。
 补丁到提交的对应关系、后续同步要求见 fork 的 [VALDI_FORK.md](https://github.com/cloud2303org/Valdi/blob/valdiroutes/VALDI_FORK.md)。
 
 ## 先在框架 fork 合并上游
@@ -64,7 +66,8 @@ pnpm test
 pnpm build
 ```
 
-`pin` 只接受不可变的完整 commit SHA，验证源码仓库与 registry 原 pin 一致后才同时修改两处。
+`pin` 只接受不可变的完整 commit SHA，验证源码仓库与 registry 原 pin 一致后同步修改
+`valdi/` 和 `module-build/` 中的源码 pin 与 registry。
 内部 Bazel 子模块共用相同 archive URL / prefix。源码准备会获取 fork，并由 Bazel 更新 lockfile。
 
 按下表适配 Node 移植部分，再重新导出 Android/iOS 运行时、准备视觉依赖，运行
@@ -73,7 +76,7 @@ pnpm build
 
 | 维护位置 | 升级时关注的内容 | 验证方式 |
 | --- | --- | --- |
-| fork 的框架源码和 `third-party/hermes_v1/` | 11 项自定义修改、Hermes 版本/API、原生导出规则 | 源码合并、运行时导出与设备验证 |
+| fork 的框架源码和 `third-party/hermes_v1/` | 现有自定义修改、Hermes 版本/API、原生导出规则 | 源码合并、运行时导出与设备验证 |
 | `tools/valdi-rolldown/hermes.ts`、工具 package/lock | fork 中的模块包装/文件头、Hermes 编译设置和版本 | 固定官方 compiler 版本，协议检查和 Release 装载验证 |
 | `tools/valdi-rolldown/vendor/companion/` | fork 的 `compiler/companion/src/` JSX 转换语义 | 差异报告、ESM 导入适配、源码审查 |
 | `tools/valdi-rolldown/codegen/` | Swift parser、models、Kotlin/ObjC/C++ 生成器和模板 | 移植语义，对比 fork 中提交的 golden |
@@ -85,3 +88,17 @@ pnpm build
 
 golden 使用 fork 中已提交的编译器输出，不运行 Swift 编译器。
 构建与 golden 不覆盖全部运行时行为；Release / OTA 使用前另外检查精简 Hermes、字节码、图片及原生桥接。
+
+## Web 与原生的升级边界
+
+保留 fork 的完整官方 Web 源码和测试。原生运行库导出的 `enable_web` 仍为空；
+浏览器输出通过独立 Node 入口验证，不能给原生模块编译规则打开 Web 开关后就认为浏览器包已生成。
+`web_renderer` 的假 DOM 单元测试、真实浏览器 bootstrap 和应用硬件服务的浏览器实现分别验证。
+运行 `pnpm build:web` 可使用当前准备好的固定版本源码打包官方 HelloWorld；
+输出位于 `tools/valdi-rolldown/web/.local/dist/`。入口、官方 renderer 测试及通用 Bazel Web
+导出尚未接通的边界见 `tools/valdi-rolldown/web/README.md`。
+
+本次上游新增 `runtime.withCallbackAttribution`，并要求
+`withGlobalNativeRefs(attribution, callback)` 提供来源标记。更新后的模块必须与本次原生运行库一起发布；
+旧 AAR/XCFramework 不能作为新模块的兼容性验证。
+`ValdiRuntimeProvider` 的 Web 引导保留原生 runtime 检测，带 `location` 的原生 worker 不会因此误启浏览器运行时。

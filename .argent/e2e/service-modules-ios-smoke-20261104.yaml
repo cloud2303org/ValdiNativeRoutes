@@ -1,0 +1,38 @@
+# Local demo credentials only. This unsigned simulator build returns to Login after restart.
+# MMKV persistence across that restart was also observed manually (1 -> 2).
+steps:
+  - launch: io.valdiroutes.app
+  - await: { visible: { id: login-account }, timeout: 15000 }
+  - await: { idle: true }
+  - type: { into: { id: login-account }, text: modules, submit: false }
+  # UIKit value is available to accessibility but omitted from the runner's text projection.
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector: { identifier: login-account }
+      expectedText: modules
+      bundleId: io.valdiroutes.app
+  - type: { into: { id: login-password }, text: demo }
+  - await: { visible: { text: Valdi + Compose Nav3 }, timeout: 15000 }
+  - await: { idle: true }
+  - assert: { visible: { text: 首页打开过 } }
+  - scroll-to: { target: { id: modal-confirm }, direction: down }
+  - tap: { id: modal-confirm }
+  - await: { visible: { text: 删除这条记录？ } }
+  - await: { idle: true }
+  - tap: { text: 取消 }
+  - await: { hidden: { text: 删除这条记录？ } }
+  - await: { visible: { text: 结果：取消了删除 } }
+  - launch: io.valdiroutes.app
+  - await: { visible: { id: login-account }, timeout: 15000 }
+  - await: { idle: true }
+  - type: { into: { id: login-account }, text: modules, submit: false }
+  - type: { into: { id: login-password }, text: demo }
+  - await: { visible: { text: 首页打开过 }, timeout: 15000 }
+  - await: { idle: true }
+  - tap: { id: sign-out }
+  - await: { visible: { text: 退出登录？ } }
+  - await: { idle: true }
+  - tap: { text: 确定 }
+  - await: { visible: { id: login-account }, timeout: 15000 }
+  - await: { idle: true }

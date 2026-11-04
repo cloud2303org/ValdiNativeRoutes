@@ -16,9 +16,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import io.valdiroutes.app.appui.ModalOptions
-import io.valdiroutes.app.appui.NativeApp
-import io.valdiroutes.app.appui.ToastOptions
+import io.valdiroutes.app_ui.appui.ModalOptions
+import io.valdiroutes.app_ui.appui.NativeApp
+import io.valdiroutes.app_ui.appui.ToastOptions
 import kotlinx.coroutines.launch
 
 /** What a native page gets: its params, and the navigator it shares with the Valdi pages. */

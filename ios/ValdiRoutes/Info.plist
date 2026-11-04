@@ -20,12 +20,6 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>NSCameraUsageDescription</key>
-	<string>扫描二维码或拍摄附件需要使用相机</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>读取当前 Wi-Fi 名称，或以 iBeacon 方式广播时使用定位服务</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>从相册选择要上传的图片</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

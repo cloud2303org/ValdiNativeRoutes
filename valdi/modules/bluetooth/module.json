@@ -17,10 +17,13 @@
     { "name": "android.permission.BLUETOOTH_ADMIN", "maxSdkVersion": 30 },
     { "name": "android.permission.BLUETOOTH_SCAN", "usesPermissionFlags": "neverForLocation" },
     { "name": "android.permission.BLUETOOTH_CONNECT" },
-    { "name": "android.permission.BLUETOOTH_ADVERTISE" }
+    { "name": "android.permission.BLUETOOTH_ADVERTISE" },
+    { "name": "android.permission.ACCESS_FINE_LOCATION", "removeMaxSdkVersion": true },
+    { "name": "android.permission.ACCESS_COARSE_LOCATION", "removeMaxSdkVersion": true }
   ],
   "iosInfoPlist": {
-    "NSBluetoothAlwaysUsageDescription": "用蓝牙连接和配置附近的设备"
+    "NSBluetoothAlwaysUsageDescription": "用蓝牙连接和配置附近的设备",
+    "NSLocationWhenInUseUsageDescription": "读取当前 Wi-Fi 名称，或以 iBeacon 方式广播时使用定位服务"
   },
   "template": "polyglot_bridge_module"
 }

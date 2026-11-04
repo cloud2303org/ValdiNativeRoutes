@@ -54,16 +54,16 @@ final class SheetHostMigrationTests: XCTestCase {
     [view] + view.subviews.flatMap(descendants)
   }
 
-  private func host(_ view: UIView) throws -> SheetHostView {
-    try XCTUnwrap(descendants(view).compactMap { $0 as? SheetHostView }.first)
+  private func host(_ view: UIView) throws -> AppUISheetHostView {
+    try XCTUnwrap(descendants(view).compactMap { $0 as? AppUISheetHostView }.first)
   }
 
-  private func tapScrim(_ host: SheetHostView) throws {
+  private func tapScrim(_ host: UIView) throws {
     try XCTUnwrap(host.subviews.compactMap { $0 as? UIControl }.first)
       .sendActions(for: .touchUpInside)
   }
 
-  private func settle(_ host: SheetHostView) async {
+  private func settle(_ host: UIView) async {
     let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
       !self.descendants(host).contains { $0.layer.animation(forKey: "sheetSettle") != nil }
     }, object: nil)
@@ -212,7 +212,7 @@ final class SheetHostMigrationTests: XCTestCase {
   func testPickersShareShellAndNavigationDefaultsRemain() async throws {
     for picker in [ColumnPicker(frame: .zero), TimePicker(frame: .zero)] as [UIView] {
       attach(picker)
-      XCTAssertEqual(descendants(picker).filter { $0 is SheetHostView }.count, 1)
+      XCTAssertEqual(descendants(picker).filter { $0 is AppUISheetHostView }.count, 1)
       XCTAssertFalse(try host(picker).showsHandle, "The existing header supplies the sole handle")
       picker.removeFromSuperview()
     }

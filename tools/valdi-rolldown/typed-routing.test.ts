@@ -33,6 +33,7 @@ function routingRuntime() {
     vm.runInContext(`(function(require,module,exports){${emitted}\n})`, context)(
       (name: string) => {
         if (modules[name]) return modules[name];
+        if (name.startsWith('native_common/')) return load(path.join(appModule('native_common').dir, name.slice('native_common/'.length) + '.ts'));
         assert.ok(name.startsWith('.'), `Unexpected module: ${name}`);
         const resolved = path.resolve(path.dirname(file), name);
         return load(resolved.endsWith('/navigation') ? `${resolved}/index.ts` : `${resolved}.ts`);

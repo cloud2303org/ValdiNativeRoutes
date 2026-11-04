@@ -59,9 +59,9 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
-import io.valdiroutes.app.appui.AppModalHost
-import io.valdiroutes.app.appui.AppPresentationHost
-import io.valdiroutes.app.appui.AppUI
+import io.valdiroutes.app_ui.appui.AppModalHost
+import io.valdiroutes.app_ui.appui.AppPresentationHost
+import io.valdiroutes.app_ui.appui.AppUI
 
 class MainActivity : ComponentActivity() {
     private var navigator by mutableStateOf<Navigator?>(null)

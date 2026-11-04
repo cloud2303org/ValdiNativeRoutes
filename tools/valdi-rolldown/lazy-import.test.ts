@@ -207,6 +207,32 @@ export const ready = true;
     assert.equal(h.evaluated.filter(id => id === 'valdi_core/src/NamespaceProbe').length, 1);
   });
 
+  test(`external star reexports enumerate loaded exports with the real lazy loader (${mode})`, async t => {
+    const f = fixture(t);
+    write(f.dir, 'src/probe.d.ts', `
+declare module 'valdi_core/src/SchemaProbe' {
+  export const loadingRequest: { parse(value: string): string };
+}
+`);
+    write(f.dir, 'src/schemas.ts', "export * from 'valdi_core/src/SchemaProbe';\n");
+    write(f.dir, 'src/index.ts', `
+import * as schemas from './schemas';
+export function validate(value: string) { return schemas.loadingRequest.parse(value); }
+`);
+    const h = host(f, await build(f, minify), {
+      'valdi_core/src/SchemaProbe': `
+events.push('schema loaded');
+exports.loadingRequest = { parse: value => 'validated:' + value };
+`,
+    });
+    assert.equal(h.loader.isLoaded('valdi_core/src/SchemaProbe'), false);
+    const entry = h.loader.load('fixture/src/index', true);
+    assert.equal(entry.validate('loading'), 'validated:loading');
+    assert.equal(h.loader.load('fixture/src/schemas', true).loadingRequest.parse('toast'), 'validated:toast');
+    assert.deepEqual(h.events, ['schema loaded']);
+    assert.equal(h.evaluated.filter(id => id === 'valdi_core/src/SchemaProbe').length, 1);
+  });
+
   test(`npm shared chunk side effects resolve from nested output entries and run once (${mode})`, async t => {
     const f = fixture(t);
     write(f.dir, 'node_modules/side-effect-probe/package.json', JSON.stringify({

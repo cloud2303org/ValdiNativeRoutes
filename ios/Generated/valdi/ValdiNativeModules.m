@@ -8,9 +8,39 @@ void VRRegisterNativeModules(SCValdiRuntime *runtime) {
     [runtime registerNativeModuleFactory:CalculatorCreateModuleFactory()];
     [runtime registerNativeModuleFactory:ValdiWebViewCreateModuleFactory()];
     {
+        Class factoryClass = NSClassFromString(@"VRAppUIModuleFactory");
+        if (!factoryClass || ![factoryClass conformsToProtocol:@protocol(SCNValdiCoreModuleFactory)])
+            [NSException raise:NSInternalInconsistencyException format:@"Missing Swift module factory: VRAppUIModuleFactory"];
+        [runtime registerNativeModuleFactory:[factoryClass new]];
+    }
+    {
         Class factoryClass = NSClassFromString(@"VRBluetoothModuleFactory");
         if (!factoryClass || ![factoryClass conformsToProtocol:@protocol(SCNValdiCoreModuleFactory)])
             [NSException raise:NSInternalInconsistencyException format:@"Missing Swift module factory: VRBluetoothModuleFactory"];
+        [runtime registerNativeModuleFactory:[factoryClass new]];
+    }
+    {
+        Class factoryClass = NSClassFromString(@"VRMMKVModuleFactory");
+        if (!factoryClass || ![factoryClass conformsToProtocol:@protocol(SCNValdiCoreModuleFactory)])
+            [NSException raise:NSInternalInconsistencyException format:@"Missing Swift module factory: VRMMKVModuleFactory"];
+        [runtime registerNativeModuleFactory:[factoryClass new]];
+    }
+    {
+        Class factoryClass = NSClassFromString(@"VRNfcModuleFactory");
+        if (!factoryClass || ![factoryClass conformsToProtocol:@protocol(SCNValdiCoreModuleFactory)])
+            [NSException raise:NSInternalInconsistencyException format:@"Missing Swift module factory: VRNfcModuleFactory"];
+        [runtime registerNativeModuleFactory:[factoryClass new]];
+    }
+    {
+        Class factoryClass = NSClassFromString(@"VRPermissionsModuleFactory");
+        if (!factoryClass || ![factoryClass conformsToProtocol:@protocol(SCNValdiCoreModuleFactory)])
+            [NSException raise:NSInternalInconsistencyException format:@"Missing Swift module factory: VRPermissionsModuleFactory"];
+        [runtime registerNativeModuleFactory:[factoryClass new]];
+    }
+    {
+        Class factoryClass = NSClassFromString(@"VRWifiModuleFactory");
+        if (!factoryClass || ![factoryClass conformsToProtocol:@protocol(SCNValdiCoreModuleFactory)])
+            [NSException raise:NSInternalInconsistencyException format:@"Missing Swift module factory: VRWifiModuleFactory"];
         [runtime registerNativeModuleFactory:[factoryClass new]];
     }
 }

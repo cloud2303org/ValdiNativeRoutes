@@ -1,0 +1,16 @@
+{
+  "nativeBuild": "host",
+  "iosLanguage": "objc",
+  "androidClassPath": "io.valdiroutes.permissions",
+  "androidModuleFactory": "io.valdiroutes.permissions.PermissionModuleFactoryImpl",
+  "androidModuleFactoryContext": true,
+  "iosModuleFactoryClass": "VRPermissionsModuleFactory",
+  "iosModuleName": "Permissions",
+  "androidDependencies": [
+    "androidx.activity:activity:1.13.0",
+    "androidx.core:core-ktx:1.17.0"
+  ],
+  "iosFrameworks": [
+    "UIKit"
+  ]
+}

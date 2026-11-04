@@ -26,6 +26,8 @@ ota/dist/
 /.ci/
 /ios/build-device/
 /ios/Generated/AppInfo.plist
+/ios/Generated/AppEntitlements.entitlements
+/ios/Generated/Modules.yml
 /.tools/
 /module-build/win.local.bazelrc
 /valdi/win.local.bazelrc

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -74,4 +74,90 @@ test('disabling a module removes previously staged archives, maps, native librar
   assert.deepEqual(['bluetooth.valdimodule', 'bluetooth.map.json', 'bluetooth.bundle', 'bluetooth'].map(file => existsSync(path.join(root, 'out', file))), [false, false, false, false]);
   assert.ok(existsSync(path.join(root, 'out/calculator.valdimodule')));
   assert.ok(existsSync(path.join(root, 'out/valdi_core.valdimodule')));
+});
+
+test('host-built modules contribute selected sources, Swift packages, entitlements and factories only while enabled', t => {
+  const { root, select, write } = fixture(t);
+  write('valdi/modules/mmkv/src/index.ts', 'export {};');
+  write('valdi/modules/mmkv/ios/Module.swift', '// Native implementation');
+  write('valdi/modules/mmkv/module.json', JSON.stringify({
+    nativeBuild: 'host', iosModuleName: 'MMKVStorage',
+    androidModuleFactory: 'com.example.StorageFactory', androidModuleFactoryContext: true,
+    iosModuleFactoryClass: 'VRStorageFactory',
+    androidDependencies: ['com.tencent:mmkv:2.4.3'],
+    iosPackages: [{ name: 'MMKV', url: 'https://github.com/Tencent/MMKV.git', revision: '007a393cd5e255e9aa68d6648f7179159bdf0f9d' }],
+    iosEntitlements: { 'com.apple.developer.networking.wifi-info': true },
+    iosFrameworks: ['NetworkExtension'],
+  }));
+  select(['mmkv']);
+  const selected = syncNativeModuleRegistration(root);
+  assert.equal(selected[0].nativeBuild, 'host');
+  const kotlin = readFileSync(path.join(root, 'android/app/generated/valdi/ValdiNativeModules.kt'), 'utf8');
+  assert.match(kotlin, /val factory\w* = com\.example\.StorageFactory\(context\.applicationContext\)/);
+  assert.match(kotlin, /registerModuleFactory \{ factory\w* \}/);
+  const project = readFileSync(path.join(root, 'ios/Generated/Modules.yml'), 'utf8');
+  assert.match(project, /Tencent\/MMKV\.git/);
+  assert.match(project, /007a393cd5e255e9aa68d6648f7179159bdf0f9d/);
+  assert.match(project, /valdi\/modules\/mmkv\/ios/);
+  assert.match(project, /NetworkExtension\.framework/);
+  assert.match(readFileSync(path.join(root, 'ios/Generated/AppEntitlements.entitlements'), 'utf8'), /wifi-info/);
+  assert.match(readFileSync(path.join(root, 'ios/Generated/valdi/ValdiModuleImports.h'), 'utf8'), /MMKVStorage\/MMKVStorage\.h/);
+  select([]);
+  syncNativeModuleRegistration(root);
+  for (const file of ['ios/Generated/Modules.yml', 'ios/Generated/AppEntitlements.entitlements',
+    'ios/Generated/valdi/ValdiModuleImports.h', 'android/app/generated/valdi/ValdiNativeModules.kt']) {
+    assert.doesNotMatch(readFileSync(path.join(root, file), 'utf8'), /MMKV|mmkv|StorageFactory|wifi-info|NetworkExtension/);
+  }
+});
+
+test('module-owned iOS dependency metadata rejects unsafe, conflicting and ambiguous contributions', t => {
+  const { root, select, write } = fixture(t);
+  select(['calculator', 'bluetooth']);
+  const config = patch => write('valdi/modules/calculator/module.json', JSON.stringify({ nativeBuild: 'host', ...patch }));
+  for (const patch of [
+    { iosPackages: [{ name: 'MMKV', url: 'https://github.com/Tencent/MMKV.git', revision: 'main' }] },
+    { iosPackages: [{ name: 'MMKV', url: 'https://github.com/Tencent/MMKV.git', revision: 'a'.repeat(40), from: '2.4.3' }] },
+    { iosPackages: [{ name: 'bad/path', url: 'https://github.com/example/a.git', revision: 'a'.repeat(40) }] },
+    { iosFrameworks: ['../WebKit'] },
+    { iosEntitlements: { 'unrestricted-setting': true } },
+  ]) {
+    config(patch);
+    assert.throws(() => nativeModules(root), /invalid ios/);
+  }
+  config({ iosInfoPlist: { NSBluetoothAlwaysUsageDescription: 'Conflicting description' } });
+  assert.throws(() => syncNativeModuleRegistration(root), /Conflicting iosInfoPlist/);
+});
+
+test('the five real services select their own native sources and platform dependencies without app_pages', t => {
+  const { root, select, write } = fixture(t);
+  const repository = path.resolve(import.meta.dirname, '../..');
+  const names = ['mmkv', 'permissions', 'wifi', 'nfc', 'app_ui', 'native_common'];
+  for (const name of names) cpSync(path.join(repository, 'valdi/modules', name),
+    path.join(root, 'valdi/modules', name), { recursive: true });
+  for (const service of names.filter(name => name !== 'native_common')) {
+    const dependencies = ['native_common', ...(['wifi', 'nfc'].includes(service) ? ['permissions'] : [])];
+    select([service, ...dependencies]);
+    const selected = syncNativeModuleRegistration(root);
+    assert.deepEqual(selected.map(module => module.name), [service, ...dependencies.filter(name => name !== 'native_common')].sort());
+    const manifest = readFileSync(path.join(root, 'android/app/build/generated/valdi-module-manifest/AndroidManifest.xml'), 'utf8');
+    const project = JSON.parse(readFileSync(path.join(root, 'ios/Generated/Modules.yml'), 'utf8'));
+    assert.equal(!!project.packages.MMKV, service === 'mmkv');
+    assert.equal(manifest.includes('AttachmentFileProvider'), service === 'app_ui');
+    assert.equal(manifest.includes('android.permission.CAMERA'), service === 'app_ui');
+    assert.equal(manifest.includes('android.permission.NFC'), service === 'nfc');
+    assert.equal(manifest.includes('android.permission.CHANGE_WIFI_STATE'), service === 'wifi');
+    if (service === 'wifi') assert.match(manifest, /xmlns:tools="http:\/\/schemas.android.com\/tools"/);
+    const entitlements = readFileSync(path.join(root, 'ios/Generated/AppEntitlements.entitlements'), 'utf8');
+    assert.equal(entitlements.includes('wifi-info'), service === 'wifi');
+    const actualSources = project.targets.ValdiRoutes.sources.map(source => source.path);
+    for (const name of ['mmkv', 'permissions', 'wifi', 'nfc', 'app_ui'])
+      assert.equal(actualSources.includes(`../../valdi/modules/${name}/ios`), name === service || dependencies.includes(name));
+  }
+  select([]);
+  syncNativeModuleRegistration(root);
+  assert.deepEqual(JSON.parse(readFileSync(path.join(root, 'ios/Generated/Modules.yml'), 'utf8')).targets.ValdiRoutes.sources, []);
+  write('valdi/modules/consumer/src/index.ts', 'export {};');
+  write('valdi/modules/consumer/BUILD.bazel', 'deps = ["//modules/mmkv:mmkv_compiled"]');
+  select(['consumer']);
+  assert.throws(() => enabledModuleNames(root), /references disabled module "mmkv"/);
 });

@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 import json
+import plistlib
 from pathlib import Path
 import subprocess
 import tempfile
@@ -19,12 +20,12 @@ def main():
     if args.output:
         output.mkdir(parents=True, exist_ok=False)
     sources = [
-        root / "ios/ValdiRoutes/AppUIPromise.swift",
+        root / "valdi/modules/app_ui/ios/AppUIPromise.swift",
         root / "ios/Tests/AppUIPromiseTests.swift",
-        root / "ios/ValdiRoutes/AppUI/ValdiImageBridge.h",
-        root / "ios/ValdiRoutes/AppUI/ValdiImageBridge.m",
-        root / "ios/Generated/valdi/app_pages",
-        root / "ios/Generated/valdi/app_pagesTypes",
+        root / "valdi/modules/app_ui/ios/VRAppUIVoidPromise.h",
+        root / "valdi/modules/app_ui/ios/VRAppUIVoidPromise.m",
+        root / "ios/Generated/valdi/AppUI",
+        root / "ios/Generated/valdi/AppUITypes",
     ]
     framework = root / "ios/Frameworks/ValdiRuntime.xcframework"
     if not framework.exists():
@@ -33,8 +34,8 @@ def main():
     bridge.write_text(
         '#import <ValdiRuntime/ValdiObjC.h>\n'
         f'#import "{sources[2]}"\n'
-        '#import <app_pages/app_pages.h>\n'
-        '#import <app_pagesTypes/app_pagesTypes.h>\n'
+        '#import <AppUI/AppUI.h>\n'
+        '#import <AppUITypes/AppUITypes.h>\n'
     )
     lines = [
         "name: AppUIPromiseRuntime", "options:", "  deploymentTarget:", '    iOS: "16.0"',
@@ -66,13 +67,18 @@ def main():
             "-resultBundlePath", str(output / "results.xcresult"), "CODE_SIGNING_ALLOWED=NO", "test",
         ],
     ]
+    with (framework / "Info.plist").open("rb") as metadata:
+        slices = plistlib.load(metadata)["AvailableLibraries"]
+    simulator = next(item for item in slices if item.get("SupportedPlatformVariant") == "simulator"
+                     and "arm64" in item["SupportedArchitectures"])
+    runtime_binary = framework / simulator["LibraryIdentifier"] / simulator["LibraryPath"] / "ValdiRuntime"
     inputs = []
     for source in sources:
         if source.is_dir():
             inputs.extend(path for path in source.rglob("*") if path.is_file())
         else:
             inputs.append(source)
-    binary = framework / "ios-arm64_x86_64-simulator/ValdiRuntime.framework/ValdiRuntime"
+    binary = runtime_binary
     inputs.append(binary)
     hashes = {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest() for path in inputs}
     (output / "inputs.json").write_text(json.dumps(hashes, indent=2) + "\n")

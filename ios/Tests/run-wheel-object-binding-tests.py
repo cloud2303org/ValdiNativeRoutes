@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import plistlib
 from pathlib import Path
 import subprocess
 import tempfile
@@ -20,7 +21,7 @@ def main():
     output = args.output.resolve() if args.output else Path(tempfile.mkdtemp(prefix="wheel-object-binding-tests-"))
     if args.output:
         output.mkdir(parents=True, exist_ok=False)
-    ui = root / "ios/ValdiRoutes/NativeRoutesUI"
+    ui = root / "valdi/modules/app_ui/ios/ui"
     framework = root / "ios/Frameworks/ValdiRuntime.xcframework"
     if not framework.exists():
         parser.error("Export the iOS runtime before preparing these tests")
@@ -32,10 +33,12 @@ def main():
                root / "ios/Tests/WheelBindingRecorder.m",
                root / "ios/ValdiRoutes/SheetHostView.swift",
                root / "ios/Generated/valdi/app_pages",
-               root / "ios/Generated/valdi/app_pagesTypes"]
+               root / "ios/Generated/valdi/app_pagesTypes",
+               root / "ios/Generated/valdi/AppUI",
+               root / "ios/Generated/valdi/AppUITypes"]
     sources += [ui / (name + ".swift") for name in (
         "BottomSheet", "OverlayScope", "OverlayActions", "PopupActionButtons",
-        "ActionButton", "UiTheme", "UiDesign", "Picker", "MenuControls")]
+        "ActionButton", "UiTheme", "UiDesign", "Picker", "MenuControls", "AppUISheetHostView")]
     bridge = output / "Bridge.h"
     bridge.write_text(
         '#import <ValdiRuntime/ValdiObjC.h>\n'
@@ -102,8 +105,13 @@ final class WheelBindingTestApp: UIResponder, UIApplicationDelegate {
          "CODE_SIGNING_ALLOWED=NO", "test"],
     ]
     (output / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")
+    with (framework / "Info.plist").open("rb") as metadata:
+        slices = plistlib.load(metadata)["AvailableLibraries"]
+    simulator = next(item for item in slices if item.get("SupportedPlatformVariant") == "simulator"
+                     and "arm64" in item["SupportedArchitectures"])
+    runtime_binary = framework / simulator["LibraryIdentifier"] / simulator["LibraryPath"] / "ValdiRuntime"
     inputs = [p for source in sources for p in (source.rglob("*") if source.is_dir() else [source]) if p.is_file()]
-    inputs.append(framework / "ios-arm64_x86_64-simulator/ValdiRuntime.framework/ValdiRuntime")
+    inputs.append(runtime_binary)
     hashes = {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest() for path in inputs}
     (output / "inputs.json").write_text(json.dumps(hashes, indent=2) + "\n")
     print(f"Prepared: {output}", flush=True)

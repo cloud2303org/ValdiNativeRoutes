@@ -1,7 +1,7 @@
 # Typed storage transport
 
-`app_pages/src/storage.ts` exports `StorageWriteRequest`, `StorageReadReply` and
-`StorageHost`. Android and iOS consume the real generated bindings. The shared
+`mmkv/src/storage.ts` owns `StorageWriteRequest`, `StorageReadReply` and
+`StorageHost`; `app_pages/src/storage.ts` remains a public reexport. Android and iOS consume the real generated bindings. The shared
 C++ host uses the same contract.
 
 ```ts

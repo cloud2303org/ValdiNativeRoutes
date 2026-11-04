@@ -35,8 +35,8 @@ final class ActionSheetMigrationTests: XCTestCase {
     try XCTUnwrap(descendants(window).compactMap { $0 as? ScrollBottomSheet }.first)
   }
 
-  private func shell() throws -> SheetHostView {
-    try XCTUnwrap(descendants(window).compactMap { $0 as? SheetHostView }.first)
+  private func shell() throws -> AppUISheetHostView {
+    try XCTUnwrap(descendants(window).compactMap { $0 as? AppUISheetHostView }.first)
   }
 
   private func item(_ id: String) throws -> UIButton {
@@ -45,7 +45,7 @@ final class ActionSheetMigrationTests: XCTestCase {
     })
   }
 
-  private func settle(_ shell: SheetHostView) async {
+  private func settle(_ shell: AppUISheetHostView) async {
     let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
       !self.descendants(shell).contains { $0.layer.animation(forKey: "sheetSettle") != nil }
     }, object: nil)
@@ -69,7 +69,7 @@ final class ActionSheetMigrationTests: XCTestCase {
     XCTAssertNil(controller.presentedViewController)
     let shell = try self.shell()
     let sheet = try self.sheet()
-    XCTAssertEqual(descendants(window).filter { $0 is SheetHostView }.count, 1)
+    XCTAssertEqual(descendants(window).filter { $0 is AppUISheetHostView }.count, 1)
     XCTAssertEqual(sheet.traitCollection.userInterfaceStyle, .dark)
     await settle(shell)
     let disabled = try item("disabled")
@@ -174,7 +174,7 @@ final class ActionSheetMigrationTests: XCTestCase {
       resolved.fulfill()
     }
     let mounted = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-      self.descendants(self.window).contains { $0 is SheetHostView }
+      self.descendants(self.window).contains { $0 is AppUISheetHostView }
     }, object: nil)
     await fulfillment(of: [mounted], timeout: 3)
     let shell = try self.shell()

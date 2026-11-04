@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import androidx.annotation.Keep
@@ -16,14 +15,11 @@ import com.snap.valdi.jsmodules.ValdiScopedJSRuntime
 import com.snap.valdi.modules.ModuleFactoryRegistry
 import com.snap.valdi.support.SupportValdiRuntimeManager
 import com.snap.valdi.views.ValdiRootView
-import io.valdiroutes.pages.InstallNfcHost
-import io.valdiroutes.pages.InstallPermissionHost
-import io.valdiroutes.pages.InstallWifiHost
-import io.valdiroutes.pages.InstallAppUI
 import io.valdiroutes.pages.NavigationHost
+import io.valdiroutes.permissions.PermissionHostImpl
+import io.valdiroutes.permissions.PermissionModuleFactoryImpl
 import io.valdiroutes.pages.StartApp
 import io.valdiroutes.pages.InstallVisionHost
-import io.valdiroutes.pages.InstallStorageHost
 import io.valdiroutes.pages.PageContext
 import io.valdiroutes.pages.PageInsets
 import io.valdiroutes.pages.PageViewModel
@@ -56,22 +52,11 @@ object ValdiHost {
         runtimeManager.registerGlobalAttributesBinder(ValdiWheelBinder(ColumnWheelView::class.java))
         runtimeManager.registerGlobalAttributesBinder(ValdiWheelBinder(TimeWheelView::class.java))
         runtimeManager.registerGlobalAttributesBinder(ValdiWheelBinder(TreeWheelView::class.java))
-        appUIHost = AppUIHostImpl(app)
-        permissionHost = PermissionHostImpl(app)
         val visionHost = VisionHostImpl(app)
-        // Both cores are app-owned and installed now: NFC must see the first activity resume to know the foreground.
-        val wifiHost = WifiHostImpl(app)
-        val nfcHost = NfcHostImpl(app)
         tokenStore = TokenStoreImpl(app)
-        storageHost = StorageHostImpl(app)
         runtimeManager.mainRuntime.createScopedJSRuntime("hosts") { js ->
             hostScope = js
-            InstallAppUI.create(js).invoke(appUIHost)
-            InstallPermissionHost.create(js).invoke(permissionHost, Build.VERSION.SDK_INT.toDouble())
-            InstallWifiHost.create(js).invoke(wifiHost)
-            InstallNfcHost.create(js).invoke(nfcHost)
             InstallVisionHost.create(js).invoke(visionHost)
-            InstallStorageHost.create(js).invoke(storageHost.host)
             // App-wide objects (the SQLite connection, api, the router) belong in this retained scope, not in a page.
             val debug = (app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
             val table = RouteTable.from(StartApp.create(js).invoke(debug, navigationHost, tokenStore.store))
@@ -88,9 +73,6 @@ object ValdiHost {
 
     /** auth.ts's token; held here, for as long as JS can call it. */
     private lateinit var tokenStore: TokenStoreImpl
-
-    /** `api.*StorageSync`, in MMKV. */
-    private lateinit var storageHost: StorageHostImpl
 
     private var started: RouteTable? = null
     private val waiting = mutableListOf<(RouteTable) -> Unit>()
@@ -146,13 +128,9 @@ object ValdiHost {
     @Keep
     private var hostScope: ValdiScopedJSRuntime? = null
 
-    /** Keep the exported proxy app-owned even after the installing callback and its calling page are gone. */
-    @Keep
-    private lateinit var appUIHost: AppUIHostImpl
-
     /** Runtime permissions for permissions/index.ts; the activity lends it the permission prompt. */
-    lateinit var permissionHost: PermissionHostImpl
-        private set
+    val permissionHost: PermissionHostImpl
+        get() = PermissionModuleFactoryImpl.requireHost()
 
     /** The route table, tab bar and first page, from startApp (app.ts); on the main thread, once JS has started. */
     fun start(completion: (RouteTable) -> Unit) {

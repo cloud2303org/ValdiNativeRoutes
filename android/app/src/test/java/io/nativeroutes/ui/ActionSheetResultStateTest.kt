@@ -1,4 +1,4 @@
-package io.nativeroutes.ui
+package io.valdiroutes.app_ui.ui
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

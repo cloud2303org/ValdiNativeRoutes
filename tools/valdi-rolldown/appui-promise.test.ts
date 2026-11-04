@@ -6,14 +6,14 @@ import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
 import { codegenModules, generateNativeCode, nativeSourceFiles } from './codegen/index';
-import { appModule, root } from './pipeline';
+import { appModule, root, valdiSourceRoot } from './pipeline';
 import { valdiTs } from './valdiTs';
 
 const app = appModule('app_pages');
 // Use the actual application's compiler, transforms, tsconfig and source files, rather than a copied API fixture.
 const compiler = valdiTs(app, ts.ModuleKind.CommonJS);
 const emitted = new Map<string, string>();
-const source = (name: string) => path.join(app.dir, 'src', `${name}.ts`);
+const source = (name: string) => path.join(appModule('app_ui').dir, 'src', `${name}.ts`);
 const emit = (file: string) => {
   if (!emitted.has(file)) emitted.set(file, compiler.emit(file));
   return emitted.get(file)!;
@@ -58,13 +58,14 @@ function runtime(install = true) {
   const requireApp = createRequire(path.join(app.dir, 'package.json'));
   const modules: Record<string, any> = {
     valibot: requireApp('valibot'),
+    tslib: requireApp(path.join(valdiSourceRoot()!, 'src/valdi_modules/src/valdi/valdi_core/src/tslib.js')),
     // This is the CommonJS test adapter for the default imports handled by Rolldown in production.
     dayjs: { default: requireApp('dayjs') },
     'dayjs/plugin/customParseFormat': { default: requireApp('dayjs/plugin/customParseFormat') },
     'dayjs/plugin/utc': { default: requireApp('dayjs/plugin/utc') },
     'bluetooth/src/index': { bluetoothApi: () => ({}) },
-    './nfc/extension': { createNFCExtension: () => ({ getNFCAdapter() {} }) },
-    './wifi/extension': { createWifiExtension: () => ({}) },
+    'nfc/src/extension': { createNFCExtension: () => ({ getNFCAdapter() {} }) },
+    'wifi/src/extension': { createWifiExtension: () => ({}) },
   };
   const cache = new Map<string, any>();
   const load = (file: string): any => {
@@ -74,6 +75,9 @@ function runtime(install = true) {
     vm.runInContext(`(function(require,module,exports){${emit(file)}\n})`, context, { filename: file })(
       (name: string) => {
         if (Object.hasOwn(modules, name)) return modules[name];
+        if (name === './AppUI') return { getHost() { throw Error('native AppUI is not installed'); } };
+        if (name === './MMKV') return { getHost() { throw Error('native storage is not installed'); } };
+        if (/^(app_ui|mmkv|native_common)\//.test(name)) return load(path.join(app.dir, '..', name + '.ts'));
         assert.ok(name.startsWith('.'), `Unexpected module: ${name}`);
         return load(`${path.resolve(path.dirname(file), name)}.ts`);
       }, module, module.exports,
@@ -88,7 +92,7 @@ function runtime(install = true) {
     return handlers[method] ? handlers[method]!(...args) : Promise.resolve(defaults[method]);
   }]));
   if (install) bridge.installAppUI(host);
-  const { api, ApiError } = load(source('api'));
+  const { api, ApiError } = load(path.join(app.dir, 'src/api.ts'));
   return { api, ApiError, calls, handlers, bridge, host, cache, load };
 }
 
@@ -132,7 +136,7 @@ test('real compiler sees exactly thirteen callback-free typed Promise host metho
 });
 
 test('real generator emits canonical Kotlin, Objective-C and C++ Promise proxies with no completion ABI', () => {
-  const target = codegenModules().app_pages;
+  const target = codegenModules().app_ui;
   const code = generateNativeCode(target);
   const directories = {
     android: 'android/app/generated/valdi',
@@ -169,8 +173,8 @@ test('real generator emits canonical Kotlin, Objective-C and C++ Promise proxies
   assert.doesNotMatch(outputs.ios, /VRAppUIHostShow\w+Block|@interface VRAppUIHost: SCValdiMarshallableObject/);
   assert.match(outputs.android, /proxyClass = AppUIHost_Proxy::class/);
   assert.match(outputs.ios, /@interface VRAppUIHost: SCValdiProxyMarshallableObject/);
-  assert.match(outputs.cpp, /"c\+ 'snap::valdi_modules::app_pages::AppUIHost'\{/);
-  const cppSchema = outputs.cpp.match(/"c\+ 'snap::valdi_modules::app_pages::AppUIHost'\{([^"]+)\}"/)![1];
+  assert.match(outputs.cpp, /"c\+ 'snap::valdi_modules::app_ui::AppUIHost'\{/);
+  const cppSchema = outputs.cpp.match(/"c\+ 'snap::valdi_modules::app_ui::AppUIHost'\{([^"]+)\}"/)![1];
   assert.equal((cppSchema.match(/f\|m\|/g) ?? []).length, 13);
   assert.equal((cppSchema.match(/: p</g) ?? []).length, 13);
   assert.match(cppSchema, /'scanCode':f\|m\|\(\): p<r:/);

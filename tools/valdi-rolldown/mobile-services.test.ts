@@ -35,6 +35,11 @@ function runtime(platform: 'android' | 'ios', sdk = 36, device?: object, legacyP
         if (name === 'valdi_core/src/Device')
           return { Device: device ?? { getSystemType: () => platform, isAndroid: () => platform === 'android' } };
         if (name === 'valibot') return requireApp('valibot');
+        const nativeModules = ['Permissions', 'Wifi', 'Nfc'];
+        if (nativeModules.some(module => name === `./${module}`)) return {
+          getHost() { throw Error('Native module collaborator was not installed'); }, getAndroidSdk: () => sdk,
+        };
+        if (/^(native_common|permissions|wifi|nfc)\//.test(name)) return load(path.join(modules, name + '.ts'));
         assert.ok(name.startsWith('.'), `Unexpected dependency: ${name}`);
         return load(`${path.resolve(path.dirname(file), name)}.ts`);
       },
@@ -97,7 +102,10 @@ test('Owned service sources pass strict noEmit against the real upstream Device 
     moduleResolution: ts.ModuleResolutionKind.Node10,
     types: [],
     baseUrl: root,
-    paths: { 'valdi_core/*': [path.join(upstream, 'src/valdi_modules/src/valdi/valdi_core/*')] },
+    paths: {
+      'valdi_core/*': [path.join(upstream, 'src/valdi_modules/src/valdi/valdi_core/*')],
+      '*': [path.join(modules, '*')],
+    },
   });
   const diagnostics = ts.getPreEmitDiagnostics(program);
   assert.equal(diagnostics.length, 0, ts.formatDiagnosticsWithColorAndContext(diagnostics, {

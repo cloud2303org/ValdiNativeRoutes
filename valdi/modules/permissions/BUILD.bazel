@@ -1,0 +1,14 @@
+load("//bzl/node_module:module.bzl", "node_valdi_module")
+
+# Node owns TS and generated bindings. Host Gradle/Xcode owns android/ and ios/;
+# the macro's standalone native targets are intentionally unused for this module.
+node_valdi_module(
+    name = "permissions",
+    srcs = glob(["src/**/*.ts", "src/**/*.tsx"]),
+    config = "module.json",
+    ios_module_name = "Permissions",
+    ios_language = "objc",
+    deps = [
+        "//modules/native_common:native_common_compiled",
+    ],
+)

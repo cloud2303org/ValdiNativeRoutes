@@ -159,8 +159,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (args.length || !['debug', 'release'].includes(mode)) throw new Error('Unexpected module build arguments');
   const config = moduleConfig(name);
   if ((config.iosLanguage ?? 'objc') !== iosLanguage) throw new Error('BUILD ios_language must match module.json iosLanguage');
-  if (config.nativeBuild !== 'bazel' || (config.iosModuleName ?? name) !== iosName) {
-    throw new Error(`${name}: BUILD.bazel and module.json must agree on nativeBuild and iosModuleName`);
+  if ((config.iosModuleName ?? name) !== iosName) {
+    throw new Error(`${name}: BUILD.bazel and module.json must agree on iosModuleName`);
   }
   await compileNodeModule(appModule(name), out, iosName, mode as 'debug' | 'release', dependencies, iosLanguage as 'objc' | 'swift' | 'both');
 }

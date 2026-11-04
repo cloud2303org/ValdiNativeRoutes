@@ -1,4 +1,4 @@
-package io.nativeroutes.ui
+package io.valdiroutes.app_ui.ui
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource

@@ -1,4 +1,4 @@
-package io.valdiroutes.app
+package io.valdiroutes.mmkv
 
 import org.junit.Assert.*
 import org.junit.Test

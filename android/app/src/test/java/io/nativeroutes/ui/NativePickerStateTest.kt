@@ -1,8 +1,5 @@
-package io.nativeroutes.ui
+package io.valdiroutes.app_ui.ui
 
-import io.valdiroutes.app.WheelDate
-import io.valdiroutes.app.WheelItem
-import io.valdiroutes.app.WheelNode
 import org.junit.Assert.*
 import org.junit.Test
 

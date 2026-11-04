@@ -53,8 +53,8 @@ callback = runtime_root / "promise/CppPromiseCallback.kt"
 if not marker.is_file() or "PromiseRejectionException" not in callback.read_text():
     raise RuntimeError("Select integrated fork sources containing PromiseRejectionException and its callback handling")
 sources = [
-    repo / "android/app/generated/valdi/app_pages.kt",
-    source_root / "main/java/io/valdiroutes/app/AppUIHostImpl.kt",
+    repo / "android/app/generated/valdi/app_ui.kt",
+    repo / "valdi/modules/app_ui/android/AppUIHostImpl.kt",
     *sorted((source_root / "test/java/io/valdiroutes/app").glob("AppUIPromise*Test.kt")),
     runtime_root / "promise/CppPromiseCallback.kt",
     runtime_root / "exceptions/ExceptionUtils.kt",

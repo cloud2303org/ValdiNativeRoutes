@@ -26,14 +26,10 @@ final class ValdiHost {
         if let started { return completion(started) }
         waiting.append(completion)
         guard waiting.count == 1 else { return }
+        MainActor.assumeIsolated { AppUI.imageLoader = AppImages.load }
         let runtime = self.runtime
         VRRegisterNativeModules(runtime)
-        VRInstallAppUI.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: appUIHost) {}
-        VRInstallPermissionHost.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: permissionHost, androidSdk: 0) {}
-        VRInstallWifiHost.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: wifiHost) {}
-        // No NfcHost: nfc/native.ts answers NOT_SUPPORTED on iOS before it looks one up.
         VRInstallVisionHost.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: visionHost) {}
-        VRInstallStorageHost.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: storageHost.host) {}
         // App-wide objects (the SQLite connection, api, the router) are created here, not in a page.
         #if DEBUG
         let debug = true
@@ -103,24 +99,11 @@ final class ValdiHost {
         DispatchQueue.main.async { [weak self] in self?.navigator.map(action) }
     }
 
-    /// `api` in TS lands here; requests are already validated and defaulted there. Called on the JS thread. Held here
-    /// for the app's lifetime: JS only references native functions weakly, so a host nobody holds gets released.
-    private let appUIHost = AppUIHostImpl()
-
     /// `runDemo` of vision/VisionHost.ts, on the C++ VisionCore.
     private let visionHost = VisionHostImpl()
 
-    /// Runtime permissions for permissions/index.ts; on iOS only openSettings does anything.
-    private let permissionHost = PermissionHostImpl()
-
-    /// `api`'s Wi-Fi methods, on the shared WifiCore.
-    private let wifiHost = WifiHostImpl()
-
     /// auth.ts's token, in the Keychain.
     private let tokenStore = TokenStoreImpl()
-
-    /// `api.*StorageSync`, in MMKV.
-    private let storageHost = StorageHostImpl()
 
     func createPage(_ entry: PageEntry, insets: UIEdgeInsets, navigator: Navigator) -> SCValdiRootView {
         let viewModel = viewModel(entry, insets)

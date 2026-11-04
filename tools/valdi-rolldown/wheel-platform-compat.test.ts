@@ -8,7 +8,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
 import { unpack } from './archive';
-import { root, buildModule, valdiSourceRoot } from './pipeline';
+import { appModule, root, buildModule, valdiSourceRoot } from './pipeline';
 import { valdiTs } from './valdiTs';
 import { JSXProcessor } from './vendor/companion/JSXProcessor';
 
@@ -34,6 +34,8 @@ function fixture(typesRoot: string, source?: string) {
   const modules = path.join(typesRoot, modulePrefix);
   const paths = Object.fromEntries(['valdi_core', 'valdi_tsx', 'coreutils'].map(name =>
     [`${name}/*`, [path.join(modules, name, '*')]]));
+  for (const name of ['native_common', 'app_ui'])
+    paths[`${name}/*`] = [path.join(root, 'valdi/modules', name, '*')];
   writeFileSync(path.join(dir, 'tsconfig.json'), JSON.stringify({
     extends: path.join(typesRoot, 'modules/_configs/base.tsconfig.json'),
     compilerOptions: {
@@ -150,6 +152,14 @@ test(`actual shared wheels typecheck against selected sources; ${runtimeLabel} r
     }
     for (const minify of [false, true]) {
       const { entries } = await buildModule(module, plugin, minify);
+      const commonModule = appModule('native_common');
+      const commonPlugin = valdiTs(commonModule);
+      try {
+        const common = await buildModule(commonModule, commonPlugin, minify);
+        assert.equal(commonPlugin.diagnostics(), '');
+        for (const source of commonPlugin.program().getSourceFiles()) hash(source.fileName);
+        for (const [file, bytes] of common.entries) entries.set(`native_common/${file}`, bytes);
+      } finally { commonPlugin.dispose(); }
       for (const [name, bytes] of entries) {
         const file = path.join(module.dir, minify ? 'output-min' : 'output-debug', name);
         mkdirSync(path.dirname(file), { recursive: true });

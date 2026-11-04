@@ -19,13 +19,13 @@ def main():
     output = args.output.resolve() if args.output else Path(tempfile.mkdtemp(prefix="sheet-host-tests-"))
     if args.output:
         output.mkdir(parents=True, exist_ok=False)
-    ui = root / "ios/ValdiRoutes/NativeRoutesUI"
+    ui = root / "valdi/modules/app_ui/ios/ui"
     sources = [root / "ios/ValdiRoutes/SheetHostView.swift",
                root / "ios/Tests/SheetHostMigrationTests.swift",
                root / "ios/Tests/ActionSheetMigrationTests.swift"]
     sources += [ui / (name + ".swift") for name in (
         "BottomSheet", "OverlayScope", "OverlayActions", "PopupActionButtons",
-        "ActionButton", "UiTheme", "UiDesign", "Picker", "MenuControls")]
+        "ActionButton", "UiTheme", "UiDesign", "Picker", "MenuControls", "AppUISheetHostView")]
     # UIKit control dispatch needs UIApplicationMain, even though the test bundle
     # compiles the production UI sources directly and does not need Valdi.
     host_source = output / "SheetHostTestApp.swift"

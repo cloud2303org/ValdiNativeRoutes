@@ -6,7 +6,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
 import type { NavigationOptions, ResolvedNavigation } from '../../valdi/modules/app_pages/src/navigation/options';
-import { appModule } from './pipeline';
+import { appModule, valdiSourceRoot } from './pipeline';
 import { valdiTs } from './valdiTs';
 
 const app = appModule('app_pages');
@@ -55,6 +55,7 @@ function runtime(platform: Platform, navigation?: NavigationOptions, routeOption
     'valdi_core/src/Style': { Style: class {} },
     'valdi_core/src/SystemFont': { systemBoldFont: () => '', systemFont: () => '' },
     valibot: requireApp('valibot'),
+    tslib: requireApp(path.join(valdiSourceRoot()!, 'src/valdi_modules/src/valdi/valdi_core/src/tslib.js')),
     [source('Button.tsx')]: { Button },
     [source('PageHeader.tsx')]: { PageHeader },
     [source('PageComponent.ts')]: { Page: class {} },
@@ -75,6 +76,7 @@ function runtime(platform: Platform, navigation?: NavigationOptions, routeOption
     vm.runInContext(`(function(require,exports){${emitted.get(file)}\n})`, context, { filename: file })(
       (name: string) => {
         if (Object.hasOwn(modules, name)) return modules[name];
+        if (name.startsWith('native_common/')) return load(path.join(app.dir, '..', name + '.ts'));
         assert.ok(name.startsWith('.'), `Unexpected runtime dependency: ${name}`);
         const relative = path.resolve(path.dirname(file), name);
         const resolved = [`${relative}.ts`, `${relative}.tsx`, path.join(relative, 'index.ts')].find(existsSync);

@@ -59,7 +59,7 @@ export function copyModuleTree(source, destination) {
 }
 
 export function bazelModules() {
-  return nativeModules(root).map(module => module.name);
+  return nativeModules(root).filter(module => module.nativeBuild === 'bazel').map(module => module.name);
 }
 
 export function buildNodeModules(platform = 'ios', release = false, native = false) {

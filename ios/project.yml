@@ -1,5 +1,7 @@
 # Generate the Xcode project with `xcodegen` (brew install xcodegen); ValdiRoutes.xcodeproj is not checked in.
 name: ValdiRoutes
+include:
+  - Generated/Modules.yml
 options:
   bundleIdPrefix: io.valdiroutes
   deploymentTarget:
@@ -9,11 +11,6 @@ packages:
   SDWebImage:
     url: https://github.com/SDWebImage/SDWebImage.git
     from: 5.21.0
-  # api.*StorageSync (StorageHostImpl.swift), as ExpoNativeRoutes' stores. Pinned to v2.4.3's commit: its package uses
-  # unsafeFlags, which SwiftPM only allows in a package resolved by revision, not by version.
-  MMKV:
-    url: https://github.com/Tencent/MMKV.git
-    revision: 007a393cd5e255e9aa68d6648f7179159bdf0f9d
 settings:
   base:
     SWIFT_VERSION: "5.0"
@@ -43,13 +40,11 @@ targets:
         embed: false
         link: true
       - sdk: libc++.tbd
-      - sdk: WebKit.framework
       # Built by our module-only workspace, against the unchanged ValdiRuntime.
       - framework: ../module-build/out/ios/libvaldi_modules_ios.a
         embed: false
         link: false # Linked once via -force_load, including Swift runtime-discovered classes.
       - package: SDWebImage
-      - package: MMKV
     preBuildScripts:
       - name: Native Valdi modules
         basedOnDependencyAnalysis: false
@@ -120,15 +115,6 @@ targets:
         # The app version over-the-air packages target (scripts/ota.mjs).
         CFBundleShortVersionString: $(MARKETING_VERSION)
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        NSLocationWhenInUseUsageDescription: 读取当前 Wi-Fi 名称，或以 iBeacon 方式广播时使用定位服务
-        NSCameraUsageDescription: 扫描二维码或拍摄附件需要使用相机
-        NSPhotoLibraryUsageDescription: 从相册选择要上传的图片
-    # As ExpoNativeRoutes' NativeRoutesApp.entitlements: join device hotspots and read the current SSID.
-    entitlements:
-      path: ValdiRoutes/ValdiRoutes.entitlements
-      properties:
-        com.apple.developer.networking.HotspotConfiguration: true
-        com.apple.developer.networking.wifi-info: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.valdiroutes.app
@@ -147,6 +133,7 @@ targets:
         # objects too; -ObjC alone is not a Swift registration contract.
         OTHER_LDFLAGS: ["$(inherited)", "-ObjC", "-force_load", "$(SRCROOT)/../module-build/out/ios/libvaldi_modules_ios.a"]
         INFOPLIST_FILE: Generated/AppInfo.plist
+        CODE_SIGN_ENTITLEMENTS: Generated/AppEntitlements.entitlements
         LIBRARY_SEARCH_PATHS: ["$(inherited)", "$(SRCROOT)/../module-build/out/ios"]
         SWIFT_INCLUDE_PATHS: ["$(inherited)", "$(SRCROOT)/../module-build/out/ios/swift"]
         # Use Xcode's processed framework, so modular and textual imports refer

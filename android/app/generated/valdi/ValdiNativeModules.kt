@@ -7,9 +7,22 @@ import com.snap.valdi.modules.ModuleFactoryRegistry
 
 object ValdiNativeModules {
     fun registerFactories(context: Context) {
-        ModuleFactoryRegistry.registerModuleFactory { io.valdiroutes.bluetooth.BluetoothModuleFactoryImpl(context.applicationContext) }
-        ModuleFactoryRegistry.registerModuleFactory { com.snap.modules.calculator.CalculatorModuleFactoryImpl() }
-        ModuleFactoryRegistry.registerModuleFactory { com.snap.valdi.modules.webview.WebViewNativeModuleFactoryImpl() }
+        val factory0 = io.valdiroutes.app_ui.AppUIModuleFactoryImpl(context.applicationContext)
+        ModuleFactoryRegistry.registerModuleFactory { factory0 }
+        val factory1 = io.valdiroutes.bluetooth.BluetoothModuleFactoryImpl(context.applicationContext)
+        ModuleFactoryRegistry.registerModuleFactory { factory1 }
+        val factory2 = com.snap.modules.calculator.CalculatorModuleFactoryImpl()
+        ModuleFactoryRegistry.registerModuleFactory { factory2 }
+        val factory3 = io.valdiroutes.mmkv.MMKVModuleFactoryImpl(context.applicationContext)
+        ModuleFactoryRegistry.registerModuleFactory { factory3 }
+        val factory4 = io.valdiroutes.nfc.NfcModuleFactoryImpl(context.applicationContext)
+        ModuleFactoryRegistry.registerModuleFactory { factory4 }
+        val factory5 = io.valdiroutes.permissions.PermissionModuleFactoryImpl(context.applicationContext)
+        ModuleFactoryRegistry.registerModuleFactory { factory5 }
+        val factory6 = com.snap.valdi.modules.webview.WebViewNativeModuleFactoryImpl()
+        ModuleFactoryRegistry.registerModuleFactory { factory6 }
+        val factory7 = io.valdiroutes.wifi.WifiModuleFactoryImpl(context.applicationContext)
+        ModuleFactoryRegistry.registerModuleFactory { factory7 }
     }
 
     fun registerViewBinders(context: Context, runtime: ValdiRuntimeManager) {

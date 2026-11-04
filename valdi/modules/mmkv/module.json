@@ -1,0 +1,19 @@
+{
+  "nativeBuild": "host",
+  "iosLanguage": "objc",
+  "androidClassPath": "io.valdiroutes.mmkv",
+  "androidModuleFactory": "io.valdiroutes.mmkv.MMKVModuleFactoryImpl",
+  "androidModuleFactoryContext": true,
+  "iosModuleFactoryClass": "VRMMKVModuleFactory",
+  "iosModuleName": "MMKVStorage",
+  "androidDependencies": [
+    "com.tencent:mmkv:2.4.3"
+  ],
+  "iosPackages": [
+    {
+      "name": "MMKV",
+      "url": "https://github.com/Tencent/MMKV.git",
+      "revision": "007a393cd5e255e9aa68d6648f7179159bdf0f9d"
+    }
+  ]
+}

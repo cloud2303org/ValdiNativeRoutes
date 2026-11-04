@@ -1,0 +1,56 @@
+{
+  "nativeBuild": "host",
+  "iosLanguage": "objc",
+  "androidClassPath": "io.valdiroutes.app_ui",
+  "androidModuleFactory": "io.valdiroutes.app_ui.AppUIModuleFactoryImpl",
+  "androidModuleFactoryContext": true,
+  "iosModuleFactoryClass": "VRAppUIModuleFactory",
+  "iosModuleName": "AppUI",
+  "androidDependencies": [
+    "androidx.compose.ui:ui",
+    "androidx.compose.foundation:foundation",
+    "androidx.compose.material3:material3",
+    "androidx.activity:activity-compose:1.13.0",
+    "androidx.core:core-ktx:1.17.0",
+    "androidx.appcompat:appcompat:1.7.1",
+    "androidx.dynamicanimation:dynamicanimation:1.1.0",
+    "androidx.viewpager2:viewpager2:1.1.0",
+    "dev.chrisbanes.haze:haze:1.7.2",
+    "io.coil-kt.coil3:coil-core:3.3.0",
+    "io.coil-kt.coil3:coil-network-okhttp:3.3.0",
+    "io.coil-kt.coil3:coil-network-cache-control:3.3.0",
+    "androidx.camera:camera-core:1.6.0",
+    "androidx.camera:camera-camera2:1.6.0",
+    "androidx.camera:camera-lifecycle:1.6.0",
+    "androidx.camera:camera-view:1.6.0",
+    "com.google.mlkit:barcode-scanning:17.3.0"
+  ],
+  "androidPermissions": [
+    {
+      "name": "android.permission.CAMERA"
+    },
+    {
+      "name": "android.permission.INTERNET"
+    }
+  ],
+  "androidFeatures": [
+    {
+      "name": "android.hardware.camera",
+      "required": false
+    }
+  ],
+  "iosInfoPlist": {
+    "NSCameraUsageDescription": "扫描二维码或拍摄附件需要使用相机",
+    "NSPhotoLibraryUsageDescription": "从相册选择要上传的图片"
+  },
+  "iosFrameworks": [
+    "UIKit",
+    "AVFoundation",
+    "Photos",
+    "PhotosUI",
+    "UniformTypeIdentifiers"
+  ],
+  "androidPlatforms": [
+    "androidx.compose:compose-bom:2026.09.00"
+  ]
+}

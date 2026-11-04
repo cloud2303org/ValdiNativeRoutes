@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { rolldown, RolldownMagicString, type Plugin, type PreRenderedChunk } from 'rolldown';
+import ts from 'typescript';
 import type { ArchiveEntries } from './archive';
 import { sourceFiles, type ValdiModule, type ValdiTsPlugin } from './valdiTs';
 import { availableModuleNames, enabledModuleNames } from './modules.mjs';
@@ -22,16 +23,20 @@ export const genDir = (name: string) => path.join(genRoot, name);
 export const modulesDir = path.join(valdi, 'modules');
 
 export interface ModuleConfig {
-  nativeBuild?: 'bazel';
+  nativeBuild?: 'bazel' | 'host';
   iosModuleName?: string;
   iosLanguage?: 'objc' | 'swift' | 'both';
   androidClassPath?: string;
   androidModuleFactory?: string;
   androidModuleFactoryContext?: boolean;
   androidDependencies?: string[];
-  androidPermissions?: { name: string; maxSdkVersion?: number; usesPermissionFlags?: 'neverForLocation' }[];
+  androidPlatforms?: string[];
+  androidPermissions?: { name: string; maxSdkVersion?: number; usesPermissionFlags?: 'neverForLocation'; removeMaxSdkVersion?: true }[];
   androidFeatures?: { name: string; required?: boolean }[];
   iosInfoPlist?: Record<string, string>;
+  iosPackages?: { name: string; url: string; revision?: string; from?: string; product?: string }[];
+  iosEntitlements?: Record<string, boolean>;
+  iosFrameworks?: string[];
   androidViewBinder?: string;
   iosModuleFactory?: string;
   iosModuleFactoryClass?: string;
@@ -42,7 +47,7 @@ export function moduleConfig(name: string): ModuleConfig {
   const file = path.join(modulesDir, name, 'module.json');
   if (!existsSync(file)) return {};
   const config = JSON.parse(readFileSync(file, 'utf8'));
-  if (config.nativeBuild !== undefined && config.nativeBuild !== 'bazel') throw new Error(`${file}: unsupported nativeBuild`);
+  if (config.nativeBuild !== undefined && !['bazel', 'host'].includes(config.nativeBuild)) throw new Error(`${file}: unsupported nativeBuild`);
   if (config.iosModuleName !== undefined && !/^[A-Za-z][A-Za-z0-9_]*$/.test(config.iosModuleName)) {
     throw new Error(`${file}: invalid iosModuleName`);
   }
@@ -239,6 +244,43 @@ const eagerSideEffectRequires: Plugin = {
   },
 };
 
+/** Star reexports enumerate an external module before reading any of its properties. */
+function eagerStarReexports(plugin: ValdiTsPlugin): Plugin {
+  return {
+    name: 'eager-star-reexports',
+    renderChunk(code, chunk) {
+      const sources = new Set([...chunk.moduleIds, ...(chunk.facadeModuleId ? [chunk.facadeModuleId] : [])]);
+      const reexports = new Set<string>();
+      for (const id of sources) {
+        const source = plugin.program().getSourceFile(id);
+        for (const statement of source?.statements ?? []) {
+          if (ts.isExportDeclaration(statement) && !statement.isTypeOnly && !statement.exportClause &&
+              statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)) {
+            reexports.add(statement.moduleSpecifier.text);
+          }
+        }
+      }
+      if (!reexports.size) return null;
+      let edited: RolldownMagicString | undefined;
+      const visit = (node: any) => {
+        if (!node || typeof node !== 'object') return;
+        if (node.type === 'CallExpression' && node.callee.type === 'Identifier' && node.callee.name === 'require' &&
+            node.arguments.length === 1 && node.arguments[0].type === 'Literal' &&
+            reexports.has(node.arguments[0].value)) {
+          edited ??= new RolldownMagicString(code);
+          edited.appendLeft(node.arguments[0].end, ', true');
+        }
+        for (const value of Object.values(node)) {
+          if (Array.isArray(value)) value.forEach(visit);
+          else if (value && typeof value === 'object') visit(value);
+        }
+      };
+      visit(this.parse(code));
+      return edited ?? null;
+    },
+  };
+}
+
 /**
  * The module's JavaScript, named as in its archive: a CommonJS file per source file (`src/routes.js`), and the npm
  * code they import split as rolldown splits code between entries: what one file alone imports is bundled into it,
@@ -264,7 +306,7 @@ export async function buildModule(module: ValdiModule, plugin: ValdiTsPlugin, mi
     // `require("./routes")`; the archive entries get the .js back.
     entryFileNames: '[name]',
     chunkFileNames: chunkName(module),
-    plugins: [eagerSideEffectRequires],
+    plugins: [eagerSideEffectRequires, eagerStarReexports(plugin)],
     // As TypeScript's CommonJS: Valdi modules default-import each other through it, and a default export is
     // exports.default even when it is the only export (res.js).
     esModule: true,

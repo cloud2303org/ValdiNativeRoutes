@@ -1,5 +1,7 @@
 package io.valdiroutes.app
 
+import io.valdiroutes.app_ui.AppUIPromise
+
 import com.snap.valdi.exceptions.ValdiException
 import com.snap.valdi.exceptions.valdiErrorCode
 import com.snap.valdi.promise.CppPromiseCallback

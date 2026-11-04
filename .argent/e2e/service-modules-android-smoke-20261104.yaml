@@ -1,0 +1,29 @@
+# Demo credentials only; start signed out and finish signed out.
+steps:
+  - launch: io.valdiroutes.app
+  - await: { visible: { id: login-account }, timeout: 15000 }
+  - await: { idle: true }
+  - type: { into: { id: login-account }, text: modules, submit: false }
+  - type: { into: { id: login-password }, text: demo }
+  - tool: button
+    args: { button: back }
+  - tap: { text: 登录 }
+  - await: { visible: { text: Valdi + Compose Nav3 }, timeout: 15000 }
+  - await: { idle: true }
+  - assert: { visible: { text: 首页打开过 } }
+  - launch: io.valdiroutes.app
+  - await: { visible: { text: Valdi + Compose Nav3 }, timeout: 15000 }
+  - await: { idle: true }
+  - tap: { text: 退出登录 }
+  - await: { visible: { text: 退出登录？ } }
+  - await: { idle: true }
+  - tap: { text: 取消 }
+  - await: { hidden: { text: 退出登录？ } }
+  - await: { visible: { text: Valdi + Compose Nav3 } }
+  - await: { idle: true }
+  - tap: { text: 退出登录 }
+  - await: { visible: { text: 退出登录？ } }
+  - await: { idle: true }
+  - tap: { text: 确定 }
+  - await: { visible: { id: login-account }, timeout: 15000 }
+  - await: { idle: true }

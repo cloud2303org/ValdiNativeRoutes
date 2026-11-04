@@ -8,7 +8,7 @@ import ts from 'typescript';
 import { codegenModules, generateNativeCode, nativeSourceFiles } from './codegen/index';
 import { appModule } from './pipeline';
 
-const app = appModule('app_pages');
+const app = appModule('mmkv');
 function runtime() {
   const context = vm.createContext({});
   const requireApp = createRequire(path.join(app.dir, 'package.json'));
@@ -21,7 +21,11 @@ function runtime() {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
     }).outputText;
     vm.runInContext(`(function(require,module,exports){${output}\n})`, context)(
-      (name: string) => name.startsWith('.') ? load(path.resolve(path.dirname(file), `${name}.ts`)) : requireApp(name),
+      (name: string) => {
+        if (name === './MMKV') return { getHost() { throw Error('native storage is not installed'); } };
+        if (name.startsWith('native_common/')) return load(path.join(appModule('native_common').dir, name.slice('native_common/'.length) + '.ts'));
+        return name.startsWith('.') ? load(path.resolve(path.dirname(file), `${name}.ts`)) : requireApp(name);
+      },
       module, module.exports,
     );
     return module.exports;
@@ -96,7 +100,7 @@ test('unrepresentable roots and cycles fail before calling native', () => {
 });
 
 test('real generator exports structured storage request/reply signatures on all native targets', () => {
-  const target = codegenModules().app_pages;
+  const target = codegenModules().mmkv;
   const code = generateNativeCode(target);
   const platform = (name: 'android' | 'ios' | 'cpp') => [...nativeSourceFiles(target, code, name)].map(([, source]) => source).join('\n');
   const android = platform('android');

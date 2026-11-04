@@ -91,7 +91,7 @@ VALDI_SWIFT_TYPECHECK=1 node node_modules/tsx/dist/cli.mjs --test swift.test.ts
 模块原生库默认构建 arm64 模拟器；Xcode 真机构建时会根据 `SDK_NAME`/`PLATFORM_NAME`
 选择设备架构，也可显式设置 `VALDI_IOS_PLATFORM=device`。Release 配置使用优化编译。
 Swift 库与 ObjC 库一起汇入 `libvaldi_modules_ios.a`，宿主保留动态注册需要的 Swift 对象。
-额外的第三方原生 framework、资源、entitlements 仍需在宿主显式配置。
+模块可通过平台元数据贡献原生依赖、资源和 entitlements；签名团队和实际平台授权仍由宿主管理。
 
 ## 已迁移的 Bluetooth 模块
 
@@ -102,7 +102,7 @@ Swift 库与 ObjC 库一起汇入 `libvaldi_modules_ios.a`，宿主保留动态�
 ```json
 {
   "valdi": {
-    "modules": ["app_pages", "bluetooth", "calculator", "valdi_webview"]
+    "modules": ["app_pages", "app_ui", "bluetooth", "calculator", "mmkv", "native_common", "nfc", "permissions", "valdi_webview", "wifi"]
   }
 }
 ```
@@ -123,15 +123,27 @@ WebView 演示同样依赖 `valdi_webview`；停用时需一起移除页面和�
 避免上一次构建留下的文件混入包内。修改名单后重建 App，并重启已经运行的 `pnpm dev`。
 外部 npm 依赖和 Valdi runtime 内置模块不使用这份名单。
 
-蓝牙专属 Android 权限/feature、iOS `NSBluetoothAlwaysUsageDescription` 由其 `module.json`
-贡献，停用后不再合入 App。Android 主 Manifest 与 iOS 基础 Info.plist 保留 App 自己的配置；
-共享定位权限仍属于宿主 Wi-Fi 等能力，不能随蓝牙一起删除。iOS entitlements、签名、
-第三方 framework 和 SwiftPM 配置仍由宿主管理。
+Android 权限/feature、模块自己的 Manifest application 节点、资源和依赖，iOS 隐私说明、系统 framework、SwiftPM 包及 entitlements，均按启用名单合入。共享定位权限由 Wi-Fi 和蓝牙分别贡献，相同声明合并，冲突明确失败；签名团队仍属于宿主。
 
-Wi-Fi、NFC、权限、MMKV 存储和 AppUI 目前仍属于 `app_pages` 与应用宿主，
-尚未成为可单独开关的模块。仅从名单移除 Bluetooth 不会移除这些能力。
-后续拆分必须同时迁移接口、原生实现、初始化与平台依赖；尤其 MMKV 的
-iOS SwiftPM 依赖当前在 `ios/project.yml`，还不随模块名单切换。
+### 五个服务模块
+
+| 模块 ID | 实现与依赖 | 直接模块依赖 |
+| --- | --- | --- |
+| `mmkv` | 同步结构化存储，Android MMKV 2.4.3 / iOS 固定 revision 的 MMKV | `native_common` |
+| `permissions` | 共享权限队列及原生系统设置入口，Android Activity 权限结果 | `native_common` |
+| `wifi` | 原有 Android/iOS Wi-Fi 核心、权限、iOS HotspotConfiguration / wifi-info | `permissions`, `native_common` |
+| `nfc` | 原有 Android reader mode 核心；iOS 保持不支持 | `permissions`, `native_common` |
+| `app_ui` | 弹窗、菜单、选择器、扫码、附件、Toast/Loading 和原生展示控件 | `native_common` |
+
+`native_common` 只提供共享的 TS 数据校验和辅助函数，没有原生工厂。业务仍可从 `app_pages/src/api` 调用原有 API，原路径保留为转发出口；独立消费者可直接引用对应服务模块。正常运行通过模块工厂获取原生 Host，无需再由 `ValdiHost` 逐个注入。旧安装函数仅保留为显式兼容覆盖入口。
+
+这五项使用 `nativeBuild: "host"`：Node 生成 TS 产物及 Kotlin/Objective-C 契约，选中的原生目录由 Gradle/Xcode 编译。这样保留现有 Compose/UIKit 和 SwiftPM 集成，无需复制运行时。蓝牙、Calculator、WebView 继续使用 `nativeBuild: "bazel"` 的独立库方式。
+
+本轮拆分的构建、回归和模拟器验证边界见 [服务模块](service-modules.md)。
+
+Android 的模块工厂在注册时创建并保留，权限、Wi-Fi、NFC 能观察第一个 Activity 生命周期。宿主通过 permissions 工厂的 `requireHost()` 借出权限 launcher。AppUI 的页面归属、关闭及展示时机仍由导航宿主通知，导航本身不属于服务模块。iOS 的图片加载器由宿主通过 `AppUI.imageLoader` 提供，沿用原来的缓存与传输策略。
+
+停用前需移除业务和原生宿主的对应引用；保留引用会明确报错，不会偷偷启用模块。生成的 `ios/Generated/Modules.yml` 管理所选源目录、SwiftPM 和系统框架，`AppEntitlements.entitlements` 与 `AppInfo.plist` 管理平台声明。Android 主 Manifest 和 iOS 基础 plist 不再固定声明这五项服务的专属配置。选中的 AppUI 文件 Provider 及相应 XML 随模块生成。
 
 `valdi/modules/bluetooth` 实际通过上面的 `polyglot_bridge_module` 命令创建，
 再用已有 BLE 业务替换模板里的 Calculator 示例。它使用相同的 Node 编译、绑定生成、
@@ -140,7 +152,7 @@ Bazel 原生库和模块工厂注册流程，没有独立的 BLE 构建入口。
 - `src/`：公共 API、参数校验、中心/外设模式、事件分发及原生声明。
 - `android/`：Kotlin 工厂、适配和 BLE 核心。
 - `ios/`：直接实现生成的 Swift 协议及模块工厂，CoreBluetooth 核心随模块编译。
-- `App`：保留 Manifest/Info.plist 权限说明，以及与 Wi-Fi/NFC 共用的权限服务。
+- `App`：选择使用的模块、通知宿主生命周期，并向蓝牙初始化传入独立权限服务。
 
 App 在其长期持有的启动作用域初始化一次：
 
@@ -221,13 +233,14 @@ pnpm build:android
 
 ## 接入边界
 
-- `module.json` 用 `nativeBuild: "bazel"` 选择新规则，`iosModuleName` 必须与 BUILD 声明一致。
+- `module.json` 用 `nativeBuild: "bazel"` 选择独立原生库，或用 `nativeBuild: "host"` 选择宿主编译原生源目录；`iosModuleName` 必须与 BUILD 声明一致。
 - Node 的 `module-build.ts` 在临时目录生成 tsconfig、资源声明和绑定，不向源模块或宿主绑定目录写文件。
 - TS 模块依赖通过 `deps` 指定其他模块的 `_compiled` target，规则传递源码输入和资源类型声明。
   原生库依赖分别由 `android_deps` / `ios_deps` 声明。calculator 本身不依赖 app_pages。
   Android 第三方库还需在 `module.json` 的 `androidDependencies` 中列出 Maven 坐标，
-  宿主 Gradle 会读取这些坐标；它不会自动解析 Bazel 依赖图。iOS 第三方 framework、
-  SwiftPM 依赖和资源仍需在宿主配置。
+  宿主 Gradle 会读取这些坐标；它不会自动解析 Bazel 依赖图。BOM 放在 `androidPlatforms`。
+  `iosFrameworks`、`iosPackages` 和 `iosEntitlements` 分别贡献系统框架、SwiftPM 包和布尔 entitlements。
+  SwiftPM 版本使用固定 `revision` 或 `from`，有冲突时生成失败。
 - Android 由 `scripts/native-modules.mjs` 生成工厂和 AttributesBinder 注册入口，不依赖上游注解处理器。
 - iOS 保留模板的 factory / protocol 结构。已有 XCFramework 隐藏了
   `VALDI_REGISTER_MODULE()` 调用的 C 注册函数，因此由模块导出工厂创建函数，宿主通过公开的

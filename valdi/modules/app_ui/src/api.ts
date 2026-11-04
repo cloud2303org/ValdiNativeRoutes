@@ -8,7 +8,7 @@ import {
   PresentationReply,
   ScanCodeReply,
 } from './AppUIHost';
-import * as schema from './schemas';
+import * as schema from 'native_common/src/pickerSchemas';
 
 export interface ApiSuccess {
   errMsg: string;

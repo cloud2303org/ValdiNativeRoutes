@@ -1,8 +1,8 @@
 # AppUI typed Promise contract
 
-`valdi/modules/app_pages/src/AppUIHost.ts` is the native capability boundary for Android and iOS.
+`valdi/modules/app_ui/src/AppUIHost.ts` is the native capability boundary for Android and iOS.
 `AppUIHost` uses the existing `@ExportProxy` generator path used by `BleHost` and `PermissionHost`. Its native names
-remain `VRAppUIHost` and `io.valdiroutes.pages.AppUIHost`. Request/reply models and `installAppUI` retain their names
+are `VRAppUIHost` and `io.valdiroutes.app_ui.AppUIHost`. Request/reply models and `installAppUI` retain their names
 and fields. This replaces the old `done(error, fallbackReply)` boundary; the public `api` methods retain their
 arguments, results, validation and `ApiError` behavior.
 
@@ -95,12 +95,12 @@ Run from `tools/valdi-rolldown`, with the repository's existing dependencies ins
 with other canonical generators/builders in the shared checkout:
 
 ```sh
-node node_modules/tsx/dist/cli.mjs codegen.ts app_pages \
+node node_modules/tsx/dist/cli.mjs codegen.ts app_ui \
   --kotlin-out ../../android/app/generated/valdi \
   --objc-out ../../ios/Generated/valdi --objc-framework ValdiRuntime \
   --cpp-out ../../valdi/native/generated
 
-node node_modules/tsx/dist/cli.mjs codegen.ts app_pages \
+node node_modules/tsx/dist/cli.mjs codegen.ts app_ui \
   --kotlin-out ../../android/app/generated/valdi \
   --objc-out ../../ios/Generated/valdi --objc-framework ValdiRuntime \
   --cpp-out ../../valdi/native/generated --check
@@ -110,13 +110,13 @@ node node_modules/tsx/dist/cli.mjs --test appui-promise.test.ts
 
 The real generator writes seven canonical files:
 
-- `android/app/generated/valdi/app_pages.kt`
-- `ios/Generated/valdi/app_pages/app_pages.h`
-- `ios/Generated/valdi/app_pages/app_pages.m`
-- `ios/Generated/valdi/app_pagesTypes/app_pagesTypes.h`
-- `ios/Generated/valdi/app_pagesTypes/app_pagesTypes.m`
-- `valdi/native/generated/valdi_modules/app_pages/app_pages.hpp`
-- `valdi/native/generated/valdi_modules/app_pages/app_pages.cpp`
+- `android/app/generated/valdi/app_ui.kt`
+- `ios/Generated/valdi/AppUI/AppUI.h`
+- `ios/Generated/valdi/AppUI/AppUI.m`
+- `ios/Generated/valdi/AppUITypes/AppUITypes.h`
+- `ios/Generated/valdi/AppUITypes/AppUITypes.m`
+- `valdi/native/generated/valdi_modules/app_ui/app_ui.hpp`
+- `valdi/native/generated/valdi_modules/app_ui/app_ui.cpp`
 
 The focused tests execute real application compiler output for `AppUIHost.ts`, `api.ts`, `schemas.ts` and
 `storage.ts`, using actual npm validation/date dependencies and supplying native services at their boundary.

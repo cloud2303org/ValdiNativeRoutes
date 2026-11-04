@@ -2,9 +2,10 @@ import { Component } from 'valdi_core/src/Component';
 import { Style } from 'valdi_core/src/Style';
 import { View } from 'valdi_tsx/src/NativeTemplateElements';
 import * as v from 'valibot';
-import type { PickerOption } from './AppUIHost';
+import type { PickerOption } from 'app_ui/src/AppUIHost';
 import type { ColumnWheelConfig, TimeWheelConfig, TreeWheelConfig } from './WheelHost';
-import type { DatePickMode, TreeNode } from './schemas';
+import type { DatePickMode } from 'native_common/src/pickerSchemas';
+import type { TreeNode } from './schemas';
 import * as schema from './schemas';
 
 export type { TreeNode } from './schemas';

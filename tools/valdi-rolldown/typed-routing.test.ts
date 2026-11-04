@@ -201,7 +201,7 @@ test('startup stays synchronous, installs error handler first, initializes servi
         setCatchAllUncaughtErrorHandler: () => events.push('handler'),
       },
       'bluetooth/src/index': { initializeBluetooth: () => events.push('bluetooth') },
-      './permissions/index': {},
+      'permissions/src/index': {},
       './api': { api: {} },
       './auth': {
         installAuth: () => events.push('auth'),
@@ -265,7 +265,7 @@ test('pinned lazy ModuleLoader publishes fresh routes after hot unload and dispo
       exports.setCatchAllUncaughtErrorHandler = () => events.push('handler');
     `],
     ['bluetooth/src/index', `exports.initializeBluetooth = () => events.push('bluetooth');`],
-    ['app_pages/src/permissions/index', ''],
+    ['permissions/src/index', ''],
     ['app_pages/src/api', `exports.api = {};`],
     ['app_pages/src/db', `exports.initializeAppDb = () => events.push('db');`],
     ['app_pages/src/theme', `exports.installTheme = () => events.push('theme');`],

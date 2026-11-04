@@ -1,7 +1,7 @@
 import { setCatchAllUncaughtErrorHandler, UncaughtErrorHandlerResult } from 'valdi_core/src/UncaughtErrorHandler';
 import { getModuleLoader } from 'valdi_core/src/ModuleLoaderGlobal';
 import { initializeBluetooth } from 'bluetooth/src/index';
-import * as permissions from './permissions/index';
+import * as permissions from 'permissions/src/index';
 import { api } from './api';
 import type { TokenStore } from './auth';
 import { initializeAppDb } from './db';

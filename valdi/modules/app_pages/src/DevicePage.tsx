@@ -3,12 +3,12 @@ import { systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
 import { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
 import { api } from './api';
 import { Button } from './Button';
-import type { NFCDiscoveredCallback } from './nfc/adapter';
+import type { NFCDiscoveredCallback } from 'nfc/src/adapter';
 import { PageContext, PageViewModel } from './Page';
 import { Page } from './PageComponent';
 import { PageHeader } from './PageHeader';
 import { Router } from './navigation';
-import type { GetWifiListCallback } from './wifi/wechat';
+import type { GetWifiListCallback } from 'wifi/src/wechat';
 
 interface State {
   log: string[];

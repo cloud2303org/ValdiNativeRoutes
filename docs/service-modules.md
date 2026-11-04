@@ -2,7 +2,8 @@
 
 MMKV, permissions, Wi-Fi, NFC and AppUI are local modules under `valdi/modules/`.
 Their existing Android/iOS implementations are preserved; `app_pages` remains the
-consumer and retains forwarding exports for existing imports.
+consumer and imports the service modules directly. Legacy forwarding files under
+`app_pages/src/` have been removed.
 
 | Module | Responsibility | Required modules |
 | --- | --- | --- |
@@ -37,6 +38,10 @@ See [custom module configuration](custom-modules.md) and the
 [source-move handoff](../valdi/modules/native_common/SPLIT_INTEGRATION.md).
 
 ## Validation on November 4, 2026
+
+App-owned wheel validation remains in `app_pages/src/schemas.ts`; common request
+schemas are imported directly from `native_common/src/pickerSchemas`. AppUI also
+uses that direct import instead of its redundant schema forwarding file.
 
 The source review covered service lifetimes, registration, generated contracts,
 platform declarations and conditional packaging. Corrections include unique
@@ -95,3 +100,10 @@ Local execution logs, failed attempts and artifact hashes are retained under
 the ignored `.ci/service-modules-20261104/` directory and referenced temporary
 output directories. Native regression and Android emulator results are recorded
 there with their exact validation boundary.
+
+The subsequent forwarding cleanup removed 21 legacy application entry files and
+AppUI's redundant schema entry. The complete JS suite, application typecheck and
+canonical codegen check passed again. Actual Debug/Release module compilation
+confirmed those entries are absent from both application and AppUI archives.
+Native implementations and generated contracts did not change; the native and
+simulator results above precede this import-only cleanup.

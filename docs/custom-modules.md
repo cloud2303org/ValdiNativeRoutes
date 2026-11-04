@@ -135,7 +135,7 @@ Android 权限/feature、模块自己的 Manifest application 节点、资源和
 | `nfc` | 原有 Android reader mode 核心；iOS 保持不支持 | `permissions`, `native_common` |
 | `app_ui` | 弹窗、菜单、选择器、扫码、附件、Toast/Loading 和原生展示控件 | `native_common` |
 
-`native_common` 只提供共享的 TS 数据校验和辅助函数，没有原生工厂。业务仍可从 `app_pages/src/api` 调用原有 API，原路径保留为转发出口；独立消费者可直接引用对应服务模块。正常运行通过模块工厂获取原生 Host，无需再由 `ValdiHost` 逐个注入。旧安装函数仅保留为显式兼容覆盖入口。
+`native_common` 只提供共享的 TS 数据校验和辅助函数，没有原生工厂。业务可从 `app_pages/src/api` 使用应用组合的 API；类型、权限和辅助函数直接从对应模块导入，旧服务路径的兼容转发文件已删除。正常运行通过模块工厂获取原生 Host，无需再由 `ValdiHost` 逐个注入。旧安装函数仅保留为显式兼容覆盖入口。
 
 这五项使用 `nativeBuild: "host"`：Node 生成 TS 产物及 Kotlin/Objective-C 契约，选中的原生目录由 Gradle/Xcode 编译。这样保留现有 Compose/UIKit 和 SwiftPM 集成，无需复制运行时。蓝牙、Calculator、WebView 继续使用 `nativeBuild: "bazel"` 的独立库方式。
 
@@ -158,7 +158,7 @@ App 在其长期持有的启动作用域初始化一次：
 
 ```ts
 import { initializeBluetooth, bluetoothApi } from 'bluetooth/src/index';
-import * as permissions from './permissions/index';
+import * as permissions from 'permissions/src/index';
 
 initializeBluetooth(permissions);
 const bluetooth = bluetoothApi();

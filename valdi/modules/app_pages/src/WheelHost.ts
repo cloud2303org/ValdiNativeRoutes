@@ -1,4 +1,4 @@
-import type { PickerOption } from './AppUIHost';
+import type { PickerOption } from 'app_ui/src/AppUIHost';
 
 /**
  * Data passed atomically to the embedded native column picker.

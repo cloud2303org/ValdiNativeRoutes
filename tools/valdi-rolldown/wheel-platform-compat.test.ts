@@ -47,7 +47,7 @@ function fixture(typesRoot: string, source?: string) {
   else {
     // Compile the three actual components and their actual schemas, including
     // callback/config types. AppUIHost and schemas' type-only imports stay real.
-    for (const name of ['WheelPickers.tsx', 'WheelHost.ts', 'schemas.ts', 'AppUIHost.ts']) {
+    for (const name of ['WheelPickers.tsx', 'WheelHost.ts', 'schemas.ts']) {
       const file = path.join(process.env.WHEEL_SHARED_SOURCE_ROOT ?? path.join(root, 'valdi/modules/app_pages/src'), name);
       hash(file);
       writeFileSync(path.join(dir, 'src', name), readFileSync(file));

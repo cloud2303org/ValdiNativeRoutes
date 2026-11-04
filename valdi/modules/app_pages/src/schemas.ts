@@ -10,7 +10,6 @@ import {
   year,
   yearMessage,
 } from 'native_common/src/pickerSchemas';
-export * from 'native_common/src/pickerSchemas';
 
 // The wheel components (WheelPickers.tsx) take the same options and years as the presented pickers. A value they can't
 // show is not an error there: it becomes the first option, the first path, or the current date and time.

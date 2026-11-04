@@ -1,5 +1,5 @@
 import type { JsonObject } from './config';
-import { snapshotStructuredValue } from '../structuredData';
+import { snapshotStructuredValue } from 'native_common/src/structuredData';
 
 /** Routes require an outer dictionary; nested values use the same strict snapshot as other native bridges. */
 export function snapshotRouteData(value: unknown): JsonObject {

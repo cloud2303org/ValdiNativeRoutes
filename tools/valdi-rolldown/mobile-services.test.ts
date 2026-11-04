@@ -8,7 +8,10 @@ import ts from 'typescript';
 import { valdiSourceRoot } from './pipeline';
 
 const modules = path.resolve(import.meta.dirname, '../../valdi/modules');
-const app = (name: string) => path.join(modules, 'app_pages/src', name.endsWith('.ts') ? name : `${name}.ts`);
+const service = (name: string) => {
+  const [module, ...file] = name.split('/');
+  return path.join(modules, module, 'src', `${file.join('/')}.ts`);
+};
 const bluetooth = (name: string) => path.join(modules, 'bluetooth/src', name.endsWith('.ts') ? name : `${name}.ts`);
 const requireApp = createRequire(path.join(modules, 'app_pages/package.json'));
 const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value));
@@ -65,8 +68,8 @@ function runtime(platform: 'android' | 'ios', sdk = 36, device?: object, legacyP
     },
     async openSettings() {},
   };
-  const permissions = load(app('permissions/index'));
-  load(app('permissions/PermissionHost')).installPermissionHost(host, sdk);
+  const permissions = load(service('permissions/index'));
+  load(service('permissions/PermissionHost')).installPermissionHost(host, sdk);
   const blePermissions = load(bluetooth('permissions'));
   blePermissions.configureBluetoothPermissions(legacyProvider ? {
     isAndroid: permissions.isAndroid,
@@ -77,7 +80,7 @@ function runtime(platform: 'android' | 'ios', sdk = 36, device?: object, legacyP
   return {
     load, permissions, blePermissions, host, grants, checks, prompts,
     ble: load(bluetooth('permission')),
-    wifi: () => load(app('wifi/permission')),
+    wifi: () => load(service('wifi/permission')),
   };
 }
 
@@ -90,8 +93,8 @@ test('Owned service sources pass strict noEmit against the real upstream Device 
   const upstream = valdiSourceRoot();
   assert.ok(upstream, 'Prepare Valdi sources or set VALDI_SOURCE_ROOT');
   const program = ts.createProgram([
-    app('permissions/index'), app('permissions/PermissionHost'), app('wifi/permission'),
-    app('nfc/adapter'), app('nfc/native'), app('nfc/NfcHost'), app('nfc/permission'),
+    service('permissions/index'), service('permissions/PermissionHost'), service('wifi/permission'),
+    service('nfc/adapter'), service('nfc/native'), service('nfc/NfcHost'), service('nfc/permission'),
     bluetooth('permission'), bluetooth('permissions'),
   ], {
     noEmit: true,
@@ -183,7 +186,7 @@ test('Android Wi-Fi SDK sets and Android 12 precise location pairing are preserv
 test('iOS Wi-Fi scan remains unavailable, connect approved and info uses serialized native location flow', async () => {
   const f = runtime('ios', 0);
   const calls: string[] = [];
-  f.load(app('wifi/WifiHost')).installWifiHost({
+  f.load(service('wifi/WifiHost')).installWifiHost({
     setEvents() {},
     async getLocationPermissionState() { calls.push('check'); return { status: 'denied', canAskAgain: true }; },
     async requestLocationPermission() { calls.push('request'); return granted; },
@@ -211,7 +214,7 @@ test('Android NFC retain discovery, host tech strings, byte copying and stale ha
     const calls: string[] = [];
     const reply = new Uint8Array([0, 0x90, 0]);
     let sent: Uint8Array | undefined;
-    f.load(app('nfc/NfcHost')).installNfcHost({
+    f.load(service('nfc/NfcHost')).installNfcHost({
       setEvents(value: any) { events = value; },
       async startDiscovery() { calls.push('start'); },
       async stopDiscovery() { calls.push('stop'); },
@@ -222,7 +225,7 @@ test('Android NFC retain discovery, host tech strings, byte copying and stale ha
         return reply.subarray(1);
       },
     });
-    const { createNFCAdapter, NFC_TECH } = f.load(app('nfc/adapter'));
+    const { createNFCAdapter, NFC_TECH } = f.load(service('nfc/adapter'));
     const adapter = createNFCAdapter();
     const discovered: any[] = [];
     adapter.onDiscovered((tag: any) => discovered.push(tag));
@@ -251,7 +254,7 @@ test('Android public NFC availability and permission paths preserve host state w
     const f = runtime(platform);
     let calls = 0;
     let state = { supported: true, enabled: true, foreground: true, permissionGranted: false };
-    f.load(app('nfc/NfcHost')).installNfcHost({
+    f.load(service('nfc/NfcHost')).installNfcHost({
       setEvents() {},
       async getAvailability() {
         calls++;
@@ -259,7 +262,7 @@ test('Android public NFC availability and permission paths preserve host state w
       },
       async startDiscovery() { assert.fail('Availability must not start discovery'); },
     });
-    const permission = f.load(app('nfc/permission'));
+    const permission = f.load(service('nfc/permission'));
     for (const next of [
       { supported: true, enabled: true, foreground: true, permissionGranted: false },
       { supported: true, enabled: true, foreground: true, permissionGranted: true },
@@ -280,11 +283,11 @@ test('Android public NFC availability and permission paths preserve host state w
 
 test('iOS public NFC availability and permission paths stay unavailable without native access', async () => {
   const f = runtime('ios', 0);
-  f.load(app('nfc/NfcHost')).installNfcHost({
+  f.load(service('nfc/NfcHost')).installNfcHost({
     setEvents() {},
     async getAvailability() { assert.fail('iOS must not query the native NFC host'); },
   });
-  const permission = f.load(app('nfc/permission'));
+  const permission = f.load(service('nfc/permission'));
   assert.deepEqual(plain(await permission.getNFCAvailability()), {
     supported: false, enabled: false, foreground: false, permissionGranted: false,
   });
@@ -297,11 +300,11 @@ test('iOS public NFC availability and permission paths stay unavailable without 
 test('Android public NFC permission paths retain native error mapping', async () => {
   for (const platform of ['android'] as const) {
     const f = runtime(platform);
-    f.load(app('nfc/NfcHost')).installNfcHost({
+    f.load(service('nfc/NfcHost')).installNfcHost({
       setEvents() {},
       async getAvailability() { throw new Error('E_NFC_13019:normal permission missing'); },
     });
-    const permission = f.load(app('nfc/permission'));
+    const permission = f.load(service('nfc/permission'));
     for (const method of ['getNFCAvailability', 'getNFCPermissionState', 'requestNFCPermission']) {
       await assert.rejects(permission[method](), (error: any) =>
         error.errCode === 13019 && error.errMsg === 'getNFCAvailability:fail user is not authorized');
@@ -312,9 +315,9 @@ test('Android public NFC permission paths retain native error mapping', async ()
 
 test('iOS NFC stays unsupported before native access', async () => {
   const ios = runtime('ios', 0);
-  const native = ios.load(app('nfc/native')).nativeNFC;
+  const native = ios.load(service('nfc/native')).nativeNFC;
   await assert.rejects(native.getAvailability(), /E_NFC_13000/);
   assert.throws(() => native.onDiscovered(() => {}), /E_NFC_13000/);
-  const adapter = ios.load(app('nfc/adapter')).createNFCAdapter();
+  const adapter = ios.load(service('nfc/adapter')).createNFCAdapter();
   await assert.rejects(adapter.startDiscovery(), (error: any) => error.errCode === 13000);
 });

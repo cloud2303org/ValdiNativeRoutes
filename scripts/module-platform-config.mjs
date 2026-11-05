@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { readAppConfig } from './app-config.mjs';
 
 const xml = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;')
   .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&apos;');
@@ -55,7 +56,7 @@ export function validatePlatformConfig(config, file) {
   }
 }
 
-export function syncModulePlatformConfig(root, modules) {
+export function syncModulePlatformConfig(root, modules, app = readAppConfig(root)) {
   const write = (file, content) => {
     if (existsSync(file) && readFileSync(file, 'utf8') === content) return;
     mkdirSync(path.dirname(file), { recursive: true });
@@ -110,7 +111,7 @@ export function syncModulePlatformConfig(root, modules) {
   const baseInfo = path.join(root, 'ios/ValdiRoutes/Info.plist');
   if (existsSync(baseInfo)) {
     const entries = entriesFor('iosInfoPlist');
-    const source = readFileSync(baseInfo, 'utf8');
+    const source = readFileSync(baseInfo, 'utf8').replace('$(VALDI_APP_DISPLAY_NAME)', () => xml(app.displayName));
     for (const key of entries.keys()) {
       if (source.includes(`<key>${key}</key>`)) throw new Error(`Module privacy key ${key} must not also be declared in the App base Info.plist.`);
     }
@@ -154,6 +155,6 @@ export function syncModulePlatformConfig(root, modules) {
         : []),
     ]);
   write(path.join(root, 'ios/Generated/Modules.yml'), `${JSON.stringify({
-    packages, targets: { ValdiRoutes: { sources, dependencies: [...dependencies.values()] } },
+    packages, targets: { [app.name]: { sources, dependencies: [...dependencies.values()] } },
   }, null, 2)}\n`);
 }

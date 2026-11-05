@@ -1,10 +1,11 @@
 // Unified developer entry points. Node dispatches on every host; platform details stay internal.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkDependencies, checkRuntime, checkSources, checkVision } from './prerequisites.mjs';
 import { chooseAndroidDevice, chooseIosSimulator } from './device.mjs';
+import { appBuildPaths, readAppConfig, syncAppConfig } from './app-config.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const rolldown = path.join(root, 'tools/valdi-rolldown');
@@ -266,6 +267,7 @@ function prebuild(options) {
   }
 
   const actions = [];
+  syncAppConfig(root);
   if (ensureDependencies(options)) actions.push('installed JS dependencies');
   if (ensureSources(options)) actions.push('fetched Valdi sources');
   if (ensureBindings(platform)) actions.push('regenerated native bindings');
@@ -295,34 +297,22 @@ function printPlan(plan, json) {
   console.log(`Prebuild plan (${plan.platform}):\n` + plan.steps.map(entry => `  ${entry.step}: ${entry.action}`).join('\n'));
 }
 
-function androidApplicationId() {
-  const text = readFileSync(path.join(root, 'android/app/build.gradle.kts'), 'utf8');
-  const match = /applicationId\s*=\s*"([^"]+)"/.exec(text);
-  if (!match) throw new Error('Cannot read applicationId from android/app/build.gradle.kts.');
-  return match[1];
-}
-
-function iosBundleId() {
-  const text = readFileSync(path.join(root, 'ios/project.yml'), 'utf8');
-  const match = /PRODUCT_BUNDLE_IDENTIFIER:\s*(\S+)/.exec(text);
-  if (!match) throw new Error('Cannot read PRODUCT_BUNDLE_IDENTIFIER from ios/project.yml.');
-  return match[1].trim();
-}
-
 function installAndLaunchAndroid(options) {
+  const applicationId = readAppConfig(root).android.applicationId;
   const { adb, device } = chooseAndroidDevice(options.device);
-  const apk = path.join(root, 'android/app/build/outputs/apk/debug/app-debug.apk');
+  const apk = appBuildPaths(root).androidApk;
   if (!existsSync(apk)) throw new Error(`Missing Debug APK: ${apk}. Build it first.`);
   console.log(`Installing on ${device.serial}...`);
   run(adb, ['-s', device.serial, 'install', '-r', '-d', apk]);
   if (options.noLaunch) return;
-  console.log(`Launching ${androidApplicationId()} on ${device.serial}...`);
-  run(adb, ['-s', device.serial, 'shell', 'monkey', '-p', androidApplicationId(), '-c', 'android.intent.category.LAUNCHER', '1']);
+  console.log(`Launching ${applicationId} on ${device.serial}...`);
+  run(adb, ['-s', device.serial, 'shell', 'monkey', '-p', applicationId, '-c', 'android.intent.category.LAUNCHER', '1']);
 }
 
 function installAndLaunchIos(options) {
+  const bundleId = readAppConfig(root).ios.bundleIdentifier;
   const simulator = chooseIosSimulator(options.device);
-  const app = path.join(root, 'ios/build/Build/Products/Debug-iphonesimulator/ValdiRoutes.app');
+  const app = appBuildPaths(root).iosApp;
   if (!existsSync(app)) throw new Error(`Missing simulator app: ${app}. Build it first.`);
   if (simulator.state !== 'Booted') {
     console.log(`Booting ${simulator.name} (${simulator.udid})...`);
@@ -332,8 +322,8 @@ function installAndLaunchIos(options) {
   console.log(`Installing on ${simulator.name}...`);
   run('xcrun', ['simctl', 'install', simulator.udid, app]);
   if (options.noLaunch) return;
-  console.log(`Launching ${iosBundleId()} on ${simulator.name}...`);
-  run('xcrun', ['simctl', 'launch', simulator.udid, iosBundleId()]);
+  console.log(`Launching ${bundleId} on ${simulator.name}...`);
+  run('xcrun', ['simctl', 'launch', simulator.udid, bundleId]);
 }
 
 function deviceCommand(platform, options) {
@@ -416,6 +406,7 @@ export function main(argv = process.argv.slice(2)) {
     return 0;
   }
   try {
+    readAppConfig(root);
     if (command === 'prebuild') return prebuild(options);
     if (command === 'android') return deviceCommand('android', options);
     if (command === 'ios') return deviceCommand('ios', options);

@@ -6,6 +6,7 @@
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
+app_id=$(node scripts/app-config.mjs read androidId)
 ios=${IOS_DEVICE:-642846B5-C399-4A1D-BAAE-58BA0110960C}
 # The remote emulator (AVD valdi_test, x86_64 with arm64 translation); adb connect it first.
 android=${ANDROID_DEVICE:-100.78.189.64:5555}
@@ -30,9 +31,9 @@ for platform in $platforms; do
     device=$android
     # Grant the runtime permissions up front: a system permission dialog (Bluetooth, Wi-Fi, camera) would cover the
     # app for every later test. A permission the system doesn't know or doesn't ask for is skipped.
-    for permission in $(adb -s "$device" shell dumpsys package io.valdiroutes.app |
+    for permission in $(adb -s "$device" shell dumpsys package "$app_id" |
       sed -n 's/^ *\(android\.permission\.[A-Z_]*\): granted=false.*/\1/p'); do
-      adb -s "$device" shell pm grant io.valdiroutes.app "$permission" 2>/dev/null || true
+      adb -s "$device" shell pm grant "$app_id" "$permission" 2>/dev/null || true
     done
     # A photo for the photo picker test (presentation-choose-photos), in the media store.
     if ! adb -s "$device" shell content query --uri content://media/external/images/media --projection _display_name |
@@ -43,6 +44,7 @@ for platform in $platforms; do
     fi
   fi
   echo "== $platform: $device"
-  argent e2e run "$test_path" --device "$device" "$@" || status=1
+  configured_test=$(node scripts/e2e-config.mjs "$platform" "$test_path")
+  argent e2e run "$configured_test" --device "$device" "$@" || status=1
 done
 exit $status

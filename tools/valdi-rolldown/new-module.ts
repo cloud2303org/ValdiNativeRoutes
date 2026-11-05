@@ -4,6 +4,7 @@ import path from 'node:path';
 import { syncNativeModuleRegistration } from '../../scripts/native-modules.mjs';
 import { appModule, appModules, root, valdiSourceRoot, writeTsconfig } from './pipeline';
 import { createModule, MODULE_TEMPLATES, type ModuleTemplate } from './scaffold';
+import { readAppConfig } from '../../scripts/app-config.mjs';
 
 const help = `Usage: pnpm new-module [name] [--template <template>] [--ios-language objc|swift] [--swiftui] [--android-context] [--skip-checks]
 
@@ -57,7 +58,10 @@ async function main() {
   if (!name) throw new Error(help);
   const sources = valdiSourceRoot();
   if (!sources) throw new Error('Pinned Valdi sources are missing. Run: node scripts/prepare-valdi.mjs');
-  const created = createModule({ root, sources, name, template: (template ?? 'ui_component') as ModuleTemplate, iosLanguage, swiftUI, androidContext });
+  const created = createModule({
+    root, sources, name, template: (template ?? 'ui_component') as ModuleTemplate,
+    iosLanguage, swiftUI, androidContext, naming: readAppConfig(root).native,
+  });
   const modules = appModules();
   const enabled = modules.some(module => module.name === created.name);
   if (!enabled) writeTsconfig(appModule(created.name), [...modules, appModule(created.name)]);

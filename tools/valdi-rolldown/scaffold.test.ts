@@ -8,6 +8,7 @@ import { unpack } from './archive';
 import { compileNodeModule } from './module-build';
 import { root, valdiSourceRoot } from './pipeline';
 import { createModule, MODULE_TEMPLATES } from './scaffold';
+import { sampleApp } from '../../scripts/tests/fixtures/app-config.mjs';
 
 test('every official module template compiles with the Node backend and preserves platform sources', async t => {
   const fixture = mkdtempSync(path.join(tmpdir(), 'valdi-scaffold-'));
@@ -52,7 +53,7 @@ test('every official module template compiles with the Node backend and preserve
     }
     assert.throws(() => createModule({ root: fixture, sources, name: created.name, template }), /already exists/);
   }
-  writeFileSync(path.join(fixture, 'package.json'), JSON.stringify({ valdi: { modules: MODULE_TEMPLATES.map(template => `sample_${template}`) } }));
+  writeFileSync(path.join(fixture, 'package.json'), JSON.stringify({ valdi: { app: sampleApp(), modules: MODULE_TEMPLATES.map(template => `sample_${template}`) } }));
   const modules = syncNativeModuleRegistration(fixture);
   assert.equal(modules.length, 2);
   assert.deepEqual(nativeModules(fixture), modules);
@@ -106,9 +107,48 @@ test('Swift bridge and SwiftUI templates generate independent native libraries a
       assert.match(view, /removeFromParent/);
     }
   }
-  writeFileSync(path.join(fixture, 'package.json'), JSON.stringify({ valdi: { modules: ['swift_math', 'swift_counter'] } }));
+  writeFileSync(path.join(fixture, 'package.json'), JSON.stringify({ valdi: { app: sampleApp(), modules: ['swift_math', 'swift_counter'] } }));
   syncNativeModuleRegistration(fixture);
   assert.match(readFileSync(path.join(fixture, 'ios/Generated/valdi/ValdiNativeModules.m'), 'utf8'), /VRSwiftMathModuleFactory/);
   assert.match(readFileSync(path.join(fixture, 'android/app/generated/valdi/ValdiNativeModules.kt'), 'utf8'), /CalculatorModuleFactoryImpl\(context.applicationContext\)/);
   assert.throws(() => createModule({ root: fixture, sources, name: 'bad_ui', template: 'polyglot_bridge_module', swiftUI: true }), /requires/);
+});
+
+test('project naming applies only to new modules and agrees with compiled native contracts', async t => {
+  const fixture = mkdtempSync(path.join(tmpdir(), 'valdi-project-scaffold-'));
+  t.after(() => rmSync(fixture, { recursive: true, force: true }));
+  const sources = valdiSourceRoot()!;
+  const app = sampleApp();
+  for (const [name, template, iosLanguage] of [
+    ['custom_math', 'polyglot_bridge_module', 'objc'],
+    ['custom_swift', 'polyglot_bridge_module', 'swift'],
+    ['custom_view', 'polyglot_view_module', 'objc'],
+  ] as const) {
+    const created = createModule({ root: fixture, sources, name, template, iosLanguage, naming: app.native });
+    const config = JSON.parse(readFileSync(path.join(created.directory, 'module.json'), 'utf8'));
+    assert.equal(config.androidClassPath, `com.example.host.modules.${name}`);
+    const out = path.join(fixture, 'out', name);
+    await compileNodeModule({
+      name, dir: created.directory, generatedDirs: [], nodeModules: path.join(root, 'valdi/node_modules'),
+    }, out, config.iosModuleName, 'debug', [], iosLanguage);
+    if (template === 'polyglot_bridge_module') {
+      assert.match(readFileSync(path.join(out, 'android', `${name}.kt`), 'utf8'),
+        new RegExp(`package com\\.example\\.host\\.modules\\.${name}`));
+    }
+    if (name === 'custom_math') {
+      assert.equal(config.iosModuleFactory, 'EXCustomMathCreateModuleFactory');
+      assert.match(readFileSync(path.join(created.directory, 'ios/EXCustomMathModuleFactory.m'), 'utf8'),
+        /EXCustomMathCalculatorModuleFactoryImpl/);
+      assert.match(readFileSync(path.join(out, 'ios/CustomMathTypes/CustomMathTypes.h'), 'utf8'),
+        /CustomMathCalculatorModule/);
+    } else if (name === 'custom_swift') {
+      assert.equal(config.iosModuleFactoryClass, 'EXCustomSwiftModuleFactory');
+      assert.match(readFileSync(path.join(out, 'ios/CustomSwiftTypes/CustomSwiftTypes.swift'), 'utf8'),
+        /protocol EXCustomSwiftCalculatorModule/);
+    } else {
+      assert.ok(existsSync(path.join(created.directory, 'ios/EXCustomViewNativeView.m')));
+      assert.match(readFileSync(path.join(created.directory, 'android/PolyglotNativeView.kt'), 'utf8'),
+        /package com\.example\.host\.modules\.custom_view/);
+    }
+  }
 });

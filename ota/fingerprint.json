@@ -26,6 +26,7 @@
   ],
   "android": [
     "android/app/src",
+    "scripts/app-config.mjs",
     "scripts/native-modules.mjs",
     "scripts/module-platform-config.mjs",
     "scripts/node-modules.mjs",
@@ -49,6 +50,7 @@
   ],
   "ios": [
     "ios/ValdiRoutes",
+    "scripts/app-config.mjs",
     "scripts/native-modules.mjs",
     "scripts/module-platform-config.mjs",
     "scripts/node-modules.mjs",

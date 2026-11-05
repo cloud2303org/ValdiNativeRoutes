@@ -14,8 +14,8 @@ function write(file: string, content: string) {
 }
 
 export function createModule({
-  root, sources, name, template, iosLanguage = 'objc', swiftUI = false, androidContext = false,
-}: { root: string; sources: string; name: string; template: ModuleTemplate; iosLanguage?: 'objc' | 'swift'; swiftUI?: boolean; androidContext?: boolean }): { name: string; directory: string } {
+  root, sources, name, template, iosLanguage = 'objc', swiftUI = false, androidContext = false, naming,
+}: { root: string; sources: string; name: string; template: ModuleTemplate; iosLanguage?: 'objc' | 'swift'; swiftUI?: boolean; androidContext?: boolean; naming?: { androidNamespace: string; iosPrefix: string } }): { name: string; directory: string } {
   if (!['objc', 'swift'].includes(iosLanguage)) throw new Error('Template iOS language must be objc or swift');
   if (iosLanguage === 'swift' && template === 'ui_component')
     throw new Error('--ios-language swift applies to polyglot templates; ui_component contains only TS/TSX');
@@ -207,6 +207,23 @@ node_valdi_module(
 )
 `);
   } else copied.delete('BUILD.bazel');
+  if (naming && template !== 'ui_component') {
+    // Only freshly generated template symbols are renamed; installed modules retain their ABI.
+    const rename = (text: string) => text
+      .replaceAll(`com.snap.modules.${name}`, `${naming.androidNamespace}.modules.${name}`)
+      .replaceAll(`${pascal}CreateModuleFactory`, `${naming.iosPrefix}${pascal}CreateModuleFactory`)
+      .replaceAll(`SCC${pascal}`, `${naming.iosPrefix}${pascal}`)
+      .replaceAll(`SC${pascal}`, `${naming.iosPrefix}${pascal}`)
+      .replaceAll(`VR${pascal}`, `${naming.iosPrefix}${pascal}`);
+    for (const [file, text] of [...copied]) {
+      copied.delete(file);
+      copied.set(rename(file), rename(text));
+    }
+    for (const [key, value] of Object.entries(config)) {
+      if (typeof value === 'string') config[key] = rename(value);
+    }
+    config.androidClassPath = `${naming.androidNamespace}.modules.${name}`;
+  }
   copied.set('module.json', JSON.stringify(config, null, 2) + '\n');
   copied.set('LICENSE', license);
   copied.set('TEMPLATE.md', `# ${name}

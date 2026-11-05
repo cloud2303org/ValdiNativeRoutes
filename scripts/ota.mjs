@@ -25,6 +25,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { nativeModuleInputs } from './native-modules.mjs';
+import { readAppConfig } from './app-config.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const inputs = JSON.parse(readFileSync(path.join(root, 'ota/fingerprint.json'), 'utf8'));
@@ -141,7 +142,10 @@ function fingerprintParts(platform, info) {
     config: info ? info.config : 'release',
     valdi: info ? info.valdi : valdiHash(),
     bindings: bindingsHash(platform),
-    native: digest(fileEntries([...new Set([...inputs[platform], ...nativeModuleInputs(platform)])])),
+    native: digest([
+      ...fileEntries([...new Set([...inputs[platform], ...nativeModuleInputs(platform)])]),
+      ['app-identity', JSON.stringify(readAppConfig(root))],
+    ]),
   };
   const fingerprint = sha256(`${platform}\n${parts.config}\n${parts.valdi}\n${parts.bindings}\n${parts.native}\n`).slice(0, 32);
   return { fingerprint, ...parts };

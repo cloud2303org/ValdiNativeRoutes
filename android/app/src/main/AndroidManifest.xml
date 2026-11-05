@@ -8,7 +8,7 @@
 
     <application
         android:name=".App"
-        android:label="Valdi 路由"
+        android:label="@string/valdi_app_name"
         android:networkSecurityConfig="@xml/network_security_config"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"

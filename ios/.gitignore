@@ -1,4 +1,4 @@
 # Generated: `xcodegen` and scripts/export-ios.sh
-ValdiRoutes.xcodeproj/
+*.xcodeproj/
 Frameworks/
 build/

@@ -21,6 +21,7 @@ ota/dist/
 # Argent e2e secrets ({{secret:NAME}} in .argent/e2e): local only.
 .argent/secrets.env
 .argent/recordings/
+.argent/generated/
 
 # CI logs, upstream comparison reports and simulator archives.
 /.ci/
@@ -28,6 +29,7 @@ ota/dist/
 /ios/Generated/AppInfo.plist
 /ios/Generated/AppEntitlements.entitlements
 /ios/Generated/Modules.yml
+/ios/Generated/App.yml
 /.tools/
 /module-build/win.local.bazelrc
 /valdi/win.local.bazelrc

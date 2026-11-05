@@ -1,9 +1,9 @@
-# Generate the Xcode project with `xcodegen` (brew install xcodegen); ValdiRoutes.xcodeproj is not checked in.
-name: ValdiRoutes
+# Generate with node scripts/ios-project.mjs; application identity comes from package.json.
+name: ${VALDI_APP_NAME}
 include:
   - Generated/Modules.yml
+  - Generated/App.yml
 options:
-  bundleIdPrefix: io.valdiroutes
   deploymentTarget:
     iOS: "16.0"
 packages:
@@ -16,7 +16,7 @@ settings:
     SWIFT_VERSION: "5.0"
     DEVELOPMENT_TEAM: ""
 targets:
-  ValdiRoutes:
+  ${VALDI_APP_NAME}:
     type: application
     platform: iOS
     sources:
@@ -100,24 +100,8 @@ targets:
           if [ "$CONFIGURATION" = "Release" ] && [ -n "$VALDI_OTA_URL" ]; then record="--record"; fi
           node "$SRCROOT/../scripts/ota.mjs" app-info ios "$SRCROOT/Frameworks/valdi_ota.json" "$MARKETING_VERSION" \
             "$VALDI_OTA_URL" $record > "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/valdi_ota.json"
-    info:
-      path: ValdiRoutes/Info.plist
-      properties:
-        UILaunchScreen: {}
-        # UIKit app and scene delegates (App.swift); the stack is a UINavigationController.
-        UIApplicationSceneManifest:
-          UIApplicationSupportsMultipleScenes: false
-          UISceneConfigurations:
-            UIWindowSceneSessionRoleApplication:
-              - UISceneConfigurationName: Default
-                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
-        CFBundleDisplayName: ValdiRoutes
-        # The app version over-the-air packages target (scripts/ota.mjs).
-        CFBundleShortVersionString: $(MARKETING_VERSION)
-        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.valdiroutes.app
         MARKETING_VERSION: "1.0"
         CODE_SIGN_STYLE: Automatic
         # Update server of ValdiOta.swift; empty turns update checks off.
@@ -157,7 +141,7 @@ targets:
           - $(SRCROOT)/../vision/vendor/install/ios/VisionDependencies.xcframework/ios-arm64-simulator/Headers/opencv4
           - $(SRCROOT)/../vision/vendor/install/ios/VisionDependencies.xcframework/ios-arm64-simulator/Headers/ncnn
 schemes:
-  ValdiRoutes:
+  ${VALDI_APP_NAME}:
     build:
       targets:
-        ValdiRoutes: all
+        ${VALDI_APP_NAME}: all

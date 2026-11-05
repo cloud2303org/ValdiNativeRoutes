@@ -29,6 +29,9 @@ scripts/
 
 ## 运行
 
+应用名、Android applicationId、iOS Bundle ID 与新模块命名默认值统一在根目录
+`package.json` 的 `valdi.app` 配置，见[应用配置说明](docs/app-configuration.md)。
+
 日常构建和测试从仓库根目录运行：
 
 ```sh
@@ -107,7 +110,7 @@ iOS：
 
 ```sh
 scripts/export-ios.sh                # 开发用 debug 运行时；发版加 release，同样只在首次或运行时变化后执行
-cd ios && xcodegen generate          # brew install xcodegen；生成 ValdiRoutes.xcodeproj
+node scripts/ios-project.mjs         # brew install xcodegen；按 valdi.app 配置生成工程
 ```
 
 真机运行要在 `project.yml` 里填 `DEVELOPMENT_TEAM`。
@@ -376,7 +379,7 @@ iOS 是 `scripts/export-ios.sh release`、`project.yml` 的 `VALDI_OTA_URL`、`s
     --objc-out ../../ios/Generated/valdi --objc-framework ValdiRuntime --cpp-out ../../valdi/native/generated
   ```
 
-- **接入**：Android 是 Gradle 的 `<variant>ValdiModules`（产物进 assets 和 res）和 `valdiCodegenCheck`（挂在 preBuild）；iOS 是 `project.yml` 的 “Valdi bindings check” 和 “Valdi modules” 两个构建脚本（产物进 app 的资源目录，Valdi 先在这里找模块）。改了 `project.yml` 要重新 `xcodegen generate`。
+- **接入**：Android 是 Gradle 的 `<variant>ValdiModules`（产物进 assets 和 res）和 `valdiCodegenCheck`（挂在 preBuild）；iOS 是 `project.yml` 的 “Valdi bindings check” 和 “Valdi modules” 两个构建脚本（产物进 app 的资源目录，Valdi 先在这里找模块）。改了 `project.yml` 要重新运行 `node scripts/ios-project.mjs`。
 - **命令行**：`pnpm build [--release] [--minify] [--out <dir>] [--res <dir>] [--ios-res <dir>]`；`pnpm dev` 是热重载（`scripts/hotreload.sh`），监听 `src/`、`res/`、`sql/`，把改动推给 Android 模拟器和启动着的 iOS 模拟器（端口 13592，Valdi daemon 的协议），代替 `valdi hotreload`。真机只在 `ANDROID_SERIAL` 指定时才推，因为装着别的构建的 app 收到推送会出问题。
 - **模块**：`valdi/modules/` 下每个有 `src/` 的目录都是一个模块，不用登记，各自打成 `<模块>.valdimodule`（自己的图片、npm 代码），绑定也按模块生成到同一组目录。模块之间按路径导入（`import { X } from 'other/src/X'`），运行时 Valdi 加载对方的模块。新建：`pnpm new-module <名字>`，交互选择官方 `ui_component`、`polyglot_bridge_module` 或 `polyglot_view_module` 模板，也可用 `--template` 指定。名字规范为 snake_case；原生模板自动接入库链接、工厂和 View Binder 注册，再运行 `pnpm android` / `pnpm ios`。详见 [自定义模块](docs/custom-modules.md)。没有 `@Export…` 的模块不生成 C++ 文件，所以不需要重新导出运行时。删掉一个模块后，删它在 `android/app/generated/valdi`、`ios/Generated/valdi` 里的绑定，再跑 `pnpm tsconfig`。
 - **IDE**：各模块的 `tsconfig.json` 由 `pnpm tsconfig` 生成（`new-module` 会跑），代替 `valdi projectsync`：Valdi 的基础配置、运行时带的 Valdi 模块（只有这些能导入）、所有 app 模块，生成的资源声明（`res.ts`）在 `tools/valdi-rolldown/.gen/`。`valdi/modules/app_pages/BUILD.bazel` 已经用不到了。

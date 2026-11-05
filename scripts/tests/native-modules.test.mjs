@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { nativeModuleInputs, nativeModules, syncNativeModuleRegistration } from '../native-modules.mjs';
+import { sampleApp } from './fixtures/app-config.mjs';
 
 test('native modules are discovered, registered and included in platform compatibility inputs', t => {
   const root = mkdtempSync(path.join(tmpdir(), 'valdi-native-modules-'));
@@ -11,7 +12,7 @@ test('native modules are discovered, registered and included in platform compati
   const config = path.join(root, 'valdi/modules/hello/module.json');
   mkdirSync(path.dirname(config), { recursive: true });
   mkdirSync(path.join(path.dirname(config), 'src'));
-  writeFileSync(path.join(root, 'package.json'), JSON.stringify({ valdi: { modules: ['hello'] } }));
+  writeFileSync(path.join(root, 'package.json'), JSON.stringify({ valdi: { app: sampleApp(), modules: ['hello'] } }));
   writeFileSync(config, JSON.stringify({
     nativeBuild: 'bazel', name: 'unrelated',
     androidModuleFactory: 'com.example.Factory', androidViewBinder: 'com.example.Binder',

@@ -4,6 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkDependencies, checkRuntime, checkSources, checkVision, run, runPnpm } from './prerequisites.mjs';
 import { buildNodeModules } from './node-modules.mjs';
+import { appBuildPaths, syncAppConfig } from './app-config.mjs';
+import { generateIosProject } from './ios-project.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const [platform, ...forwarded] = process.argv.slice(2);
@@ -19,7 +21,7 @@ function main() {
     if (platform === 'modules') {
       runPnpm(['--dir', 'tools/valdi-rolldown', 'build', ...forwarded], root);
     } else {
-      run(process.execPath, ['--test', 'scripts/tests/prerequisites.test.mjs', 'scripts/tests/upstream.test.mjs', 'scripts/tests/cli.test.mjs', 'scripts/tests/dev-controls.test.mjs', 'scripts/tests/native-modules.test.mjs', 'scripts/tests/module-selection.test.mjs', 'scripts/tests/swift-runtime.test.mjs'], root);
+      run(process.execPath, ['--test', 'scripts/tests/app-config.test.mjs', 'scripts/tests/prerequisites.test.mjs', 'scripts/tests/upstream.test.mjs', 'scripts/tests/cli.test.mjs', 'scripts/tests/dev-controls.test.mjs', 'scripts/tests/native-modules.test.mjs', 'scripts/tests/module-selection.test.mjs', 'scripts/tests/swift-runtime.test.mjs'], root);
       const valdiSource = sourceOption >= 0 ? forwarded[sourceOption + 1] : [
         path.join(root, 'valdi/.valdi-sources/external/valdi+'),
         path.join(root, 'valdi/bazel-valdi/external/valdi+'),
@@ -54,6 +56,7 @@ function main() {
   }
   if (platform === 'ios' && process.platform !== 'darwin') throw new Error('build:ios requires macOS and Xcode.');
   checkDependencies(root);
+  syncAppConfig(root);
   checkRuntime(root, platform);
   checkSources(root);
   checkVision(root, platform);
@@ -66,10 +69,11 @@ function main() {
   }
   const cwd = path.join(root, 'ios');
   buildNodeModules('ios', false, true);
-  run('xcodegen', ['generate', '--spec', 'project.yml'], cwd);
+  generateIosProject(root);
+  const paths = appBuildPaths(root);
   run('xcodebuild', [
-    '-project', 'ValdiRoutes.xcodeproj',
-    '-scheme', 'ValdiRoutes',
+    '-project', paths.iosProject,
+    '-scheme', paths.iosScheme,
     '-configuration', 'Debug',
     '-sdk', 'iphonesimulator',
     '-destination', 'generic/platform=iOS Simulator',

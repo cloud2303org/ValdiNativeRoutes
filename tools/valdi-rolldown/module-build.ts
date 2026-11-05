@@ -36,6 +36,9 @@ export async function compileNodeModule(
   iosLanguage: 'objc' | 'swift' | 'both' = 'objc',
 ): Promise<void> {
   const name = original.name;
+  const originalConfigFile = path.join(original.dir, 'module.json');
+  const originalConfig = existsSync(originalConfigFile)
+    ? JSON.parse(readFileSync(originalConfigFile, 'utf8')) : moduleConfig(name);
   const temporary = mkdtempSync(path.join(tmpdir(), `node-valdi-${name}-`));
   try {
     symlinkSync(original.nodeModules!, path.join(temporary, 'node_modules'), 'dir');
@@ -74,7 +77,8 @@ export async function compileNodeModule(
       module,
       program: () => plugin.program(),
       nativeDependencies: dependencies.map(module => {
-        const config = moduleConfig(module.name);
+        const configFile = path.join(module.dir, 'module.json');
+        const config = existsSync(configFile) ? JSON.parse(readFileSync(configFile, 'utf8')) : moduleConfig(module.name);
         return { module, bundleInfo: {
           ...VALDI_PROJECT_CONFIG, name: module.name, iosModuleName: config.iosModuleName ?? module.name,
           iosLanguage: config.iosLanguage ?? 'objc', asyncStrictMode: false,
@@ -86,7 +90,7 @@ export async function compileNodeModule(
         name,
         iosModuleName: iosName,
         iosLanguage,
-        androidClassPath: moduleConfig(name).androidClassPath,
+        androidClassPath: originalConfig.androidClassPath,
         asyncStrictMode: false,
       },
     };

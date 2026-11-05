@@ -170,7 +170,8 @@ jobs:
         if: matrix.target == 'ios'
         run: |
           pnpm build:ios 2>&1 | tee .ci/build.log
-          tar -czf .ci/ValdiRoutes-simulator.tar.gz -C ios/build/Build/Products/Debug-iphonesimulator ValdiRoutes.app
+          app_name=$(node --input-type=module -e 'import { readAppConfig } from "./scripts/app-config.mjs"; console.log(readAppConfig().name)')
+          tar -czf .ci/ios-simulator.tar.gz -C ios/build/Build/Products/Debug-iphonesimulator "$app_name.app"
       - name: Capture upgrade inputs and source review
         if: always()
         run: |

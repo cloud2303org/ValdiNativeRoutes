@@ -2,7 +2,33 @@
   "private": true,
   "packageManager": "pnpm@10.32.1",
   "valdi": {
-    "modules": ["app_pages", "app_ui", "app_video", "bluetooth", "calculator", "mmkv", "native_common", "nfc", "permissions", "valdi_webview", "wifi"]
+    "app": {
+      "name": "ValdiRoutes",
+      "displayName": "Valdi 路由",
+      "android": {
+        "applicationId": "io.valdiroutes.app"
+      },
+      "ios": {
+        "bundleIdentifier": "io.valdiroutes.app"
+      },
+      "native": {
+        "androidNamespace": "io.valdiroutes.app",
+        "iosPrefix": "VR"
+      }
+    },
+    "modules": [
+      "app_pages",
+      "app_ui",
+      "app_video",
+      "bluetooth",
+      "calculator",
+      "mmkv",
+      "native_common",
+      "nfc",
+      "permissions",
+      "valdi_webview",
+      "wifi"
+    ]
   },
   "scripts": {
     "postinstall": "node scripts/install.mjs",
@@ -23,6 +49,7 @@
     "format": "biome format --write valdi/modules"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.3"
+    "@biomejs/biome": "2.6.3",
+    "yaml": "2.9.1"
   }
 }

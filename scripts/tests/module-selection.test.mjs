@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { availableModuleNames, enabledModuleNames, pruneDisabledModuleOutputs } from '../../tools/valdi-rolldown/modules.mjs';
 import { nativeModuleInputs, nativeModules, syncNativeModuleRegistration } from '../native-modules.mjs';
+import { sampleApp } from './fixtures/app-config.mjs';
 
 function fixture(t) {
   const root = mkdtempSync(path.join(tmpdir(), 'valdi-selection-'));
@@ -14,7 +15,7 @@ function fixture(t) {
     mkdirSync(path.dirname(target), { recursive: true });
     writeFileSync(target, value);
   };
-  const select = modules => write('package.json', JSON.stringify({ valdi: { modules } }));
+  const select = modules => write('package.json', JSON.stringify({ valdi: { app: sampleApp(), modules } }));
   for (const name of ['app_pages', 'bluetooth', 'calculator']) write(`valdi/modules/${name}/src/index.ts`, 'export {};');
   write('valdi/modules/calculator/module.json', JSON.stringify({ nativeBuild: 'bazel', androidModuleFactory: 'CalculatorFactory', iosModuleFactory: 'CalculatorFactory' }));
   write('valdi/modules/bluetooth/module.json', JSON.stringify({
@@ -94,7 +95,7 @@ test('host media assets participate in native compatibility and selected iOS res
   syncNativeModuleRegistration(root);
   assert.ok(nativeModuleInputs('android', root).includes('valdi/modules/calculator/assets'));
   assert.ok(nativeModuleInputs('ios', root).includes('valdi/modules/calculator/assets'));
-  const sources = () => JSON.parse(readFileSync(path.join(root, 'ios/Generated/Modules.yml'), 'utf8')).targets.ValdiRoutes.sources;
+  const sources = () => JSON.parse(readFileSync(path.join(root, 'ios/Generated/Modules.yml'), 'utf8')).targets.SampleApp.sources;
   assert.ok(sources().some(source => source.path.endsWith('/calculator/assets') && source.buildPhase === 'resources'));
   select([]);
   syncNativeModuleRegistration(root);
@@ -186,13 +187,13 @@ test('the five real services select their own native sources and platform depend
     if (service === 'wifi') assert.match(manifest, /xmlns:tools="http:\/\/schemas.android.com\/tools"/);
     const entitlements = readFileSync(path.join(root, 'ios/Generated/AppEntitlements.entitlements'), 'utf8');
     assert.equal(entitlements.includes('wifi-info'), service === 'wifi');
-    const actualSources = project.targets.ValdiRoutes.sources.map(source => source.path);
+    const actualSources = project.targets.SampleApp.sources.map(source => source.path);
     for (const name of ['mmkv', 'permissions', 'wifi', 'nfc', 'app_ui'])
       assert.equal(actualSources.includes(`../../valdi/modules/${name}/ios`), name === service || dependencies.includes(name));
   }
   select([]);
   syncNativeModuleRegistration(root);
-  assert.deepEqual(JSON.parse(readFileSync(path.join(root, 'ios/Generated/Modules.yml'), 'utf8')).targets.ValdiRoutes.sources, []);
+  assert.deepEqual(JSON.parse(readFileSync(path.join(root, 'ios/Generated/Modules.yml'), 'utf8')).targets.SampleApp.sources, []);
   write('valdi/modules/consumer/src/index.ts', 'export {};');
   write('valdi/modules/consumer/BUILD.bazel', 'deps = ["//modules/mmkv:mmkv_compiled"]');
   select(['consumer']);

@@ -26,6 +26,7 @@ function fixture(t, config = 'debug') {
   cpSync(path.join(repository, 'scripts/ota.mjs'), path.join(root, 'scripts/ota.mjs'));
   cpSync(path.join(repository, 'scripts/native-modules.mjs'), path.join(root, 'scripts/native-modules.mjs'));
   cpSync(path.join(repository, 'scripts/module-platform-config.mjs'), path.join(root, 'scripts/module-platform-config.mjs'));
+  cpSync(path.join(repository, 'scripts/app-config.mjs'), path.join(root, 'scripts/app-config.mjs'));
   write('tools/valdi-rolldown/modules.mjs', readFileSync(path.join(repository, 'tools/valdi-rolldown/modules.mjs'), 'utf8'));
   const info = JSON.parse(execFileSync(process.execPath, [path.join(root, 'scripts/ota.mjs'), 'valdi-hash', 'android', config], { encoding: 'utf8' }));
   write('android/app/libs/valdi_runtime.aar', 'runtime artifact');

@@ -7,7 +7,7 @@ import ValdiRuntime
 final class TokenStoreImpl {
     private let query: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
-        kSecAttrService as String: "io.valdiroutes.app.session",
+        kSecAttrService as String: "\(Bundle.main.bundleIdentifier!).session",
         kSecAttrAccount as String: "token",
     ]
 

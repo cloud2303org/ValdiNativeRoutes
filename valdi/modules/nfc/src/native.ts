@@ -8,8 +8,7 @@ import type { NativeNFCTag, NFCDiscoveryState, NFCRecord, NFCTechHandle } from '
 // NfcHostEvents for the app's lifetime; listeners subscribe here, so they never cross the bridge. NFC is Android-only:
 // on iOS every call fails with NOT_SUPPORTED before a host is looked up (none is installed there).
 
-const bytes = (value: ArrayBuffer): Uint8Array => new Uint8Array(value.slice(0));
-// As in ble/native.ts: outgoing bytes are copied, incoming ones used as is when the view covers their buffer.
+// Public schemas own outgoing snapshots. Full-buffer replies reuse their native-backed storage.
 const buffer = (value: Uint8Array): ArrayBuffer =>
   value.byteOffset === 0 && value.byteLength === value.buffer.byteLength
     ? (value.buffer as ArrayBuffer)
@@ -72,28 +71,16 @@ export const nativeNFC = {
   connect: (handle: NFCTechHandle) => nativeCall(() => host().connect(handle)),
   close: (handle: NFCTechHandle) => nativeCall(() => host().close(handle)),
   isConnected: (handle: NFCTechHandle) => nativeCall(() => host().isConnected(handle)),
-  transceive: async (handle: NFCTechHandle, data: ArrayBuffer) =>
-    buffer(await nativeCall(() => host().transceive(handle, bytes(data)))),
+  transceive: async (handle: NFCTechHandle, data: Uint8Array) =>
+    buffer(await nativeCall(() => host().transceive(handle, data))),
   getMaxTransceiveLength: (handle: NFCTechHandle) => nativeCall(() => host().getMaxTransceiveLength(handle)),
   setTimeout: (handle: NFCTechHandle, timeout: number) => nativeCall(() => host().setTimeout(handle, timeout)),
   getAtqa: async (handle: NFCTechHandle) => buffer(await nativeCall(() => host().getAtqa(handle))),
   getSak: (handle: NFCTechHandle) => nativeCall(() => host().getSak(handle)),
   getHistoricalBytes: async (handle: NFCTechHandle) =>
     buffer(await nativeCall(() => host().getHistoricalBytes(handle))),
-  writeNdefMessage: (handle: NFCTechHandle, records: NFCRecord[], uris: string[], texts: string[]) =>
-    nativeCall(() =>
-      host().writeNdefMessage(
-        handle,
-        records.map(value => ({
-          tnf: value.tnf,
-          id: bytes(value.id),
-          type: bytes(value.type),
-          payload: bytes(value.payload),
-        })),
-        uris,
-        texts,
-      ),
-    ),
+  writeNdefMessage: (handle: NFCTechHandle, records: NfcRecordModel[], uris: string[], texts: string[]) =>
+    nativeCall(() => host().writeNdefMessage(handle, records, uris, texts)),
   onDiscovered: (callback: (tag: NativeNFCTag) => void) => add(discoveredListeners, callback),
   removeDiscoveredListener: (id: number) => void discoveredListeners.delete(id),
   onDiscoveryStateChange: (callback: (state: NFCDiscoveryState) => void) => add(stateListeners, callback),

@@ -83,7 +83,7 @@ function fixture(t: test.TestContext) {
       Promise.resolve().then(() => { checkActive?.(); return request(); }),
   });
   return {
-    api: api.bluetoothApi(), admitted, started, active, host,
+    api: api.bluetoothApi(), admitted, started, active, host, require,
     get events() { return events; },
     finish(deviceId: string, value?: any) {
       const id = key(deviceId);
@@ -206,6 +206,51 @@ test('write snapshots are independent for overlapping caller views; incoming sub
   f.api.offBLECharacteristicValueChange(callback);
 });
 
+test('writes accept Uint8Array subviews and snapshot before native dispatch', async t => {
+  const f = fixture(t);
+  await f.api.openBluetoothAdapter();
+  const source = Uint8Array.of(99, 1, 2, 3, 88);
+  const first = f.api.writeBLECharacteristicValue({ ...characteristic, value: source.subarray(1, 3) });
+  void first.catch(() => {});
+  source[2] = 7;
+  const second = f.api.writeBLECharacteristicValue({ ...characteristic, value: source.subarray(2, 4) });
+  void second.catch(() => {});
+  source.fill(0);
+  await flush();
+  assert.equal(f.admitted.length, 2, 'both byte views must be admitted');
+  assert.deepEqual([...f.admitted[0].params.value], [1, 2]);
+  assert.deepEqual([...f.admitted[1].params.value], [7, 3]);
+  assert.notEqual(f.admitted[0].params.value.buffer, source.buffer);
+  assert.notEqual(f.admitted[0].params.value.buffer, f.admitted[1].params.value.buffer);
+  f.finish('A');
+  await first;
+  f.finish('A');
+  await second;
+});
+
+test('native adapter forwards the admitted byte snapshot without copying it again', async t => {
+  const f = fixture(t);
+  const owned = Uint8Array.of(1, 2, 3);
+  const sent = f.require('./native.js').nativeBLE.writeBLECharacteristicValue({ ...characteristic, value: owned });
+  assert.equal(f.admitted[0].params.value, owned);
+  f.finish('A');
+  await sent;
+});
+
+test('whole-buffer receive reuses native storage and preserves bytes retained by JS', async t => {
+  const f = fixture(t);
+  await f.api.openBluetoothAdapter();
+  const received: ArrayBuffer[] = [];
+  f.api.onBLECharacteristicValueChange((event: any) => received.push(event.value));
+  const first = Uint8Array.of(1, 2);
+  const next = Uint8Array.of(3, 4);
+  f.events.characteristicUpdate({ ...characteristic, value: first });
+  f.events.characteristicUpdate({ ...characteristic, value: next });
+  assert.equal(received[0], first.buffer);
+  assert.equal(received[1], next.buffer);
+  assert.deepEqual([...new Uint8Array(received[0])], [1, 2]);
+});
+
 test('native work on independent devices progresses independently', async t => {
   const f = fixture(t);
   await f.api.openBluetoothAdapter();
@@ -226,7 +271,7 @@ test('public validation and native errors preserve their WeChat error codes', as
   await assert.rejects(f.api.readBLECharacteristicValue(characteristic),
     failure(10000, 'readBLECharacteristicValue:fail not init'));
   await f.api.openBluetoothAdapter();
-  await assert.rejects(f.api.writeBLECharacteristicValue({ ...characteristic, value: Uint8Array.of(1) }),
+  await assert.rejects(f.api.writeBLECharacteristicValue({ ...characteristic, value: Uint16Array.of(1) }),
     failure(10013, 'writeBLECharacteristicValue:fail invalid_data'));
   assert.equal(f.admitted.length, 0);
   const read = f.api.readBLECharacteristicValue(characteristic);

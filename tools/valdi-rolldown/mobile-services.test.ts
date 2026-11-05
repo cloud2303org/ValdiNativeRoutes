@@ -249,6 +249,92 @@ test('Android NFC retain discovery, host tech strings, byte copying and stale ha
   }
 });
 
+for (const inputType of ['ArrayBuffer', 'Uint8Array subview']) {
+  test(`Android NFC snapshots ${inputType} before awaiting transceive`, async () => {
+    const f = runtime('android');
+    let events: any;
+    let resolve!: (value: Uint8Array) => void;
+    let sent: Uint8Array | undefined;
+    f.load(service('nfc/NfcHost')).installNfcHost({
+      setEvents(value: any) { events = value; },
+      async startDiscovery() {},
+      transceive(_handle: any, data: Uint8Array) {
+        sent = data;
+        return new Promise<Uint8Array>(done => { resolve = done; });
+      },
+    });
+    const adapter = f.load(service('nfc/adapter')).createNFCAdapter();
+    await adapter.startDiscovery();
+    events.discovered({ tagHandle: 'tag', id: Uint8Array.of(1), techs: ['NfcA'], messages: [] });
+    const source = inputType === 'ArrayBuffer' ? Uint8Array.of(0x30, 0) : Uint8Array.of(99, 0x30, 0, 88);
+    const data = inputType === 'ArrayBuffer' ? source.buffer : source.subarray(1, 3);
+    const response = adapter.getNfcA().transceive({ data });
+    void response.catch(() => {});
+    source.fill(7);
+    assert.ok(sent, 'transceive must capture the input before returning');
+    assert.deepEqual([...sent], [0x30, 0]);
+    assert.notEqual(sent.buffer, source.buffer);
+    const reply = Uint8Array.of(0x90, 0);
+    resolve(reply);
+    assert.equal((await response).data, reply.buffer, 'full-buffer replies need no JS copy');
+  });
+}
+
+test('NFC native adapter forwards owned command and record bytes without another snapshot', async () => {
+  const f = runtime('android');
+  const sent: Uint8Array[] = [];
+  f.load(service('nfc/NfcHost')).installNfcHost({
+    setEvents() {},
+    async transceive(_handle: any, data: Uint8Array) { sent.push(data); return data; },
+    async writeNdefMessage(_handle: any, records: any[]) {
+      sent.push(records[0].id, records[0].type, records[0].payload);
+    },
+  });
+  const native = f.load(service('nfc/native')).nativeNFC;
+  const handle = { tagHandle: 'tag', tech: 'NfcA' };
+  const owned = Uint8Array.of(1, 2, 3);
+  assert.equal(await native.transceive(handle, owned), owned.buffer);
+  await native.writeNdefMessage(handle, [{ id: owned, type: owned, payload: owned, tnf: 1 }], [], []);
+  assert.equal(sent.length, 4);
+  for (const value of sent) assert.equal(value, owned);
+});
+
+test('Android NDEF snapshots nested byte views and strings before asynchronous work', async () => {
+  const f = runtime('android');
+  let events: any;
+  let records: any[];
+  let texts: string[];
+  let uris: string[];
+  f.load(service('nfc/NfcHost')).installNfcHost({
+    setEvents(value: any) { events = value; },
+    async startDiscovery() {},
+    async writeNdefMessage(_handle: any, value: any[], urls: string[], strings: string[]) {
+      records = value;
+      uris = urls;
+      texts = strings;
+    },
+  });
+  const adapter = f.load(service('nfc/adapter')).createNFCAdapter();
+  await adapter.startDiscovery();
+  events.discovered({ tagHandle: 'tag', id: Uint8Array.of(1), techs: ['Ndef'], messages: [] });
+  const bytes = Uint8Array.of(99, 1, 2, 3, 88);
+  const input = {
+    records: [{ id: bytes.subarray(1, 2), type: bytes.subarray(2, 3), payload: bytes.subarray(1, 4) }],
+    texts: ['original'], uris: ['https://example.com'],
+  };
+  const write = adapter.getNdef().writeNdefMessage(input);
+  bytes.fill(0);
+  input.texts[0] = 'changed';
+  input.uris[0] = 'https://example.org';
+  input.records[0].payload = Uint8Array.of(7);
+  await write;
+  assert.deepEqual([...records![0].id], [1]);
+  assert.deepEqual([...records![0].type], [2]);
+  assert.deepEqual([...records![0].payload], [1, 2, 3]);
+  assert.deepEqual([...texts!], ['original']);
+  assert.deepEqual([...uris!], ['https://example.com']);
+});
+
 test('Android public NFC availability and permission paths preserve host state without prompts', async () => {
   for (const platform of ['android'] as const) {
     const f = runtime(platform);

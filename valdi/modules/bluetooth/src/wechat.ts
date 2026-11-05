@@ -7,7 +7,7 @@ import type {
   BleService as Service,
 } from './BleHost';
 import { throwWechatBleError } from './errors';
-import { type CharacteristicValue, type Device, nativeBLE } from './native';
+import { type BinaryInput, type CharacteristicValue, type Device, nativeBLE } from './native';
 import {
   type BLEPeripheralConnectionStateChangedCallback,
   type BLEPeripheralServer,
@@ -92,7 +92,7 @@ export interface WechatBleApi {
     deviceId: string;
     serviceId: string;
     characteristicId: string;
-    value: ArrayBuffer;
+    value: BinaryInput;
     writeType?: BleWriteType;
   }): Promise<BleResult>;
   readBLECharacteristicValue(options: {
@@ -459,7 +459,7 @@ export class WechatBleRuntime implements WechatBleApi {
     deviceId: string;
     serviceId: string;
     characteristicId: string;
-    value: ArrayBuffer;
+    value: BinaryInput;
     writeType?: BleWriteType;
   }): Promise<BleResult> {
     return this.run('writeBLECharacteristicValue', () => {

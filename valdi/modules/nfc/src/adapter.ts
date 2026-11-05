@@ -23,12 +23,14 @@ export interface NdefMessageEvent {
 export type NFCDiscoveredCallback = (event: NFCDiscoveredEvent) => void;
 export type NdefMessageCallback = (event: NdefMessageEvent) => void;
 
+export type NFCBinaryInput = ArrayBuffer | Uint8Array;
+
 export interface NFCTechnology {
   connect(): Promise<NFCResult>;
   close(): Promise<NFCResult>;
   /** Deprecated by WeChat; succeeds only while this technology is connected. */
   isConnected(): Promise<NFCResult>;
-  transceive(options: { data: ArrayBuffer }): Promise<NFCResult<{ data: ArrayBuffer }>>;
+  transceive(options: { data: NFCBinaryInput }): Promise<NFCResult<{ data: ArrayBuffer }>>;
   getMaxTransceiveLength(): Promise<NFCResult<{ length: number }>>;
   setTimeout(options: { timeout: number }): Promise<NFCResult>;
 }
@@ -47,9 +49,9 @@ export type MifareClassic = NFCTechnology;
 export type MifareUltralight = NFCTechnology;
 
 export interface NdefRecordInput {
-  id: ArrayBuffer;
-  type: ArrayBuffer;
-  payload: ArrayBuffer;
+  id: NFCBinaryInput;
+  type: NFCBinaryInput;
+  payload: NFCBinaryInput;
   /** Defaults to TNF_WELL_KNOWN (1); include this field for byte-faithful record round trips. */
   tnf?: number;
 }

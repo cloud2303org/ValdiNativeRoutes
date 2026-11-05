@@ -1,6 +1,6 @@
 import type { BlePeripheralConnectionState, BlePeripheralReadRequest, BlePeripheralSubscriptionEvent } from './BleHost';
 import { throwWechatBleError } from './errors';
-import { nativeBLE, type PeripheralWriteRequest } from './native';
+import { type BinaryInput, nativeBLE, type PeripheralWriteRequest } from './native';
 import {
   addServiceOptions,
   advertisingOptions,
@@ -18,7 +18,7 @@ export interface OpenBluetoothAdapterOptions {
 export interface BLEPeripheralDescriptor {
   uuid: string;
   permission?: { read?: boolean; write?: boolean };
-  value?: ArrayBuffer;
+  value?: BinaryInput;
 }
 export interface BLEPeripheralCharacteristic {
   uuid: string;
@@ -35,7 +35,7 @@ export interface BLEPeripheralCharacteristic {
     readEncryptionRequired?: boolean;
     writeEncryptionRequired?: boolean;
   };
-  value?: ArrayBuffer;
+  value?: BinaryInput;
   descriptors?: BLEPeripheralDescriptor[];
 }
 export interface BLEPeripheralService {
@@ -49,7 +49,7 @@ export interface BLEPeripheralAdvertisingOptions {
     serviceUuids?: string[];
     manufacturerData?: {
       manufacturerId: string;
-      manufacturerSpecificData?: ArrayBuffer;
+      manufacturerSpecificData?: BinaryInput;
     }[];
     beacon?: { uuid: string; major: number; minor: number; measuredPower?: number };
   };
@@ -58,7 +58,7 @@ export interface BLEPeripheralAdvertisingOptions {
 export interface BLEPeripheralWriteOptions {
   serviceId: string;
   characteristicId: string;
-  value: ArrayBuffer;
+  value: BinaryInput;
   needNotify: boolean;
   callbackId?: number;
 }

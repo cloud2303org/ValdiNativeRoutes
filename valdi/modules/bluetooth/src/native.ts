@@ -16,6 +16,7 @@ import {
   type BlePeripheralWriteRequest,
   type BleReadParams,
   type BleScanParams,
+  type BleWriteParams,
   bleHost,
 } from './BleHost';
 import { listen, unlisten } from './events';
@@ -32,11 +33,13 @@ export type Device = Omit<BleDevice, 'advertisData' | 'serviceData'> & {
 export type CharacteristicValue = Omit<BleCharacteristicValue, 'value'> & { value: ArrayBuffer };
 export type PeripheralWriteRequest = Omit<BlePeripheralWriteRequest, 'value'> & { value: ArrayBuffer };
 
-/**
- * Outgoing bytes are copied: native reads the JS memory itself (no copy at the bridge), possibly after the caller
- * changed it.
- */
-export const bytes = (buffer: ArrayBuffer): Uint8Array => new Uint8Array(buffer.slice(0));
+export type BinaryInput = ArrayBuffer | Uint8Array;
+
+/** Snapshot exactly the caller's byte range at public admission, before any asynchronous dispatch. */
+export const bytes = (input: BinaryInput): Uint8Array => {
+  const view = input instanceof Uint8Array ? input : new Uint8Array(input);
+  return new Uint8Array(view);
+};
 /** Incoming bytes come in a buffer of their own, used as is unless the view covers only part of it. */
 const buffer = (data: Uint8Array): ArrayBuffer =>
   data.byteOffset === 0 && data.byteLength === data.buffer.byteLength
@@ -78,8 +81,9 @@ export const nativeBLE = {
     nativeCall(() => bleHost().getBLEDeviceCharacteristics(deviceId, serviceId)),
   notifyBLECharacteristicValueChange: (params: BleNotifyParams) =>
     nativeCall(() => bleHost().notifyBLECharacteristicValueChange(params)),
-  writeBLECharacteristicValue: (params: BleReadParams & { value: ArrayBuffer; writeType?: string }) =>
-    nativeCall(() => bleHost().writeBLECharacteristicValue({ ...params, value: bytes(params.value) })),
+  // All outgoing byte fields have already been snapshotted by the public schemas.
+  writeBLECharacteristicValue: (params: BleWriteParams) =>
+    nativeCall(() => bleHost().writeBLECharacteristicValue(params)),
   readBLECharacteristicValue: (params: BleReadParams) => nativeCall(() => bleHost().readBLECharacteristicValue(params)),
   setBLEMTU: (deviceId: string, mtu: number) => nativeCall(() => bleHost().setBLEMTU(deviceId, mtu)),
   getBLEMTU: (deviceId: string, writeType: string | undefined) =>

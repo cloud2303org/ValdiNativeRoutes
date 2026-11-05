@@ -16,8 +16,14 @@ const fields = <TEntries extends v.ObjectEntries>(entries: TEntries, message: st
   );
 const bytes = (field: string) =>
   v.pipe(
-    v.instance(ArrayBuffer, `${field} must be an ArrayBuffer`),
-    v.transform(value => value.slice(0)),
+    v.union(
+      [v.instance(ArrayBuffer), v.instance(Uint8Array)],
+      `${field} must be an ArrayBuffer or Uint8Array`,
+    ),
+    v.transform(value => {
+      const view = value instanceof Uint8Array ? value : new Uint8Array(value);
+      return new Uint8Array(view);
+    }),
   );
 const strings = (field: string) =>
   v.optional(v.array(v.string(`${field} must be a string array`), `${field} must be a string array`), []);

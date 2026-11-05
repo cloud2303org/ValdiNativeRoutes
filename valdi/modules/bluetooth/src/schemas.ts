@@ -97,6 +97,14 @@ const characteristic = {
   serviceId: bluetoothUuid('serviceId'),
   characteristicId: bluetoothUuid('characteristicId'),
 };
+const data = (field: string) =>
+  v.pipe(
+    v.union(
+      [v.instance(ArrayBuffer), v.instance(Uint8Array)],
+      `${field} must be an ArrayBuffer or Uint8Array`,
+    ),
+    v.transform(bytes),
+  );
 
 export const openAdapterOptions = fields(
   { mode: v.nullish(v.picklist(['central', 'peripheral'], 'mode must be central or peripheral'), 'central') },
@@ -138,7 +146,7 @@ export const notifyOptions = fields(
 export const writeOptions = fields(
   {
     // Snapshot at public admission, before any scheduling or native async wait.
-    value: v.pipe(v.instance(ArrayBuffer, 'value must be an ArrayBuffer'), v.transform(value => value.slice(0))),
+    value: data('value'),
     ...characteristic,
     writeType: v.optional(writeType, 'write'),
   },
@@ -162,8 +170,6 @@ const integer = (field: string, min: number, max: number) => {
   const message = `${field} is out of range`;
   return v.pipe(v.number(message), v.safeInteger(message), v.minValue(min, message), v.maxValue(max, message));
 };
-/** A copy, as it crosses the bridge as Uint8Array: native reads it later, maybe after the caller changed it. */
-const data = (field: string) => v.pipe(v.instance(ArrayBuffer, `${field} must be an ArrayBuffer`), v.transform(bytes));
 const optionalData = (field: string) => v.optional(data(field), () => new ArrayBuffer(0));
 const distinct = (values: unknown[]) => new Set(values).size === values.length;
 

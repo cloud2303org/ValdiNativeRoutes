@@ -15,7 +15,7 @@ while (args.length) {
   if (flag === '--target' && args.length) targets.push(...args.shift().split(','));
   else if (flag === '--jobs' && args.length) jobs = Number(args.shift());
   else if (flag === '--help') {
-    console.log('Prepare pinned OpenCV Mobile + ncnn from source\n  pnpm vision:prepare --target ' + allowed.join('|') + ' [--jobs N]\n  --target ios builds device + simulator and their XCFramework.\n  Parallelism defaults to the native build tool unless --jobs is supplied.');
+    console.log('Prepare pinned OpenCV Mobile + ncnn from source\n  node vision/scripts/prepare-native.cjs --target ' + allowed.join('|') + ' [--jobs N]\n  Android builds shared libraries in android-arm64/shared; existing static outputs are preserved.\n  --target ios builds static device + simulator archives and their XCFramework.\n  Parallelism defaults to the native build tool unless --jobs is supplied.');
     process.exit(0);
   } else throw new Error(`Unknown/missing option: ${flag}`);
 }
@@ -76,13 +76,20 @@ for (const dependency of [lock.opencv, lock.ncnn]) {
   }
 }
 const common = ['-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_POSITION_INDEPENDENT_CODE=ON', '-DCMAKE_POLICY_VERSION_MINIMUM=3.5'];
+const androidOpenCvHooks = path.join(root, 'patches/opencv-mobile-android');
+const androidOpenCvPatch = path.join(androidOpenCvHooks, 'INIT_MODULE_SOURCES_opencv_highgui.cmake');
+function androidNdk() {
+  const sdk = process.env.ANDROID_SDK_ROOT || process.env.ANDROID_HOME || path.join(os.homedir(), 'Library/Android/sdk');
+  return process.env.VISION_ANDROID_NDK || path.join(sdk, 'ndk/27.1.12297006');
+}
 function platformOptions(target) {
   if (target === 'android-arm64') {
-    const sdk = process.env.ANDROID_SDK_ROOT || process.env.ANDROID_HOME || path.join(os.homedir(), 'Library/Android/sdk');
-    const ndk = process.env.VISION_ANDROID_NDK || path.join(sdk, 'ndk/27.1.12297006');
+    const ndk = androidNdk();
     const toolchain = path.join(ndk, 'build/cmake/android.toolchain.cmake');
     if (!fs.existsSync(toolchain)) throw new Error('Set VISION_ANDROID_NDK to the installed NDK directory.');
-    return [`-DCMAKE_TOOLCHAIN_FILE=${toolchain}`, '-DANDROID_ABI=arm64-v8a', '-DANDROID_PLATFORM=android-28', '-DANDROID_STL=c++_shared'];
+    return [`-DCMAKE_TOOLCHAIN_FILE=${toolchain}`, '-DANDROID_ABI=arm64-v8a', '-DANDROID_PLATFORM=android-28', '-DANDROID_STL=c++_shared',
+      '-DANDROID_CPP_FEATURES=rtti exceptions', '-DCMAKE_CXX_STANDARD=20', '-DCMAKE_CXX_STANDARD_REQUIRED=ON',
+      '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'];
   }
   if (target.startsWith('ios-')) {
     const sdk = capture('xcrun', ['--sdk', target === 'ios-arm64' ? 'iphoneos' : 'iphonesimulator', '--show-sdk-path']);
@@ -91,30 +98,56 @@ function platformOptions(target) {
   return ['-DCMAKE_OSX_ARCHITECTURES=arm64', '-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0'];
 }
 for (const target of targets) {
-  const prefix = path.join(vendor, 'install', target);
+  const androidShared = target === 'android-arm64';
+  // Never reuse a static build cache or overwrite the existing static install.
+  const variant = androidShared ? path.join(target, 'shared') : target;
+  const prefix = path.join(vendor, 'install', variant);
+  const receipt = path.join(prefix, 'native-routes-vision.json');
   const platform = platformOptions(target);
+  let android, patches;
+  if (androidShared) {
+    const properties = fs.readFileSync(path.join(androidNdk(), 'source.properties'), 'utf8');
+    const ndkRevision = properties.match(/^Pkg\.Revision\s*=\s*(\S+)/m)?.[1];
+    if (!ndkRevision) throw new Error('Cannot identify VISION_ANDROID_NDK from source.properties.');
+    android = {abi: 'arm64-v8a', api: 28, stl: 'c++_shared', cxxStandard: 20, rtti: true, exceptions: true, ndkRevision,
+      videoCaptureBackend: 'none'};
+    patches = {opencvAndroidHighgui: hash(androidOpenCvPatch)};
+    // An interrupted rebuild must not retain a success receipt from an earlier run.
+    fs.rmSync(receipt, {force: true});
+  }
   const options = fs.readFileSync(path.join(vendor, 'src', lock.opencv.directory, 'options.txt'), 'utf8').trim().split(/\r?\n/).filter(Boolean);
-  const opencvBuild = path.join(vendor, 'build', target, 'opencv');
+  const opencvBuild = path.join(vendor, 'build', variant, 'opencv');
   run(cmake, ['-S', path.join(vendor, 'src', lock.opencv.directory), '-B', opencvBuild, ...common, ...platform, ...options,
-    `-DCMAKE_INSTALL_PREFIX=${prefix}`, '-DBUILD_LIST=core,imgproc,highgui', '-DWITH_OPENMP=OFF', '-DWITH_KLEIDICV=OFF', '-DWITH_LAPACK=OFF']);
+    `-DCMAKE_INSTALL_PREFIX=${prefix}`, '-DBUILD_LIST=core,imgproc,highgui', '-DWITH_OPENMP=OFF', '-DWITH_KLEIDICV=OFF', '-DWITH_LAPACK=OFF',
+    // The pinned mobile options.txt sets BUILD_SHARED_LIBS=OFF; override it last on Android only.
+    ...(androidShared ? ['-DBUILD_SHARED_LIBS=ON', '-DBUILD_opencv_world=OFF', `-DOPENCV_CMAKE_HOOKS_DIR=${androidOpenCvHooks}`] : [])]);
   run(cmake, ['--build', opencvBuild, ...parallelArgs]);
   run(cmake, ['--install', opencvBuild]);
   // OpenCV's Android SDK install layout differs from its Unix/iOS layout.
-  // Stage the actual archives/headers into the package's common target layout.
-  if (target === 'android-arm64') {
+  // Stage the actual shared components/headers into the package's common layout.
+  if (androidShared) {
     fs.cpSync(path.join(prefix, 'sdk/native/jni/include'), path.join(prefix, 'include/opencv4'), {recursive: true});
     fs.mkdirSync(path.join(prefix, 'lib'), {recursive: true});
     for (const library of ['opencv_core', 'opencv_imgproc', 'opencv_highgui']) {
-      fs.copyFileSync(path.join(prefix, 'sdk/native/staticlibs/arm64-v8a', `lib${library}.a`), path.join(prefix, 'lib', `lib${library}.a`));
+      fs.copyFileSync(path.join(prefix, 'sdk/native/libs/arm64-v8a', `lib${library}.so`), path.join(prefix, 'lib', `lib${library}.so`));
     }
   }
-  const ncnnBuild = path.join(vendor, 'build', target, 'ncnn');
+  const ncnnBuild = path.join(vendor, 'build', variant, 'ncnn');
   run(cmake, ['-S', path.join(vendor, 'src', lock.ncnn.directory), '-B', ncnnBuild, ...common, ...platform,
-    `-DCMAKE_INSTALL_PREFIX=${prefix}`, `-DNCNN_VERSION=${lock.ncnn.version}`, '-DNCNN_VULKAN=OFF', '-DNCNN_OPENMP=OFF', '-DNCNN_SHARED_LIB=OFF',
+    `-DCMAKE_INSTALL_PREFIX=${prefix}`, `-DNCNN_VERSION=${lock.ncnn.version}`, '-DNCNN_VULKAN=OFF', '-DNCNN_OPENMP=OFF',
+    `-DNCNN_SHARED_LIB=${androidShared ? 'ON' : 'OFF'}`,
+    ...(androidShared ? ['-DNCNN_DISABLE_RTTI=OFF', '-DNCNN_DISABLE_EXCEPTION=OFF', '-DCMAKE_INSTALL_LIBDIR=lib'] : []),
     '-DNCNN_BUILD_TOOLS=OFF', '-DNCNN_BUILD_EXAMPLES=OFF', '-DNCNN_BUILD_BENCHMARK=OFF', '-DNCNN_BUILD_TESTS=OFF', '-DNCNN_INSTALL_SDK=ON']);
   run(cmake, ['--build', ncnnBuild, ...parallelArgs]);
   run(cmake, ['--install', ncnnBuild]);
-  fs.writeFileSync(path.join(prefix, 'native-routes-vision.json'), JSON.stringify({target, opencv: lock.opencv.version, ncnn: lock.ncnn.version, sourcePins: {opencv: lock.opencv.sha256, ncnn: lock.ncnn.sha256},cpuOnly: true}, null, 2) + '\n');
+  if (androidShared) {
+    if (hash(androidOpenCvPatch) !== patches.opencvAndroidHighgui) throw new Error('Android OpenCV hook changed during preparation; rebuild with a frozen patch.');
+    for (const library of ['opencv_core', 'opencv_imgproc', 'opencv_highgui', 'ncnn']) {
+      if (!fs.statSync(path.join(prefix, 'lib', `lib${library}.so`)).isFile()) throw new Error(`Missing shared vendor library: ${library}`);
+    }
+  }
+  fs.writeFileSync(receipt, JSON.stringify({target, opencv: lock.opencv.version, ncnn: lock.ncnn.version, sourcePins: {opencv: lock.opencv.sha256, ncnn: lock.ncnn.sha256},cpuOnly: true,
+    ...(androidShared ? {linkage: 'shared', android, patches} : {})}, null, 2) + '\n');
   console.log(`Prepared ${target}: ${prefix}`);
 }
 // CocoaPods selects one static XCFramework slice for the actual SDK, so the two

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -116,24 +117,66 @@ test('a clean checkout reports missing sources with a preparation command', t =>
   assert.throws(() => checkSources(root), /Valdi sources are not prepared.*\n.*prepare-valdi\.mjs/);
 });
 
-test('vision dependencies must include all linked Android archives', t => {
+test('Android Vision requires every shared library and a compatible shared receipt', t => {
   const { root, write } = fixture(t);
   const lock = { opencv: { version: '4.12.0', sha256: 'opencv-sha' }, ncnn: { version: '20250503', sha256: 'ncnn-sha' } };
   write('vision/vendor-lock.json', JSON.stringify(lock));
+  const patch = 'Android-only highgui source hook';
+  write('vision/patches/opencv-mobile-android/INIT_MODULE_SOURCES_opencv_highgui.cmake', patch);
   const stamp = (opencv = lock.opencv, ncnn = lock.ncnn) => JSON.stringify({
     target: 'android-arm64', opencv: opencv.version, ncnn: ncnn.version,
     sourcePins: { opencv: opencv.sha256, ncnn: ncnn.sha256 },
+    cpuOnly: true,
+    linkage: 'shared',
+    android: {
+      abi: 'arm64-v8a', api: 28, stl: 'c++_shared', cxxStandard: 20,
+      rtti: true, exceptions: true, ndkRevision: '27.1.12297006', videoCaptureBackend: 'none',
+    },
+    patches: { opencvAndroidHighgui: createHash('sha256').update(patch).digest('hex') },
   });
-  for (const name of ['opencv_core', 'opencv_imgproc', 'opencv_highgui']) {
+  for (const name of ['opencv_core', 'opencv_imgproc', 'opencv_highgui', 'ncnn']) {
     write(`vision/vendor/install/android-arm64/lib/lib${name}.a`, 'archive');
   }
-  assert.throws(() => checkVision(root, 'android'), /prepare-native\.cjs --target android-arm64/);
-  write('vision/vendor/install/android-arm64/lib/libncnn.a', 'archive');
-  // Archives without the preparation stamp are not proof of what they were built from.
-  assert.throws(() => checkVision(root, 'android'), /another vision\/vendor-lock\.json/);
   write('vision/vendor/install/android-arm64/native-routes-vision.json', stamp());
+  // A previous static install must not let prebuild skip shared preparation.
+  assert.throws(() => checkVision(root, 'android'), /prepare-native\.cjs --target android-arm64/);
+  for (const name of ['opencv_core', 'opencv_imgproc', 'opencv_highgui']) {
+    write(`vision/vendor/install/android-arm64/shared/lib/lib${name}.so`, 'shared library');
+  }
+  assert.throws(() => checkVision(root, 'android'), /prepare-native\.cjs --target android-arm64/);
+  write('vision/vendor/install/android-arm64/shared/lib/libncnn.so', 'shared library');
+  assert.throws(() => checkVision(root, 'android'), /another vision\/vendor-lock\.json/);
+  write('vision/vendor/install/android-arm64/shared/native-routes-vision.json', stamp());
   assert.doesNotThrow(() => checkVision(root, 'android'));
+  for (const patch of [
+    { linkage: 'static' },
+    { cpuOnly: false },
+    { android: { ...JSON.parse(stamp()).android, abi: 'x86_64' } },
+    { android: { ...JSON.parse(stamp()).android, stl: 'c++_static' } },
+    { android: { ...JSON.parse(stamp()).android, exceptions: false } },
+    { android: { ...JSON.parse(stamp()).android, videoCaptureBackend: 'v4l2' } },
+    { patches: { opencvAndroidHighgui: 'outdated-hook' } },
+  ]) {
+    write('vision/vendor/install/android-arm64/shared/native-routes-vision.json',
+      JSON.stringify({ ...JSON.parse(stamp()), ...patch }));
+    assert.throws(() => checkVision(root, 'android'), /shared.*configuration/);
+  }
+  write('vision/vendor/install/android-arm64/shared/native-routes-vision.json', stamp());
   // A changed lock invalidates the existing build.
   write('vision/vendor-lock.json', JSON.stringify({ ...lock, ncnn: { version: '20250504', sha256: 'other-ncnn-sha' } }));
   assert.throws(() => checkVision(root, 'android'), /another vision\/vendor-lock\.json/);
+});
+
+test('iOS Vision still accepts its existing static XCFramework and preparation receipts', t => {
+  const { root, write } = fixture(t);
+  const lock = { opencv: { version: '4.13.0', sha256: 'opencv-sha' }, ncnn: { version: '20260526', sha256: 'ncnn-sha' } };
+  write('vision/vendor-lock.json', JSON.stringify(lock));
+  write('vision/vendor/install/ios/VisionDependencies.xcframework/Info.plist', 'static XCFramework metadata');
+  for (const target of ['ios-arm64', 'ios-simulator-arm64']) {
+    write(`vision/vendor/install/${target}/native-routes-vision.json`, JSON.stringify({
+      target, opencv: lock.opencv.version, ncnn: lock.ncnn.version,
+      sourcePins: { opencv: lock.opencv.sha256, ncnn: lock.ncnn.sha256 }, cpuOnly: true,
+    }));
+  }
+  assert.doesNotThrow(() => checkVision(root, 'ios'));
 });

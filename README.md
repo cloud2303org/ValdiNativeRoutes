@@ -2,6 +2,11 @@
 
 页面全部用 Valdi（TSX）写，原生负责路由。Android 用 Compose Navigation 3 管页面栈，iOS 用 UIKit 的 UINavigationController。
 
+媒体示例从首页进入：[`Lottie 动画`](docs/lottie-demo.md) 使用官方 `<animatedimage>`，
+[`原生视频播放器`](docs/video-demo.md) 使用官方 `<video>` 接入 Android Media3 和 iOS AVPlayer，
+通过每播放器的 Valdi 原生对象接口和事件订阅控制，
+提供离线 MP4、HLS、TSX 控制、全屏及画中画。各功能的验证范围见对应文档。
+
 ```text
 valdi/                  Valdi 工作区（Bazel），只用来编 Valdi 运行时
   BUILD.bazel           valdi_runtime：导出成 valdi_runtime.aar / ValdiRuntime.xcframework
@@ -184,7 +189,9 @@ _ = try await app.ui.showToast(ToastOptions(title: "已同步", icon: "none"))
 
 `vision/` 是 ExpoNativeRoutes `@native-routes/vision` 的 C++ 核心（`VisionCore`）：原生生成一张 256 × 192 的彩色图，用 OpenCV 转灰度、做 Canny 边缘检测、缩放到 64 × 64，再用 ncnn 跑一个没有训练权重的真实网络（全局平均池化加 Softmax），输出 RGB 三通道响应。TS 通过 `vision/VisionHost.ts` 的 `runDemo()` 调用，两张图以缓存目录里的 PNG 文件返回。示例页是首页“更多示例”里的“OpenCV 与 ncnn”（`VisionPage.tsx`）。
 
-OpenCV Mobile 4.13.0 和 ncnn 20260526 按 `vision/vendor-lock.json`（固定 URL 和 SHA256）从源码编译，静态链接进宿主。Android 用 NDK r27.1 和 CMake 编出 `libvaldi_routes_vision.so`（`c++_shared`，和依赖库编译时一致），在 `JNI_OnLoad` 里设置 `OPENCV_PARALLEL_BACKEND=builtin`：否则 OpenCV 第一次运行会去 `base.apk!/lib/…` 找并行插件，而 opencv-mobile 关闭了异常，找不到就直接崩溃。iOS 把 `VisionCore.cpp` 和一个 Objective-C++ 包装编进 app target，静态链接 `VisionDependencies.xcframework`（模拟器只有 arm64）。产物在 git 忽略的 `vision/vendor/install/`，用 `node vision/scripts/prepare-native.cjs --target android-arm64` / `--target ios` 生成（需要 CMake、Ninja 和对应 SDK）。
+OpenCV Mobile 4.13.0 和 ncnn 20260526 按 `vision/vendor-lock.json`（固定 URL 和 SHA256）从源码编译。Android 用 NDK r27.1 和 CMake 生成独立的 `libopencv_core.so`、`libopencv_imgproc.so`、`libopencv_highgui.so` 和 `libncnn.so`，由 `libvaldi_routes_vision.so` JNI 桥接库动态链接；共用 `c++_shared`，开启 RTTI 和异常。`JNI_OnLoad` 仍选择 `OPENCV_PARALLEL_BACKEND=builtin`，避免查找未提供的并行插件。Android 产物位于 `vision/vendor/install/android-arm64/shared/`，具体构建、依赖验证及无摄像头后端的边界见 [Android Vision 动态库](docs/vision-android-shared.md)。
+
+iOS 保持静态链接：`VisionCore.cpp` 和 Objective-C++ 包装编进 app target，依赖静态 `VisionDependencies.xcframework`（模拟器只有 arm64），不拆动态库。产物在 git 忽略的 `vision/vendor/install/`；用 `node vision/scripts/prepare-native.cjs --target android-arm64` 或 `--target ios` 生成，需要 CMake、Ninja 和对应 SDK。
 
 ## 蓝牙 API
 

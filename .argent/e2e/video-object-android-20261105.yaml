@@ -1,0 +1,246 @@
+# Unproven diagnostic recording. Known stale-tree checks and navigation crash retained.
+# Original recorded step numbers and findings: android-qa/report.md. No full replay pass.
+steps:
+  - launch: io.valdiroutes.app
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 原生视频播放器（MP4 / HLS）
+      timeoutMs: 5000
+  - await: { idle: true }
+  - tap:
+      text: 原生视频播放器（MP4 / HLS）
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 视频已暂停
+        identifier: video-status
+      timeoutMs: 5000
+  - await: { idle: true }
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 0.0 / 5.1 秒 · 内嵌
+        identifier: video-time
+      timeoutMs: 5000
+  - tap:
+      text: 倍速 1×
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 倍速 1.5×
+      timeoutMs: 5000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 视频已暂停
+        identifier: video-status
+      timeoutMs: 5000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 0.0 / 5.1 秒 · 内嵌
+        identifier: video-time
+      timeoutMs: 5000
+  - tap:
+      text: 倍速 1.5×
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 倍速 2×
+      timeoutMs: 5000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 视频已暂停
+        identifier: video-status
+      timeoutMs: 5000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 0.0 / 5.1 秒 · 内嵌
+        identifier: video-time
+      timeoutMs: 5000
+  - tap:
+      text: 倍速 2×
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 倍速 1×
+      timeoutMs: 5000
+  - tap:
+      text: 静音
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 取消静音
+      timeoutMs: 5000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 视频已暂停
+        identifier: video-status
+      timeoutMs: 5000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 0.0 / 5.1 秒 · 内嵌
+        identifier: video-time
+      timeoutMs: 5000
+  - tap:
+      text: 取消静音
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 静音
+      timeoutMs: 5000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 视频已暂停
+        identifier: video-status
+      timeoutMs: 5000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 0.0 / 5.1 秒 · 内嵌
+        identifier: video-time
+      timeoutMs: 5000
+  - tap:
+      text: 跳到 50%
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 2.5 / 5.1 秒 · 内嵌
+        identifier: video-time
+      timeoutMs: 5000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 视频已暂停
+        identifier: video-status
+      timeoutMs: 5000
+  - tap:
+      text: 跳到 50%
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 2.5 / 5.1 秒 · 内嵌
+        identifier: video-time
+      timeoutMs: 5000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 视频已暂停
+        identifier: video-status
+      timeoutMs: 5000
+  - tap:
+      text: 播放视频
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 视频播放结束
+        identifier: video-status
+      timeoutMs: 15000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 5.1 / 5.1 秒 · 内嵌
+        identifier: video-time
+      timeoutMs: 5000
+  - tap:
+      text: 播放视频
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 视频播放结束
+        identifier: video-status
+      timeoutMs: 15000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 5.1 / 5.1 秒 · 内嵌
+        identifier: video-time
+      timeoutMs: 5000
+  - tap:
+      text: 跳到 50%
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 2.5 / 5.1 秒 · 内嵌
+        identifier: video-time
+      timeoutMs: 5000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 视频已暂停
+        identifier: video-status
+      timeoutMs: 5000
+  - tap:
+      text: 全屏播放
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: EXIT FULLSCREEN
+      timeoutMs: 5000
+  - await: { idle: true }
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 2.5 / 5.1 秒 · 全屏
+        identifier: video-time
+      timeoutMs: 5000
+  - tap:
+      text: EXIT FULLSCREEN
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 2.5 / 5.1 秒 · 内嵌
+        identifier: video-time
+      timeoutMs: 5000
+  - await: { idle: true }
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 视频已暂停
+        identifier: video-status
+      timeoutMs: 5000
+  - tap:
+      id: navigation-back
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 原生视频播放器（MP4 / HLS）
+      timeoutMs: 5000
+  - await: { idle: true }

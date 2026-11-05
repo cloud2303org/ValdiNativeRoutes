@@ -9,20 +9,22 @@ object ValdiNativeModules {
     fun registerFactories(context: Context) {
         val factory0 = io.valdiroutes.app_ui.AppUIModuleFactoryImpl(context.applicationContext)
         ModuleFactoryRegistry.registerModuleFactory { factory0 }
-        val factory1 = io.valdiroutes.bluetooth.BluetoothModuleFactoryImpl(context.applicationContext)
+        val factory1 = io.valdiroutes.video.VideoModuleFactoryImpl(context.applicationContext)
         ModuleFactoryRegistry.registerModuleFactory { factory1 }
-        val factory2 = com.snap.modules.calculator.CalculatorModuleFactoryImpl()
+        val factory2 = io.valdiroutes.bluetooth.BluetoothModuleFactoryImpl(context.applicationContext)
         ModuleFactoryRegistry.registerModuleFactory { factory2 }
-        val factory3 = io.valdiroutes.mmkv.MMKVModuleFactoryImpl(context.applicationContext)
+        val factory3 = com.snap.modules.calculator.CalculatorModuleFactoryImpl()
         ModuleFactoryRegistry.registerModuleFactory { factory3 }
-        val factory4 = io.valdiroutes.nfc.NfcModuleFactoryImpl(context.applicationContext)
+        val factory4 = io.valdiroutes.mmkv.MMKVModuleFactoryImpl(context.applicationContext)
         ModuleFactoryRegistry.registerModuleFactory { factory4 }
-        val factory5 = io.valdiroutes.permissions.PermissionModuleFactoryImpl(context.applicationContext)
+        val factory5 = io.valdiroutes.nfc.NfcModuleFactoryImpl(context.applicationContext)
         ModuleFactoryRegistry.registerModuleFactory { factory5 }
-        val factory6 = com.snap.valdi.modules.webview.WebViewNativeModuleFactoryImpl()
+        val factory6 = io.valdiroutes.permissions.PermissionModuleFactoryImpl(context.applicationContext)
         ModuleFactoryRegistry.registerModuleFactory { factory6 }
-        val factory7 = io.valdiroutes.wifi.WifiModuleFactoryImpl(context.applicationContext)
+        val factory7 = com.snap.valdi.modules.webview.WebViewNativeModuleFactoryImpl()
         ModuleFactoryRegistry.registerModuleFactory { factory7 }
+        val factory8 = io.valdiroutes.wifi.WifiModuleFactoryImpl(context.applicationContext)
+        ModuleFactoryRegistry.registerModuleFactory { factory8 }
     }
 
     fun registerViewBinders(context: Context, runtime: ValdiRuntimeManager) {

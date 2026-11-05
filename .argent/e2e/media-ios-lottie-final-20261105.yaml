@@ -1,0 +1,81 @@
+---
+steps:
+- launch: io.valdiroutes.mediaqa
+- await:
+    visible:
+      text: Lottie 动画
+    timeout: 20000
+- await:
+    idle: true
+- tap:
+    text: Lottie 动画
+- await:
+    text:
+      in:
+        id: lottie-status
+      contains: PAUSED · LOADED
+    timeout: 15000
+- await:
+    idle: true
+- tap:
+    text: 定位 50%（暂停）
+- await:
+    text:
+      in:
+        id: lottie-time
+      contains: 1.60 / 3.20 s
+- tap:
+    text: 播放
+- await:
+    text:
+      in:
+        id: lottie-status
+      contains: PLAYING · LOADED
+- await:
+    text:
+      in:
+        id: lottie-time
+      contains: 回调时间：2.
+    timeout: 10000
+- tap:
+    text: 暂停
+- await:
+    text:
+      in:
+        id: lottie-status
+      contains: PAUSED · LOADED
+- tap:
+    text: 重置到起点（暂停）
+- await:
+    text:
+      in:
+        id: lottie-time
+      contains: 0.00 / 3.20 s
+- tap:
+    text: 定位 50%（暂停）
+- await:
+    text:
+      in:
+        id: lottie-time
+      contains: 1.60 / 3.20 s
+- tap:
+    id: navigation-back
+- await:
+    visible:
+      id: login-account
+- await:
+    idle: true
+- tap:
+    text: Lottie 动画
+- await:
+    text:
+      in:
+        id: lottie-status
+      contains: PAUSED · LOADED
+- await:
+    idle: true
+- await:
+    text:
+      in:
+        id: lottie-time
+      contains: 0.00 / 3.20 s

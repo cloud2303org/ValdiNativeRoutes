@@ -63,6 +63,7 @@ export class NavigationBar extends StatefulComponent<NavigationBarViewModel, Sta
               style={styles.back}
               backgroundColor={backPressed ? color.backPressed : undefined}
               touchAreaExtension={4}
+              accessibilityId="navigation-back"
               accessibilityLabel="返回"
               accessibilityCategory="image-button"
               onTap={onBack}

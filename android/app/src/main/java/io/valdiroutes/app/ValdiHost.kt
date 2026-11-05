@@ -18,6 +18,8 @@ import com.snap.valdi.views.ValdiRootView
 import io.valdiroutes.pages.NavigationHost
 import io.valdiroutes.permissions.PermissionHostImpl
 import io.valdiroutes.permissions.PermissionModuleFactoryImpl
+import io.valdiroutes.video.VideoHostImpl
+import io.valdiroutes.video.VideoModuleFactoryImpl
 import io.valdiroutes.pages.StartApp
 import io.valdiroutes.pages.InstallVisionHost
 import io.valdiroutes.pages.PageContext
@@ -43,6 +45,9 @@ object ValdiHost {
         // SupportValdiRuntimeManager.createWithSupportLibs, with the over-the-air module provider (ValdiOta.kt).
         ModuleFactoryRegistry.registerModuleFactoriesFromContext(app)
         runtimeManager = ValdiRuntimeManager(app, tweaks = ValdiTweaks(), customModuleProvider = ValdiOta.start(app))
+        // Only valdi-video:// session URLs use this loader. The generated native module factory and loader
+        // explicitly share one resource registry; ordinary images and media URL resolution stay independent.
+        runtimeManager.registerAssetLoader(videoHost.loader)
         runtimeManager.registerGlobalAttributesBindersFromContext(app)
         io.valdiroutes.generated.ValdiNativeModules.registerViewBinders(app, runtimeManager)
         SupportValdiRuntimeManager.configureSupportLibs(runtimeManager)
@@ -131,6 +136,9 @@ object ValdiHost {
     /** Runtime permissions for permissions/index.ts; the activity lends it the permission prompt. */
     val permissionHost: PermissionHostImpl
         get() = PermissionModuleFactoryImpl.requireHost()
+
+    val videoHost: VideoHostImpl
+        get() = VideoModuleFactoryImpl.requireHost()
 
     /** The route table, tab bar and first page, from startApp (app.ts); on the main thread, once JS has started. */
     fun start(completion: (RouteTable) -> Unit) {

@@ -5,13 +5,18 @@ import ValdiRuntime
 final class ValdiHost {
     static let shared = ValdiHost()
 
-    private let runtimeManager: SCValdiRuntimeManager = {
+    /// Shared explicitly by the official loader and the generated native module factory.
+    private let videoService = VRVideoService()
+
+    private lazy var runtimeManager: SCValdiRuntimeManager = {
+        let videoService = self.videoService
         let manager = SCValdiRuntimeManager()
         // The over-the-air package's modules and images (ValdiOta.swift), chosen before the runtime starts.
         let modules = ValdiOta.start()
         // Applied when the runtime starts, after Valdi's default loader, so remote <image> sources go through SDWebImage.
         manager.updateConfiguration {
             $0.imageLoaders = [AppImageLoader()]
+            $0.videoLoaders = [videoService]
             $0.customModuleProvider = modules
             // Device.observeDarkMode (theme.ts) only hears about the appearance with this on.
             $0.allowDarkMode = true
@@ -28,7 +33,7 @@ final class ValdiHost {
         guard waiting.count == 1 else { return }
         MainActor.assumeIsolated { AppUI.imageLoader = AppImages.load }
         let runtime = self.runtime
-        VRRegisterNativeModules(runtime)
+        videoService.registerModules { VRRegisterNativeModules(runtime) }
         VRInstallVisionHost.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: visionHost) {}
         // App-wide objects (the SQLite connection, api, the router) are created here, not in a page.
         #if DEBUG

@@ -1,0 +1,69 @@
+steps:
+  - launch: io.valdiroutes.app
+  - await:
+      visible:
+        text: 原生视频播放器（MP4 / HLS）
+      timeout: 10000
+  - await: { idle: true }
+  - tap:
+      text: 原生视频播放器（MP4 / HLS）
+  - await:
+      visible:
+        text: 视频已暂停
+        id: video-status
+      timeout: 10000
+  - await: { idle: true }
+  - await:
+      visible:
+        text: 0.0 / 5.1 秒 · 内嵌
+        id: video-time
+      timeout: 10000
+  - tap:
+      text: 跳到 50%
+  - tap:
+      text: 全屏播放
+  - await:
+      visible:
+        text: EXIT FULLSCREEN
+      timeout: 10000
+  - await: { idle: true }
+  - tap:
+      text: EXIT FULLSCREEN
+  - await:
+      visible:
+        text: 2.5 / 5.1 秒 · 内嵌
+        id: video-time
+      timeout: 10000
+  - await: { idle: true }
+  - await:
+      visible:
+        text: 视频已暂停
+        id: video-status
+      timeout: 10000
+  - tap:
+      id: navigation-back
+  - await:
+      visible:
+        text: 原生视频播放器（MP4 / HLS）
+      timeout: 10000
+  - await: { idle: true }
+  - tap:
+      text: 原生视频播放器（MP4 / HLS）
+  - await:
+      visible:
+        text: 视频已暂停
+        id: video-status
+      timeout: 10000
+  - await: { idle: true }
+  - await:
+      visible:
+        text: 0.0 / 5.1 秒 · 内嵌
+        id: video-time
+      timeout: 10000
+  - tap:
+      id: navigation-back
+  - await:
+      visible:
+        text: 原生视频播放器（MP4 / HLS）
+      timeout: 10000
+  - await: { idle: true }

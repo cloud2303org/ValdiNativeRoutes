@@ -67,6 +67,7 @@ class MainActivity : ComponentActivity() {
     private var navigator by mutableStateOf<Navigator?>(null)
     /** Started: the app is in the foreground for the pages' visibility (Navigator.updateVisibility). */
     private var started by mutableStateOf(false)
+    private var videoFullscreen by mutableStateOf(false)
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
         ValdiHost.permissionHost.onResult(grants)
     }
@@ -76,6 +77,7 @@ class MainActivity : ComponentActivity() {
         val bars = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
         enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
         super.onCreate(savedInstanceState)
+        ValdiHost.videoHost.attach(this) { videoFullscreen = it }
         AppUI.attach(this)
         // PermissionHost.requestMultiple (BLE, Wi-Fi, NFC) prompts through this activity.
         ValdiHost.permissionHost.attach(this, permissionLauncher)
@@ -86,6 +88,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 navigator?.let { AppRoot(it, started) }
+                // Registered after navigation/sheet handlers: fullscreen back exits video presentation first.
+                BackHandler(enabled = videoFullscreen) { ValdiHost.videoHost.exitFullscreenFromBack() }
             }
         }
     }
@@ -95,9 +99,25 @@ class MainActivity : ComponentActivity() {
         started = true
     }
 
+    override fun onResume() {
+        super.onResume()
+        ValdiHost.videoHost.onResume(this)
+    }
+
+    override fun onPause() {
+        ValdiHost.videoHost.onPause(this)
+        super.onPause()
+    }
+
     override fun onStop() {
         started = false
+        ValdiHost.videoHost.onStop(this)
         super.onStop()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        ValdiHost.videoHost.onPictureInPictureModeChanged(this, isInPictureInPictureMode)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -106,6 +126,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        ValdiHost.videoHost.detach(this)
         AppUI.detach(this)
         ValdiHost.permissionHost.detach(this)
         navigator?.let {

@@ -1,0 +1,29 @@
+steps:
+  - launch: io.valdiroutes.app
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: lottie-check
+      timeoutMs: 20000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Lottie 动画
+  - tap:
+      text: Lottie 动画
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: lottie-status
+      expectedText: PAUSED · LOADED
+  - tap:
+      text: 定位 50%（暂停）
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: lottie-time
+      expectedText: 1.60 / 3.20 s

@@ -601,6 +601,38 @@ NSInteger VRVisionHostMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRV
 
 
 //
+// VRLottiePage.m
+//
+
+#import <app_pages/app_pages.h>
+#import <ValdiRuntime/SCValdiRuntimeProtocol.h>
+#import <ValdiRuntime/SCValdiContextProtocol.h>
+@implementation VRLottiePage
+
++ (NSString *)componentPath
+{
+    return @"LottiePage@app_pages/src/LottiePage";
+}
+
+- (instancetype)initWithViewModel:(VRPageViewModel *)viewModel componentContext:(VRPageContext *)componentContext runtime:(id<SCValdiRuntimeProtocol>)runtime
+{
+    return [super initWithViewModelUntyped:viewModel componentContextUntyped:componentContext runtime:runtime];
+}
+
+- (void)setViewModel:(VRPageViewModel *)viewModel
+{
+    self.valdiContext.viewModel = viewModel;
+}
+
+- (VRPageViewModel *)viewModel
+{
+    return self.valdiContext.viewModel;
+}
+
+@end
+
+
+//
 // VRPresentationPage.m
 //
 
@@ -644,6 +676,38 @@ NSInteger VRVisionHostMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRV
 + (NSString *)componentPath
 {
     return @"RouteAnimationPage@app_pages/src/RouteAnimationPage";
+}
+
+- (instancetype)initWithViewModel:(VRPageViewModel *)viewModel componentContext:(VRPageContext *)componentContext runtime:(id<SCValdiRuntimeProtocol>)runtime
+{
+    return [super initWithViewModelUntyped:viewModel componentContextUntyped:componentContext runtime:runtime];
+}
+
+- (void)setViewModel:(VRPageViewModel *)viewModel
+{
+    self.valdiContext.viewModel = viewModel;
+}
+
+- (VRPageViewModel *)viewModel
+{
+    return self.valdiContext.viewModel;
+}
+
+@end
+
+
+//
+// VRVideoPage.m
+//
+
+#import <app_pages/app_pages.h>
+#import <ValdiRuntime/SCValdiRuntimeProtocol.h>
+#import <ValdiRuntime/SCValdiContextProtocol.h>
+@implementation VRVideoPage
+
++ (NSString *)componentPath
+{
+    return @"VideoPage@app_pages/src/VideoPage";
 }
 
 - (instancetype)initWithViewModel:(VRPageViewModel *)viewModel componentContext:(VRPageContext *)componentContext runtime:(id<SCValdiRuntimeProtocol>)runtime

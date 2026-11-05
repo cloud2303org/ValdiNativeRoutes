@@ -49,6 +49,7 @@ export function nativeModuleInputs(platform, root = defaultRoot) {
     `valdi/modules/${name}/module.json`,
     `valdi/modules/${name}/BUILD.bazel`,
     `valdi/modules/${name}/${platform}`,
+    ...(existsSync(path.join(root, `valdi/modules/${name}/assets`)) ? [`valdi/modules/${name}/assets`] : []),
   ]);
 }
 

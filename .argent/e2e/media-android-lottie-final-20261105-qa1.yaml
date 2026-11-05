@@ -1,0 +1,435 @@
+# Recorded live. QA INCOMPLETE: preserved stale-tree failures; see assigned evidence report.
+{
+  "steps": [
+    {
+      "launch": "io.valdiroutes.app"
+    },
+    {
+      "await": {
+        "visible": {
+          "text": "Lottie 动画"
+        },
+        "timeout": 20000
+      }
+    },
+    {
+      "await": {
+        "visible": {
+          "text": "Valdi + Compose Nav3"
+        }
+      }
+    },
+    {
+      "await": {
+        "idle": true
+      }
+    },
+    {
+      "tap": {
+        "text": "Lottie 动画"
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-status"
+          },
+          "equals": "PAUSED · LOADED\n初始暂停"
+        }
+      }
+    },
+    {
+      "await": {
+        "idle": true
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-time"
+          },
+          "equals": "回调时间：0.00 / 3.20 s"
+        }
+      }
+    },
+    {
+      "tap": {
+        "text": "定位 50%（暂停）"
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-time"
+          },
+          "equals": "回调时间：1.60 / 3.20 s"
+        }
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-status"
+          },
+          "equals": "PAUSED · LOADED\n已请求定位 50%（1.60 s）· 暂停"
+        }
+      }
+    },
+    {
+      "tap": {
+        "text": "播放"
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-status"
+          },
+          "equals": "PLAYING · LOADED\n已请求播放"
+        }
+      }
+    },
+    {
+      "tap": {
+        "text": "暂停"
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-status"
+          },
+          "equals": "PAUSED · LOADED\n已请求暂停"
+        }
+      }
+    },
+    {
+      "tap": {
+        "text": "重置到起点（暂停）"
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-time"
+          },
+          "equals": "回调时间：0.00 / 3.20 s"
+        }
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-status"
+          },
+          "equals": "PAUSED · LOADED\n已请求重置到 0.00 s · 暂停"
+        }
+      }
+    },
+    {
+      "tap": {
+        "text": "定位 50%（暂停）"
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-time"
+          },
+          "equals": "回调时间：1.60 / 3.20 s"
+        }
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-status"
+          },
+          "equals": "PAUSED · LOADED\n已请求定位 50%（1.60 s）· 暂停"
+        }
+      }
+    },
+    {
+      "tap": {
+        "text": "定位 50%（暂停）"
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-time"
+          },
+          "equals": "回调时间：1.60 / 3.20 s"
+        }
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-status"
+          },
+          "equals": "PAUSED · LOADED\n已请求定位 50%（1.60 s）· 暂停"
+        }
+      }
+    },
+    {
+      "await": {
+        "visible": {
+          "id": "lottie-time",
+          "text": "回调时间：1.60 / 3.20 s"
+        }
+      }
+    },
+    {
+      "tap": {
+        "text": "播放"
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-status"
+          },
+          "equals": "PLAYING · LOADED\n已请求播放"
+        }
+      }
+    },
+    {
+      "await": {
+        "hidden": {
+          "id": "lottie-time",
+          "text": "回调时间：1.60 / 3.20 s"
+        }
+      }
+    },
+    {
+      "tap": {
+        "text": "暂停"
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-status"
+          },
+          "equals": "PAUSED · LOADED\n已请求暂停"
+        }
+      }
+    },
+    {
+      "tap": {
+        "text": "速度 1× · 切换到 2×"
+      }
+    },
+    {
+      "await": {
+        "visible": {
+          "text": "速度 2× · 切换到 0.5×"
+        }
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-status"
+          },
+          "equals": "PAUSED · LOADED\n已设置速度 2×"
+        }
+      }
+    },
+    {
+      "tap": {
+        "text": "速度 2× · 切换到 0.5×"
+      }
+    },
+    {
+      "await": {
+        "visible": {
+          "text": "速度 0.5× · 切换到 1×"
+        }
+      }
+    },
+    {
+      "await": {
+        "visible": {
+          "text": "速度 0.5× · 切换到 1×"
+        }
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-status"
+          },
+          "equals": "PAUSED · LOADED\n已设置速度 0.5×"
+        }
+      }
+    },
+    {
+      "tap": {
+        "text": "速度 0.5× · 切换到 1×"
+      }
+    },
+    {
+      "await": {
+        "visible": {
+          "text": "速度 1× · 切换到 2×"
+        }
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-status"
+          },
+          "equals": "PAUSED · LOADED\n已设置速度 1×"
+        }
+      }
+    },
+    {
+      "tap": {
+        "text": "循环：开"
+      }
+    },
+    {
+      "await": {
+        "visible": {
+          "text": "循环：关"
+        }
+      }
+    },
+    {
+      "await": {
+        "visible": {
+          "text": "循环：关"
+        }
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-status"
+          },
+          "equals": "PAUSED · LOADED\n已关闭循环"
+        }
+      }
+    },
+    {
+      "tap": {
+        "text": "重置到起点（暂停）"
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-time"
+          },
+          "equals": "回调时间：0.00 / 3.20 s"
+        }
+      }
+    },
+    {
+      "tap": {
+        "text": "播放"
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-status"
+          },
+          "equals": "ENDED · LOADED\n已请求播放"
+        }
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-time"
+          },
+          "equals": "回调时间：3.20 / 3.20 s"
+        }
+      }
+    },
+    {
+      "tap": {
+        "text": "循环：关"
+      }
+    },
+    {
+      "await": {
+        "visible": {
+          "text": "循环：开"
+        }
+      }
+    },
+    {
+      "tap": {
+        "text": "返回"
+      }
+    },
+    {
+      "await": {
+        "visible": {
+          "text": "Valdi + Compose Nav3"
+        }
+      }
+    },
+    {
+      "await": {
+        "idle": true
+      }
+    },
+    {
+      "tap": {
+        "text": "Lottie 动画"
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-status"
+          },
+          "equals": "PAUSED · LOADED\n初始暂停"
+        }
+      }
+    },
+    {
+      "await": {
+        "idle": true
+      }
+    },
+    {
+      "await": {
+        "text": {
+          "in": {
+            "id": "lottie-time"
+          },
+          "equals": "回调时间：0.00 / 3.20 s"
+        }
+      }
+    }
+  ]
+}

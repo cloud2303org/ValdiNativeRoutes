@@ -30,6 +30,10 @@ export function validatePlatformConfig(config, file) {
         typeof value !== 'string' || !/^[A-Za-z][A-Za-z0-9_]*$/.test(value)))) {
     throw new Error(`${file}: invalid iosFrameworks`);
   }
+  if (config.iosBackgroundModes !== undefined &&
+      (!Array.isArray(config.iosBackgroundModes) || config.iosBackgroundModes.some(value => value !== 'audio'))) {
+    throw new Error(`${file}: invalid iosBackgroundModes (only audio is supported)`);
+  }
   if (config.iosPackages !== undefined &&
       (!Array.isArray(config.iosPackages) || config.iosPackages.some(item => {
         if (!item || typeof item !== 'object' || !/^[A-Za-z][A-Za-z0-9_]*$/.test(item.name ?? '') ||
@@ -114,7 +118,14 @@ export function syncModulePlatformConfig(root, modules) {
     if (!closing.test(source)) throw new Error('App base Info.plist has no root dictionary.');
     const tags = [...entries].sort(([a], [b]) => a.localeCompare(b))
       .map(([key, value]) => `\t<key>${key}</key>\n\t<string>${xml(value)}</string>\n`).join('');
-    write(path.join(root, 'ios/Generated/AppInfo.plist'), source.replace(closing, `${tags}</dict>\n</plist>\n`));
+    const backgroundModes = [...new Set(modules.flatMap(module => module.iosBackgroundModes ?? []))].sort();
+    if (backgroundModes.length && source.includes('<key>UIBackgroundModes</key>')) {
+      throw new Error('Module background modes must not also be declared in the App base Info.plist.');
+    }
+    const background = backgroundModes.length
+      ? `\t<key>UIBackgroundModes</key>\n\t<array>\n${backgroundModes.map(mode => `\t\t<string>${xml(mode)}</string>\n`).join('')}\t</array>\n`
+      : '';
+    write(path.join(root, 'ios/Generated/AppInfo.plist'), source.replace(closing, `${tags}${background}</dict>\n</plist>\n`));
   }
   const entitlements = [...entriesFor('iosEntitlements')].sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => `\t<key>${xml(key)}</key>\n\t<${value ? 'true' : 'false'}/>\n`).join('');
@@ -136,7 +147,12 @@ export function syncModulePlatformConfig(root, modules) {
   // JSON is YAML. This overlay is included by XcodeGen, whose relative paths start in ios/Generated.
   const sources = modules.filter(module => module.nativeBuild === 'host' &&
     existsSync(path.join(root, `valdi/modules/${module.name}/ios`)))
-    .map(module => ({ path: `../../valdi/modules/${module.name}/ios`, group: `Modules/${module.name}` }));
+    .flatMap(module => [
+      { path: `../../valdi/modules/${module.name}/ios`, group: `Modules/${module.name}` },
+      ...(existsSync(path.join(root, `valdi/modules/${module.name}/assets`))
+        ? [{ path: `../../valdi/modules/${module.name}/assets`, group: `Modules/${module.name}`, buildPhase: 'resources' }]
+        : []),
+    ]);
   write(path.join(root, 'ios/Generated/Modules.yml'), `${JSON.stringify({
     packages, targets: { ValdiRoutes: { sources, dependencies: [...dependencies.values()] } },
   }, null, 2)}\n`);

@@ -1,0 +1,61 @@
+steps:
+  - launch: io.valdiroutes.mediaqa
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: login-account
+  - await: { idle: true }
+  - tap:
+      text: 视频播放器
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 0.0 / 5.0 秒 · 内嵌
+      textMatch: equals
+  - await: { idle: true }
+  - tap:
+      text: 倍速 1×
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 倍速 1.5×
+  - tap:
+      text: 静音
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 取消静音
+  - tap:
+      text: 跳到 50%
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 2.5 / 5.0 秒 · 内嵌
+      textMatch: equals
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 倍速 1.5×
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-status
+      expectedText: 视频已暂停
+      textMatch: equals
+  - tap:
+      id: navigation-back
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: login-account
+  - await: { idle: true }

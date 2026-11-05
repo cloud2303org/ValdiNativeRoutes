@@ -1,0 +1,48 @@
+---
+steps:
+- launch: io.valdiroutes.mediaqa
+- await:
+    visible:
+      id: login-account
+- await:
+    idle: true
+- tap:
+    text: 视频播放器
+- await:
+    text:
+      in:
+        id: video-time
+      contains: 0.0 / 5.0 秒 · 内嵌
+- await:
+    idle: true
+- tap:
+    text: 播放视频
+- await:
+    text:
+      in:
+        id: video-status
+      contains: 播放结束
+    timeout: 15000
+- tap:
+    text: 跳到 50%
+- await:
+    text:
+      in:
+        id: video-time
+      contains: 2.5 / 5.0 秒 · 内嵌
+- tap:
+    text: 全屏播放
+- await:
+    visible:
+      text: Done
+- await:
+    idle: true
+- tap:
+    text: Done
+- await:
+    text:
+      in:
+        id: video-time
+      contains: 2.5 / 5.0 秒 · 内嵌
+- await:
+    idle: true

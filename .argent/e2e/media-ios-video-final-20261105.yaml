@@ -1,0 +1,137 @@
+steps:
+  - launch: io.valdiroutes.mediaqa
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: login-account
+  - tap:
+      text: 视频播放器
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 0.0 / 5.0 秒 · 内嵌
+  - tap:
+      text: 播放视频
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-status
+      expectedText: 播放结束
+      timeoutMs: 15000
+  - tap:
+      text: 跳到 50%
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 2.5 / 5.0 秒 · 内嵌
+  - tap:
+      text: 全屏播放
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Done
+  - tap:
+      text: Done
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 2.5 / 5.0 秒 · 内嵌
+  - tap:
+      text: 载入 HLS 示例
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: / 600.0 秒
+      timeoutMs: 30000
+  - tap:
+      text: 播放视频
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-status
+      expectedText: 视频播放中
+      timeoutMs: 20000
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: "40."
+      timeoutMs: 50000
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: "100."
+      timeoutMs: 20000
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: "1"
+      timeoutMs: 15000
+  - tap:
+      text: 画中画
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 画中画
+      timeoutMs: 20000
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-error
+      expectedText: Picture in Picture is unavailable on this device
+  - tool: button
+    args:
+      button: home
+  - tool: launch-app
+    args:
+      bundleId: io.valdiroutes.mediaqa
+    delayMs: 8000
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-status
+      expectedText: 视频播放中
+  - tap:
+      text: 暂停视频
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-status
+      expectedText: 视频已暂停
+  - tap:
+      id: navigation-back
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: login-account
+  - tap:
+      text: 视频播放器
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 0.0 / 5.0 秒 · 内嵌

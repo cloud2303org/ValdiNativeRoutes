@@ -7,11 +7,13 @@ import { FormPage } from './FormPage';
 import { HomePage } from './HomePage';
 import { InputCheckPage } from './InputCheckPage';
 import { LoginPage } from './LoginPage';
+import { LottiePage } from './LottiePage';
 import type { FormLayout } from './navigation';
 import { defineRoutes, nativePage, valdiPage } from './navigation/config';
 import { PresentationPage } from './PresentationPage';
 import { RouteAnimationPage } from './RouteAnimationPage';
 import { VisionPage } from './VisionPage';
+import { VideoPage } from './VideoPage';
 import { WheelPage } from './WheelPage';
 import { WebViewPage } from './WebViewPage';
 
@@ -35,6 +37,8 @@ export const routes = defineRoutes({
     wheels: valdiPage({ component: WheelPage, title: '页面内滚轮' }),
     calculator: valdiPage({ component: CalculatorComponent, title: 'Calculator' }),
     webview: valdiPage({ component: WebViewPage, title: 'WebView' }),
+    lottie: valdiPage({ component: LottiePage, title: 'Lottie 动画' }),
+    video: valdiPage({ component: VideoPage, title: '原生视频播放器' }),
   },
   tabs: {
     initial: 'home',

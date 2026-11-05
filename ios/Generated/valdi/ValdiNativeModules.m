@@ -14,6 +14,12 @@ void VRRegisterNativeModules(SCValdiRuntime *runtime) {
         [runtime registerNativeModuleFactory:[factoryClass new]];
     }
     {
+        Class factoryClass = NSClassFromString(@"VRVideoModuleFactory");
+        if (!factoryClass || ![factoryClass conformsToProtocol:@protocol(SCNValdiCoreModuleFactory)])
+            [NSException raise:NSInternalInconsistencyException format:@"Missing Swift module factory: VRVideoModuleFactory"];
+        [runtime registerNativeModuleFactory:[factoryClass new]];
+    }
+    {
         Class factoryClass = NSClassFromString(@"VRBluetoothModuleFactory");
         if (!factoryClass || ![factoryClass conformsToProtocol:@protocol(SCNValdiCoreModuleFactory)])
             [NSException raise:NSInternalInconsistencyException format:@"Missing Swift module factory: VRBluetoothModuleFactory"];

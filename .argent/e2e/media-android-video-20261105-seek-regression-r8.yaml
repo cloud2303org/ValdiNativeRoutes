@@ -1,0 +1,42 @@
+steps:
+  - launch: io.valdiroutes.app
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 原生视频播放器（MP4 / HLS）
+  - await: { idle: true }
+  - tap:
+      text: 原生视频播放器（MP4 / HLS）
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 0.0 / 5.1 秒 · 内嵌
+        identifier: video-time
+  - await: { idle: true }
+  - tap:
+      text: 播放视频
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 视频播放中
+        identifier: video-status
+  - tap:
+      text: 暂停视频
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 视频已暂停
+        identifier: video-status
+  - tap:
+      text: 跳到 50%
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 2.5 / 5.1 秒 · 内嵌
+      textMatch: equals

@@ -81,6 +81,14 @@ export class LoginPage extends Page<PageViewModel, State, PageContext> {
           <Button id="sign-in" title="登录" onTap={this.handleSignIn} />
           <Button id="input-check" title="输入自检（无需登录）" secondary={true} onTap={this.handleInputCheck} />
           <Button id="webview-check" title="WebView 自检（无需登录）" secondary={true} onTap={this.handleWebView} />
+          <view flexDirection="row">
+            <view flexGrow={1} flexBasis={0} marginRight={5}>
+              <Button id="lottie-check" title="Lottie 动画" secondary={true} onTap={this.handleLottie} />
+            </view>
+            <view flexGrow={1} flexBasis={0} marginLeft={5}>
+              <Button id="video-check" title="视频播放器" secondary={true} onTap={this.handleVideo} />
+            </view>
+          </view>
         </view>
       </view>
     </view>;
@@ -91,6 +99,8 @@ export class LoginPage extends Page<PageViewModel, State, PageContext> {
   private handlePassword = (event: { text: string }) => this.setState({ password: event.text });
   private handleInputCheck = () => new Router(this.context).push('inputCheck', {});
   private handleWebView = () => new Router(this.context).push('webview', {});
+  private handleLottie = () => new Router(this.context).push('lottie', {});
+  private handleVideo = () => new Router(this.context).push('video', {});
 
   private handleSignIn = async () => {
     const account = this.state.account.trim();

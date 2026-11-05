@@ -1,0 +1,77 @@
+//
+// VRVideoNativeModule.h
+//
+
+#import <ValdiRuntime/SCValdiMarshaller.h>
+
+#import <AppVideoTypes/AppVideoTypes.h>
+
+/**
+* Marshall the instance into the given SCValdiMarshaller.
+*/
+FOUNDATION_EXPORT NSInteger VRVideoNativeModuleMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRVideoNativeModule> _Nonnull instance);
+
+
+//
+// VRVideoNativeModuleFactory.h
+//
+
+#import "AppVideoTypes.h"
+
+
+//
+// VRVideoState.h
+//
+
+#import <ValdiRuntime/SCValdiMarshaller.h>
+
+#import <AppVideoTypes/AppVideoTypes.h>
+
+
+//
+// VRVideoHost.h
+//
+
+#import <ValdiRuntime/SCValdiMarshaller.h>
+#import <ValdiRuntime/SCValdiPromise.h>
+
+#import <AppVideoTypes/AppVideoTypes.h>
+
+/**
+* Marshall the instance into the given SCValdiMarshaller.
+*/
+FOUNDATION_EXPORT NSInteger VRVideoHostMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRVideoHost> _Nonnull instance);
+
+
+//
+// VRVideoPlayer.h
+//
+
+#import <ValdiRuntime/SCValdiMarshaller.h>
+#import <ValdiRuntime/SCValdiPromise.h>
+#import <ValdiRuntime/SCValdiUndefinedValue.h>
+
+#import <AppVideoTypes/AppVideoTypes.h>
+
+/**
+* Marshall the instance into the given SCValdiMarshaller.
+*/
+FOUNDATION_EXPORT NSInteger VRVideoPlayerMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRVideoPlayer> _Nonnull instance);
+
+
+//
+// VRVideoSubscription.h
+//
+
+#import <ValdiRuntime/SCValdiMarshaller.h>
+#import <ValdiRuntime/SCValdiPromise.h>
+#import <ValdiRuntime/SCValdiUndefinedValue.h>
+
+#import <AppVideoTypes/AppVideoTypes.h>
+
+/**
+* Marshall the instance into the given SCValdiMarshaller.
+*/
+FOUNDATION_EXPORT NSInteger VRVideoSubscriptionMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRVideoSubscription> _Nonnull instance);
+
+

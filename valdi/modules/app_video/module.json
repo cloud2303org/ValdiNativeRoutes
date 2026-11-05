@@ -1,0 +1,19 @@
+{
+  "nativeBuild": "host",
+  "iosLanguage": "objc",
+  "iosModuleName": "AppVideo",
+  "androidClassPath": "io.valdiroutes.video",
+  "androidModuleFactory": "io.valdiroutes.video.VideoModuleFactoryImpl",
+  "androidModuleFactoryContext": true,
+  "iosModuleFactoryClass": "VRVideoModuleFactory",
+  "androidDependencies": [
+    "androidx.media3:media3-exoplayer:1.9.3",
+    "androidx.media3:media3-exoplayer-hls:1.9.3",
+    "androidx.media3:media3-ui:1.9.3"
+  ],
+  "androidPermissions": [
+    { "name": "android.permission.INTERNET" }
+  ],
+  "iosFrameworks": ["AVFoundation", "AVKit", "UIKit"],
+  "iosBackgroundModes": ["audio"]
+}

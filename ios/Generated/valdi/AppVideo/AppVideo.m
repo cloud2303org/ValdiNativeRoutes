@@ -1,0 +1,189 @@
+//
+// VRVideoNativeModule.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "AppVideo.h"
+
+@interface VRVideoNativeModule: SCValdiProxyMarshallableObject
+
+@end
+
+@implementation VRVideoNativeModule
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "getHost", .selName = "getHost", .type = "f|m|(): r:'[0]'"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRVideoHost",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeProtocol);
+}
+
+@end
+
+NSInteger VRVideoNativeModuleMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRVideoNativeModule> _Nonnull instance) {
+    return SCValdiMarshallableObjectMarshallInterface(marshaller, instance, [VRVideoNativeModule class]);
+}
+
+
+//
+// VRVideoNativeModuleFactory.m
+//
+
+#import "AppVideo.h"
+
+
+//
+// VRVideoState.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "AppVideo.h"
+
+
+//
+// VRVideoHost.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "AppVideo.h"
+
+@interface VRVideoHost: SCValdiProxyMarshallableObject
+
+@end
+
+@implementation VRVideoHost
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "getDemoSource", .selName = "getDemoSource", .type = "f|m|(): s"},
+        {.name = "create", .selName = "createWithSource:", .type = "f|m|(s): p<r:'[0]'>"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRVideoPlayer",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeProtocol);
+}
+
+@end
+
+NSInteger VRVideoHostMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRVideoHost> _Nonnull instance) {
+    return SCValdiMarshallableObjectMarshallInterface(marshaller, instance, [VRVideoHost class]);
+}
+
+
+//
+// VRVideoPlayer.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "AppVideo.h"
+
+static SCValdiFieldValue SCValdiFunctionInvokeOOD_o(const void *function, SCValdiFieldValue* fields) {
+    const void * result = ((const void * (*) (const void *, const void *, double ))function)(SCValdiFieldValueGetPtr(fields[0]), SCValdiFieldValueGetPtr(fields[1]), SCValdiFieldValueGetDouble(fields[2]));
+    return SCValdiFieldValueMakePtr(result);
+}
+
+static id SCValdiBlockCreateOOD_o(SCValdiBlockTrampoline trampoline) {
+    return ^const void *(const void * p0, double p1) {
+        return SCValdiFieldValueGetPtr(trampoline(nil, SCValdiFieldValueMakePtr(p0), SCValdiFieldValueMakeDouble(p1)));
+    };
+}
+
+static SCValdiFieldValue SCValdiFunctionInvokeOOB_o(const void *function, SCValdiFieldValue* fields) {
+    const void * result = ((const void * (*) (const void *, const void *, BOOL ))function)(SCValdiFieldValueGetPtr(fields[0]), SCValdiFieldValueGetPtr(fields[1]), SCValdiFieldValueGetBool(fields[2]));
+    return SCValdiFieldValueMakePtr(result);
+}
+
+static id SCValdiBlockCreateOOB_o(SCValdiBlockTrampoline trampoline) {
+    return ^const void *(const void * p0, BOOL p1) {
+        return SCValdiFieldValueGetPtr(trampoline(nil, SCValdiFieldValueMakePtr(p0), SCValdiFieldValueMakeBool(p1)));
+    };
+}
+
+@interface VRVideoPlayer: SCValdiProxyMarshallableObject
+
+@end
+
+@implementation VRVideoPlayer
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectBlockSupport kBlocks[] = {
+        { .typeEncoding = "ood:o", .invoker = &SCValdiFunctionInvokeOOD_o, .factory = &SCValdiBlockCreateOOD_o },
+        { .typeEncoding = "oob:o", .invoker = &SCValdiFunctionInvokeOOB_o, .factory = &SCValdiBlockCreateOOB_o },
+        { .typeEncoding = nil },
+    };
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "getSource", .selName = "getSource", .type = "f|m|(): s"},
+        {.name = "play", .selName = "play", .type = "f|m|(): p<v>"},
+        {.name = "pause", .selName = "pause", .type = "f|m|(): p<v>"},
+        {.name = "setPlaybackRate", .selName = "setPlaybackRateWithRate:", .type = "f|m|(d): p<v>"},
+        {.name = "seekTo", .selName = "seekToWithTimeMs:", .type = "f|m|(d): p<v>"},
+        {.name = "setVolume", .selName = "setVolumeWithVolume:", .type = "f|m|(d): p<v>"},
+        {.name = "setPageVisible", .selName = "setPageVisibleWithVisible:", .type = "f|m|(b): p<v>"},
+        {.name = "enterFullscreen", .selName = "enterFullscreen", .type = "f|m|(): p<v>"},
+        {.name = "exitFullscreen", .selName = "exitFullscreen", .type = "f|m|(): p<v>"},
+        {.name = "enterPictureInPicture", .selName = "enterPictureInPicture", .type = "f|m|(): p<v>"},
+        {.name = "getState", .selName = "getState", .type = "f|m|(): p<r:'[0]'>"},
+        {.name = "subscribe", .selName = "subscribeWithListener:", .type = "f|m|(f(r:'[0]')): p<r:'[1]'>"},
+        {.name = "release", .selName = "releaseObject", .type = "f|m|(): p<v>"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRVideoState",
+        "VRVideoSubscription",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, kBlocks, SCValdiMarshallableObjectTypeProtocol);
+}
+
+@end
+
+NSInteger VRVideoPlayerMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRVideoPlayer> _Nonnull instance) {
+    return SCValdiMarshallableObjectMarshallInterface(marshaller, instance, [VRVideoPlayer class]);
+}
+
+
+//
+// VRVideoSubscription.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "AppVideo.h"
+
+@interface VRVideoSubscription: SCValdiProxyMarshallableObject
+
+@end
+
+@implementation VRVideoSubscription
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "unsubscribe", .selName = "unsubscribe", .type = "f|m|(): p<v>"},
+        {.name = nil},
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeProtocol);
+}
+
+@end
+
+NSInteger VRVideoSubscriptionMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRVideoSubscription> _Nonnull instance) {
+    return SCValdiMarshallableObjectMarshallInterface(marshaller, instance, [VRVideoSubscription class]);
+}
+
+

@@ -1,0 +1,305 @@
+steps:
+  - launch: io.valdiroutes.app
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 原生视频播放器（MP4 / HLS）
+  - tap:
+      text: 原生视频播放器（MP4 / HLS）
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: video-status
+        text: 视频已暂停
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 0.0 / 5.1 秒 · 内嵌
+      textMatch: equals
+  - tool: run-sequence
+    args:
+      steps:
+        - tool: gesture-tap
+          args:
+            x: 0.5
+            y: 0.4205
+          delayMs: 700
+        - tool: await-ui-element
+          args:
+            condition: visible
+            selector:
+              identifier: video-status
+              text: 视频播放中
+        - tool: gesture-tap
+          args:
+            x: 0.5
+            y: 0.4205
+        - tool: await-ui-element
+          args:
+            condition: visible
+            selector:
+              identifier: video-status
+              text: 视频已暂停
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 1.7 / 5.1 秒 · 内嵌
+      textMatch: equals
+  - tap:
+      text: 跳到 50%
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 2.6 / 5.1 秒 · 内嵌
+      textMatch: equals
+  - tap:
+      text: 跳到 50%
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 2.6 / 5.1 秒 · 内嵌
+      textMatch: equals
+  - tap:
+      text: 倍速 1×
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 倍速 1.5×
+  - tap:
+      text: 倍速 1.5×
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 倍速 2×
+  - tap:
+      text: 倍速 2×
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 倍速 1×
+  - tap:
+      text: 静音
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 取消静音
+  - tap:
+      text: 取消静音
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 静音
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 2.5 / 5.1 秒 · 内嵌
+      textMatch: equals
+  - tap:
+      text: 全屏播放
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: EXIT FULLSCREEN
+        role: Button
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 2.5 / 5.1 秒 · 全屏
+      textMatch: equals
+  - tool: button
+    args:
+      button: back
+  - tool: run-sequence
+    args:
+      steps:
+        - tool: keyboard
+          args:
+            key: tab
+        - tool: keyboard
+          args:
+            key: enter
+  - tap:
+      text: EXIT FULLSCREEN
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 2.5 / 5.1 秒 · 内嵌
+      textMatch: equals
+  - tap:
+      text: 画中画
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 2.5 / 5.1 秒 · 画中画
+      textMatch: equals
+  - tool: launch-app
+    args:
+      bundleId: io.valdiroutes.app
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 2.5 / 5.1 秒 · 内嵌
+      textMatch: equals
+  - tap:
+      text: 载入 HLS 示例
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: video-status
+        text: 视频已暂停
+      timeoutMs: 30000
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 0.0 / 600.0 秒 · 内嵌
+      textMatch: equals
+  - tap:
+      text: 播放视频
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: video-status
+        text: 视频播放中
+  - tap:
+      text: 暂停视频
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: video-status
+        text: 视频已暂停
+  - tap:
+      text: 跳到 50%
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 300.0 / 600.0 秒 · 内嵌
+      textMatch: equals
+  - tap:
+      text: 跳到 50%
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 300.0 / 600.0 秒 · 内嵌
+      textMatch: equals
+  - tool: run-sequence
+    args:
+      steps:
+        - tool: gesture-tap
+          args:
+            x: 0.499
+            y: 0.4205
+        - tool: await-ui-element
+          args:
+            condition: visible
+            selector:
+              identifier: video-status
+              text: 视频播放中
+        - tool: button
+          args:
+            button: home
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: com.google.android.apps.nexuslauncher:id/workspace
+  - tool: launch-app
+    args:
+      bundleId: io.valdiroutes.app
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: video-status
+        text: 视频播放中
+  - tool: button
+    args:
+      button: home
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: com.google.android.apps.nexuslauncher:id/workspace
+  - tool: launch-app
+    args:
+      bundleId: io.valdiroutes.app
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: video-status
+        text: 视频播放中
+  - tap:
+      text: 暂停视频
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: video-status
+        text: 视频已暂停
+  - tap:
+      id: video-url
+  - tool: gesture-swipe
+    args:
+      fromX: 0.5
+      fromY: 0.8
+      toX: 0.5
+      toY: 0.2
+      durationMs: 400
+      momentum: false
+  - tap:
+      text: 返回
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 原生视频播放器（MP4 / HLS）
+  - tap:
+      text: 原生视频播放器（MP4 / HLS）
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: video-time
+      expectedText: 0.0 / 5.1 秒 · 内嵌
+      textMatch: equals
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: video-status
+        text: 视频已暂停

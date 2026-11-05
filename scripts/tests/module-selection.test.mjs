@@ -65,6 +65,43 @@ test('missing, duplicate, unknown and unsafe module selections fail rather than 
   assert.deepEqual(enabledModuleNames(root), ['calculator']);
 });
 
+test('video background audio capability follows module selection and rejects unsupported modes', t => {
+  const { root, select, write } = fixture(t);
+  const config = modes => write('valdi/modules/calculator/module.json', JSON.stringify({
+    nativeBuild: 'host', iosBackgroundModes: modes,
+  }));
+  config(['audio', 'audio']);
+  select(['calculator']);
+  syncNativeModuleRegistration(root);
+  const info = () => readFileSync(path.join(root, 'ios/Generated/AppInfo.plist'), 'utf8');
+  assert.match(info(), /<key>UIBackgroundModes<\/key>\s*<array>\s*<string>audio<\/string>\s*<\/array>/);
+  select([]);
+  syncNativeModuleRegistration(root);
+  assert.doesNotMatch(info(), /UIBackgroundModes/);
+  select(['calculator']);
+  for (const modes of ['audio', [true], ['location'], ['<audio>']]) {
+    config(modes);
+    assert.throws(() => nativeModules(root), /invalid iosBackgroundModes/);
+  }
+});
+
+test('host media assets participate in native compatibility and selected iOS resources', t => {
+  const { root, select, write } = fixture(t);
+  write('valdi/modules/calculator/module.json', JSON.stringify({ nativeBuild: 'host' }));
+  write('valdi/modules/calculator/ios/Player.m', '// player');
+  write('valdi/modules/calculator/assets/clip.mp4', 'media');
+  select(['calculator']);
+  syncNativeModuleRegistration(root);
+  assert.ok(nativeModuleInputs('android', root).includes('valdi/modules/calculator/assets'));
+  assert.ok(nativeModuleInputs('ios', root).includes('valdi/modules/calculator/assets'));
+  const sources = () => JSON.parse(readFileSync(path.join(root, 'ios/Generated/Modules.yml'), 'utf8')).targets.ValdiRoutes.sources;
+  assert.ok(sources().some(source => source.path.endsWith('/calculator/assets') && source.buildPhase === 'resources'));
+  select([]);
+  syncNativeModuleRegistration(root);
+  assert.deepEqual(sources(), []);
+  assert.ok(!nativeModuleInputs('ios', root).some(file => file.includes('/calculator/')));
+});
+
 test('disabling a module removes previously staged archives, maps, native libraries and resource bundles only for that module', t => {
   const { root, write } = fixture(t);
   for (const file of ['bluetooth.valdimodule', 'bluetooth.map.json', 'bluetooth.bundle/icon.png', 'bluetooth/libbluetooth_ios.a', 'calculator.valdimodule', 'valdi_core.valdimodule']) {

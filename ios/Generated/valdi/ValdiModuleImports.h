@@ -2,6 +2,9 @@
 #import <AppUI/AppUI.h>
 #import <AppUITypes/AppUITypes.h>
 #import "../../../valdi/modules/app_ui/ios/VRAppUIVoidPromise.h"
+#import <AppVideo/AppVideo.h>
+#import <AppVideoTypes/AppVideoTypes.h>
+#import "../../../valdi/modules/app_video/ios/VRVideoService.h"
 #import <MMKVStorage/MMKVStorage.h>
 #import <MMKVStorageTypes/MMKVStorageTypes.h>
 #import <Nfc/Nfc.h>

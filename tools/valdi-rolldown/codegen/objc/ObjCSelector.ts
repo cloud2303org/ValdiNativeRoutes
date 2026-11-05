@@ -19,6 +19,8 @@ export class ObjCSelector {
     readonly parameters: ObjcMessageParameter[],
   ) {
     if (!parameters.length) {
+      // NSObject's zero-argument release selector is reserved for memory management under ARC.
+      if (methodName === 'release') methodName = 'releaseObject';
       this.messageParts = [methodName];
       this.messageDeclaration = `- (${returnType})${methodName}`;
       this.selectorName = methodName;

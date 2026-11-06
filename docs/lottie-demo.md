@@ -1,6 +1,6 @@
 # Lottie demo
 
-`valdi/modules/app_pages/src/LottiePage.tsx` is a Valdi
+`valdi/modules/app_pages/src/features/lottie/LottiePage.tsx` is a Valdi
 `Page<PageViewModel, State, PageContext>` using the real `<animatedimage>`
 element. Its native exports are `VRLottiePage` (iOS) and
 `io.valdiroutes.pages.LottiePage` (Android). Open route `lottie` from Home's
@@ -32,7 +32,7 @@ node scripts/generate-lottie-demo.mjs --check
 The generator checks the original JSON SHA-256 and byte length, the MIT file
 SHA-256, attribution and metadata. It creates a narrowly scoped color
 compatibility derivative, base64-encodes that derivative, and exports the
-full license text in `valdi/modules/app_pages/src/lottieDemoData.ts`.
+full license text in `valdi/modules/app_pages/src/features/lottie/demoData.ts`.
 `LOTTIE_DEMO_SOURCE` continues to describe the untouched upstream source;
 `LOTTIE_DEMO_DERIVATIVE` describes the shipped bytes and conversion.
 `LOTTIE_DEMO_BYTE_LENGTH` is the shipped derivative's size.

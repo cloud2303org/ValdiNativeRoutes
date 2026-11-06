@@ -2,9 +2,9 @@
 
 两端使用 Valdi 官方 `<video>` 接口和应用持有的原生播放器；运行验证范围见文末。
 
-- [HomePage](../valdi/modules/app_pages/src/HomePage.tsx)：点击「原生视频播放器（MP4 / HLS）」（`video`）。
-- [LoginPage](../valdi/modules/app_pages/src/LoginPage.tsx)：未登录也可点击「视频播放器」（`video-check`）。
-- 两者进入 [routes.ts](../valdi/modules/app_pages/src/routes.ts) 的 `video` 路由，显示 [VideoPage](../valdi/modules/app_pages/src/VideoPage.tsx)「原生视频播放器」。
+- [HomePage](../valdi/modules/app_pages/src/features/home/HomePage.tsx)：点击「原生视频播放器（MP4 / HLS）」（`video`）。
+- [LoginPage](../valdi/modules/app_pages/src/features/auth/LoginPage.tsx)：未登录也可点击「视频播放器」（`video-check`）。
+- 两者进入 [routes.ts](../valdi/modules/app_pages/src/routes.ts) 的 `video` 路由，显示 [VideoPage](../valdi/modules/app_pages/src/features/video/VideoPage.tsx)「原生视频播放器」。
 
 ## 源码已实现
 
@@ -12,11 +12,11 @@
 每个播放器独立的 `VideoPlayer` 原生代理对象；`player.getSource()` 提供不透明的
 surface URL。session ID 仅由原生资源表与 loader 使用，不再作为页面命令参数。
 
-- Android：[ValdiHost](../android/app/src/main/java/io/valdiroutes/app/ValdiHost.kt)
+- Android：[ValdiHost](../android/app/src/main/java/io/valdiroutes/app/runtime/ValdiHost.kt)
   注册 [VideoLoader](../valdi/modules/app_video/android/VideoLoader.kt)，绑定
   [VideoSession](../valdi/modules/app_video/android/VideoSession.kt) 的 Media3
   `ExoPlayer` / `PlayerView`。
-- iOS：[ValdiHost](../ios/ValdiRoutes/ValdiHost.swift) 注册
+- iOS：[ValdiHost](../ios/ValdiRoutes/Runtime/ValdiHost.swift) 注册
   [VRVideoService](../valdi/modules/app_video/ios/VRVideoService.m)，通过
   `SCValdiVideoLoader` / `SCValdiVideoPlayer` 连接 AVPlayer。
 - [VideoHost API](../valdi/modules/app_video/src/VideoHost.ts) 中的 `VideoPlayer`
@@ -94,7 +94,7 @@ bundle，`getDemoSource()` 返回本地文件 URL，无远程兜底。
 [MDN-LICENSE.txt](../valdi/modules/app_video/assets/MDN-LICENSE.txt)。下载时核对了原始
 Git blob 和文件 SHA-256，构建后再次检查了本地文件与来源记录。
 
-「载入 HLS 示例」使用 [VideoPage 的 `HLS_EXAMPLE`](../valdi/modules/app_pages/src/VideoPage.tsx)
+「载入 HLS 示例」使用 [VideoPage 的 `HLS_EXAMPLE`](../valdi/modules/app_pages/src/features/video/VideoPage.tsx)
 所指向的 Apple 示例，也可输入视频 URL。离线 MP4 无需网络；远程 MP4/HLS 需要网络。
 [模块配置](../valdi/modules/app_video/module.json) 包含 Media3 HLS 依赖与 iOS
 AVFoundation/AVKit、后台音频声明。当前不提供 DRM 或自定义请求头。

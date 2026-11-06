@@ -1,5 +1,9 @@
 try-import %workspace%/win.local.bazelrc
 
+# Parent module targets are built in module-build/. Keep their nested cpp packages
+# available to this runtime workspace without loading the platform-host rules.
+try-import %workspace%/modules/runtime-packages.bazelrc
+
 # Registry from the same immutable Valdi fork commit as MODULE.bazel
 # Keep both registries in common: platform configs expand later and would let
 # BCR win over the patched fork rules if only the fork used common:<platform>.

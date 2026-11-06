@@ -76,6 +76,15 @@ NSInteger VRAppUINativeModuleMarshall(SCValdiMarshallerRef  _Nonnull marshaller,
 
 
 //
+// VRColumnWheelConfig.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "AppUI.h"
+
+
+//
 // VRDatePickerRequest.m
 //
 
@@ -157,7 +166,34 @@ NSInteger VRAppUINativeModuleMarshall(SCValdiMarshallerRef  _Nonnull marshaller,
 
 
 //
+// VRTimeWheelConfig.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "AppUI.h"
+
+
+//
 // VRToastRequest.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "AppUI.h"
+
+
+//
+// VRTreeWheelConfig.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "AppUI.h"
+
+
+//
+// VRWheelTreeNode.m
 //
 
 #import <ValdiRuntime/SCValdiJSConversionUtils.h>

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -15,7 +16,8 @@ test('every official module template compiles with the Node backend and preserve
   t.after(() => rmSync(fixture, { recursive: true, force: true }));
   const sources = valdiSourceRoot();
   assert.ok(sources, 'Prepare the pinned Valdi sources before testing templates');
-  for (const template of MODULE_TEMPLATES) {
+  const officialTemplates = MODULE_TEMPLATES.filter(template => template !== 'cpp_bridge_module');
+  for (const template of officialTemplates) {
     const created = createModule({ root: fixture, sources, name: `sample_${template}`, template });
     const config = JSON.parse(readFileSync(path.join(created.directory, 'module.json'), 'utf8'));
     const out = path.join(fixture, 'out', created.name);
@@ -53,7 +55,7 @@ test('every official module template compiles with the Node backend and preserve
     }
     assert.throws(() => createModule({ root: fixture, sources, name: created.name, template }), /already exists/);
   }
-  writeFileSync(path.join(fixture, 'package.json'), JSON.stringify({ valdi: { app: sampleApp(), modules: MODULE_TEMPLATES.map(template => `sample_${template}`) } }));
+  writeFileSync(path.join(fixture, 'package.json'), JSON.stringify({ valdi: { app: sampleApp(), modules: officialTemplates.map(template => `sample_${template}`) } }));
   const modules = syncNativeModuleRegistration(fixture);
   assert.equal(modules.length, 2);
   assert.deepEqual(nativeModules(fixture), modules);
@@ -62,6 +64,110 @@ test('every official module template compiles with the Node backend and preserve
   assert.match(kotlin, /PolyglotNativeViewAttributesBinder\(context\)/);
   const objc = readFileSync(path.join(fixture, 'ios/Generated/valdi/ValdiNativeModules.m'), 'utf8');
   assert.match(objc, /registerNativeModuleFactory:SamplePolyglotBridgeModuleCreateModuleFactory\(\)/);
+});
+
+test('C++ bridge templates generate module-owned implementations and real bindings without platform factories', async t => {
+  const fixture = mkdtempSync(path.join(tmpdir(), 'valdi-cpp-scaffold-'));
+  t.after(() => rmSync(fixture, { recursive: true, force: true }));
+  const sources = valdiSourceRoot()!;
+  for (const name of ['first_cpp', 'second_cpp']) {
+    const created = createModule({
+      root: fixture, sources, name, template: 'cpp_bridge_module',
+      naming: { androidNamespace: 'com.example.host', iosPrefix: 'EX' },
+    });
+    const config = JSON.parse(readFileSync(path.join(created.directory, 'module.json'), 'utf8'));
+    assert.equal(config.template, 'cpp_bridge_module');
+    assert.equal(config.nativeBuild, undefined, 'C++ factories belong to the runtime, not Kotlin/ObjC registration');
+    assert.equal(existsSync(path.join(created.directory, 'BUILD.bazel')), false);
+    assert.equal(existsSync(path.join(created.directory, 'android')), false);
+    assert.equal(existsSync(path.join(created.directory, 'ios')), false);
+    assert.match(readFileSync(path.join(created.directory, 'cpp/BUILD.bazel'), 'utf8'),
+      new RegExp(`module_cpp_library\\([\\s\\S]*module_name = "${name}"`));
+    assert.match(readFileSync(path.join(created.directory, 'src/Cpp.d.ts'), 'utf8'),
+      new RegExp(`android: 'com\\.example\\.host\\.modules\\.${name}\\.CppModule'`));
+    const implementation = readFileSync(path.join(created.directory, 'cpp/src/Cpp.cpp'), 'utf8');
+    assert.match(implementation, new RegExp(`namespace snap::valdi_modules::${name}`));
+    assert.match(implementation, /registerTyped<CppModuleFactoryImpl>/);
+    for (const mode of ['debug', 'release'] as const) {
+      const output = path.join(fixture, mode, name);
+      await compileNodeModule({
+        name, dir: created.directory, generatedDirs: [], nodeModules: path.join(root, 'valdi/node_modules'),
+      }, output, config.iosModuleName, mode);
+      const header = readFileSync(path.join(output, `cpp/valdi_modules/${name}/${name}.hpp`), 'utf8');
+      assert.match(header, /class CppModuleFactory/);
+      assert.match(header, /virtual double multiply\(double left, double right\)/);
+      const cpp = readFileSync(path.join(output, `cpp/valdi_modules/${name}/${name}.cpp`), 'utf8');
+      assert.ok(cpp.includes(`${name}/src/Cpp`), 'generated factory must expose the module canonical ID');
+      const archive = unpack(readFileSync(path.join(output, `${name}.valdimodule`)));
+      assert.ok([...archive.keys()].some(entry => entry.endsWith('index.js')));
+      assert.equal([...archive.keys()].some(entry => entry.endsWith('Cpp.js')), false);
+    }
+  }
+  writeFileSync(path.join(fixture, 'package.json'), JSON.stringify({
+    valdi: { app: sampleApp(), modules: ['first_cpp', 'second_cpp'] },
+  }));
+  assert.deepEqual(nativeModules(fixture), []);
+  syncNativeModuleRegistration(fixture);
+  assert.doesNotMatch(readFileSync(path.join(fixture, 'android/app/generated/valdi/ValdiNativeModules.kt'), 'utf8'),
+    /CppModuleFactory/);
+  for (const options of [
+    { iosLanguage: 'swift' as const },
+    { androidContext: true },
+    { swiftUI: true },
+  ]) {
+    assert.throws(() => createModule({
+      root: fixture, sources, name: 'invalid_cpp', template: 'cpp_bridge_module', ...options,
+    }), /requires|applies to/);
+    assert.equal(existsSync(path.join(fixture, 'valdi/modules/invalid_cpp')), false);
+  }
+  for (const name of ['double', 'namespace', 'co_await', 'reserved__cpp']) {
+    assert.throws(() => createModule({
+      root: fixture, sources, name, template: 'cpp_bridge_module',
+    }), /C\+\+ namespace/);
+    assert.equal(existsSync(path.join(fixture, 'valdi/modules', name)), false);
+  }
+});
+
+test('new-module CLI prepares C++ bindings and selection without modifying the host BUILD', t => {
+  const fixture = mkdtempSync(path.join(tmpdir(), 'valdi-cpp-scaffold-cli-'));
+  t.after(() => rmSync(fixture, { recursive: true, force: true }));
+  const tool = path.join(fixture, 'tools/valdi-rolldown');
+  mkdirSync(tool, { recursive: true });
+  for (const name of ['new-module.ts', 'codegen.ts', 'cpp-modules.ts', 'pipeline.ts', 'hermes.ts', 'codegen']) {
+    cpSync(path.join(import.meta.dirname, name), path.join(tool, name), { recursive: true });
+  }
+  for (const name of ['package.json', 'node_modules', 'modules.mjs', 'valdiTs.ts', 'module-selection.ts',
+    'editor-config.ts', 'scaffold.ts', 'scaffold-cpp.ts', 'vendor']) {
+    symlinkSync(path.join(import.meta.dirname, name), path.join(tool, name));
+  }
+  symlinkSync(path.join(root, 'scripts'), path.join(fixture, 'scripts'));
+  mkdirSync(path.join(fixture, 'valdi'), { recursive: true });
+  symlinkSync(path.join(root, 'valdi/.valdi-sources'), path.join(fixture, 'valdi/.valdi-sources'));
+  symlinkSync(path.join(root, 'valdi/node_modules'), path.join(fixture, 'valdi/node_modules'));
+  const hostBuild = 'load("//:modules/runtime-cpp.bzl", "CPP_IMPLEMENTATIONS")\n# host kept unchanged\n';
+  writeFileSync(path.join(fixture, 'valdi/BUILD.bazel'), hostBuild);
+  writeFileSync(path.join(fixture, 'package.json'), JSON.stringify({
+    valdi: { app: sampleApp(), modules: ['fresh_cpp'] },
+  }));
+  const run = (args: string[]) => spawnSync(process.execPath, [
+    path.join(import.meta.dirname, 'node_modules/tsx/dist/cli.mjs'), ...args,
+  ], { cwd: tool, encoding: 'utf8', timeout: 60_000 });
+  const created = run(['new-module.ts', 'fresh_cpp', '--template', 'cpp_bridge_module']);
+  assert.equal(created.status, 0, `${created.stdout}\n${created.stderr}`);
+  assert.equal(readFileSync(path.join(fixture, 'valdi/BUILD.bazel'), 'utf8'), hostBuild);
+  assert.ok(existsSync(path.join(fixture, 'valdi/modules/fresh_cpp/cpp/generated/valdi_modules/fresh_cpp/fresh_cpp.hpp')));
+  assert.ok(existsSync(path.join(fixture, 'android/app/generated/valdi/fresh_cpp.kt')));
+  assert.match(readFileSync(path.join(fixture, 'valdi/modules/runtime-cpp.bzl'), 'utf8'),
+    /\/\/modules\/fresh_cpp\/cpp:native/);
+  const checked = run(['codegen.ts', '--cpp-modules-out', path.join(fixture, 'valdi/modules'), '--check']);
+  assert.equal(checked.status, 0, checked.stderr);
+  const disabled = run(['new-module.ts', 'later_cpp', '--template', 'cpp_bridge_module']);
+  assert.equal(disabled.status, 0, `${disabled.stdout}\n${disabled.stderr}`);
+  const selection = readFileSync(path.join(fixture, 'valdi/modules/runtime-cpp.bzl'), 'utf8');
+  assert.match(selection, /fresh_cpp\/cpp:native/);
+  assert.doesNotMatch(selection, /later_cpp/);
+  assert.match(readFileSync(path.join(fixture, 'valdi/modules/runtime-packages.bazelrc'), 'utf8'), /modules\/later_cpp/);
+  assert.equal(existsSync(path.join(fixture, 'valdi/modules/later_cpp/cpp/generated')), false);
 });
 
 test('two native view templates have distinct Objective-C symbols and bad paths write nothing', t => {

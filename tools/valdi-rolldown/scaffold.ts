@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { assertCppModuleName, cppModuleFiles } from './scaffold-cpp';
 
-export const MODULE_TEMPLATES = ['ui_component', 'polyglot_bridge_module', 'polyglot_view_module'] as const;
+export const MODULE_TEMPLATES = ['ui_component', 'polyglot_bridge_module', 'polyglot_view_module', 'cpp_bridge_module'] as const;
 export type ModuleTemplate = typeof MODULE_TEMPLATES[number];
 
 // The pinned CLI's reserved project names, also invalid as generated package identifiers.
@@ -17,8 +18,9 @@ export function createModule({
   root, sources, name, template, iosLanguage = 'objc', swiftUI = false, androidContext = false, naming,
 }: { root: string; sources: string; name: string; template: ModuleTemplate; iosLanguage?: 'objc' | 'swift'; swiftUI?: boolean; androidContext?: boolean; naming?: { androidNamespace: string; iosPrefix: string } }): { name: string; directory: string } {
   if (!['objc', 'swift'].includes(iosLanguage)) throw new Error('Template iOS language must be objc or swift');
-  if (iosLanguage === 'swift' && template === 'ui_component')
-    throw new Error('--ios-language swift applies to polyglot templates; ui_component contains only TS/TSX');
+  const polyglot = template === 'polyglot_bridge_module' || template === 'polyglot_view_module';
+  if (iosLanguage === 'swift' && !polyglot)
+    throw new Error('--ios-language swift applies to polyglot templates');
   if (swiftUI && (iosLanguage !== 'swift' || template !== 'polyglot_view_module'))
     throw new Error('--swiftui requires a Swift polyglot_view_module');
   if (androidContext && template !== 'polyglot_bridge_module')
@@ -26,6 +28,7 @@ export function createModule({
   if (!/^[A-Za-z][A-Za-z0-9_.-]*$/.test(name)) throw new Error('Module names must start with a letter and contain letters, digits, _, - or .');
   name = name.replace(/[-.]/g, '_').replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
   if (reservedNames.has(name)) throw new Error(`Module name is reserved: ${name}`);
+  if (template === 'cpp_bridge_module') assertCppModuleName(name);
   const pascal = name.split('_').filter(Boolean).map(word => word[0].toUpperCase() + word.slice(1)).join('');
   if (!MODULE_TEMPLATES.includes(template)) throw new Error(`Unknown template: ${template}`);
   if (['client_sql', 'coreutils', 'drawing', 'jasmine', 'source_map', 'valdi_core', 'valdi_tsx'].includes(name)) throw new Error(`${name} is a runtime module`);
@@ -42,9 +45,9 @@ export function createModule({
     }
   }
   const original = path.join(sources, 'npm_modules/cli/.bootstrap/modules', template);
-  if (!existsSync(original)) throw new Error(`Pinned Valdi template missing: ${original}`);
+  if (template !== 'cpp_bridge_module' && !existsSync(original)) throw new Error(`Pinned Valdi template missing: ${original}`);
   const license = readFileSync(path.join(sources, 'LICENSE'), 'utf8');
-  const copied = new Map<string, string>();
+  const copied = template === 'cpp_bridge_module' ? cppModuleFiles(name, pascal, naming) : new Map<string, string>();
   const copy = (from: string, prefix = '') => {
     for (const entry of readdirSync(from, { withFileTypes: true })) {
       const relative = path.posix.join(prefix, entry.name);
@@ -53,9 +56,9 @@ export function createModule({
         .replaceAll('{{MODULE_NAME}}', name).replaceAll('{{MODULE_NAME_PASCAL_CASED}}', pascal));
     }
   };
-  copy(original);
+  if (template !== 'cpp_bridge_module') copy(original);
   const config: Record<string, string | boolean> = { template, iosModuleName: pascal };
-  if (template !== 'ui_component') config.nativeBuild = 'bazel';
+  if (polyglot) config.nativeBuild = 'bazel';
   if (template === 'polyglot_bridge_module') {
     config.androidModuleFactory = `com.snap.modules.${name}.CalculatorModuleFactoryImpl`;
     config.iosModuleFactory = `${pascal}CreateModuleFactory`;
@@ -96,7 +99,7 @@ FOUNDATION_EXPORT id<SCNValdiCoreModuleFactory> _Nonnull ${config.iosModuleFacto
     const view = 'android/PolyglotNativeView.kt';
     copied.set(view, copied.get(view)!.replace('class PolyglotNativeView(', '@androidx.annotation.Keep\nclass PolyglotNativeView('));
   }
-  if (template !== 'ui_component' && iosLanguage === 'swift') {
+  if (polyglot && iosLanguage === 'swift') {
     config.iosLanguage = 'swift';
     for (const file of [...copied.keys()]) if (file.startsWith('ios/')) copied.delete(file);
     if (template === 'polyglot_bridge_module') {
@@ -190,7 +193,7 @@ final class NativeView: UIView {
 `);
     }
   }
-  if (template !== 'ui_component') {
+  if (polyglot) {
     copied.set('BUILD.bazel', `load("//bzl/node_module:module.bzl", "node_valdi_module")
 
 node_valdi_module(
@@ -207,7 +210,7 @@ node_valdi_module(
 )
 `);
   } else copied.delete('BUILD.bazel');
-  if (naming && template !== 'ui_component') {
+  if (naming && polyglot) {
     // Only freshly generated template symbols are renamed; installed modules retain their ABI.
     const rename = (text: string) => text
       .replaceAll(`com.snap.modules.${name}`, `${naming.androidNamespace}.modules.${name}`)
@@ -226,7 +229,7 @@ node_valdi_module(
   }
   copied.set('module.json', JSON.stringify(config, null, 2) + '\n');
   copied.set('LICENSE', license);
-  copied.set('TEMPLATE.md', `# ${name}
+  if (template !== 'cpp_bridge_module') copied.set('TEMPLATE.md', `# ${name}
 
 Generated from the pinned Valdi CLI's \`${template}\` template.
 Template sources: \`npm_modules/cli/.bootstrap/modules/${template}\`.

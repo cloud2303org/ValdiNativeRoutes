@@ -96,7 +96,7 @@ function runtime(available = true) {
     calls.push({ method, args });
     return handlers[method] ? handlers[method]!(...args) : Promise.resolve(defaults[method]);
   }]));
-  const { api, ApiError } = load(path.join(app.dir, 'src/api.ts'));
+  const { api, ApiError } = load(path.join(app.dir, 'src/services/api.ts'));
   return { api, ApiError, calls, handlers, bridge, host, cache, load };
 }
 
@@ -145,7 +145,6 @@ test('real generator emits canonical Kotlin, Objective-C and C++ Promise proxies
   const directories = {
     android: 'android/app/generated/valdi',
     ios: 'ios/Generated/valdi',
-    cpp: 'valdi/native/generated',
   };
   const outputs: Record<string, string> = {};
   let files = 0;
@@ -156,7 +155,10 @@ test('real generator emits canonical Kotlin, Objective-C and C++ Promise proxies
       const canonical = platform === 'ios' ? content
         .replaceAll('#import <valdi_core/', '#import <ValdiRuntime/')
         .replaceAll('import ValdiCoreSwift', 'import ValdiRuntime') : content;
-      assert.equal(readFileSync(path.join(root, directories[platform], filename), 'utf8'), canonical, filename);
+      // AppUI's C++ ABI is checked in memory; it is not a runtime C++ dependency.
+      if (platform !== 'cpp') {
+        assert.equal(readFileSync(path.join(root, directories[platform], filename), 'utf8'), canonical, filename);
+      }
       files++;
     }
   }

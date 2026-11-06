@@ -1,11 +1,11 @@
 # 路由声明与原生页面
 
-App 的唯一声明是 `valdi/modules/app_pages/src/routes.ts`。导航调用从 `./navigation` 导入；
+App 的唯一声明是 `valdi/modules/app_pages/src/routes.ts`。导航调用从 `app_pages/src/routing` 导入；
 不再提供 `ROUTES`、`TAB_BAR` 或手写组件路径的旧声明方式。
 
 ```ts
 import res from 'app_pages/res';
-import { defineRoutes, valdiPage, nativePage } from './navigation/config';
+import { defineRoutes, valdiPage, nativePage } from 'app_foundation/src/navigation/config';
 import { HomePage } from './HomePage';
 import { DetailPage } from './DetailPage';
 
@@ -37,7 +37,7 @@ export const routes = defineRoutes({
 第一个声明的页面。Tab 容器使用内部标识 `$tabs`，不需要手动声明 `main` 页面。
 
 ```ts
-import { router } from './navigation';
+import { router } from 'app_pages/src/routing';
 
 router.push('home');                         // 空参数可以省略
 router.push('detail', { id: 123 });           // 参数/路由名自动补全
@@ -45,7 +45,7 @@ const result = await router.pushForResult('chooseDevice');
 router.switchTab('home');
 ```
 
-页面自己的 `Router`、`readParams` 和 `NavigationOptions` 也从 `./navigation` 导入。
+页面自己的 `Router`、`readParams` 和 `NavigationOptions` 也从 `app_pages/src/routing` 导入。
 `finish<'detail'>({ visited: 123 })` 返回结果，取消/离开页面则调用方得到 `undefined`。
 
 ## 开发校验
@@ -58,9 +58,7 @@ router.switchTab('home');
 - 启动声明、路由更新、导航选项、参数、返回值和当前页面栈通过 Valdi 生成模型与字典
   marshaller 传递，路由协议不再编码/解析 JSON 字符串。公开 router 保留页面特定泛型，
   它约束调用方，不替代 Kotlin/Swift 编译或原生返回字段的业务校验。
-- 参数/结果在边界递归校验并复制，只允许普通字典、数组、字符串、有限数字、布尔值和
-  `null`；可选字典字段的 `undefined` 被省略。函数、访问器、实例和循环引用会明确报错，
-  调用方后续修改原对象不会修改已提交的数据。
+- 参数/结果原样交给原生 marshaller。路由根必须是字典；嵌套值不再在 JS 里预校验或深拷贝。
 
 组件引用在 Node 编译时转成 canonical 路径，消费引用后移除无用的组件导入。
 路由表不会为了注册页面提前执行所有页面，页面仍由 Valdi loader 按需加载。

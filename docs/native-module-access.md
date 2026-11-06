@@ -3,7 +3,7 @@
 Business code accesses native services through generated Valdi modules. It does
 not call an installer or pass native implementations into `startApp`.
 
-For example, `app_pages/src/vision/Vision.d.ts` declares:
+For example, `app_vision/src/Vision.d.ts` declares:
 
 ```ts
 import type { VisionHost } from './VisionHost';
@@ -25,14 +25,14 @@ setup; it does not require JS to call an installation function.
 
 `AppNativeModules.kt` and `AppNativeModules.swift` register the two shared app entries:
 
-- `app_pages/src/AppContext` exposes navigation and token storage. Factories
-  retain the owners behind these capabilities; token storage is created lazily.
-- `app_pages/src/vision/Vision` exposes the existing Vision implementation.
+- `app_foundation/src/host/AppContext` exposes only the minimal navigation host. The application factory
+  retains its owner. Authentication and Zustand state belong to the app.
+- `app_vision/src/Vision` exposes the existing Vision implementation.
   The host is created on first access. The Android JNI implementation and its
   shared OpenCV/ncnn dependencies remain unchanged; iOS retains static vendors.
 
-Android additionally registers `app_pages/src/splash/SplashScreenNative` for
-the synchronous startup splash policy. iOS does not implement this entry.
+Both hosts additionally register `app_foundation/src/splash/SplashScreenNative`
+for the synchronous startup splash policy. See [SplashScreen](splash-screen.md).
 
 `startApp(debug)` still installs the error handler and theme observer, initializes
 the app database, retains the service facades, and selects the authenticated
@@ -56,8 +56,9 @@ Bluetooth, Wi-Fi and NFC register persistent event sinks inside the official
 native marshaling. Pages own independently removable JS listeners, while the
 native event sink belongs to the application.
 
-Auth and navigation likewise obtain their cached native capabilities in a
-global-reference scope. Vision registers its one-shot worker callback in that
+Navigation obtains its cached native capability in a global-reference scope.
+Application state is ordinary JS and needs no native reference scope.
+Vision registers its one-shot worker callback in that
 scope so leaving its demo page does not dispose a still-pending native callback.
 The page ignores results after destruction.
 
@@ -111,3 +112,5 @@ The iOS app still owns its navigation containers and shared image-cache policy.
 The image pipeline is in `ios/ValdiRoutes/Images/AppImages.swift`, using
 `SCValdiImage` directly. The old app `ValdiImageBridge` / `ValdiVoidPromise`
 wrappers are removed; AppUI keeps its own module-owned Promise helpers.
+
+Application-owned Host type extensions are described in [Extending app hosts](extending-app-host.md).

@@ -8,12 +8,13 @@ import { readAppConfig } from '../../scripts/app-config.mjs';
 
 const help = `Usage: pnpm new-module [name] [--template <template>] [--ios-language objc|swift] [--swiftui] [--android-context] [--skip-checks]
 
-Templates (from the pinned official Valdi CLI):
+Templates:
   ui_component             Valdi TSX component
   polyglot_bridge_module   TypeScript API + Kotlin/Objective-C implementations
   polyglot_view_module     custom-view + Kotlin/Objective-C native views
+  cpp_bridge_module        TypeScript API + shared C++ implementation (repository template)
 
-With no --template, an interactive terminal offers the official template choices.
+With no --template, an interactive terminal offers the template choices.
 Without a terminal, the default remains ui_component.
 Web/macOS template sources are preserved; native App integration is Android/iOS.
 --android-context gives a bridge module factory the Application Context.
@@ -67,14 +68,17 @@ async function main() {
   if (!enabled) writeTsconfig(appModule(created.name), [...modules, appModule(created.name)]);
   for (const module of modules) writeTsconfig(module, modules);
   syncNativeModuleRegistration(root);
-  if (enabled && (template ?? 'ui_component') === 'ui_component') {
+  if (enabled && ['ui_component', 'cpp_bridge_module'].includes(template ?? 'ui_component')) {
     execFileSync(process.execPath, [
       path.join(import.meta.dirname, 'node_modules/tsx/dist/cli.mjs'), 'codegen.ts', created.name,
       '--kotlin-out', path.join(root, 'android/app/generated/valdi'),
       '--objc-out', path.join(root, 'ios/Generated/valdi'), '--objc-framework', 'ValdiRuntime',
-      '--cpp-out', path.join(root, 'valdi/native/generated'),
     ], { cwd: import.meta.dirname, stdio: 'inherit' });
   }
+  execFileSync(process.execPath, [
+    path.join(import.meta.dirname, 'node_modules/tsx/dist/cli.mjs'), 'codegen.ts',
+    '--cpp-modules-out', path.join(root, 'valdi/modules'),
+  ], { cwd: import.meta.dirname, stdio: 'inherit' });
   console.log(`Created ${path.relative(root, created.directory)} (${template ?? 'ui_component'})`);
   console.log(`Enable "${created.name}" in package.json valdi.modules, import its TS entry, then run pnpm android or pnpm ios.`);
 }

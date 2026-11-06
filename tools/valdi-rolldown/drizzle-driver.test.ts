@@ -4,11 +4,11 @@ import { DrizzleQueryError, sql, eq } from '../../valdi/node_modules/drizzle-orm
 import { alias, blob, customType, integer, sqliteTable, text } from '../../valdi/node_modules/drizzle-orm/sqlite-core/index.js';
 import { nativeDatabase, deferred, microtasks } from './tests/drizzle-native-test';
 
-const modulePath = '../../valdi/modules/app_pages/src/database/driver';
+const modulePath = '../../valdi/modules/app_foundation/src/database/driver';
 async function driver() {
   const loaded = await import(modulePath).catch(() => undefined);
   assert.ok(loaded?.createValdiDatabase, 'production createValdiDatabase must exist');
-  return loaded as typeof import('../../valdi/modules/app_pages/src/database/driver');
+  return loaded as typeof import('../../valdi/modules/app_foundation/src/database/driver');
 }
 const items = sqliteTable('items', {
   id: integer().primaryKey(),

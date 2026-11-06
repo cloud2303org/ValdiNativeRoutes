@@ -7,6 +7,7 @@
     "valdi/MODULE.bazel",
     "valdi/MODULE.bazel.lock",
     "valdi/.bazelrc",
+    "valdi/.bazelignore",
     "valdi/.bazelversion",
     "valdi/bzl/patches",
     "valdi/bzl/node_compiler",
@@ -17,17 +18,20 @@
     "tools/valdi-rolldown/editor-config.ts",
     "tools/valdi-rolldown/modules.mjs",
     "tools/valdi-rolldown/module-selection.ts",
+    "tools/valdi-rolldown/cpp-modules.ts",
+    "tools/valdi-rolldown/codegen.ts",
+    "scripts/native-cpp.mjs",
     "tools/valdi-rolldown/archive.ts",
     "tools/valdi-rolldown/hermes.ts",
     "tools/valdi-rolldown/codegen",
     "tools/valdi-rolldown/vendor",
     "tools/valdi-rolldown/package.json",
-    "tools/valdi-rolldown/pnpm-lock.yaml",
-    "valdi/native"
+    "tools/valdi-rolldown/pnpm-lock.yaml"
   ],
   "android": [
     "android/app/src",
     "scripts/app-config.mjs",
+    "scripts/app-icons.mjs",
     "scripts/native-modules.mjs",
     "scripts/module-platform-config.mjs",
     "scripts/node-modules.mjs",
@@ -52,6 +56,7 @@
   "ios": [
     "ios/ValdiRoutes",
     "scripts/app-config.mjs",
+    "scripts/app-icons.mjs",
     "scripts/native-modules.mjs",
     "scripts/module-platform-config.mjs",
     "scripts/node-modules.mjs",

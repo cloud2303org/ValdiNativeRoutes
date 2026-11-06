@@ -9,9 +9,8 @@
     <application
         android:name=".App"
         android:label="@string/valdi_app_name"
+        android:icon="@mipmap/ic_launcher"
         android:networkSecurityConfig="@xml/network_security_config"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
         android:supportsRtl="true"
         android:theme="@style/Theme.ValdiNativeRoutes">
         <!-- Valdi root views are retained across the back stack, so the activity is never recreated for

@@ -1,7 +1,8 @@
 /**
- * Implemented in C++ (valdi/native/src/Cpp.cpp), which the export scripts link into the Valdi runtime; the C++
- * interface it implements is valdi/native/generated (tools/valdi-rolldown/codegen.ts --cpp-out). Calls are direct:
- * synchronous, on the JS thread.
+ * App-owned C++ example implemented in valdi/modules/app_pages/cpp/src/Cpp.cpp, linked into the shared Valdi
+ * runtime by //modules/app_pages/cpp:native. Its interface is generated in valdi/modules/app_pages/cpp/generated
+ * by tools/valdi-rolldown/codegen.ts --cpp-modules-out ../../valdi/modules. Calls are direct and synchronous on the
+ * JS thread.
  *
  * @ExportModule({ios: 'VRCpp', android: 'io.valdiroutes.pages.CppModule'})
  */

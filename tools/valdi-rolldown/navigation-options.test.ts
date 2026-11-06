@@ -6,10 +6,10 @@ import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
 import { root } from './pipeline';
-import type { NavigationOptions, ResolvedNavigation } from '../../valdi/modules/app_pages/src/navigation/options';
+import type { NavigationOptions, ResolvedNavigation } from '../../valdi/modules/app_foundation/src/navigation/options';
 
 const require = createRequire(path.join(root, 'valdi/package.json'));
-const source = path.join(root, 'valdi/modules/app_pages/src/navigation/options.ts');
+const source = path.join(root, 'valdi/modules/app_foundation/src/navigation/options.ts');
 const code = ts.transpileModule(readFileSync(source, 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;

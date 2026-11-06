@@ -4,7 +4,7 @@
 // cpp/<debug|release>/src (`valdi_modules/app_pages/app_pages.hpp`, `.cpp`).
 //
 //   npx tsx codegen.ts [module] [--kotlin-out <dir>] [--objc-out <dir> [--objc-framework <name>]]
-//                      [--cpp-out <dir> [--cpp-class-prefix <prefix>]] [--check]
+//                      [--cpp-out <dir>] [--cpp-modules-out <modules-dir>] [--cpp-class-prefix <prefix>] [--check]
 //
 // --objc-framework: the Objective-C imports Valdi's runtime as from that framework (<valdi_core/X.h> becomes
 // <ValdiRuntime/X.h>), as Valdi rewrites them when it packages an xcframework; the module's own headers stay as they
@@ -12,13 +12,19 @@
 // --cpp-class-prefix: what inferred C++ type names start with (`app::` names Greeting app::Greeting), as module.yaml's
 // cpp.class_prefix does; valdi_module() has no attribute for it, so Bazel builds use the project's
 // `snap::valdi_modules::<module>::`.
-// Without a module, every app module (valdi/modules/<module>); their files don't overlap, so they share the output
-// directories. At least one output is needed. Files are written only when their content changes.
+// --cpp-modules-out: module-owned cpp/generated include roots. Defaults to enabled modules owning cpp/src
+// implementations and their transitive generated C++ include dependencies; an explicit module adds its bindings
+// to these default roots, preserving complete runtime output when synchronizing a canonical modules directory.
+// Also writes runtime-packages.bazelrc excluding exact parent packages for all available modules, including disabled ones.
+// Canonical C++ command (from this directory): npx tsx codegen.ts --cpp-modules-out ../../valdi/modules
+// Other outputs retain all-host generation without a module; --cpp-out retains the generic flat layout.
+// At least one output is needed. Files are written only when their content changes.
 // --check writes nothing and fails, listing them, when files would change: the build runs it, developers run the
 // generator when they change a native interface.
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { codegenModules, generateNativeCode, nativeSourceFiles } from './codegen/index';
+import { codegenModules, generateNativeCode, nativeSourceFiles, type CodegenModule, type NativeCode } from './codegen/index';
+import { planCppModules, syncCppModules } from './cpp-modules';
 import { moduleConfig, root } from './pipeline';
 import { availableModuleNames, enabledModuleNames } from './modules.mjs';
 
@@ -36,6 +42,7 @@ const outputs = {
   ios: option('--objc-out'),
   cpp: option('--cpp-out'),
 };
+const cppModulesOut = option('--cpp-modules-out');
 const objcFramework = option('--objc-framework');
 const cppClassPrefix = option('--cpp-class-prefix');
 const check = args.includes('--check');
@@ -47,20 +54,38 @@ if (
   unknown.length ||
   positional.length > 1 ||
   (name && !modules[name]) ||
-  (!outputs.android && !outputs.ios && !outputs.cpp) ||
+  (!outputs.android && !outputs.ios && !outputs.cpp && !cppModulesOut) ||
   (objcFramework && !outputs.ios) ||
-  (cppClassPrefix && !outputs.cpp)
+  (cppClassPrefix && !outputs.cpp && !cppModulesOut)
 ) {
   console.error(
-    'Usage: npx tsx codegen.ts [module] [--kotlin-out <dir>] [--objc-out <dir> [--objc-framework <name>]] [--cpp-out <dir> [--cpp-class-prefix <prefix>]] [--check]',
+    'Usage: npx tsx codegen.ts [module] [--kotlin-out <dir>] [--objc-out <dir> [--objc-framework <name>]] [--cpp-out <dir>] [--cpp-modules-out <modules-dir>] [--cpp-class-prefix <prefix>] [--check]',
   );
   if (name && !modules[name]) console.error(`Modules: ${Object.keys(modules).join(', ')}`);
   process.exit(2);
 }
-// Bazel modules compile their generated bindings in their own native libraries.
-const targets = (name ? [modules[name]] : Object.values(modules).filter(target => moduleConfig(target.module.name).nativeBuild !== 'bazel')).map(configured =>
+const configuredModules = Object.fromEntries(Object.entries(modules).map(([id, configured]) => [id,
   cppClassPrefix ? { ...configured, bundleInfo: { ...configured.bundleInfo, cppClassPrefix } } : configured,
-);
+]));
+// Bazel modules compile their generated Kotlin/ObjC (and generic flat bindings) in their own native libraries.
+const targets = name ? [configuredModules[name]] : Object.values(configuredModules)
+  .filter(target => moduleConfig(target.module.name).nativeBuild !== 'bazel');
+const generated = new Map<string, NativeCode>();
+const generate = (target: CodegenModule): NativeCode => {
+  let code = generated.get(target.module.name);
+  if (!code) {
+    code = generateNativeCode(target);
+    generated.set(target.module.name, code);
+  }
+  return code;
+};
+// Resolve the complete closure before touching any output, so a disabled/missing dependency fails cleanly.
+const cppPlan = cppModulesOut ? planCppModules({
+  modules: configuredModules,
+  availableModules: availableModuleNames(root),
+  roots: name ? [name] : undefined,
+  generate,
+}) : undefined;
 
 /** Relative to the working directory when inside it. */
 const shown = (file: string) => {
@@ -69,6 +94,7 @@ const shown = (file: string) => {
 };
 
 const changed: string[] = [];
+if (cppPlan) changed.push(...syncCppModules(cppPlan, cppModulesOut!, check).map(shown));
 if (!name) {
   const enabled = new Set(enabledModuleNames(root));
   for (const disabled of availableModuleNames(root).filter(value => !enabled.has(value))) {
@@ -89,8 +115,8 @@ if (!name) {
     }
   }
 }
-for (const target of targets) {
-  const code = generateNativeCode(target);
+for (const target of outputs.android || outputs.ios || outputs.cpp ? targets : []) {
+  const code = generate(target);
   for (const platform of ['android', 'ios', 'cpp'] as const) {
     const outDir = outputs[platform];
     if (!outDir) continue;
@@ -118,6 +144,7 @@ if (check && changed.length) {
     ...(outputs.ios ? ['--objc-out', outputs.ios] : []),
     ...(objcFramework ? ['--objc-framework', objcFramework] : []),
     ...(outputs.cpp ? ['--cpp-out', outputs.cpp] : []),
+    ...(cppModulesOut ? ['--cpp-modules-out', cppModulesOut] : []),
     ...(cppClassPrefix ? ['--cpp-class-prefix', cppClassPrefix] : []),
   ];
   console.error(`The native bindings are out of date; run: npx tsx codegen.ts ${name ? `${name} ` : ''}${outArgs.join(' ')}`);

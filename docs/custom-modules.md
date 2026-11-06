@@ -1,11 +1,12 @@
 # 自定义模块与官方模板
 
-`pnpm new-module` 使用固定 Valdi 源码中的官方模板，支持三种选择：
+`pnpm new-module` 支持三种固定 Valdi 源码中的官方模板，以及仓库提供的 C++ 模板：
 
 ```sh
 pnpm new-module profile --template ui_component
 pnpm new-module device_api --template polyglot_bridge_module
 pnpm new-module camera_view --template polyglot_view_module
+pnpm new-module math_core --template cpp_bridge_module
 ```
 
 需要 Android `Application Context` 的能力模块可以加 `--android-context`：
@@ -26,6 +27,8 @@ pnpm new-module bluetooth --template polyglot_bridge_module --ios-language swift
 - `polyglot_bridge_module`：TypeScript 原生接口、Kotlin 与 Objective-C 工厂实现，以及上游 Web 实现。
 - `polyglot_view_module`：TSX 的 `<custom-view>` 封装、Android View / AttributesBinder、
   iOS UIView，以及上游 macOS / Web 实现。
+- `cpp_bridge_module`：TypeScript 接口和入口、共享 C++ 实现、模块自己的 C++ Bazel target。
+  这是仓库模板，不复制 Kotlin、Objective-C、Web 或 macOS 示例。
 
 这里的 TSX 模块提供 Valdi 运行时的模块名、组件、资源和原生契约，产物为 `.valdimodule`。
 pnpm 安装的是构建工具和 npm 依赖；这些依赖仍会由 Node 管线处理，两者用途不同。
@@ -35,6 +38,49 @@ pnpm 安装的是构建工具和 npm 依赖；这些依赖仍会由 Node 管线�
 修改 Kotlin / Objective-C / Swift 实现需要重新构建 App；只修改 TSX 页面可用开发服务器热更新。
 官方模板默认使用 Objective-C；仓库同时提供 Swift 实现选项。
 保留 Web / macOS 模板源码不代表当前仓库提供对应宿主的构建入口。
+
+## C++ 模块
+
+```sh
+pnpm new-module math_core --template cpp_bridge_module
+```
+
+生成的目录：
+
+```text
+math_core/
+├── src/
+│   ├── Cpp.d.ts          # 原生接口
+│   └── index.ts          # TypeScript 入口
+├── cpp/
+│   ├── src/Cpp.cpp       # 实现及工厂注册
+│   └── BUILD.bazel       # 使用公共 module_cpp_library 规则
+└── module.json
+```
+
+将 `math_core` 加入根 `package.json` 的 `valdi.modules` 后：
+
+```ts
+import { multiply } from 'math_core/src';
+
+const result = multiply(6, 7);
+```
+
+执行 `pnpm prebuild --platform android` 或 `pnpm prebuild --platform ios`，
+公共流程会生成 `cpp/generated/` 绑定，并更新 `valdi/modules/runtime-cpp.bzl`：
+
+- `CPP_IMPLEMENTATIONS` 选择所有启用模块中拥有 `cpp/src` 实现的 `:native` target。
+- `CPP_BINDING_DEPS` 根据生成代码的跨模块 include 声明 `:bindings` 依赖。
+- 宿主和各模块 BUILD 读取这份清单，无需为新增模块手改 `native_deps`。
+
+创建时也会更新 runtime package 清单；尚未启用的模块不会加入 runtime 实现列表。
+新增跨模块类型依赖后重新生成绑定，公共规则会使用更新后的依赖图。
+额外第三方 C++ 库仍应通过模块自己的 `cpp/BUILD.bazel` 的 `deps` 明确声明。
+
+模块实现和绑定最终静态链接进同一个 Valdi runtime。这里统一的是模块编译和接入流程，
+没有新增模块动态库或另一份 Hermes。C++ 实现或接口变化需要重新导出 runtime、构建原生 App；
+普通构建会拒绝不匹配的旧导出，不能仅通过 TS OTA 更新这些代码。
+模板方法同步运行在 JS 线程，耗时计算应另行设计异步执行接口。
 
 ## Swift 与 SwiftUI
 
@@ -135,7 +181,7 @@ Android 权限/feature、模块自己的 Manifest application 节点、资源和
 | `nfc` | 原有 Android reader mode 核心；iOS 保持不支持 | `permissions`, `native_common` |
 | `app_ui` | 弹窗、菜单、选择器、扫码、附件、Toast/Loading 和原生展示控件 | `native_common` |
 
-`native_common` 只提供共享的 TS 数据校验和辅助函数，没有原生工厂。业务可从 `app_pages/src/api` 使用应用组合的 API；类型、权限和辅助函数直接从对应模块导入，旧服务路径的兼容转发文件已删除。正常运行通过模块工厂获取原生 Host，无需再由 `ValdiHost` 逐个注入。生产接口不再暴露安装覆盖函数；测试在原生入口边界提供替身。
+`native_common` 只提供共享的 TS 数据校验和辅助函数，没有原生工厂。业务可从 `app_pages/src/services/api` 使用应用组合的 API；类型、权限和辅助函数直接从对应模块导入，旧服务路径的兼容转发文件已删除。正常运行通过模块工厂获取原生 Host，无需再由 `ValdiHost` 逐个注入。生产接口不再暴露安装覆盖函数；测试在原生入口边界提供替身。
 
 这五项使用 `nativeBuild: "host"`：Node 生成 TS 产物及 Kotlin/Objective-C 契约，选中的原生目录由 Gradle/Xcode 编译。这样保留现有 Compose/UIKit 和 SwiftPM 集成，无需复制运行时。蓝牙、Calculator、WebView 继续使用 `nativeBuild: "bazel"` 的独立库方式。
 

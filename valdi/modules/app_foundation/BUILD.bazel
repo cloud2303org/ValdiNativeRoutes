@@ -1,0 +1,12 @@
+load("//bzl/node_module:module.bzl", "node_valdi_module")
+
+# Shared page, navigation, startup, storage, and database contracts.
+# Native host implementations are composed by the application.
+node_valdi_module(
+    name = "app_foundation",
+    srcs = glob(["src/**/*.ts", "src/**/*.tsx"]),
+    config = "module.json",
+    deps = [
+        "//modules/native_common:native_common_compiled",
+    ],
+)

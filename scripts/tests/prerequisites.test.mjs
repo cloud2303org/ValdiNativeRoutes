@@ -17,13 +17,24 @@ function fixture(t, config = 'debug') {
     mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
     writeFileSync(path.join(root, name), content);
   };
-  write('ota/fingerprint.json', JSON.stringify({ valdi: ['valdi/MODULE.bazel', 'valdi/bzl/patches', 'valdi/bzl/node_compiler', 'tools/valdi-rolldown/runtime-module.ts', 'valdi/native'] }));
+  write('package.json', JSON.stringify({ valdi: { modules: ['app_foundation', 'app_pages'] } }));
+  write('ota/fingerprint.json', JSON.stringify({ valdi: ['valdi/MODULE.bazel', 'valdi/bzl/patches', 'valdi/bzl/node_compiler', 'tools/valdi-rolldown/runtime-module.ts'] }));
   write('valdi/MODULE.bazel', 'pinned Valdi version');
-  write('valdi/native/src/Module.cpp', 'original implementation');
+  write('valdi/BUILD.bazel', 'native_deps = ["//modules/app_pages/cpp:native"]');
+  write('valdi/modules/runtime-packages.bazelrc', 'common --deleted_packages=modules/app_foundation,modules/app_pages,modules/unused');
+  write('valdi/modules/runtime-cpp.bzl', 'CPP_IMPLEMENTATIONS = ["//modules/app_pages/cpp:native"]');
+  write('valdi/bzl/module_cpp/module.bzl', 'def module_cpp_library(module_name): pass');
+  write('valdi/modules/app_pages/src/index.ts', 'export {};');
+  write('valdi/modules/app_foundation/src/index.ts', 'export {};');
+  write('valdi/modules/unused/src/index.ts', 'export {};');
+  write('valdi/modules/app_pages/cpp/src/Module.cpp', 'original implementation');
+  write('valdi/modules/app_pages/cpp/BUILD.bazel', 'deps = ["//modules/app_foundation/cpp:bindings"]');
+  write('valdi/modules/app_foundation/cpp/generated/valdi_modules/app_foundation/app_foundation.hpp', 'original shared binding');
   write('valdi/bzl/patches/rules_python/toolchain.patch', 'original toolchain patch');
   write('tools/valdi-rolldown/runtime-module.ts', 'original Node compiler');
   mkdirSync(path.join(root, 'scripts'));
   cpSync(path.join(repository, 'scripts/ota.mjs'), path.join(root, 'scripts/ota.mjs'));
+  cpSync(path.join(repository, 'scripts/native-cpp.mjs'), path.join(root, 'scripts/native-cpp.mjs'));
   cpSync(path.join(repository, 'scripts/native-modules.mjs'), path.join(root, 'scripts/native-modules.mjs'));
   cpSync(path.join(repository, 'scripts/module-platform-config.mjs'), path.join(root, 'scripts/module-platform-config.mjs'));
   cpSync(path.join(repository, 'scripts/app-config.mjs'), path.join(root, 'scripts/app-config.mjs'));
@@ -50,8 +61,35 @@ test('a missing runtime gives an export command without creating artifacts', t =
 
 test('changed C++ requires a new export and preserves the release configuration', t => {
   const { root, write } = fixture(t, 'release');
-  write('valdi/native/src/Module.cpp', 'changed implementation');
+  write('valdi/modules/app_pages/cpp/src/Module.cpp', 'changed implementation');
   assert.throws(() => checkRuntime(root, 'android'), /out of date.*\n.*export-android\.sh release/);
+});
+
+test('a changed shared C++ binding or module build rule invalidates the export', t => {
+  const { root, write } = fixture(t);
+  write('valdi/modules/app_foundation/cpp/generated/valdi_modules/app_foundation/app_foundation.hpp', 'changed shared binding');
+  assert.throws(() => checkRuntime(root, 'android'), /runtime is out of date/);
+  const another = fixture(t);
+  another.write('valdi/modules/app_pages/cpp/BUILD.bazel', 'deps = []');
+  assert.throws(() => checkRuntime(another.root, 'android'), /runtime is out of date/);
+});
+
+test('host C++ selection invalidates the export while disabled-module C++ does not', t => {
+  const { root, write } = fixture(t);
+  write('valdi/modules/unused/src/index.ts', 'export {};');
+  write('valdi/modules/unused/cpp/src/Unused.cpp', 'unselected implementation');
+  assert.doesNotThrow(() => checkRuntime(root, 'android'));
+  write('valdi/BUILD.bazel', 'native_deps = []');
+  assert.throws(() => checkRuntime(root, 'android'), /runtime is out of date/);
+});
+
+test('generated C++ selection and common build rules invalidate the export', t => {
+  const selection = fixture(t);
+  selection.write('valdi/modules/runtime-cpp.bzl', 'CPP_IMPLEMENTATIONS = []');
+  assert.throws(() => checkRuntime(selection.root, 'android'), /runtime is out of date/);
+  const rules = fixture(t);
+  rules.write('valdi/bzl/module_cpp/module.bzl', 'def module_cpp_library(module_name): fail("changed")');
+  assert.throws(() => checkRuntime(rules.root, 'android'), /runtime is out of date/);
 });
 
 test('a changed fork pin invalidates the export even when C++ is unchanged', t => {

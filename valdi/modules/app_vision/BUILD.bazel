@@ -1,0 +1,8 @@
+load("//bzl/node_module:module.bzl", "node_valdi_module")
+
+# The app supplies the platform implementation and registers the generated factory.
+node_valdi_module(
+    name = "app_vision",
+    srcs = glob(["src/**/*.ts", "src/**/*.tsx"]),
+    config = "module.json",
+)

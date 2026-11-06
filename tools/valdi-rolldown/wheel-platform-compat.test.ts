@@ -47,10 +47,12 @@ function fixture(typesRoot: string, source?: string) {
   else {
     // Compile the three actual components and their actual schemas, including
     // callback/config types. AppUIHost and schemas' type-only imports stay real.
+    mkdirSync(path.join(dir, 'src/wheels'));
+    writeFileSync(path.join(dir, 'src/AppUIHost.ts'), "export type * from 'app_ui/src/AppUIHost';\n");
     for (const name of ['WheelPickers.tsx', 'WheelHost.ts', 'schemas.ts']) {
-      const file = path.join(process.env.WHEEL_SHARED_SOURCE_ROOT ?? path.join(root, 'valdi/modules/app_pages/src'), name);
+      const file = path.join(process.env.WHEEL_SHARED_SOURCE_ROOT ?? path.join(root, 'valdi/modules/app_ui/src/wheels'), name);
       hash(file);
-      writeFileSync(path.join(dir, 'src', name), readFileSync(file));
+      writeFileSync(path.join(dir, 'src/wheels', name), readFileSync(file));
     }
     // Package resolution uses the existing installation, never network.
     execFileSync('ln', ['-s', path.join(root, 'valdi/node_modules'), path.join(dir, 'node_modules')]);
@@ -141,7 +143,7 @@ function host(platform: number, application: Map<string, Buffer>, typesRoot: str
 test(`actual shared wheels typecheck against selected sources; ${runtimeLabel} retain class identity`, async t => {
   for (const typesRoot of [sourceRoot]) {
     const { module, plugin } = fixture(typesRoot);
-    const emitted = plugin.emit(path.join(module.dir, 'src/WheelPickers.tsx'));
+    const emitted = plugin.emit(path.join(module.dir, 'src/wheels/WheelPickers.tsx'));
     writeFileSync(path.join(module.dir, 'WheelPickers.emitted.js'), emitted);
     const prototypes = [...emitted.matchAll(/makeNodePrototype\([^;]+/g)].map(m => m[0]);
     assert.equal(prototypes.length, 3);
@@ -168,7 +170,7 @@ test(`actual shared wheels typecheck against selected sources; ${runtimeLabel} r
       }
       for (const platform of platforms) {
         const h = host(platform, entries, typesRoot);
-        const exports = h.load('wheel_fixture/src/WheelPickers');
+        const exports = h.load('wheel_fixture/src/wheels/WheelPickers');
         for (const [name, model, next, native] of [
           ['ColumnPicker', { options: ['A;,', 'B'], value: 'A;,' }, 'B', 'Column'],
           ['TimePicker', { mode: 'date', value: '2000-02-29', minYear: 1900, maxYear: 2100 }, '2000-03-01', 'Time'],

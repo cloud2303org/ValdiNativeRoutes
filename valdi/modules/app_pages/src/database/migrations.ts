@@ -1,5 +1,5 @@
 import { APP_MIGRATIONS } from './generated-migrations';
-import type { NativeCallback, NativeParameter, NativeRunResult } from './native-types';
+import type { NativeCallback, NativeParameter, NativeRunResult } from 'app_foundation/src/database/native-types';
 
 export const APP_DATABASE_IDENTITY = 'valdiroutes_app_drizzle.sqlite';
 

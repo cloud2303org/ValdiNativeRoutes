@@ -1,7 +1,7 @@
 // Over-the-air updates of the Valdi modules: the signing key, the binaries' release records and signed packages.
 //   node scripts/ota.mjs keygen                                  ota/private.pem (keep out of git) and ota/public.pem
 //   node scripts/ota.mjs valdi-hash <android|ios> <debug|release>  JSON the export scripts write next to their output
-//   node scripts/ota.mjs check-export <android|ios> <valdi_ota.json>  fails when valdi/native changed since that export
+//   node scripts/ota.mjs check-export <android|ios> <valdi_ota.json>  fails when module C++ changed since that export
 //   node scripts/ota.mjs app-info <android|ios> <valdi_ota.json> <app version> <update url> [--record]
 //                                                                the app's valdi_ota.json (Gradle, ios/project.yml)
 //   node scripts/ota.mjs pack <android|ios> <app version> <version>  ota/dist/<platform>/<app version>/<version>/
@@ -26,6 +26,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { nativeModuleInputs } from './native-modules.mjs';
 import { readAppConfig } from './app-config.mjs';
+import { nativeCppInputs } from './native-cpp.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const inputs = JSON.parse(readFileSync(path.join(root, 'ota/fingerprint.json'), 'utf8'));
@@ -70,9 +71,9 @@ const bindingSources = {
   ios: { dir: 'ios/Generated/valdi', extensions: ['.h', '.m', '.swift'] },
 };
 
-/** The Valdi side of the fingerprint, as exported: the toolchain (Valdi fork, Hermes) and valdi/native. */
+/** The exported runtime's toolchain and module-owned C++ sources, bindings, and build rules. */
 const valdiHash = () => digest([
-  ...fileEntries(inputs.valdi),
+  ...fileEntries([...new Set([...inputs.valdi, ...nativeCppInputs(root)])]),
   ['compiler-backend', 'node'],
 ]);
 
@@ -96,16 +97,17 @@ function bindingsHash(platform) {
 }
 
 /**
- * The C++ the export links into the Valdi runtime (valdi/native: @ExportModule implementations and their generated
- * bindings). It counts in valdiHash too (ota/fingerprint.json); this one only tells whether an export is current.
+ * Module-owned C++ implementations, bindings and build rules. This conservative
+ * input set includes every enabled module's cpp directory, even if a target is not linked.
+ * It counts in valdiHash too; this separate hash checks whether an export is current.
  */
-const nativeHash = () => digest(fileEntries(['valdi/native']));
+const nativeHash = () => digest(fileEntries(nativeCppInputs(root)));
 
-/** The apps' builds run this: a runtime exported before valdi/native last changed lacks that C++. */
+/** An export must match the module-owned C++ sources and build rules. */
 function checkExport(platform, info) {
   if (info.native === nativeHash()) return;
   throw new Error(
-    `valdi/native (C++ linked into the Valdi runtime) changed since the runtime was exported: run scripts/export-${platform}.sh${info.config === 'release' ? ' release' : ''}`,
+    `Module C++ sources or build rules changed since the runtime was exported: run scripts/export-${platform}.sh${info.config === 'release' ? ' release' : ''}`,
   );
 }
 
@@ -127,7 +129,7 @@ function buildModules(platform) {
 /** What the parts of a fingerprint are, for the errors that name the changed ones. */
 const partNames = {
   config: 'the Valdi runtime build (debug/release export)',
-  valdi: 'the Valdi fork/toolchain or valdi/native (ota/fingerprint.json "valdi")',
+  valdi: 'the Valdi fork/toolchain or module-owned C++ (ota/fingerprint.json "valdi")',
   bindings: 'the native bindings (a native interface of a module)',
   native: 'the native sources (ota/fingerprint.json "<platform>")',
 };
@@ -138,13 +140,14 @@ const partNames = {
  */
 function fingerprintParts(platform, info) {
   if (info && info.platform !== platform) throw new Error(`Export info is for ${info.platform}, not ${platform}.`);
+  const app = readAppConfig(root);
   const parts = {
     config: info ? info.config : 'release',
     valdi: info ? info.valdi : valdiHash(),
     bindings: bindingsHash(platform),
     native: digest([
-      ...fileEntries([...new Set([...inputs[platform], ...nativeModuleInputs(platform)])]),
-      ['app-identity', JSON.stringify(readAppConfig(root))],
+      ...fileEntries([...new Set([...inputs[platform], ...nativeModuleInputs(platform), ...(app.icon ? [app.icon] : [])])]),
+      ['app-identity', JSON.stringify(app)],
     ]),
   };
   const fingerprint = sha256(`${platform}\n${parts.config}\n${parts.valdi}\n${parts.bindings}\n${parts.native}\n`).slice(0, 32);

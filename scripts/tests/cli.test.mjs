@@ -1,16 +1,62 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { parseAdbDevices, parseIosSimulators, selectAndroidDevice, selectIosSimulator } from '../device.mjs';
 import { ensureBazelShell, extraBazelFlags } from '../node-modules.mjs';
 import { planPrebuild } from '../cli.mjs';
+import { sampleApp } from './fixtures/app-config.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const cli = path.join(repository, 'scripts/cli.mjs');
 const cliRun = args => spawnSync(process.execPath, [cli, ...args], { cwd: repository, encoding: 'utf8' });
+
+function freshIconProject(t) {
+  const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'valdi-cli-icon-bootstrap-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(path.join(root, 'scripts'));
+  mkdirSync(path.join(root, 'assets'));
+  for (const name of ['cli.mjs', 'prerequisites.mjs', 'device.mjs', 'app-config.mjs', 'app-icons.mjs']) {
+    copyFileSync(path.join(repository, 'scripts', name), path.join(root, 'scripts', name));
+  }
+  copyFileSync(path.join(repository, 'assets/app-icon.png'), path.join(root, 'assets/app-icon.png'));
+  writeFileSync(path.join(root, 'package.json'), JSON.stringify({
+    valdi: { app: { ...sampleApp(), icon: 'assets/app-icon.png' } },
+  }));
+  // Stop at the dependency-install boundary; this fixture never invokes a package manager.
+  writeFileSync(path.join(root, 'scripts/pnpm.mjs'),
+    'console.log("fixture dependency installer reached"); process.exit(23);\n');
+  return {
+    root,
+    run: args => spawnSync(process.execPath, [path.join(root, 'scripts/cli.mjs'), ...args], {
+      cwd: root, encoding: 'utf8',
+    }),
+  };
+}
+
+test('fresh icon prebuild reaches dependency installation before requiring sharp', t => {
+  const f = freshIconProject(t);
+  const result = f.run(['prebuild', '--platform', 'android']);
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stdout, /fixture dependency installer reached/);
+  assert.match(result.stderr, /exited with 23/);
+  assert.doesNotMatch(result.stderr, /sharp is unavailable/);
+  assert.equal(existsSync(path.join(f.root, 'ios/Generated')), false);
+  assert.equal(existsSync(path.join(f.root, 'android/app/build')), false);
+});
+
+test('fresh icon dry-run needs no sharp or dependency installation and writes no assets', t => {
+  const f = freshIconProject(t);
+  const result = f.run(['prebuild', '--platform', 'android', '--dry-run', '--json']);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).platform, 'android');
+  assert.doesNotMatch(result.stdout, /fixture dependency installer reached/);
+  assert.equal(existsSync(path.join(f.root, 'ios/Generated')), false);
+  assert.equal(existsSync(path.join(f.root, 'android/app/build')), false);
+});
 
 test('--help documents the unified commands and exits 0', () => {
   const result = cliRun(['--help']);

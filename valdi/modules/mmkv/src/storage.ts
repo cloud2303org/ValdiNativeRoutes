@@ -1,12 +1,10 @@
 import { getHost } from './MMKV';
 import * as v from 'valibot';
-import { snapshotStructuredValue } from 'native_common/src/structuredData';
 
 /**
  * The app's key-value store: one MMKV instance, synchronous, on the JS thread. The bridge carries structured
- * values; JSON encoding belongs to the native persistence boundary. Not for secrets: MMKV's file is readable
- * by whoever gets the app's files (the token is in
- * TokenStore, auth.ts).
+ * values; JSON encoding belongs to the native persistence boundary. MMKV does not
+ * define an application's authentication or secret-storage policy.
  *
  * @ExportModel({ios: 'VRStorageHost', android: 'io.valdiroutes.mmkv.StorageHost'})
  */
@@ -63,7 +61,7 @@ export function storageApi(fail: (method: string, cause: unknown) => Error) {
 
     setStorageSync(key: string, data: unknown): void {
       sync('setStorageSync', () => {
-        const payload = { value: snapshotStructuredValue(data, 'storage data') };
+        const payload = { value: data };
         if (!getHost().set({ key: v.parse(storageKey, key), payload })) {
           throw new Error('the store could not write it');
         }

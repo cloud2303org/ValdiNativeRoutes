@@ -10,6 +10,8 @@ import { appModule, appModules, valdiSourceRoot, writeTsconfig } from './pipelin
 import { findFonts, findImages, writeResTs } from './resources';
 import { valdiTs } from './valdiTs';
 
+const foundation = (name: string) => path.join(appModule('app_foundation').dir, 'src', name);
+
 async function fixture(t: TestContext, dev = false) {
   const temporary = mkdtempSync(path.join(tmpdir(), 'valdi-routes-'));
   t.after(() => rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
@@ -45,7 +47,7 @@ function execute(f: Awaited<ReturnType<typeof fixture>>, dependencies: Record<st
   const nativeNavigation: Record<string, any> = {};
   dependencies = {
     'valdi_core/src/NativeReferences': { withGlobalNativeRefs: (_name: string, body: () => unknown) => body() },
-    './AppContext': { getHost: () => ({ getNavigationHost: () => nativeNavigation }) },
+    '../host/AppContext': { getHost: () => ({ getNavigationHost: () => nativeNavigation }) },
     ...dependencies,
   };
   const context = vm.createContext({});
@@ -58,6 +60,7 @@ function execute(f: Awaited<ReturnType<typeof fixture>>, dependencies: Record<st
     cache.set(file, module.exports);
     const require = (name: string) => {
       if (Object.hasOwn(dependencies, name)) return dependencies[name];
+      if (name.startsWith('app_foundation/')) return load(path.join(appModule('app_foundation').dir, name.slice('app_foundation/'.length) + '.ts'));
       assert.ok(name.startsWith('.'), `route evaluation must not load page/native/npm modules: ${name}`);
       return load(path.resolve(path.dirname(file), `${name}.ts`));
     };
@@ -73,7 +76,7 @@ function addCustomBar(f: Awaited<ReturnType<typeof fixture>>) {
   const file = path.join(f.module.dir, 'src/AppTabBar.ts');
   writeFileSync(file, `
 import { Component } from 'valdi_core/src/Component';
-import type { TabBarContext, TabBarViewModel } from './TabBar';
+import type { TabBarContext, TabBarViewModel } from './components/TabBar';
 /** @Component({viewModel: 'TabBarViewModel', context: 'TabBarContext'}) */
 export class AppTabBar extends Component<TabBarViewModel, TabBarContext> {
   onRender(): void {}
@@ -93,7 +96,7 @@ test('routes compile direct components/res to metadata, execute without loading 
   const host = routes.toHost('login');
   assert.equal(host.root, 'login');
   assert.equal(routes.home, '$tabs');
-  assert.equal(host.routes.find((route: any) => route.route === 'home').component, 'HomePage@app_pages/src/HomePage');
+  assert.equal(host.routes.find((route: any) => route.route === 'home').component, 'HomePage@app_pages/src/features/home/HomePage');
   assert.equal(host.routes.find((route: any) => route.route === 'calculator').component, 'CalculatorComponent@calculator/src/CalculatorComponent');
   assert.equal(host.routes.find((route: any) => route.route === 'picker').nativeName, 'app/device-picker');
   assert.equal(host.tabBar.initial, 'home');
@@ -101,14 +104,14 @@ test('routes compile direct components/res to metadata, execute without loading 
   assert.equal(host.tabBar.component, undefined);
   assert.equal(host.tabBar.tabs[0].icon, 'tab_home');
   assert.equal(host.tabBar.tabs[0].selectedIcon, 'tab_home_on');
-  assert.ok(loaded.every(file => ['/src/routes.ts', '/src/navigation/config.ts', '/src/NavigationHost.ts']
+  assert.ok(loaded.every(file => ['/src/routes.ts', '/src/navigation/config.ts', '/src/navigation/NavigationHost.ts']
     .some(suffix => file.endsWith(suffix))), loaded.join('\n'));
   assert.throws(() => routes.assertRoute('absent'), /Unknown route: "absent"/);
   assert.throws(() => routes.assertTab('detail'), /Unknown tab/);
-  f.change(path.join(f.module.dir, 'src/HomePage.tsx'), text => text.replace('export class HomePage', 'export default class HomePage'));
-  f.change(f.routeFile, text => text.replace("import { HomePage } from './HomePage';", "import HomePage from './HomePage';"));
+  f.change(path.join(f.module.dir, 'src/features/home/HomePage.tsx'), text => text.replace('export class HomePage', 'export default class HomePage'));
+  f.change(f.routeFile, text => text.replace("import { HomePage } from './features/home/HomePage';", "import HomePage from './features/home/HomePage';"));
   assert.equal(f.plugin.diagnostics(), '');
-  assert.equal(execute(f).routes.toHost().routes.find((route: any) => route.route === 'home').component, 'default@app_pages/src/HomePage');
+  assert.equal(execute(f).routes.toHost().routes.find((route: any) => route.route === 'home').component, 'default@app_pages/src/features/home/HomePage');
 });
 
 test('custom tab component resolves to canonical metadata without a static component import', async t => {
@@ -153,11 +156,11 @@ export type PageInstance = HomePage;
 export type { HomePage };
 `);
   assert.equal(f.plugin.diagnostics(), '');
-  assert.ok(!/require\(["']\.\/HomePage["']\)/.test(f.plugin.emit(f.routeFile)),
+  assert.ok(!/require\(["']\.\/features\/home\/HomePage["']\)/.test(f.plugin.emit(f.routeFile)),
     'valdiPage metadata shares the same runtime-only import liveness');
   const { routes, loaded } = execute(f);
   assert.equal(routes.toHost().routes.find((route: any) => route.route === 'home').component,
-    'HomePage@app_pages/src/HomePage');
+    'HomePage@app_pages/src/features/home/HomePage');
   assert.ok(!loaded.some(file => file.endsWith('/HomePage.tsx')));
 });
 
@@ -176,7 +179,7 @@ export class ${component} {
 `);
     f.plugin.invalidate(file);
     f.change(f.routeFile, text => `${component === 'HomePage'
-      ? text.replace("from './HomePage';", `from './${implementation}';`) : text}
+      ? text.replace("from './features/home/HomePage';", `from './${implementation}';`) : text}
 export const observed: { component: unknown; key: string | symbol }[] = [];
 function keep(component: unknown): PropertyDecorator {
   return (_target, key) => { observed.push({ component, key }); };
@@ -223,14 +226,14 @@ export class Consumer {
       f.change(f.routeFile, text => `${text}\n${declaration}\n`);
       assert.equal(f.plugin.diagnostics(), '');
       const emitted = f.plugin.emit(f.routeFile);
-      assert.ok(!emitted.includes(`require("./${component}")`),
+      assert.ok(!emitted.includes(`require("./${component === 'HomePage' ? 'features/home/HomePage' : component}")`),
         `erased ambient ${ambient} must not retain the ${component} runtime import`);
       const { routes, loaded } = execute(f);
       if (component === 'AppTabBar') {
         assert.equal(routes.toHost().tabBar.component, 'AppTabBar@app_pages/src/AppTabBar');
       } else {
         assert.equal(routes.toHost().routes.find((route: any) => route.route === 'home').component,
-          'HomePage@app_pages/src/HomePage');
+          'HomePage@app_pages/src/features/home/HomePage');
       }
       assert.ok(!loaded.some(file => file.endsWith(`/${component}.ts`) || file.endsWith(`/${component}.tsx`)));
     });
@@ -300,8 +303,8 @@ test('editor types enforce the default/custom discriminant and require a compone
   const f = await fixture(t);
   const file = path.join(f.module.dir, 'src/tab-bar-types.ts');
   writeFileSync(file, `
-import type { TabBarDefinition } from './navigation/config';
-import { HomePage } from './HomePage';
+import type { TabBarDefinition } from 'app_foundation/src/navigation/config';
+import { HomePage } from './features/home/HomePage';
 const defaultBar: TabBarDefinition = { type: 'default' };
 const customBar: TabBarDefinition = { type: 'custom', component: HomePage };
 // @ts-expect-error custom requires a component
@@ -313,7 +316,7 @@ const invalid: TabBarDefinition = { type: 'floating' };
 // @ts-expect-error callbacks are not component classes
 const callback: TabBarDefinition = { type: 'custom', component: () => undefined };
 // @ts-expect-error canonical strings belong to generated metadata, not business source
-const raw: TabBarDefinition = { type: 'custom', component: 'HomePage@app_pages/src/HomePage' };
+const raw: TabBarDefinition = { type: 'custom', component: 'HomePage@app_pages/src/features/home/HomePage' };
 `);
   f.plugin.invalidate(file);
   assert.equal(f.plugin.diagnostics(), '');
@@ -323,8 +326,8 @@ test('editor types reject unknown native/Valdi routes, wrong params/results, and
   const f = await fixture(t);
   const file = path.join(f.module.dir, 'src/navigation-types.ts');
   writeFileSync(file, `
-import { router, Router, readParams } from './navigation';
-import type { PageContext, PageViewModel } from './Page';
+import { router, Router, readParams } from './routing/index';
+import type { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 router.push('home');
 router.push('picker');
 router.push('detail', { id: 123, from: 'test' });
@@ -386,7 +389,7 @@ test('old JSON declarations, non-components and unresolved image references are 
   const f = await fixture(t);
   const original = readFileSync(f.routeFile, 'utf8');
   for (const [source, error] of [
-    [original.replace("valdiPage({ component: HomePage, title: '首页' })", "{ kind: 'valdi', title: '首页', component: 'HomePage@app_pages/src/HomePage' }"), /legacy route JSON/],
+    [original.replace("valdiPage({ component: HomePage, title: '首页' })", "{ kind: 'valdi', title: '首页', component: 'HomePage@app_pages/src/features/home/HomePage' }"), /legacy route JSON/],
     [original.replace('component: HomePage', 'component: Date'), /exported @Component class/],
     [original.replace('icon: res.tabHome,', 'icon: res.absent,'), /Unknown Tab image/],
   ] as const) {
@@ -411,7 +414,7 @@ test('dev icon bytes change emitted routes and refresh the host; production refe
   const updates: any[] = [];
   nativeNavigation.updateRoutes = (declaration: any) => updates.push(declaration);
   // Re-evaluate the actual helper to simulate a changed declaration arriving from the dev daemon.
-  const config = load(path.join(f.module.dir, 'src/navigation/config.ts'));
+  const config = load(foundation('navigation/config.ts'));
   const changed = config.defineRoutes({ pages: routes.pages, tabs: { items: [{ route: 'home', text: 'Changed', icon: { name: 'tab_home', data } }] } });
   assert.equal(updates.length, 0, 'defining routes is side-effect free even with a native host installed');
   changed.publish('login');

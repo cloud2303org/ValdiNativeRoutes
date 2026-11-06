@@ -14,6 +14,9 @@ valdi_module(
     res = glob(["res/**/*.png"]),
     visibility = ["//visibility:public"],
     deps = [
+        "//modules/app_foundation:app_foundation_compiled",
+        "//modules/app_ui:app_ui_compiled",
+        "//modules/app_vision:app_vision_compiled",
         "@valdi//src/valdi_modules/src/valdi/client_sql",
         "@valdi//src/valdi_modules/src/valdi/valdi_core",
         "@valdi//src/valdi_modules/src/valdi/valdi_tsx",

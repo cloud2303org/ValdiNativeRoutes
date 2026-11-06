@@ -1,21 +1,21 @@
 import res from 'app_pages/res';
 import { CalculatorComponent } from 'calculator/src/CalculatorComponent';
-import { BlePage } from './BlePage';
-import { DetailPage } from './DetailPage';
-import { DevicePage } from './DevicePage';
-import { FormPage } from './FormPage';
-import { HomePage } from './HomePage';
-import { InputCheckPage } from './InputCheckPage';
-import { LoginPage } from './LoginPage';
-import { LottiePage } from './LottiePage';
-import type { FormLayout } from './navigation';
-import { defineRoutes, nativePage, valdiPage } from './navigation/config';
-import { PresentationPage } from './PresentationPage';
-import { RouteAnimationPage } from './RouteAnimationPage';
-import { VisionPage } from './VisionPage';
-import { VideoPage } from './VideoPage';
-import { WheelPage } from './WheelPage';
-import { WebViewPage } from './WebViewPage';
+import { BlePage } from './features/bluetooth/BlePage';
+import { DetailPage } from './features/detail/DetailPage';
+import { DevicePage } from './features/device/DevicePage';
+import { FormPage } from './features/form/FormPage';
+import { HomePage } from './features/home/HomePage';
+import { InputCheckPage } from './features/inputs/InputCheckPage';
+import { LoginPage } from './features/auth/LoginPage';
+import { LottiePage } from './features/lottie/LottiePage';
+import type { FormLayout } from './routing/index';
+import { defineRoutes, nativePage, valdiPage } from 'app_foundation/src/navigation/config';
+import { PresentationPage } from './features/presentation/PresentationPage';
+import { RouteAnimationPage } from './features/navigation/RouteAnimationPage';
+import { VisionPage } from './features/vision/VisionPage';
+import { VideoPage } from './features/video/VideoPage';
+import { WheelPage } from './features/wheels/WheelPage';
+import { WebViewPage } from './features/webview/WebViewPage';
 
 export const routes = defineRoutes({
   navigation: {

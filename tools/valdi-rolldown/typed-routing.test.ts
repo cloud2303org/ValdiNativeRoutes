@@ -11,6 +11,7 @@ import { appModule, valdiSourceRoot } from './pipeline';
 
 const app = appModule('app_pages');
 const source = (name: string) => path.join(app.dir, 'src', name);
+const foundation = (name: string) => path.join(appModule('app_foundation').dir, 'src', name);
 
 /** Execute real routing sources with native services supplied at their boundary. */
 function routingRuntime() {
@@ -23,7 +24,7 @@ function routingRuntime() {
     'valdi_core/src/Device': { Device: { getSystemType: () => 'android', isAndroid: () => true } },
     valibot: requireApp('valibot'),
     'valdi_core/src/NativeReferences': { withGlobalNativeRefs: (_name: string, body: () => unknown) => body() },
-    './AppContext': { getHost: () => ({ getNavigationHost: () => globals.nativeNavigation }) },
+    '../host/AppContext': { getHost: () => ({ getNavigationHost: () => globals.nativeNavigation }) },
   };
   const load = (file: string): any => {
     if (cache.has(file)) return cache.get(file);
@@ -35,16 +36,16 @@ function routingRuntime() {
     vm.runInContext(`(function(require,module,exports){${emitted}\n})`, context)(
       (name: string) => {
         if (modules[name]) return modules[name];
-        if (name.startsWith('native_common/')) return load(path.join(appModule('native_common').dir, name.slice('native_common/'.length) + '.ts'));
+        if (/^(app_foundation|native_common)\//.test(name)) return load(path.join(app.dir, '..', name + '.ts'));
         assert.ok(name.startsWith('.'), `Unexpected module: ${name}`);
         const resolved = path.resolve(path.dirname(file), name);
-        return load(resolved.endsWith('/navigation') ? `${resolved}/index.ts` : `${resolved}.ts`);
+        return load(`${resolved}.ts`);
       }, module, module.exports,
     );
     return module.exports;
   };
   const evaluate = (code: string) => vm.runInContext(code, context);
-  globals.config = load(source('navigation/config.ts'));
+  globals.config = load(foundation('navigation/config.ts'));
   modules['../routes'] = evaluate(`({
     routes: config.defineRoutes({
       navigation: { android: { animation: 'slideRight', durationMs: 333 } },
@@ -55,9 +56,9 @@ function routingRuntime() {
       tabs: { items: [{ route: 'detail', text: '详情', icon: { name: 'tab_home' } }] },
     }),
   })`);
-  globals.host = load(source('NavigationHost.ts'));
-  globals.navigation = load(source('navigation/index.ts'));
-  globals.data = load(source('navigation/data.ts'));
+  globals.host = load(foundation('navigation/NavigationHost.ts'));
+  globals.navigation = load(source('routing/index.ts'));
+  globals.data = load(foundation('navigation/data.ts'));
   evaluate(`
     globalThis.nativeNavigation = {
       push: (...args) => calls.push(['push', ...args]),
@@ -112,7 +113,7 @@ test('tab bar config normalizes omitted/default modes, validates custom metadata
   `), undefined);
 });
 
-test('typed router snapshots structured params/results without JSON transport and retains cancellation semantics', async () => {
+test('typed router passes params and results through without JSON transport and retains cancellation semantics', async () => {
   const { evaluate, calls } = routingRuntime();
   evaluate(`
     JSON.stringify = JSON.parse = () => { throw Error('JSON transport is forbidden'); };
@@ -125,8 +126,8 @@ test('typed router snapshots structured params/results without JSON transport an
     globalThis.resultPromise = navigation.router.pushForResult('picker', payload);
   `);
   assert.equal(calls[0][2].label, '中文 🧭');
-  assert.equal(calls[0][2].nested[2].n, -4);
-  assert.equal(Object.hasOwn(calls[0][2], 'optional'), false);
+  assert.equal(calls[0][2].nested[2].n, 99);
+  assert.equal(Object.hasOwn(calls[0][2], 'optional'), true);
   assert.equal(calls[0].length, 4);
   assert.equal(calls[0][3].durationMs, 333);
   assert.equal(calls[0][3].animation, 'slideRight');
@@ -140,7 +141,7 @@ test('typed router snapshots structured params/results without JSON transport an
     resultData.nested[1] = 9;
     resultPromise;
   `);
-  assert.equal((await successful).nested[1], 2);
+  assert.equal((await successful).nested[1], 9);
   const canceled = evaluate(`
     globalThis.canceled = navigation.router.pushForResult('picker');
     calls[5][4]({}, true);
@@ -153,7 +154,7 @@ test('typed router snapshots structured params/results without JSON transport an
     new navigation.Router({ finish: value => { globalThis.finished = value; }, back() {} }).finish(result);
     result.nested[0] = false;
   `);
-  assert.equal(evaluate('finished.nested[0]'), true);
+  assert.equal(evaluate('finished.nested[0]'), false);
   const pages = evaluate(`
     globalThis.pagesPromise = navigation.router.getCurrentPages();
     globalThis.pages = [{ pageId: '1', route: 'detail', params: payload }];
@@ -161,33 +162,38 @@ test('typed router snapshots structured params/results without JSON transport an
     payload.nested[2].n = 100;
     pagesPromise;
   `);
-  assert.equal((await pages)[0].params.nested[2].n, 99);
+  assert.equal((await pages)[0].params.nested[2].n, 100);
   assert.equal(evaluate(`navigation.readParams({ params: { id: 123 } }).id`), 123);
 });
 
-test('routing rejects non-data payloads before host calls and rejects invalid native callback data', async () => {
+test('routing rejects non-dictionary params and forwards other values to the host', async () => {
   const { evaluate, calls } = routingRuntime();
+  for (const expression of ['null', '[]', '42']) {
+    assert.throws(() => evaluate(`navigation.router.push('detail', (${expression}))`), /Invalid route data/);
+  }
+  assert.equal(calls.length, 0);
   for (const expression of [
-    'null', '[]', '42', '{ callback() {} }', '{ nested: { callback() {} } }',
+    '{ callback() {} }', '{ nested: { callback() {} } }',
     '{ value: new Date() }', '{ value: NaN }', '{ value: Infinity }',
     '{ value: 1n }', '{ value: Symbol("x") }', '{ value: [undefined] }',
     'Object.assign({}, { [Symbol("x")]: 1 })',
     '(() => { const value = {}; value.self = value; return value; })()',
     '({ get value() { throw Error("getter was executed"); } })',
   ]) {
-    assert.throws(() => evaluate(`navigation.router.push('detail', (${expression}))`), /Invalid route data/);
+    evaluate(`navigation.router.push('detail', (${expression}))`);
   }
-  assert.equal(calls.length, 0);
-  const promise = evaluate(`
+  assert.equal(calls.length, 11);
+  const resolved = await evaluate(`
     globalThis.invalidResult = navigation.router.pushForResult('picker');
-    calls[0][4]({ value() {} }, false);
+    calls[11][4]({ value() {} }, false);
     invalidResult;
   `);
-  await assert.rejects(promise, /Invalid route data/);
+  assert.equal(typeof resolved.value, 'function');
   assert.equal(evaluate(`
     globalThis.shared = { text: 'ok' };
-    data.snapshotRouteData({ a: shared, b: shared }).b.text;
-  `), 'ok', 'repeated noncyclic references are valid and copied independently');
+    const routed = data.snapshotRouteData({ a: shared, b: shared });
+    routed.a === shared && routed.b === shared && routed.b.text === 'ok';
+  `), true);
 });
 
 test('routing accepts options directly and rejects removed sheet arguments before native calls', () => {
@@ -217,17 +223,20 @@ test('startup stays synchronous, installs error handler first, initializes servi
         UncaughtErrorHandlerResult: { CRASH_APPLICATION: 1, IGNORE: 0 },
         setCatchAllUncaughtErrorHandler: () => events.push('handler'),
       },
-      './api': { api: {} },
-      './auth': {
+      './services/api': { api: {} },
+      './services/auth': {
         auth: { isSignedIn: () => { events.push('signedIn'); return signedIn; } },
       },
-      './db': { initializeAppDb: () => events.push('db') },
+      './services/database': { initializeAppDb: () => events.push('db') },
       './routes': { routes: { home: '$tabs', toHost: (root: string) => { events.push('declaration'); return { root }; } } },
-      './theme': { installTheme: () => events.push('theme') },
+      './components/theme': { installTheme: () => events.push('theme') },
     };
     mocks['valdi_core/src/ModuleLoaderGlobal'] = {
       getModuleLoader: () => ({
-        load: (name: string) => mocks[name.replace('app_pages/src/', './')],
+        load: (name: string) => {
+          assert.match(name, /^app_pages\/src\//, 'global loader lookups require canonical module IDs');
+          return mocks[name.replace('app_pages/src/', './')];
+        },
         onHotReload: () => () => {},
       }),
     };
@@ -270,24 +279,24 @@ test('pinned lazy ModuleLoader publishes fresh routes after hot unload and dispo
   evaluateModule(loaderCode, (id: string) => assert.fail(id), { exports: bootstrap }, bootstrap);
   const sources = new Map<string, string>([
     ['app_pages/src/app', emit(source('app.ts'))],
-    ['app_pages/src/NavigationHost', emit(source('NavigationHost.ts'))],
-    ['app_pages/src/navigation/config', emit(source('navigation/config.ts'))],
+    ['app_foundation/src/navigation/NavigationHost', emit(foundation('navigation/NavigationHost.ts'))],
+    ['app_foundation/src/navigation/config', emit(foundation('navigation/config.ts'))],
     ['valdi_core/src/ModuleLoaderGlobal', emit(path.join(core, 'ModuleLoaderGlobal.ts'))],
     ['valdi_core/src/UncaughtErrorHandler', `
       exports.UncaughtErrorHandlerResult = { CRASH_APPLICATION: 1, IGNORE: 0 };
       exports.setCatchAllUncaughtErrorHandler = () => events.push('handler');
     `],
     ['valdi_core/src/NativeReferences', `exports.withGlobalNativeRefs = (_name, body) => body();`],
-    ['app_pages/src/AppContext', `exports.getHost = () => ({ getNavigationHost: () => globalThis.navigation });`],
-    ['app_pages/src/api', `exports.api = {};`],
-    ['app_pages/src/db', `exports.initializeAppDb = () => events.push('db');`],
-    ['app_pages/src/theme', `exports.installTheme = () => events.push('theme');`],
-    ['app_pages/src/auth', `
+    ['app_foundation/src/host/AppContext', `exports.getHost = () => ({ getNavigationHost: () => globalThis.navigation });`],
+    ['app_pages/src/services/api', `exports.api = {};`],
+    ['app_pages/src/services/database', `exports.initializeAppDb = () => events.push('db');`],
+    ['app_pages/src/components/theme', `exports.installTheme = () => events.push('theme');`],
+    ['app_pages/src/services/auth', `
       exports.auth = { isSignedIn: () => globalThis.tokens.has() };
     `],
   ]);
   const routeSource = (title: string) => `
-    const config = require('app_pages/src/navigation/config', true);
+    const config = require('app_foundation/src/navigation/config', true);
     exports.routes = config.defineRoutes({
       pages: {
         login: config.nativePage({ name: 'login', title: '登录' }),
@@ -334,11 +343,16 @@ test('pinned lazy ModuleLoader publishes fresh routes after hot unload and dispo
 });
 
 test('real application generator exports fixed route models and dictionary schemas on Android, iOS and C++', () => {
-  const target = codegenModules().app_pages;
-  const code = generateNativeCode(target);
-  const kotlin = [...nativeSourceFiles(target, code, 'android').values()].join('\n');
-  const objc = [...nativeSourceFiles(target, code, 'ios').values()].join('\n');
-  const cpp = [...nativeSourceFiles(target, code, 'cpp').values()].join('\n');
+  const targets = codegenModules();
+  const generated = [targets.app_pages, targets.app_foundation].map(target => ({
+    target, code: generateNativeCode(target),
+  }));
+  const platform = (name: 'android' | 'ios' | 'cpp') => generated.flatMap(({ target, code }) =>
+    [...nativeSourceFiles(target, code, name).values()]).join('\n');
+  const kotlin = platform('android');
+  const objc = platform('ios');
+  const cpp = platform('cpp');
+  const code = generated[0].code;
   assert.match(kotlin, /constructor\(routes: List<RouteEntry>, tabBar: RouteTabBar\? = null, root: String\)/);
   assert.match(kotlin, /constructor\(pageId: String, route: String, params: Map<String, Any\?>\)/);
   assert.match(kotlin, /constructor\(animation: String, durationMs: Double, presentation: String\)/);
@@ -371,7 +385,7 @@ test('real application generator exports fixed route models and dictionary schem
   assert.match(cpp, /RouteDeclaration\(const std::vector<RouteEntry> &routes, const Valdi::Ref<RouteTabBar> &tabBar, const Valdi::StringBox &root\)/);
   assert.match(cpp, /StackPage\(const Valdi::StringBox &pageId, const Valdi::StringBox &route, const Valdi::Ref<Valdi::ValueMap> &params\)/);
   assert.match(cpp, /RouteTabBar\(const Valdi::StringBox &route, const Valdi::StringBox &initial, const std::vector<RouteTab> &tabs, const std::optional<Valdi::StringBox> &mode, const std::optional<Valdi::StringBox> &component\)/);
-  assert.match(cpp, /TabBarViewModel\(const std::vector<RouteTab> &items, const Valdi::StringBox &selectedRoute, double safeAreaBottom\)/);
+  assert.match(cpp, /TabBarViewModel\(const std::vector<app_foundation::RouteTab> &items, const Valdi::StringBox &selectedRoute, double safeAreaBottom\)/);
   assert.match(cpp, /TabBarContext\(const SelectTabFn &selectTab\)/);
   for (const output of [kotlin, objc, cpp]) assert.doesNotMatch(output, /paramsJson|resultJson|navigationJson|routesJson/);
 });

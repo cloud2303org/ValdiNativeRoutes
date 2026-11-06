@@ -1,8 +1,8 @@
 #!/bin/sh
 # Rebuild the Valdi runtime into android/app/libs/valdi_runtime.aar: libvaldi_runtime.so, Valdi's Kotlin and its own
-# modules (valdi_core, valdi_tsx), and the app's C++ (valdi/native: @ExportModule implementations and their
+# modules (valdi_core, valdi_tsx), and the app's module-owned C++ (@ExportModule implementations and their
 # bindings), linked into the runtime. app_pages and the npm packages are built by the app's Gradle build
-# (tools/valdi-rolldown), so this is only needed when the pinned Valdi fork/toolchain or valdi/native changes.
+# (tools/valdi-rolldown), so this is only needed when the pinned Valdi fork/toolchain or module C++ changes.
 # Builtin modules use the local Node backend by default; compiler changes also require a new export.
 # The old Swift Valdi compiler and its fallback have been removed.
 # Usage: scripts/export-android.sh [debug|release] [output dir, default android/app/libs]
@@ -31,7 +31,7 @@ esac
 # First checkout: fetch the pinned Valdi declarations before checking the app's C++ bindings.
 node "$root/scripts/prepare-valdi.mjs"
 # The C++ bindings must be current: they're compiled into the runtime here.
-(cd "$root/tools/valdi-rolldown" && pnpm exec tsx codegen.ts --cpp-out ../../valdi/native/generated --check)
+(cd "$root/tools/valdi-rolldown" && pnpm exec tsx codegen.ts --cpp-modules-out ../../valdi/modules --check)
 cd "$root/valdi"
 # valdi export always builds arm32/arm64/x86_64 (an extra --android_platforms adds to the list instead of
 # replacing it); the app's abiFilters keeps only arm64 in the APK.
@@ -74,7 +74,7 @@ esac
 # What earlier versions of this script left here: the aar with app_pages in it, and the modules' resources.
 rm -rf "$out/valdi_pages.aar" "$out/valdi_res" "$out/valdi_exported"
 
-# The Valdi half of the over-the-air fingerprint (toolchain, valdi/native, generated bindings) and valdi/native's own
+# The Valdi half of the over-the-air fingerprint (toolchain, module C++, generated bindings) and the module C++ inputs' own
 # hash, which the app's build checks this export against; the app's Gradle build adds the native half
 # (ota/fingerprint.json).
 node "$root/scripts/ota.mjs" valdi-hash android "$config" >"$out/valdi_ota.json"

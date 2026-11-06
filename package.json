@@ -5,6 +5,7 @@
     "app": {
       "name": "ValdiRoutes",
       "displayName": "Valdi 路由",
+      "icon": "assets/app-icon.png",
       "android": {
         "applicationId": "io.valdiroutes.app"
       },
@@ -17,9 +18,11 @@
       }
     },
     "modules": [
+      "app_foundation",
       "app_pages",
       "app_ui",
       "app_video",
+      "app_vision",
       "bluetooth",
       "calculator",
       "mmkv",

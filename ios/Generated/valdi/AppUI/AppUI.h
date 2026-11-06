@@ -56,6 +56,15 @@ FOUNDATION_EXPORT NSInteger VRAppUINativeModuleMarshall(SCValdiMarshallerRef  _N
 
 
 //
+// VRColumnWheelConfig.h
+//
+
+#import <ValdiRuntime/SCValdiMarshaller.h>
+
+#import <AppUITypes/AppUITypes.h>
+
+
+//
 // VRDatePickerRequest.h
 //
 
@@ -137,7 +146,34 @@ FOUNDATION_EXPORT NSInteger VRAppUINativeModuleMarshall(SCValdiMarshallerRef  _N
 
 
 //
+// VRTimeWheelConfig.h
+//
+
+#import <ValdiRuntime/SCValdiMarshaller.h>
+
+#import <AppUITypes/AppUITypes.h>
+
+
+//
 // VRToastRequest.h
+//
+
+#import <ValdiRuntime/SCValdiMarshaller.h>
+
+#import <AppUITypes/AppUITypes.h>
+
+
+//
+// VRTreeWheelConfig.h
+//
+
+#import <ValdiRuntime/SCValdiMarshaller.h>
+
+#import <AppUITypes/AppUITypes.h>
+
+
+//
+// VRWheelTreeNode.h
 //
 
 #import <ValdiRuntime/SCValdiMarshaller.h>

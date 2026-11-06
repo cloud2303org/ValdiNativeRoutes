@@ -1,6 +1,6 @@
 # Typed routing ABI
 
-The shared TypeScript contract is in `app_pages/src/navigation/models.ts`.
+The shared TypeScript contract is in `app_foundation/src/navigation/models.ts`.
 All listed interfaces are pure data `@ExportModel`s. Android names use
 `io.valdiroutes.pages.<Name>`; Objective-C names use `VR<Name>`; C++ names
 use `snap::valdi_modules::app_pages::<Name>`.
@@ -93,7 +93,7 @@ testing; it does not attach a full-root `onTap` or claim the empty area as a
 gesture target. The layout measurement stays in business code; the host still
 does not measure bar height or add it to page insets.
 
-`app_pages/src/TabBar.ts` defines the generated component contract:
+`app_pages/src/components/TabBar.ts` defines the generated component contract:
 
 ```ts
 /** @ViewModel; exported as VRTabBarViewModel / io.valdiroutes.pages.TabBarViewModel */
@@ -144,12 +144,10 @@ The real companion/exporter rejects `Record<string, unknown>` with
 native reference. This spelling is limited to the exported ABI. Nested structured
 values use Valdi's dictionary/any marshaller. No route
 transport calls `JSON.stringify` or `JSON.parse`. The public application API
-retains its route-specific parameter/result generics and JSON-compatible data
-constraints. The router snapshots dictionaries recursively, rejects functions,
-accessors, nonplain instances, cyclic values, symbol keys and nonfinite numbers,
-and omits optional object fields whose value is undefined. Arrays retain order,
-null, booleans, finite numbers and Unicode strings. The native ABI uses plain
-strings for discriminants.
+retains its route-specific parameter/result generics. The router passes
+parameter and result objects through to the native marshaller and still
+rejects a non-dictionary root. The native ABI uses plain strings for
+discriminants.
 
 `defineRoutes` validates and returns a declaration builder without publishing
 to native. `routes.toHost(root?)` builds the typed declaration.
@@ -173,7 +171,7 @@ The real Node `tools/valdi-rolldown/codegen.ts app_pages` pipeline generated:
 - `android/app/generated/valdi/app_pages.kt`
 - `ios/Generated/valdi/app_pagesTypes/app_pagesTypes.h` and `.m`
 - `ios/Generated/valdi/app_pages/app_pages.h` and `.m`
-- `valdi/native/generated/valdi_modules/app_pages/app_pages.hpp` and `.cpp`
+- `valdi/modules/app_pages/cpp/generated/valdi_modules/app_pages/app_pages.hpp` and `.cpp`
 
 Kotlin full constructors (optional fields also have generated overloads):
 

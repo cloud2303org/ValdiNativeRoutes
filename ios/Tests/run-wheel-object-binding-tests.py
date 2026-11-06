@@ -25,14 +25,12 @@ def main():
     framework = root / "ios/Frameworks/ValdiRuntime.xcframework"
     if not framework.exists():
         parser.error("Export the iOS runtime before preparing these tests")
-    sources = [root / "ios/ValdiRoutes/WheelViews.swift",
-               root / "ios/ValdiRoutes/WheelObjectBinding.h",
-               root / "ios/ValdiRoutes/WheelObjectBinding.m",
+    sources = [root / "ios/ValdiRoutes/Adapters/Wheels/WheelViews.swift",
+               root / "ios/ValdiRoutes/Adapters/Wheels/WheelObjectBinding.h",
+               root / "ios/ValdiRoutes/Adapters/Wheels/WheelObjectBinding.m",
                root / "ios/Tests/WheelObjectBindingTests.swift",
                root / "ios/Tests/WheelBindingRecorder.h",
                root / "ios/Tests/WheelBindingRecorder.m",
-               root / "ios/Generated/valdi/app_pages",
-               root / "ios/Generated/valdi/app_pagesTypes",
                root / "ios/Generated/valdi/AppUI",
                root / "ios/Generated/valdi/AppUITypes"]
     sources += [ui / (name + ".swift") for name in (
@@ -41,9 +39,9 @@ def main():
     bridge = output / "Bridge.h"
     bridge.write_text(
         '#import <ValdiRuntime/ValdiObjC.h>\n'
-        '#import <app_pages/app_pages.h>\n'
-        '#import <app_pagesTypes/app_pagesTypes.h>\n'
-        f'#import "{root / "ios/ValdiRoutes/WheelObjectBinding.h"}"\n'
+        '#import <AppUI/AppUI.h>\n'
+        '#import <AppUITypes/AppUITypes.h>\n'
+        f'#import "{root / "ios/ValdiRoutes/Adapters/Wheels/WheelObjectBinding.h"}"\n'
         f'#import "{root / "ios/Tests/WheelBindingRecorder.h"}"\n'
     )
     # UIKit control dispatch needs UIApplicationMain, even though the test bundle

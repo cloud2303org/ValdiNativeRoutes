@@ -1,7 +1,8 @@
 # Android startup splash
 
-Android uses AndroidX `core-splashscreen` 1.2.0 with a static vector mark and
-the existing page background. The launcher Activity installs the starting
+Android uses AndroidX `core-splashscreen` 1.2.0 with the app's generated PNG icon and
+the existing page background. `valdi.app.icon` in `package.json` selects the shared
+source (`assets/app-icon.png`). The launcher Activity installs the starting
 theme before `super.onCreate`. The normal application theme, Compose
 WindowInsets and renderer remain unchanged.
 
@@ -33,10 +34,10 @@ Compose Insets; the content-view lookup is for draw control only.
 
 ## Manual control
 
-The public entry is `app_pages/src/splash/SplashScreen`:
+The public entry is `app_foundation/src/splash/SplashScreen`:
 
 ```ts
-import * as SplashScreen from 'app_pages/src/splash/SplashScreen';
+import * as SplashScreen from 'app_foundation/src/splash/SplashScreen';
 
 // During application startup, before awaiting other initialization:
 const held = SplashScreen.preventAutoHide();
@@ -65,9 +66,9 @@ Repeated prevent calls are idempotent rather than reference counted.
 Later route changes do not show it again. Do not block the synchronous
 `startApp()` route declaration waiting for the resource-loading task.
 
-The wrapper acquires a generated native proxy lazily. This implementation is
-Android-only; calls on iOS throw explicitly before resolving the Android
-native module. iOS launch-screen behavior is unchanged.
+The wrapper acquires a generated native proxy lazily on both Android and iOS.
+See [the shared SplashScreen contract and iOS resources](splash-screen.md).
+The historical validation below predates the iOS implementation.
 
 ## Fixed-size root layout
 

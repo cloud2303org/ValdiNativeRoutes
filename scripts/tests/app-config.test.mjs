@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -16,6 +17,19 @@ function fixture(t, app = sampleApp()) {
   save(app);
   return { root, save };
 }
+
+test('absent icon preserves the exact config shape and copied no-icon consumers stay synchronous', t => {
+  const { root } = fixture(t);
+  assert.deepEqual(readAppConfig(root), sampleApp());
+  assert.deepEqual(syncAppConfig(root), sampleApp());
+  assert.equal(existsSync(path.join(root, 'ios/Generated/AppAssets.xcassets')), false);
+  assert.equal(existsSync(path.join(root, 'android/app/build/generated/valdi-app/res/mipmap-mdpi')), false);
+  const copied = path.join(root, 'app-config.mjs');
+  cpSync(new URL('../app-config.mjs', import.meta.url), copied);
+  const isolated = createRequire(import.meta.url)(copied);
+  assert.deepEqual(isolated.readAppConfig(root), sampleApp());
+  assert.deepEqual(isolated.syncAppConfig(root), sampleApp());
+});
 
 test('application identity is independent of native code identity and build paths use the configured name', t => {
   const { root, save } = fixture(t);
@@ -48,6 +62,8 @@ test('missing, unknown and unsafe configuration fails before generating files', 
     { ...sampleApp(), native: { androidNamespace: 'com.example', iosPrefix: 'NS' } },
     { ...sampleApp(), native: { androidNamespace: 'com.example', iosPrefix: 'Bad-Prefix' } },
     { ...sampleApp(), displayname: 'Typo' },
+    { ...sampleApp(), icons: 'assets/app-icon.png' },
+    ...[null, false, 42, {}, { source: 'assets/app-icon.png' }, ''].map(icon => ({ ...sampleApp(), icon })),
   ];
   for (const app of invalid) {
     save(app);
@@ -55,6 +71,22 @@ test('missing, unknown and unsafe configuration fails before generating files', 
     assert.equal(existsSync(path.join(root, 'ios')), false);
     assert.equal(existsSync(path.join(root, 'android')), false);
   }
+});
+
+test('optional icon is exposed unchanged and synchronized before native config outputs', async t => {
+  const sharp = createRequire(import.meta.url)('../../tools/valdi-rolldown/node_modules/sharp');
+  const app = { ...sampleApp(), icon: 'assets/app-icon.png' };
+  const { root } = fixture(t, app);
+  mkdirSync(path.join(root, 'assets'));
+  await sharp({ create: { width: 1024, height: 1024, channels: 3, background: '#164abd' } })
+    .png().toFile(path.join(root, app.icon));
+  assert.deepEqual(readAppConfig(root), app);
+  assert.deepEqual(syncAppConfig(root), app);
+  assert.ok(existsSync(path.join(root, 'ios/Generated/AppAssets.xcassets/AppIcon.appiconset/AppIcon.png')));
+  const original = readFileSync(path.join(root, 'ios/Generated/App.yml'));
+  writeFileSync(path.join(root, app.icon), Buffer.from('not a PNG'));
+  assert.throws(() => syncAppConfig(root), /invalid icon/);
+  assert.deepEqual(readFileSync(path.join(root, 'ios/Generated/App.yml')), original);
 });
 
 test('generated Android and iOS configuration preserves Unicode and literal display-name characters', t => {

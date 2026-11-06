@@ -117,7 +117,7 @@ export function checkRuntime(root, platform) {
   if (result.error || result.status !== 0) throw new Error(`Cannot check the ${platform} runtime fingerprint: ${result.error?.message ?? result.stderr.trim()}`);
   const current = JSON.parse(result.stdout);
   if (info.valdi !== current.valdi || info.native !== current.native) {
-    throw new Error(`${platform} Valdi runtime is out of date (Valdi fork/toolchain configuration or valdi/native changed). Run:\n  ${exportCommand(platform)}${info.config === 'release' ? ' release' : ''}`);
+    throw new Error(`${platform} Valdi runtime is out of date (Valdi fork/toolchain configuration or module C++ changed). Run:\n  ${exportCommand(platform)}${info.config === 'release' ? ' release' : ''}`);
   }
 }
 

@@ -39,7 +39,7 @@ See [custom module configuration](custom-modules.md) and the
 
 ## Validation on November 4, 2026
 
-App-owned wheel validation remains in `app_pages/src/schemas.ts`; common request
+App-owned wheel validation remains in `app_ui/src/wheels/schemas.ts`; common request
 schemas are imported directly from `native_common/src/pickerSchemas`. AppUI also
 uses that direct import instead of its redundant schema forwarding file.
 

@@ -142,7 +142,7 @@ test('factory-backed storage preserves snapshots, null/missing distinction and f
     remove: (key: string) => records.delete(key),
     clear: () => records.clear(),
   };
-  Object.assign(r.context, { facade: r.load('app_pages/src/api') });
+  Object.assign(r.context, { facade: r.load('app_pages/src/services/api') });
   assert.equal(r.evaluate(`facade.api.setStorageSync('x', null); facade.api.getStorageSync('x')`), null);
   assert.equal(r.evaluate(`facade.api.getStorageSync('missing')`), undefined);
   assert.equal(
@@ -241,7 +241,7 @@ test('AppUI validates requests and keeps the facade error type and cancel replie
       throw new Error('native presentation failure');
     },
   };
-  const { api, ApiError } = r.load('app_pages/src/api');
+  const { api, ApiError } = r.load('app_pages/src/services/api');
   assert.equal((await api.showModal({ editable: true, defaultText: 'kept' })).content, 'kept');
   const canceled = await api.showPicker({ options: ['a'] });
   assert.deepEqual({ ...canceled }, { confirm: false, cancel: true, value: '', index: -1, errMsg: 'showPicker:ok' });

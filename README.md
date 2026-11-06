@@ -11,17 +11,20 @@
 valdi/                  Valdi 工作区（Bazel），只用来编 Valdi 运行时
   BUILD.bazel           valdi_runtime：导出成 valdi_runtime.aar / ValdiRuntime.xcframework
   package.json          Valdi 命令行工具，以及页面用的 npm 包（dependencies）
+  modules/app_foundation/ 通用导航、页面生命周期、Splash 和数据库驱动
   modules/app_pages/    业务页面、应用路由与初始化
-    src/Page.ts         页面和宿主之间的契约：PageViewModel、PageContext
-    src/routes.ts       类型化路由声明、参数和结果类型，由 StartApp(debug) 返回给原生
+    src/features/       按功能归类的页面
+    src/services/       业务 API、认证和数据库服务
+    src/routes.ts       具体路由声明，由 StartApp(debug) 返回给原生
+  modules/app_vision/   独立 Vision 能力契约和调用封装
   modules/              AppUI、视频、蓝牙、存储等能力及其平台实现
 tools/valdi-rolldown/   我们自己的 Valdi 模块构建（代替 Valdi 的编译器）：编译、打包、热重载、原生绑定生成
 android/                普通 Gradle 工程，Compose + Nav3
   app/libs/             valdi_runtime.aar（导出产物，不进 git）
-  app/generated/valdi/  app_pages 的 Kotlin 绑定（codegen.ts 生成，进 git）
+  app/generated/valdi/  各启用模块的 Kotlin 绑定（codegen.ts 生成，进 git）
 ios/                    UIKit 工程（XcodeGen 的 project.yml）
   Frameworks/           ValdiRuntime.xcframework（导出产物，不进 git）
-  Generated/valdi/      app_pages 的 Objective-C 绑定（codegen.ts 生成，进 git）
+  Generated/valdi/      各启用模块的 Objective-C 绑定（codegen.ts 生成，进 git）
 scripts/
   export-android.sh     重新导出 Valdi 运行时 aar
   export-ios.sh         重新导出 Valdi 运行时 xcframework
@@ -85,7 +88,7 @@ Windows 原生 Android 构建入口见 [Native Windows Android builds](docs/wind
 
 ```sh
 pnpm install                               # 一次安装根目录、页面和构建工具的锁定依赖，生成 tsconfig
-pnpm prebuild --platform android           # 首次/Valdi 或 valdi/native 变化时导出运行时并准备其余产物
+pnpm prebuild --platform android           # 首次/Valdi 或模块 C++ 变化时导出运行时并准备其余产物
 ```
 
 需要 JDK 17、Android SDK、Node、pnpm。Valdi 命令行工具不用全局安装：它是 `valdi/package.json` 里的开发依赖（`@snap/valdi` 1.2.1），导出脚本用 `pnpm exec valdi` 调它。导出只编 Valdi 运行时（`libvaldi_runtime.so`、Valdi 的 Kotlin 和它自带的模块）以及构建要用的 Valdi 工具，第一次从头编译约 17 分钟。aar 里有三种 CPU 架构，APK 只打包 arm64（`abiFilters`）。
@@ -138,10 +141,10 @@ node scripts/ios-project.mjs         # brew install xcodegen；按 valdi.app 配
 
 ## 弹窗与提示 API
 
-小程序风格的接口：`api.showModal`、`showToast`、`hideToast`、`showLoading`、`hideLoading`（`src/api.ts`）。每个方法只返回 Promise，不接受 `success` / `fail` / `complete`（蓝牙、Wi-Fi、NFC 也一样）。成功结果带 `errMsg: 'showModal:ok'` 这类字段，失败抛 `ApiError`（`errMsg` 形如 `showModal:fail …`）。参数只在入口校验一次：`src/schemas.ts` 里的 valibot schema（和 ExpoNativeRoutes 同一套规则）检查类型和取值约束（选项个数、选择器的值必须在选项里、年份范围、日期用 dayjs 校验等），并补默认值（按钮文字“确定”“取消”、Toast 图标 `success`、时长 1500 ms 等）。之后不再检查：原生 AppUI 只负责展示，原生回传的结果也不校验，所以原生页面直接调 `NativeApp.ui` / `app.ui` 时要自己传合法参数。蓝牙、Wi-Fi、NFC 同样在入口用 valibot 校验（`ble/`、`wifi/`、`nfc/` 下的 `schemas.ts`），错误码不变。valibot 1.5.0 是 npm 包，`import * as v from 'valibot'`（见“npm 依赖”）。没人 catch 的错误（比如参数错了又没处理 `fail`）由 `startAppServices` 装的全局处理器接住：debug 包直接崩溃，release 包只记日志。
+小程序风格的接口：`api.showModal`、`showToast`、`hideToast`、`showLoading`、`hideLoading`（`app_pages/src/services/api.ts`）。每个方法只返回 Promise，不接受 `success` / `fail` / `complete`（蓝牙、Wi-Fi、NFC 也一样）。成功结果带 `errMsg: 'showModal:ok'` 这类字段，失败抛 `ApiError`（`errMsg` 形如 `showModal:fail …`）。参数只在入口校验一次：各能力模块的 valibot schema（和 ExpoNativeRoutes 同一套规则）检查类型和取值约束（选项个数、选择器的值必须在选项里、年份范围、日期用 dayjs 校验等），并补默认值（按钮文字“确定”“取消”、Toast 图标 `success`、时长 1500 ms 等）。之后不再检查：原生 AppUI 只负责展示，原生回传的结果也不校验，所以原生页面直接调 `NativeApp.ui` / `app.ui` 时要自己传合法参数。蓝牙、Wi-Fi、NFC 同样在入口用 valibot 校验（`ble/`、`wifi/`、`nfc/` 下的 `schemas.ts`），错误码不变。valibot 1.5.0 是 npm 包，`import * as v from 'valibot'`（见“npm 依赖”）。没人 catch 的错误（比如参数错了又没处理 `fail`）由 `startAppServices` 装的全局处理器接住：debug 包直接崩溃，release 包只记日志。
 
 ```ts
-import { api } from './api';
+import { api } from 'app_pages/src/services/api';
 
 const answer = await api.showModal({ title: '重命名设备', editable: true, defaultText: '采样设备' });
 if (answer.confirm) console.log(answer.content);
@@ -262,7 +265,7 @@ ClientSQL 负责连接、调度和事务协调；业务表和迁移记录只由 
 
 ## 页面生命周期和状态栏
 
-**生命周期**：页面继承 `Page`（`src/PageComponent.ts`），写法 `class XxxPage extends Page<PageViewModel, State, PageContext>`。类型参数跟 `StatefulComponent` 一样，因为 `@Component` 注解点名的类型要在页面文件里当类型用到，Valdi 编译器才找得到。
+**生命周期**：页面继承 `Page`（`app_foundation/src/page/PageComponent.ts`），写法 `class XxxPage extends Page<PageViewModel, State, PageContext>`。类型参数跟 `StatefulComponent` 一样，因为 `@Component` 注解点名的类型要在页面文件里当类型用到，Valdi 编译器才找得到。
 
 | 小程序 | 这里 |
 |---|---|
@@ -285,8 +288,7 @@ ClientSQL 负责连接、调度和事务协调；业务表和迁移记录只由 
   - 入参用 valibot 在入口校验，错了抛 `ApiError`，比如 `setStorageSync:fail data must be JSON, …`。
   - 底层是一个 MMKV 实例 `app`，和 ExpoNativeRoutes 一样。目录：iOS `Documents/mmkv`，安卓 `files/mmkv`。iOS 用 SPM，钉在 v2.4.3 的 commit 上（它的包用了 `unsafeFlags`，SPM 只允许按 revision 引用这种包）；安卓用 `com.tencent:mmkv:2.4.3`。
   - MMKV 的文件没加密，拿到 app 文件的人能读，所以不放机密。
-- **token：** 存在 `TokenStore`（`src/auth.ts`）里：iOS 存 Keychain，重装后算未登录；安卓用 Keystore 里的 AES 密钥加密后存 SharedPreferences，这个文件不进备份。安卓判断是否已登录只看有没有存过 token，不解密，启动时不碰 Keystore。
-- **为什么不用 Valdi 的 `PersistentStore`：** 它只有异步接口，而 `startApp` 要同步决定首页。它的加密只给 user-scoped 的存储用，要宿主提供 Snap 的 `UserSession` 和 Keychain 实现；`deviceGlobal` 的存储不加密。
+- **应用状态：** 示例使用 `app_pages/src/state/session.ts` 的 `zustand/vanilla` store，认证跳转在 `services/auth.ts`。示例会话只在当前 JS runtime 内有效，重启后重新登录。用户模型、认证和持久化策略由应用自己实现，基础模块不提供 TokenStore。普通 JS 状态不需要生成原生代理。
 
 ## Valdi fork 与工具补丁
 
@@ -333,7 +335,7 @@ Android release 开了 R8（`isMinifyEnabled`、`isShrinkResources`），APK 从
 **加载。** Valdi 读模块前先问 runtime 的 custom module provider，返回 null 才读安装包里的 `.valdimodule`。图片的清单（名字、宽高）在 `.valdimodule` 里，图片文件在外面（Android 是 drawable，iOS 是 `<module>.bundle`），和 RN 的 AssetRegistry 加 `--assets-dest` 一样。`custom_module_assets.patch` 给 provider 加了一个可选方法，Valdi 找模块图片前先问它（Android `resolveAssetUrl`，iOS `assetURLForModule:resourcePath:`），返回 `file://` 地址就用热更新包里的图，返回 null 用安装包里的。宿主的 provider 在 `ValdiOta.kt` / `ValdiOta.swift`（iOS 的 provider 本身是 Objective-C 的 `ValdiOtaModules`：Swift 的 `throws -> Data` 表达不了"没有错误、用安装包里的"）。原生 Tab 栏图标也先问 `ValdiOta.image`。
 
 **按 App 版本下发，指纹兜底。** 热更新包针对一个 App 版本（Android `versionName`，iOS `CFBundleShortVersionString`，`project.yml` 的 `MARKETING_VERSION`），打包时指定，这个版本的安装包都会收到。前提是这个版本的原生部分没变，指纹用来检查这一点。指纹由四部分组成：
-- 导出时记下的 Valdi 部分：Valdi fork 提交、依赖规则补丁、`valdi/native`，写在 `libs/valdi_ota.json`、`ios/Frameworks/valdi_ota.json` 里；
+- 导出时记下的 Valdi 部分：Valdi fork 提交、依赖规则补丁、启用模块的 C++ 目录及链接规则，写在 `libs/valdi_ota.json`、`ios/Frameworks/valdi_ota.json` 里；
 - `codegen.ts` 从 `@Export…` 生成的原生绑定（`android/app/generated/valdi/`、`ios/Generated/valdi/`，去掉注释后计算）；
 - `ota/fingerprint.json` 列出的原生源码；
 - debug/release：包里是 Hermes 字节码，只发 release。
@@ -382,24 +384,24 @@ iOS 是 `scripts/export-ios.sh release`、`project.yml` 的 `VALDI_OTA_URL`、`s
   ```sh
   cd tools/valdi-rolldown
   pnpm exec tsx codegen.ts --kotlin-out ../../android/app/generated/valdi \
-    --objc-out ../../ios/Generated/valdi --objc-framework ValdiRuntime --cpp-out ../../valdi/native/generated
+    --objc-out ../../ios/Generated/valdi --objc-framework ValdiRuntime --cpp-modules-out ../../valdi/modules
   ```
 
 - **接入**：Android 是 Gradle 的 `<variant>ValdiModules`（产物进 assets 和 res）和 `valdiCodegenCheck`（挂在 preBuild）；iOS 是 `project.yml` 的 “Valdi bindings check” 和 “Valdi modules” 两个构建脚本（产物进 app 的资源目录，Valdi 先在这里找模块）。改了 `project.yml` 要重新运行 `node scripts/ios-project.mjs`。
 - **命令行**：`pnpm build [--release] [--minify] [--out <dir>] [--res <dir>] [--ios-res <dir>]`；`pnpm dev` 是热重载（`scripts/hotreload.sh`），监听 `src/`、`res/`、`sql/`，把改动推给 Android 模拟器和启动着的 iOS 模拟器（端口 13592，Valdi daemon 的协议），代替 `valdi hotreload`。真机只在 `ANDROID_SERIAL` 指定时才推，因为装着别的构建的 app 收到推送会出问题。
-- **模块**：`valdi/modules/` 下每个有 `src/` 的目录都是一个模块，不用登记，各自打成 `<模块>.valdimodule`（自己的图片、npm 代码），绑定也按模块生成到同一组目录。模块之间按路径导入（`import { X } from 'other/src/X'`），运行时 Valdi 加载对方的模块。新建：`pnpm new-module <名字>`，交互选择官方 `ui_component`、`polyglot_bridge_module` 或 `polyglot_view_module` 模板，也可用 `--template` 指定。名字规范为 snake_case；原生模板自动接入库链接、工厂和 View Binder 注册，再运行 `pnpm android` / `pnpm ios`。详见 [自定义模块](docs/custom-modules.md)。没有 `@Export…` 的模块不生成 C++ 文件，所以不需要重新导出运行时。删掉一个模块后，删它在 `android/app/generated/valdi`、`ios/Generated/valdi` 里的绑定，再跑 `pnpm tsconfig`。
+- **模块**：`valdi/modules/` 下每个有 `src/` 的目录都是一个模块，不用登记，各自打成 `<模块>.valdimodule`（自己的图片、npm 代码），绑定也按模块生成到同一组目录。模块之间按路径导入（`import { X } from 'other/src/X'`），运行时 Valdi 加载对方的模块。新建：`pnpm new-module <名字>`，交互选择官方 `ui_component`、`polyglot_bridge_module`、`polyglot_view_module`，或仓库的 `cpp_bridge_module` 模板，也可用 `--template` 指定。名字规范为 snake_case；原生模板自动接入库链接、工厂和 View Binder 注册；C++ 模板自动生成模块自己的实现与 Bazel 规则，启用后由公共流程生成绑定和 runtime 链接清单，无需手改宿主 BUILD，再运行 `pnpm android` / `pnpm ios`。详见 [自定义模块](docs/custom-modules.md)。没有 `@Export…` 的模块不生成 C++ 文件，所以不需要重新导出运行时。删掉一个模块后，删它在 `android/app/generated/valdi`、`ios/Generated/valdi` 里的绑定，再跑 `pnpm tsconfig`。
 - **IDE**：各模块的 `tsconfig.json` 由 `pnpm tsconfig` 生成（`new-module` 会跑），代替 `valdi projectsync`：Valdi 的基础配置、运行时带的 Valdi 模块（只有这些能导入）、所有 app 模块，生成的资源声明（`res.ts`）在 `tools/valdi-rolldown/.gen/`。`valdi/modules/app_pages/BUILD.bazel` 已经用不到了。
 
-导出脚本只在 Valdi fork 提交、工具链配置或 `valdi/native`（C++，见下一节）变了时才需要跑：它提供运行时 aar / xcframework 和指纹的 Valdi 一半；导出内置模块时仍可能构建上游 toolbox，应用 Node 管线不再调用它。
+导出脚本只在 Valdi fork 提交、工具链配置或 模块的 `cpp/`（C++，见下一节）变了时才需要跑：它提供运行时 aar / xcframework 和指纹的 Valdi 一半；导出内置模块时仍可能构建上游 toolbox，应用 Node 管线不再调用它。
 
 ## C++ 绑定
 
-TS 声明一个 `@ExportModule` 的 `.d.ts`，C++ 实现它，JS 像普通模块一样 `import` 并直接同步调用（在 JS 线程上执行，返回值直接回到 JS）。宿主的 Kotlin / Swift 不参与。示例是 `src/cpp/Cpp.d.ts`（常量 `BUILD_INFO`、`sha256(text)`、`stats(values)` 返回一个模型），实现在 `valdi/native/src/Cpp.cpp`，页面是“OpenCV 与 ncnn”最下面的“C++ 绑定”。
+TS 声明一个 `@ExportModule` 的 `.d.ts`，C++ 实现它，JS 像普通模块一样 `import` 并直接同步调用（在 JS 线程上执行，返回值直接回到 JS）。宿主的 Kotlin / Swift 不参与。示例是 `src/cpp/Cpp.d.ts`（常量 `BUILD_INFO`、`sha256(text)`、`stats(values)` 返回一个模型），实现在 `valdi/modules/app_pages/cpp/src/Cpp.cpp`，页面是“OpenCV 与 ncnn”最下面的“C++ 绑定”。
 
-- **生成**：`codegen.ts --cpp-out ../../valdi/native/generated` 写出 `valdi_modules/app_pages/app_pages.{hpp,cpp}`，命名空间 `snap::valdi_modules::app_pages`，和 Valdi 编译器的输出一样。`Cpp.d.ts` 生成接口 `CppModule`（每个函数一个纯虚方法，常量是无参方法）和工厂 `CppModuleFactory`；同时也生成 Kotlin / Objective-C 的同名接口，没人实现，不影响。模块和模型要像其他注解一样写上 `ios` / `android` 名字，否则 Kotlin 默认落在 `com.snap.modules.app_pages`，和模块的包冲突，生成会失败（Valdi 的编译器也一样）。
+- **生成**：`codegen.ts --cpp-modules-out ../../valdi/modules` 写出模块自己的 `cpp/generated/valdi_modules/<模块>/<模块>.{hpp,cpp}`；默认只生成有手写 C++ 的模块及其生成类型依赖，命名空间 `snap::valdi_modules::app_pages`，和 Valdi 编译器的输出一样。`Cpp.d.ts` 生成接口 `CppModule`（每个函数一个纯虚方法，常量是无参方法）和工厂 `CppModuleFactory`；同时也生成 Kotlin / Objective-C 的同名接口，没人实现，不影响。模块和模型要像其他注解一样写上 `ios` / `android` 名字，否则 Kotlin 默认落在 `com.snap.modules.app_pages`，和模块的包冲突，生成会失败（Valdi 的编译器也一样）。
 - **实现**：继承 `CppModuleFactory`，重写 `onLoadModule()` 返回 `CppModule` 的实现，再用 `Valdi::RegisterModuleFactory::registerTyped<…>()` 静态注册。运行时创建时收集这些注册，JS 第一次读 `app_pages/src/cpp/Cpp` 时调用工厂。
-- **编进运行时**：`valdi/native/BUILD.bazel` 的 `app_pages_native`（实现 + 生成的绑定，`alwayslink`）通过 `valdi_exported_library` 的 `native_deps`（fork 中的原生导出规则扩展）链接进 `libvaldi_runtime.so` 和 `ValdiRuntime.xcframework`。不在 CMake / Xcode 里单独编：`libvaldi_runtime.so` 静态链接 libc++、只导出 JNI 符号，单独编的 so 会带另一份 libc++，跨 so 传 `shared_ptr`、抛异常都不安全。代价是改了 C++ 要重新导出（增量编译）。
-- **检查**：导出脚本先检查 C++ 绑定没过期；导出时 `valdi_ota.json` 记下 `valdi/native` 的哈希，Gradle 的 `valdiCodegenCheck` 和 Xcode 的 “Valdi bindings check” 比对它（`scripts/ota.mjs check-export`），改了 C++ 没重新导出就构建失败并给出命令。`valdi/native` 也算进 OTA 指纹：C++ 在安装包里，不能热更新。
+- **编进运行时**：`//modules/app_pages/cpp:native`（手写实现，`alwayslink`），以及它显式依赖的 `:bindings` 和 `//modules/app_foundation/cpp:bindings`通过 `valdi_exported_library` 的 `native_deps`（fork 中的原生导出规则扩展）链接进 `libvaldi_runtime.so` 和 `ValdiRuntime.xcframework`。不在 CMake / Xcode 里单独编：`libvaldi_runtime.so` 静态链接 libc++、只导出 JNI 符号，单独编的 so 会带另一份 libc++，跨 so 传 `shared_ptr`、抛异常都不安全。代价是改了 C++ 要重新导出（增量编译）。
+- **检查**：导出脚本先检查 C++ 绑定没过期；导出时 `valdi_ota.json` 记下 启用模块 C++ 目录及链接规则的哈希，Gradle 的 `valdiCodegenCheck` 和 Xcode 的 “Valdi bindings check” 比对它（`scripts/ota.mjs check-export`），改了 C++ 没重新导出就构建失败并给出命令。模块 C++ 目录也算进 OTA 指纹：C++ 在安装包里，不能热更新。
 - **耗时的计算**：同步调用期间 JS 线程被占住。要在后台算，用回调参数，C++ 在自己的线程（`Valdi::DispatchQueue::create`）算完再调回调，Valdi 会把调用转回 JS 线程。
 
 ## npm 依赖
@@ -407,7 +409,7 @@ TS 声明一个 `@ExportModule` 的 `.d.ts`，C++ 实现它，JS 像普通模块
 页面直接按包名导入 npm 包：`import dayjs from 'dayjs'`、`import * as v from 'valibot'`。
 
 - **版本**写在 `valdi/package.json` 的 `dependencies`，`pnpm-lock.yaml` 锁版本和 integrity；`node_modules` 在 `valdi/` 下。pnpm 只把直接声明的包放在顶层，没声明的包导入不到。用新包就是 `pnpm add` 再 `import`，不用登记。
-- **打包**：npm 代码打进 `app_pages` 里，按 rolldown 的代码分割走（类似 webpack 的 splitChunks）：只有一个文件用的包直接打进那个文件（现在的 dayjs 在 `src/schemas.js` 里），多个文件共用的提成公共 chunk（`npm/valibot.js`），按包名命名，每次构建名字不变。CommonJS 包的互操作在 chunk 里由 rolldown 处理，不经过 Valdi 的懒加载代理。
+- **打包**：npm 代码打进使用它的各个模块里，按 rolldown 的代码分割走（类似 webpack 的 splitChunks）：只有一个文件用的包直接打进那个文件（例如 AppUI 滚轮的 dayjs），多个文件共用的提成公共 chunk（`npm/valibot.js`），按包名命名，每次构建名字不变。CommonJS 包的互操作在 chunk 里由 rolldown 处理，不经过 Valdi 的懒加载代理。
 - **类型**直接用包自带的。
 
 升级：改 `package.json` 的版本，`pnpm install`，然后重新构建。`@tanstack/query-core` 已经装了，还没有页面用它。

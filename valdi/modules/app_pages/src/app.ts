@@ -1,9 +1,9 @@
 import { setCatchAllUncaughtErrorHandler, UncaughtErrorHandlerResult } from 'valdi_core/src/UncaughtErrorHandler';
 import { getModuleLoader } from 'valdi_core/src/ModuleLoaderGlobal';
-import { api } from './api';
-import { initializeAppDb } from './db';
-import type { RouteDeclaration } from './navigation/models';
-import { installTheme } from './theme';
+import { api } from './services/api';
+import { initializeAppDb } from './services/database';
+import type { RouteDeclaration } from 'app_foundation/src/navigation/models';
+import { installTheme } from './components/theme';
 
 /**
  * The app's start, called once by the host from the JS scope it keeps for the app's lifetime: whatever is installed
@@ -42,7 +42,7 @@ function currentRoutes(): typeof import('./routes')['routes'] {
 
 /** Consult the current auth module and its lazy native token store after reload. */
 function rootRoute(home: string): string {
-  const { auth } = getModuleLoader().load('app_pages/src/auth', true) as typeof import('./auth');
+  const { auth } = getModuleLoader().load('app_pages/src/services/auth', true) as typeof import('./services/auth');
   return auth.isSignedIn() ? home : 'login';
 }
 

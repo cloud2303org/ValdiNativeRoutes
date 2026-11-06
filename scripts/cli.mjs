@@ -170,8 +170,8 @@ function ensureSources(options) {
 
 function bindingsArguments(platform) {
   return platform === 'android'
-    ? ['--kotlin-out', '../../android/app/generated/valdi', '--cpp-out', '../../valdi/native/generated']
-    : ['--objc-out', '../../ios/Generated/valdi', '--objc-framework', 'ValdiRuntime', '--cpp-out', '../../valdi/native/generated'];
+    ? ['--kotlin-out', '../../android/app/generated/valdi', '--cpp-modules-out', '../../valdi/modules']
+    : ['--objc-out', '../../ios/Generated/valdi', '--objc-framework', 'ValdiRuntime', '--cpp-modules-out', '../../valdi/modules'];
 }
 
 function ensureBindings(platform) {
@@ -267,8 +267,8 @@ function prebuild(options) {
   }
 
   const actions = [];
-  syncAppConfig(root);
   if (ensureDependencies(options)) actions.push('installed JS dependencies');
+  syncAppConfig(root);
   if (ensureSources(options)) actions.push('fetched Valdi sources');
   if (ensureBindings(platform)) actions.push('regenerated native bindings');
   if (ensureRuntime(platform, options)) actions.push('exported the runtime');

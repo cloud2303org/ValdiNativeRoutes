@@ -204,9 +204,9 @@ abstract class ValdiModules : DefaultTask() {
 }
 
 /**
- * Fails when generated/valdi (Kotlin) or valdi/native/generated (C++) is not what tools/valdi-rolldown/codegen.ts
+ * Fails when generated/valdi (Kotlin) or module-owned C++ bindings differ from tools/valdi-rolldown/codegen.ts
  * generates from the current TypeScript: a native interface changed without the bindings being regenerated. Only
- * checks; regenerating is done by hand. The C++ is linked into the exported runtime, so it also fails when valdi/native
+ * checks; regenerating is done by hand. The C++ is linked into the exported runtime, so it also fails when module C++
  * changed since libs/valdi_runtime.aar was exported (scripts/ota.mjs check-export).
  */
 abstract class ValdiCodegenCheck : DefaultTask() {
@@ -221,23 +221,23 @@ abstract class ValdiCodegenCheck : DefaultTask() {
     @TaskAction
     fun check() {
         val repo = repoDir.get().asFile
-        val cppDir = repo.resolve("valdi/native/generated")
+        val cppModulesDir = repo.resolve("valdi/modules")
         val result = execOperations.exec {
             workingDir = repo.resolve("tools/valdi-rolldown")
             commandLine(
                 pnpm.get() + listOf(
                     "exec", "tsx", "codegen.ts",
-                    "--kotlin-out", generatedDir.get().asFile.path, "--cpp-out", cppDir.path, "--check",
+                    "--kotlin-out", generatedDir.get().asFile.path, "--cpp-modules-out", cppModulesDir.path, "--check",
                 ),
             )
             isIgnoreExitValue = true
         }
         if (result.exitValue != 0) {
             throw GradleException(
-                "The Valdi bindings in generated/valdi or valdi/native/generated are stale: a native interface changed. " +
+                "The Valdi Kotlin or module-owned C++ bindings are stale: a native interface changed. " +
                     "Regenerate them with\n" +
                     "  cd tools/valdi-rolldown && pnpm exec tsx codegen.ts --kotlin-out ../../android/app/generated/valdi " +
-                    "--cpp-out ../../valdi/native/generated\n" +
+                    "--cpp-modules-out ../../valdi/modules\n" +
                     "then export the runtime again (scripts/export-android.sh): the C++ is linked into it.",
             )
         }
@@ -252,11 +252,17 @@ val valdiCodegenCheck = tasks.register<ValdiCodegenCheck>("valdiCodegenCheck") {
     val repo = rootProject.projectDir.parentFile
     val tool = repo.resolve("tools/valdi-rolldown")
     sources.from(
-        fileTree(repo.resolve("valdi/modules")) { include("*/src/**", "*/tsconfig.json", "*/module.json") },
-        fileTree(tool) { include("codegen.ts", "codegen/**", "vendor/**", "valdiTs.ts", "routes-transform.ts", "pipeline.ts", "modules.mjs", "module-selection.ts", "package.json", "pnpm-lock.yaml") },
+        fileTree(repo.resolve("valdi/modules")) { include("*/src/**", "*/cpp/**", "*/tsconfig.json", "*/module.json") },
+        fileTree(tool) { include("codegen.ts", "cpp-modules.ts", "codegen/**", "vendor/**", "valdiTs.ts", "routes-transform.ts", "pipeline.ts", "modules.mjs", "module-selection.ts", "package.json", "pnpm-lock.yaml") },
         repo.resolve("package.json"),
         fileTree("generated/valdi"),
-        fileTree(repo.resolve("valdi/native")),
+        repo.resolve("valdi/BUILD.bazel"),
+        repo.resolve("valdi/modules/runtime-packages.bazelrc"),
+        repo.resolve("valdi/modules/runtime-cpp.bzl"),
+        fileTree(repo.resolve("valdi/bzl/module_cpp")),
+        repo.resolve("scripts/ota.mjs"),
+        repo.resolve("scripts/native-cpp.mjs"),
+        repo.resolve("ota/fingerprint.json"),
         file("libs/valdi_ota.json"),
     )
     pnpm = providers.gradleProperty("valdiPnpm").map { listOf(it) }.orElse(
@@ -291,6 +297,7 @@ androidComponents {
                     include("module-bindings.ts", "codegen/**", "pipeline.ts", "valdiTs.ts", "modules.mjs", "module-selection.ts")
                 },
             )
+            (appConfig["icon"] as? String)?.let { fingerprintFiles.from(repo.resolve(it)) }
             repoRoot = repo
             publicKey = repo.resolve("ota/public.pem")
             val version = variant.outputs.single().versionName.orNull ?: throw GradleException("The app has no versionName")

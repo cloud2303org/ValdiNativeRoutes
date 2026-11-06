@@ -30,6 +30,8 @@ ota/dist/
 /ios/Generated/AppEntitlements.entitlements
 /ios/Generated/Modules.yml
 /ios/Generated/App.yml
+/ios/Generated/AppAssets.xcassets/
+/ios/Generated/AppIcons.json
 /.tools/
 /module-build/win.local.bazelrc
 /valdi/win.local.bazelrc

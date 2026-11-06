@@ -6,12 +6,12 @@ enum AppNativeModules {
     static func register(_ runtime: SCValdiRuntime, navigationHost: VRNavigationHost) {
         runtime.registerNativeModuleFactory(AppContextModuleFactory(navigationHost: navigationHost))
         runtime.registerNativeModuleFactory(VisionModuleFactory())
+        runtime.registerNativeModuleFactory(SplashScreenModuleFactory())
     }
 }
 
 private final class AppContextHostImpl: NSObject, VRAppContextHost {
     private let navigationHost: VRNavigationHost
-    private lazy var tokenStore = TokenStoreImpl()
 
     init(navigationHost: VRNavigationHost) {
         self.navigationHost = navigationHost
@@ -19,7 +19,6 @@ private final class AppContextHostImpl: NSObject, VRAppContextHost {
     }
 
     func getNavigationHost() -> VRNavigationHost { navigationHost }
-    func getTokenStore() -> VRTokenStore { tokenStore.store }
 }
 
 private final class AppContextModule: NSObject, VRAppContextNativeModule {

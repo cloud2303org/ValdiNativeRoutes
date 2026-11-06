@@ -180,6 +180,42 @@
 
 
 //
+// VRColumnWheelConfig.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "AppUITypes.h"
+
+@implementation VRColumnWheelConfig
+
+@dynamic options;
+@dynamic value;
+
+- (instancetype _Nonnull)initWithOptions:(NSArray<VRPickerOption *> * _Nonnull)options value:(NSString * _Nonnull)value
+{
+    return [super initWithFieldValues:nil, options, value];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "options", .selName = nil, .type = "a<r:'[0]'>"},
+        {.name = "value", .selName = nil, .type = "s"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRPickerOption",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
 // VRDatePickerRequest.m
 //
 
@@ -506,6 +542,42 @@
 
 
 //
+// VRTimeWheelConfig.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "AppUITypes.h"
+
+@implementation VRTimeWheelConfig
+
+@dynamic mode;
+@dynamic value;
+@dynamic minYear;
+@dynamic maxYear;
+
+- (instancetype _Nonnull)initWithMode:(NSString * _Nonnull)mode value:(NSString * _Nonnull)value minYear:(double)minYear maxYear:(double)maxYear
+{
+    return [super initWithFieldValues:nil, mode, value, minYear, maxYear];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "mode", .selName = nil, .type = "s"},
+        {.name = "value", .selName = nil, .type = "s"},
+        {.name = "minYear", .selName = nil, .type = "d"},
+        {.name = "maxYear", .selName = nil, .type = "d"},
+        {.name = nil},
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
 // VRToastRequest.m
 //
 
@@ -536,6 +608,82 @@
         {.name = nil},
     };
     return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRTreeWheelConfig.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "AppUITypes.h"
+
+@implementation VRTreeWheelConfig
+
+@dynamic data;
+@dynamic value;
+@dynamic columns;
+
+- (instancetype _Nonnull)initWithData:(NSArray<VRWheelTreeNode *> * _Nonnull)data value:(NSArray<NSString *> * _Nonnull)value columns:(double)columns
+{
+    return [super initWithFieldValues:nil, data, value, columns];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "data", .selName = nil, .type = "a<r:'[0]'>"},
+        {.name = "value", .selName = nil, .type = "a<s>"},
+        {.name = "columns", .selName = nil, .type = "d"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRWheelTreeNode",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRWheelTreeNode.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "AppUITypes.h"
+
+@implementation VRWheelTreeNode
+
+@dynamic value;
+@dynamic label;
+@dynamic children;
+
+- (instancetype _Nonnull)initWithValue:(NSString * _Nonnull)value label:(NSString * _Nonnull)label
+{
+    return [super initWithFieldValues:nil, value, label, nil];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "value", .selName = nil, .type = "s"},
+        {.name = "label", .selName = nil, .type = "s"},
+        {.name = "children", .selName = nil, .type = "a?<r:'[0]'>"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRWheelTreeNode",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
 }
 
 @end

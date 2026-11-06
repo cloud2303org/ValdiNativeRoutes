@@ -18,8 +18,8 @@ param(
 
 # Controlled fixture changes against a real built checkout, using the same isolated caches:
 #  * a standalone module's native implementation rebuilds its module library and the app, and must
-#    not re-export the runtime (valdi/native is unchanged);
-#  * a valdi/native C++ change must fail the daily app build with the re-export instruction and
+#    not re-export the runtime (module-owned C++ is unchanged);
+#  * a module-owned C++ C++ change must fail the daily app build with the re-export instruction and
 #    leave the old AAR in place, while the full entry point exports a new runtime.
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'lib.ps1')
@@ -71,7 +71,7 @@ $moduleJar = 'module-build/out/android/calculator/calculator_android.jar'
 $apk = 'android/app/build/outputs/apk/debug/app-debug.apk'
 
 $moduleSource = Join-Path $app 'valdi/modules/calculator/android/CalculatorModuleFactory.kt'
-$nativeSource = Join-Path $app 'valdi/native/src/Cpp.cpp'
+$nativeSource = Join-Path $app 'valdi/modules/app_pages/cpp/src/Cpp.cpp'
 foreach ($file in @($moduleSource, $nativeSource)) {
     if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Fixture file missing: $file" }
 }
@@ -125,7 +125,7 @@ try {
         Remove-Item -LiteralPath $tsBackup -Force -ErrorAction SilentlyContinue
     }
 
-    # --- valdi/native, which is linked into the runtime ---------------------------
+    # --- module-owned C++, which is linked into the runtime ---------------------------
     $nativeText = [System.IO.File]::ReadAllText($nativeSource)
     [System.IO.File]::WriteAllText($nativeSource, $nativeText + "`n// cold-invalidation-fixture $fixture`n")
     $staleExit = Invoke-Node -Arguments @('scripts/project.mjs', 'android', '--no-daemon') -LogName 'invalidation-runtime-stale.log'
@@ -137,9 +137,9 @@ try {
     Write-Output 'Runtime change: daily build refused the stale AAR with the export instruction.'
 
     $prebuildExit = Invoke-Prebuild -LogName 'invalidation-runtime-prebuild.log'
-    if ($prebuildExit -ne 0) { throw "Prebuild failed after a valdi/native change (exit $prebuildExit)." }
+    if ($prebuildExit -ne 0) { throw "Prebuild failed after a module-owned C++ change (exit $prebuildExit)." }
     $runtimeAfterExport = Get-HashOf $runtimeAar
-    if ($runtimeAfterExport -eq $InitialRuntimeHar) { throw 'Prebuild did not re-export the runtime after valdi/native changed.' }
+    if ($runtimeAfterExport -eq $InitialRuntimeHar) { throw 'Prebuild did not re-export the runtime after module-owned C++ changed.' }
     $rebuildExit = Invoke-Node -Arguments @('scripts/project.mjs', 'android', '--no-daemon') -LogName 'invalidation-runtime-app.log'
     if ($rebuildExit -ne 0) { throw "The daily build failed after prebuild exported the new runtime (exit $rebuildExit)." }
     Write-Output 'Runtime change: prebuild exported a new AAR and the daily build then accepted it.'

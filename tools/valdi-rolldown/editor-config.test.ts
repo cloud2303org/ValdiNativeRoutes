@@ -375,7 +375,7 @@ test('real WheelPickers resolves shared valibot types through physical and logic
   const f = await fixture(t);
   const live = await import('./pipeline');
   const { createEditorConfig } = await import('./editor-config');
-  const module = live.appModule('app_pages');
+  const module = live.appModule('app_ui');
   const configJson = createEditorConfig(module, live.appModules(), {
     frameworkSources: live.valdiSourceRoot(),
     bootstrapBase: path.join(root, 'valdi/tsconfig.editor-base.json'),
@@ -384,10 +384,10 @@ test('real WheelPickers resolves shared valibot types through physical and logic
   const alias = path.join(f.directory, 'module-build/modules');
   mkdirSync(path.dirname(alias), { recursive: true });
   symlinkSync(path.join(root, 'valdi/modules'), alias, 'dir');
-  for (const directory of [module.dir, path.join(alias, 'app_pages')]) {
+  for (const directory of [module.dir, path.join(alias, 'app_ui')]) {
     const config = ts.parseJsonConfigFileContent(configJson, ts.sys, directory, undefined, path.join(directory, 'tsconfig.json'));
     assert.deepEqual(config.errors, []);
-    const file = path.join(directory, 'src/WheelPickers.tsx');
+    const file = path.join(directory, 'src/wheels/WheelPickers.tsx');
     const resolved = ts.resolveModuleName('valibot', file, config.options, ts.sys).resolvedModule;
     assert.ok(resolved && /valibot\/dist\/index\.d\.mts$/.test(resolved.resolvedFileName));
     const program = ts.createProgram([file], config.options);

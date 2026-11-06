@@ -27,6 +27,7 @@ function load(file: string, overrides: Record<string, any> = {}): any {
   vm.runInThisContext(`(function(require,module,exports,console){${output}\n})`, { filename: file })(
     (name: string) => {
       if (Object.hasOwn(overrides, name)) return overrides[name];
+      if (name.startsWith('app_foundation/')) return load(path.join(root, 'valdi/modules', `${name}.ts`), overrides);
       if (name.startsWith('.')) return load(path.resolve(path.dirname(file), `${name}.ts`), overrides);
       return requireApp(name);
     }, module, module.exports, overrides['test:console'] ?? console,
@@ -129,7 +130,7 @@ function appRuntime(h: ReturnType<typeof sqlite>, delayMigration = false) {
     h.connection.transaction = transaction;
     release = () => h.options.bindNative(() => transaction(body, callback));
   };
-  const api = load(path.join(sourceRoot, 'db.ts'), {
+  const api = load(path.join(sourceRoot, 'services/database.ts'), {
     'test:console': { error: (...args: unknown[]) => reported.push(args) },
     'client_sql/src/ClientSQLNative': {
       openDatabase(...args: [name: string, version: number, statements: string[], migrations: unknown[]]) {

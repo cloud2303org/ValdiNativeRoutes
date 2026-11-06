@@ -40,12 +40,12 @@ export function routeTransformer(
     };
     const icon = (node: ts.Expression): ts.Expression => {
       if (!ts.isPropertyAccessExpression(node) || !ts.isIdentifier(node.expression)) {
-        return fail(node, 'Tab icons must directly reference app_pages/res, for example res.tabHome');
+        return fail(node, `Tab icons must directly reference ${module.name}/res, for example res.tabHome`);
       }
       const binding = checker.getSymbolAtLocation(node.expression)?.declarations?.[0];
       const imported = binding && ts.isImportClause(binding) ? binding.parent : undefined;
-      if (!imported || !ts.isStringLiteral(imported.moduleSpecifier) || imported.moduleSpecifier.text !== 'app_pages/res') {
-        return fail(node, 'Tab icons must come from app_pages/res');
+      if (!imported || !ts.isStringLiteral(imported.moduleSpecifier) || imported.moduleSpecifier.text !== `${module.name}/res`) {
+        return fail(node, `Tab icons must come from ${module.name}/res`);
       }
       const directory = path.join(module.dir, 'res');
       const candidates = readdirSync(directory).flatMap(file => {

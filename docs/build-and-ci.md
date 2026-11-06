@@ -99,14 +99,14 @@ Bazel 8.2.1、JDK 17、Android SDK/NDK/CMake、Git Bash、CMake/Ninja/curl）。
 `scripts/windows/test-cold-build.ps1` 在空目录里从网络克隆一个提交，并使用空的 pnpm store、Bazel
 output/user root/repository/disk cache、Gradle user home、Go/Coursier 缓存和 Vision 目录跑完整入口，
 然后跑管线测试和 `scripts/windows/test-native-invalidation.ps1`（独立模块改动只重建模块库+APK；
-`valdi/native` 改动会让日常构建拒绝旧 AAR，完整入口重新导出）。CI 的 `Windows Android CI` 增加手动的
+模块 `cpp/` 改动会让日常构建拒绝旧 AAR，完整入口重新导出）。CI 的 `Windows Android CI` 增加手动的
 `cold_build` 输入，用同一脚本在隔离路径运行，上传 `logs/cold-build-report.json` 与 APK；workflow 并发组与
 常规 Windows 任务共用，避免同一台机器上并发大构建。详见 [Windows 原生构建](windows-native-build.md)。
 
 ## 仍然需要的原生工具与产物
 
 - **Valdi + Hermes + 应用 C++ 运行时**：由 `scripts/export-android.sh` / `export-ios.sh` 导出
-  AAR / XCFramework；`valdi/native` 实现和生成绑定也链接在其中。
+  AAR / XCFramework；模块 `cpp/` 中的实现和生成绑定也链接在其中。
 - **Valdi 自带的模块**：`valdi/BUILD.bazel` 依赖 `valdi_core`、`valdi_tsx` 和作为数据库原生执行层的 `client_sql`。
   它们及传递依赖现在默认使用 Node 编译后端，保留原生库与导出规则。
   [接入范围、测试和源码清理](node-runtime-compiler.md)。

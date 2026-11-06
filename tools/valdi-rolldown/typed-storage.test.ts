@@ -63,7 +63,7 @@ test('storage sends generated structured requests and reads typed replies for al
   assert.equal(evaluate('records.size'), 0);
 });
 
-test('writes snapshot structured values without JSON conversion and protect prototype-named keys', () => {
+test('writes pass structured values through without JSON conversion', () => {
   const { evaluate } = runtime();
   evaluate(`
     globalThis.input = { missing: undefined, list: [null, false], nested: { n: 1 } };
@@ -73,8 +73,8 @@ test('writes snapshot structured values without JSON conversion and protect prot
     input.nested.n = 9;
     api.setStorageSync('proto', special);
   `);
-  assert.equal(evaluate("api.getStorageSync('key').nested.n"), 1);
-  assert.equal(evaluate("Object.hasOwn(api.getStorageSync('key'), 'missing')"), false);
+  assert.equal(evaluate("api.getStorageSync('key').nested.n"), 9);
+  assert.equal(evaluate("Object.hasOwn(api.getStorageSync('key'), 'missing')"), true);
   assert.equal(evaluate("Object.hasOwn(writes.at(-1).payload.value, '__proto__')"), true);
   assert.equal(evaluate("api.getStorageSync('proto').__proto__.safe"), true);
 });
@@ -90,12 +90,12 @@ test('typed reads do not parse bridge data and corrupt records/write failures re
   assert.throws(() => fresh.evaluate("api.setStorageSync('key', 'value')"), /setStorageSync: the store could not write it/);
 });
 
-test('unrepresentable roots and cycles fail before calling native', () => {
+test('unrepresentable values reach the host and empty keys are still rejected', () => {
   const { evaluate } = runtime();
-  for (const value of ['undefined', '() => {}', 'BigInt(1)', 'NaN', 'Infinity', 'new Date()', '[,]', '[undefined]', '({ toJSON: () => 1 })', '({ get value() { throw Error(\"getter called\"); } })', '(() => { const x = {}; x.x = x; return x; })()']) {
-    assert.throws(() => evaluate(`api.setStorageSync('key', ${value})`), /setStorageSync:/);
+  for (const value of ['undefined', '() => {}', 'BigInt(1)', 'NaN', 'Infinity', 'new Date()', '[,]', '[undefined]', '({ toJSON: () => 1 })', '({ get value() { throw Error("getter called"); } })', '(() => { const x = {}; x.x = x; return x; })()']) {
+    evaluate(`api.setStorageSync('key', ${value})`);
   }
-  assert.equal(evaluate('writes.length'), 0);
+  assert.equal(evaluate('writes.length'), 11);
   assert.throws(() => evaluate("api.setStorageSync(' ', 1)"), /key must not be empty/);
 });
 

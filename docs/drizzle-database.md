@@ -4,6 +4,11 @@ The template uses Drizzle ORM **0.45.4** and Drizzle Kit **0.31.11**. **ClientSQ
 
 The database identity is **`valdiroutes_app_drizzle.sqlite`**, resolved by ClientSQL's native storage mechanism. This identity does not establish a new storage root or prove isolation from an earlier prototype using the same identity. There is no import, copy, deletion or adoption of an older template schema. The initial Drizzle migration creates `submission`; an existing unjournaled table with that name causes startup to fail rather than being adopted. The app does not load `ClientSQLDebugger` or use legacy SQLgen business queries or migration lists.
 
+The reusable driver and native connection types are in `app_foundation/src/database/`.
+Business schema, migration history and startup migration policy remain in
+`app_pages/src/database/`; the application connection and submission queries are
+in `app_pages/src/services/database.ts`. Foundation does not import app_pages.
+
 ## Schema and generation
 
 Edit `valdi/modules/app_pages/src/database/schema.ts`. The initial table has:
@@ -52,7 +57,7 @@ The manifest hashes detect divergence between the persisted history and the bund
 
 ## Business API and callback lifetime
 
-The app service in `valdi/modules/app_pages/src/db.ts` exposes:
+The app service in `valdi/modules/app_pages/src/services/database.ts` exposes:
 
 ```ts
 interface AppDatabase {

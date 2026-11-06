@@ -5,14 +5,15 @@ import path from 'node:path';
 import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
-import type { NavigationOptions, ResolvedNavigation } from '../../valdi/modules/app_pages/src/navigation/options';
+import type { NavigationOptions, ResolvedNavigation } from '../../valdi/modules/app_foundation/src/navigation/options';
 import { appModule, valdiSourceRoot } from './pipeline';
 import { valdiTs } from './valdiTs';
 
 const app = appModule('app_pages');
 const compiler = valdiTs(app, ts.ModuleKind.CommonJS);
 const source = (name: string) => path.join(app.dir, 'src', name);
-const pageFile = source('RouteAnimationPage.tsx');
+const foundation = (name: string) => path.join(appModule('app_foundation').dir, 'src', name);
+const pageFile = source('features/navigation/RouteAnimationPage.tsx');
 const emitted = new Map<string, string>();
 const requireApp = createRequire(path.join(app.dir, 'package.json'));
 const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value));
@@ -55,16 +56,16 @@ function runtime(platform: Platform, navigation?: NavigationOptions, routeOption
     'valdi_core/src/Style': { Style: class {} },
     'valdi_core/src/SystemFont': { systemBoldFont: () => '', systemFont: () => '' },
     'valdi_core/src/NativeReferences': { withGlobalNativeRefs: (_name: string, body: () => unknown) => body() },
-    './AppContext': { getHost: () => ({ getNavigationHost: () => ({
+    '../host/AppContext': { getHost: () => ({ getNavigationHost: () => ({
       push: (route: string, params: Push['params'], resolved: ResolvedNavigation) =>
         pushes.push(plain({ route, params, navigation: resolved })),
     }) }) },
     valibot: requireApp('valibot'),
     tslib: requireApp(path.join(valdiSourceRoot()!, 'src/valdi_modules/src/valdi/valdi_core/src/tslib.js')),
-    [source('Button.tsx')]: { Button },
-    [source('PageHeader.tsx')]: { PageHeader },
-    [source('PageComponent.ts')]: { Page: class {} },
-    [source('api.ts')]: { api: { showToast: (value: unknown) => toasts.push(value) } },
+    [source('components/Button.tsx')]: { Button },
+    [source('components/PageHeader.tsx')]: { PageHeader },
+    [foundation('page/PageComponent.ts')]: { Page: class {} },
+    [source('services/api.ts')]: { api: { showToast: (value: unknown) => toasts.push(value) } },
     [source('routes.ts')]: { routes: {
       navigation,
       assertRoute: (route: string) => {
@@ -81,7 +82,7 @@ function runtime(platform: Platform, navigation?: NavigationOptions, routeOption
     vm.runInContext(`(function(require,exports){${emitted.get(file)}\n})`, context, { filename: file })(
       (name: string) => {
         if (Object.hasOwn(modules, name)) return modules[name];
-        if (name.startsWith('native_common/')) return load(path.join(app.dir, '..', name + '.ts'));
+        if (/^(app_foundation|native_common)\//.test(name)) return load(path.join(app.dir, '..', name + '.ts'));
         assert.ok(name.startsWith('.'), `Unexpected runtime dependency: ${name}`);
         const relative = path.resolve(path.dirname(file), name);
         const resolved = [`${relative}.ts`, `${relative}.tsx`, path.join(relative, 'index.ts')].find(existsSync);
@@ -93,7 +94,7 @@ function runtime(platform: Platform, navigation?: NavigationOptions, routeOption
   }
   const page = new (load(pageFile).RouteAnimationPage)();
   page.context = { back: () => { backs++; } };
-  const router = new (load(source('navigation/index.ts')).Router)(page.context);
+  const router = new (load(source('routing/index.ts')).Router)(page.context);
   function render(animation = 'list') {
     nodes.length = 0;
     page.viewModel = vm.runInContext(`(${JSON.stringify({
@@ -112,7 +113,7 @@ function runtime(platform: Platform, navigation?: NavigationOptions, routeOption
       vm.runInContext(`(${JSON.stringify({ animation })})`, context)),
     tap: (button: Record<string, any>) => button.onTap(button.id),
     backCount: () => backs,
-    resolve: load(source('navigation/options.ts')).resolveNavigation as
+    resolve: load(foundation('navigation/options.ts')).resolveNavigation as
       (...layers: (NavigationOptions | undefined)[]) => ResolvedNavigation,
   };
 }

@@ -47,7 +47,7 @@ the APK. A new computer needs this one command plus the preinstalled tools; it d
 not need a previous export, APK or Maven seed. `pnpm build:android` is the daily
 entry point: it checks an existing export and fails with the
 `sh scripts/export-android.sh` instruction when the Valdi pin/toolchain or
-`valdi/native` changed, instead of exporting silently.
+module C++ changed, instead of exporting silently.
 
 The complete Windows entry point is Debug-only, matching `pnpm build:android`.
 Release runtime export remains available through `export-android.ps1 -Config release`.
@@ -118,7 +118,7 @@ cache above (`caches\…`, `bazel-out`). It then runs the unified `pnpm android 
 plus the Gradle build), the pipeline tests against the fetched
 Valdi sources, and `scripts/windows/test-native-invalidation.ps1` (standalone module change rebuilds the module
 library and APK without re-exporting; a TypeScript-only change does not rebuild either native artifact; a
-`valdi/native` change fails the daily build with the export instruction). It then scaffolds a module through
+module C++ change fails the daily build with the export instruction). It then scaffolds a module through
 `pnpm new-module` and rebuilds the module bundles (`-SkipNewModule` opts out), writes
 `logs\cold-build-report.json` with the cache sizes after the run, output hashes, test results, invalidation and
 new-module evidence, and prints the artifact hashes. Preinstalled tools are reused explicitly; this validates an
@@ -291,28 +291,30 @@ node scripts/verify-runtime-actions.mjs runtime-actions.json
 
 - **`valdi`**: the Valdi fork pin/registry, `valdi/.bazelrc`, the runtime Node compiler
   (`tools/valdi-rolldown/{runtime-module,valdiTs,pipeline,archive,hermes}.ts`, `codegen`, `vendor`), and
-  `valdi/native` (the app C++ linked into `libvaldi_runtime.so`). Changing any of these makes
+  enabled modules' `cpp/` directories and their runtime linkage rules. Changing any of these makes
   `scripts/ota.mjs check-export` fail with the `sh scripts/export-android.sh` instruction; the full Windows
   entry point re-exports first, so it is the supported way to rebuild.
 - **`android`**: host sources, the standalone module's native implementation (`valdi/modules/calculator/android`,
   `module.json`, `Calculator.d.ts`), `module-build/`, Gradle files, `vision/`, and `ota/public.pem`. Changing these
   rebuilds the module library (`module-build` Bazel workspace) and the APK; the runtime AAR is not re-exported.
 
-Generated bindings follow the same split: `tools/valdi-rolldown/codegen.ts` writes Kotlin to
-`android/app/generated/valdi` and C++ to `valdi/native/generated` for app modules, but **excludes**
-`nativeBuild: "bazel"` modules because they compile their bindings in their own native libraries. So:
+Generated Kotlin/Objective-C bindings still follow each module's native-build ownership.
+Canonical C++ generation uses `--cpp-modules-out ../../valdi/modules`: each C++ owner
+gets `cpp/generated/valdi_modules/<id>/`, and explicit module `cpp/BUILD.bazel` targets
+compile it. The default roots are enabled modules with `cpp/src` implementations;
+generated include dependencies supply the transitive binding closure. Today this is
+`app_pages -> app_foundation`. The runtime links only `//modules/app_pages/cpp:native`.
 
-- adding or changing a standalone native module (`module.json` `nativeBuild: "bazel"` plus native sources in the
-  module) rebuilds that module's library and the app; no runtime export is needed;
-- changing an app-level `@Export` declaration (a non-Bazel module), `valdi/native`, or the Valdi pin/toolchain
-  changes `valdi/native/generated` or the runtime inputs, so the runtime must be exported again.
+- A host-only binding outside that C++ closure rebuilds its native module/app, without
+  adding a new runtime C++ dependency. Its changed native ABI still affects OTA compatibility.
+- C++ implementations, generated binding dependencies, module C++ build rules, and the
+  runtime/toolchain inputs require a matching runtime export.
 
-`scripts/windows/test-native-invalidation.ps1` checks this against a real build: it changes the calculator
-implementation and asserts the module JAR and APK change while the AAR hash stays identical; then it changes
-`valdi/native/src/Cpp.cpp` and asserts the daily `pnpm build:android` exits non-zero with the `runtime is out of
-date` instruction and leaves the old AAR untouched, after which the full entry point exports a new AAR. Finally it
-restores both files and rebuilds, so the reported artifacts match the committed tree. A failing export never
-silently produces a new APK: the wrapper exits before Gradle runs, and `check-export` rejects a stale AAR.
+`scripts/windows/test-native-invalidation.ps1` changes Calculator and the app-owned
+`valdi/modules/app_pages/cpp/src/Cpp.cpp` in turn to exercise those boundaries. It
+restores both sources afterward. A failed export never silently produces a new APK:
+`check-export` rejects the old runtime. This documents the runner; it is not a claim
+that a fresh Windows invalidation run has passed.
 
 The Vision preparation stamps its source pins; a changed `vision/vendor-lock.json` makes both the daily check and
 the full wrapper demand a fresh `prepare-native.cjs` instead of reusing old archives.

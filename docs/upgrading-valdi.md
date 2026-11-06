@@ -87,7 +87,7 @@ pnpm build
 | `valdi/modules/app_pages/src/database/`、`valdi/drizzle/` | Drizzle 驱动、schema、事务和迁移记录 | `pnpm db:check`、真实 SQLite 回归和匹配运行时验证 |
 | 两个 workspace 的 `bzl/patches/clientsql-drizzle.patch` | ClientSQL 的 `queryRows`、`run` 和原生回归 | `pnpm db:test:native`、扩展 ABI golden、两端 runtime 导出 |
 | `valdi/patches/@snap__valdi@1.2.1.patch` | npm CLI 的 Bazel 参数和 export 行为 | CLI 独立升级时审查 patch 和 pnpm lock |
-| `android/`、`ios/`、`valdi/native/` | 框架 API、模块注册、生成绑定 ABI | 匹配运行时编译、设备验证 |
+| `android/`、`ios/`、模块 `cpp/` | 框架 API、模块注册、生成绑定 ABI | 匹配运行时编译、设备验证 |
 
 golden 使用 fork 中已提交的编译器输出，不运行 Swift 编译器。
 构建与 golden 不覆盖全部运行时行为；Release / OTA 使用前另外检查精简 Hermes、字节码、图片及原生桥接。

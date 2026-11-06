@@ -6,7 +6,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import { root } from './pipeline';
 
-const source = path.join(root, 'valdi/modules/app_pages/src/WebViewPage.tsx');
+const source = path.join(root, 'valdi/modules/app_pages/src/features/webview/WebViewPage.tsx');
 const code = ts.transpileModule(readFileSync(source, 'utf8'), {
   compilerOptions: {
     module: ts.ModuleKind.CommonJS,
@@ -59,10 +59,10 @@ function fixture() {
     'valdi_core/src/Style': { Style: class {} },
     'valdi_core/src/SystemFont': { systemFont: () => 'font' },
     'valdi_webview/src/WebView': { WebView: { createController: () => controller } },
-    './PageComponent': { Page },
-    './Button': {},
-    './NavigationBar': {},
-    './theme': { color: {}, tokens: { font: {}, space: {} } },
+    'app_foundation/src/page/PageComponent': { Page },
+    '../../components/Button': {},
+    '../../components/NavigationBar': {},
+    '../../components/theme': { color: {}, tokens: { font: {}, space: {} } },
   };
   vm.runInNewContext(`(function(require,exports){${code}\n})`)(
     (name: string) => {

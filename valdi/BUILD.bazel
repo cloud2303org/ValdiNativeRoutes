@@ -1,8 +1,9 @@
 load("@valdi//bzl/valdi:valdi_exported_library.bzl", "valdi_exported_library")
+load("//:modules/runtime-cpp.bzl", "CPP_IMPLEMENTATIONS")
 
 # Exported as valdi_runtime.aar (libvaldi_runtime.so) and ValdiRuntime.xcframework: the Valdi runtime, Valdi's own
-# modules, and the app's C++ (native/: app_pages' @ExportModule implementations). app_pages' JavaScript, resources and
-# Kotlin/Objective-C bindings come from tools/valdi-rolldown, built by the apps' Gradle and Xcode builds.
+# modules, and enabled modules' C++ implementations. The app's JavaScript, resources and Kotlin/Objective-C bindings
+# come from tools/valdi-rolldown, built by the apps' Gradle and Xcode builds.
 valdi_exported_library(
     name = "valdi_runtime",
     # Valdi's defaults (bzl/valdi/valdi_exported_library.bzl), except that Valdi's own .kotlin_module files stay: the
@@ -26,7 +27,7 @@ valdi_exported_library(
     ios_swift = True,
     # Linked into the runtime on both platforms, so it uses the runtime's own C++ library (libc++ is static in
     # libvaldi_runtime.so); bzl/patches/valdi/export_native_deps.patch adds the parameter.
-    native_deps = ["//native:app_pages_native"],
+    native_deps = CPP_IMPLEMENTATIONS,
     deps = [
         "@valdi//src/valdi_modules/src/valdi/client_sql",
         "@valdi//src/valdi_modules/src/valdi/valdi_core",

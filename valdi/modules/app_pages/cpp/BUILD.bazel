@@ -1,0 +1,9 @@
+load("//bzl/module_cpp:module.bzl", "module_cpp_library")
+
+# The app-owned example's handwritten implementation is linked into //:valdi_runtime via native_deps.
+# It shares the runtime's C++ library; changing it requires a new runtime export.
+module_cpp_library(
+    module_name = "app_pages",
+    srcs = glob(["src/**/*.cpp", "src/**/*.cc", "src/**/*.cxx"]),
+    hdrs = glob(["src/**/*.h", "src/**/*.hpp"]),
+)

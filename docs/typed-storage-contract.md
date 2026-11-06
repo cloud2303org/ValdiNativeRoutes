@@ -31,13 +31,10 @@ bridge argument. `found: false` distinguishes absence from `found: true` with
 API throws its usual `ApiError` instead of reporting a cache miss.
 
 `api.getStorageSync<T>`, `setStorageSync`, `removeStorageSync` and
-`clearStorageSync` keep their public signatures. Values must be plain objects,
-arrays, strings, finite numbers, booleans or null. `structuredData.ts` snapshots
-and validates these values without JSON.stringify/JSON.parse; routes reuse the
-same validator with their existing outer-dictionary requirement. Optional
-undefined object fields are omitted. Undefined roots/array elements, holes,
-Date/class instances, toJSON callbacks, accessors, symbols, nonfinite numbers
-and cycles are rejected before calling native.
+`clearStorageSync` keep their public signatures. `setStorageSync` passes the
+value through in the `{ value }` envelope, without a JS snapshot or
+JSON.stringify/JSON.parse. The native codec rejects values it cannot persist.
+Routes still require an outer dictionary and likewise pass that object through.
 
 Native StorageCodec persists the complete `{ value }` envelope. Android and iOS
 use the new MMKV instance `app-structured`. There is no old-format reader, fallback,

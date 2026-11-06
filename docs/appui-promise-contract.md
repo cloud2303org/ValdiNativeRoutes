@@ -97,31 +97,32 @@ with other canonical generators/builders in the shared checkout:
 ```sh
 node node_modules/tsx/dist/cli.mjs codegen.ts app_ui \
   --kotlin-out ../../android/app/generated/valdi \
-  --objc-out ../../ios/Generated/valdi --objc-framework ValdiRuntime \
-  --cpp-out ../../valdi/native/generated
+  --objc-out ../../ios/Generated/valdi --objc-framework ValdiRuntime
 
 node node_modules/tsx/dist/cli.mjs codegen.ts app_ui \
   --kotlin-out ../../android/app/generated/valdi \
-  --objc-out ../../ios/Generated/valdi --objc-framework ValdiRuntime \
-  --cpp-out ../../valdi/native/generated --check
+  --objc-out ../../ios/Generated/valdi --objc-framework ValdiRuntime --check
 
 node node_modules/tsx/dist/cli.mjs --test appui-promise.test.ts
 ```
 
-The real generator writes seven canonical files:
+The real generator writes five canonical host files:
 
 - `android/app/generated/valdi/app_ui.kt`
 - `ios/Generated/valdi/AppUI/AppUI.h`
 - `ios/Generated/valdi/AppUI/AppUI.m`
 - `ios/Generated/valdi/AppUITypes/AppUITypes.h`
 - `ios/Generated/valdi/AppUITypes/AppUITypes.m`
-- `valdi/native/generated/valdi_modules/app_ui/app_ui.hpp`
-- `valdi/native/generated/valdi_modules/app_ui/app_ui.cpp`
+
+AppUI currently has no handwritten C++ implementation and is outside the runtime's
+C++ binding closure. The focused test still generates its two C++ binding files
+in memory and checks their Promise schemas and methods. A standalone consumer can
+request them with `codegen.ts app_ui --cpp-out <temporary-directory>`.
 
 The focused tests execute real application compiler output for `AppUIHost.ts`, `api.ts`, `schemas.ts` and
 `storage.ts`, using actual npm validation/date dependencies and supplying native services at their boundary.
-They check all 13 method signatures and invocations, absence of JS completion arguments, every canonical file
-against real generator output, C++ `c+`/Promise schemas, undefined void fulfillment, delayed settlement, rejection,
+They check all 13 method signatures and invocations, absence of JS completion arguments, every canonical host file
+against real generator output, in-memory C++ `c+`/Promise schemas, undefined void fulfillment, delayed settlement, rejection,
 empty errors, validation/defaults, cancellation, attachment mapping and host-module reload.
 
 These checks establish the shared TypeScript behavior and generated ABI. The VM reload check does not destroy a

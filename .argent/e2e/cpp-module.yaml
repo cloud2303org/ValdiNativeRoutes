@@ -1,4 +1,4 @@
-# The C++ @ExportModule (app_pages/src/cpp/Cpp.d.ts, valdi/native/src/Cpp.cpp) called from the "OpenCV 与 ncnn" page:
+# The C++ @ExportModule (app_pages/src/cpp/Cpp.d.ts, valdi/modules/app_pages/cpp/src/Cpp.cpp) called from the "OpenCV 与 ncnn" page:
 # a constant, a string in and out, and an array in with a model out, all computed in the C++ linked into the runtime.
 steps:
   - run: home

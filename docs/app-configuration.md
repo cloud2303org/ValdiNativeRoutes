@@ -9,6 +9,7 @@ CLI and new native modules:
     "app": {
       "name": "ValdiRoutes",
       "displayName": "Valdi 路由",
+      "icon": "assets/app-icon.png",
       "android": { "applicationId": "io.valdiroutes.app" },
       "ios": { "bundleIdentifier": "io.valdiroutes.app" },
       "native": {
@@ -31,6 +32,10 @@ your application's imports and host implementations.
 - `displayName` is the launcher name on both platforms. Unicode and XML
   punctuation are supported. Control characters and Xcode `$(...)` / `${...}` substitutions
   are rejected.
+- `icon` is the optional repository-relative path to a square 1024-by-1024 PNG.
+  This app uses `assets/app-icon.png` as the single source for both launcher
+  icons and SplashScreen. Replace that PNG and run the normal prebuild/build;
+  platform sizes and asset catalogs are generated automatically.
 - `android.applicationId` is the installed Android package ID.
 - `ios.bundleIdentifier` is the installed Apple bundle ID.
 
@@ -87,6 +92,7 @@ Generated files remain ignored:
 
 - `android/app/build/generated/valdi-app/res/values/valdi_app.xml`
 - `ios/Generated/App.yml`
+- `ios/Generated/AppAssets.xcassets/`
 - `ios/Generated/Modules.yml`
 - `ios/Generated/AppInfo.plist`
 
@@ -106,11 +112,14 @@ not relabeled as the configured app.
 ## OTA compatibility
 
 Application identity is included in the native application fingerprint.
+The configured icon's contents and its generation script also count as native
+inputs. Icon changes require a new native build; they are not delivered by a
+JS-only OTA.
 Changing identity requires rebuilding the host and producing matching OTA
 compatibility records. This does not itself require recompiling the Valdi runtime
 when its native inputs are unchanged.
 
-The iOS token Keychain service uses the actual bundle identifier followed by
-`.session`, so a new bundle does not retain the old application's service name.
+Application session state and its persistence policy are app-owned. The demo
+uses an in-memory Zustand store and has no native token-storage service.
 OTA client modularization remains a separate task; this change keeps the existing
 client startup, verification, activation and rollback behavior.

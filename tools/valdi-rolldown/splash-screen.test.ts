@@ -5,7 +5,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
 
-const source = path.resolve(import.meta.dirname, '../../valdi/modules/app_pages/src/splash');
+const source = path.resolve(import.meta.dirname, '../../valdi/modules/app_foundation/src/splash');
 
 function load(file: string, boundaries: Record<string, unknown>) {
   const module = { exports: {} as any };
@@ -21,7 +21,7 @@ function load(file: string, boundaries: Record<string, unknown>) {
   return module.exports;
 }
 
-function facade(android = true) {
+function facade(platform: 'android' | 'ios' | 'other' = 'android') {
   const calls: string[] = [];
   let fail = false;
   let accepted = true;
@@ -30,7 +30,9 @@ function facade(android = true) {
     hide: () => { calls.push('hide'); if (fail) throw new Error('native failure'); },
   };
   const api = load('SplashScreen.ts', {
-    'valdi_core/src/Device': { Device: { isAndroid: () => android } },
+    'valdi_core/src/Device': {
+      Device: { isAndroid: () => platform === 'android', isIOS: () => platform === 'ios' },
+    },
     'valdi_core/src/NativeReferences': {
       withGlobalNativeRefs: (name: string, body: () => unknown) => {
         calls.push(`scope:${name}`);
@@ -59,14 +61,26 @@ test('an already dismissed splash returns false synchronously', () => {
   assert.equal(f.api.preventAutoHide(), false);
 });
 
+test('iOS uses the same synchronous lazy native contract', () => {
+  const f = facade('ios');
+  assert.deepEqual(f.calls, []);
+  assert.equal(f.api.preventAutoHide(), true);
+  assert.equal(f.api.hide(), undefined);
+  f.dismissed();
+  assert.equal(f.api.preventAutoHide(), false);
+  assert.deepEqual(f.calls, ['scope:splash-screen', 'getHost', 'prevent', 'hide', 'prevent']);
+  f.fail();
+  assert.throws(() => f.api.hide(), /native failure/);
+});
+
 test('native hide errors throw synchronously', () => {
   const f = facade();
   f.fail();
   assert.throws(() => f.api.hide(), /native failure/);
 });
 
-test('unsupported platforms throw without resolving an Android native module', () => {
-  const f = facade(false);
+test('unsupported platforms throw without resolving a native module', () => {
+  const f = facade('other');
   assert.throws(() => f.api.preventAutoHide(), /Android/);
   assert.throws(() => f.api.hide(), /Android/);
   assert.deepEqual(f.calls, []);

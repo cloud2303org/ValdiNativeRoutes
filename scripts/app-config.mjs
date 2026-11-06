@@ -1,8 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repository = path.resolve(import.meta.dirname, '..');
+// Keep copied/no-icon consumers independent of the optional generator and sharp.
+const require = createRequire(import.meta.url);
 const reserved = new Set('abstract as assert boolean break byte case catch char class const continue default do double else enum extends false final finally float for fun goto if implements import in instanceof int interface is long native new null object package private protected public return short static strictfp super switch synchronized this throw throws transient true try typealias typeof val var void volatile when while'.split(' '));
 const xml = value => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;')
   .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&apos;');
@@ -25,7 +28,7 @@ function identifier(value, label, pattern) {
 /** Installation identity can change without renaming native classes or existing module contracts. */
 export function readAppConfig(root = repository) {
   const app = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).valdi?.app;
-  object(app, ['name', 'displayName', 'android', 'ios', 'native'], 'configuration');
+  object(app, ['name', 'displayName', 'android', 'ios', 'native', 'icon'], 'configuration');
   object(app.android, ['applicationId'], 'android');
   object(app.ios, ['bundleIdentifier'], 'ios');
   object(app.native, ['androidNamespace', 'iosPrefix'], 'native');
@@ -42,11 +45,13 @@ export function readAppConfig(root = repository) {
   if (['NS', 'UI', 'AV', 'CA', 'CF', 'SC'].includes(iosPrefix)) {
     throw new Error('package.json valdi.app: native.iosPrefix must not use an Apple/framework prefix');
   }
+  if (Object.hasOwn(app, 'icon')) require('./app-icons.mjs').readAppIcon(root, app.icon);
   return {
     name, displayName: app.displayName,
     android: { applicationId },
     ios: { bundleIdentifier },
     native: { androidNamespace, iosPrefix },
+    ...(Object.hasOwn(app, 'icon') ? { icon: app.icon } : {}),
   };
 }
 
@@ -66,6 +71,7 @@ export function iosProjectEnvironment(root = repository, env = process.env) {
 
 export function syncAppConfig(root = repository) {
   const app = readAppConfig(root);
+  if (app.icon !== undefined) require('./app-icons.mjs').syncAppIcons(root, app.icon);
   const write = (relative, content) => {
     const target = path.join(root, relative);
     if (existsSync(target) && readFileSync(target, 'utf8') === content) return;

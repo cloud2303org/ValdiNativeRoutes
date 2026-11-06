@@ -38,7 +38,7 @@ struct RoutePayload {
     }
 }
 
-/// Acceptance happens before a pop or sheet dismissal completes; the first accepted outcome owns its snapshot.
+/// Acceptance happens before a pop or cover back completes; the first accepted outcome owns its snapshot.
 struct RouteResultState {
     private var accepted: (payload: RoutePayload, canceled: Bool)?
 

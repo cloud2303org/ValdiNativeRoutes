@@ -10,7 +10,7 @@ import io.valdiroutes.mmkv.StorageReadReply
  * Called on the JS thread; MMKV is thread safe. Only the persistence layer handles JSON text.
  */
 class StorageHostImpl(context: Context) {
-    private val mmkv: MMKV = run {
+    private val mmkv: MMKV by lazy {
         MMKV.initialize(context)
         MMKV.mmkvWithID("app-structured")
     }

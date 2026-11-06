@@ -11,18 +11,8 @@ import io.valdiroutes.pages.StackPage
 enum class Presentation(val value: String) {
     Push("push"),
 
-    /** Fixed height; the keyboard shrinks the page inside it. */
-    Sheet("sheet"),
-
-    /** Sized by its page; the whole sheet rides up with the keyboard. */
-    CompactSheet("compactSheet"),
-
     /** A page shown in the tab shell, not on the stack. */
-    Tab("tab");
-
-    companion object {
-        fun parse(value: String) = entries.firstOrNull { it.value == value } ?: Push
-    }
+    Tab("tab"),
 }
 
 typealias ResultCallback = (result: Map<String, Any?>, canceled: Boolean) -> Unit
@@ -89,17 +79,13 @@ class PageEntry(
 }
 
 /**
- * The one stack of Valdi and native pages: a Nav3 back stack plus at most one sheet above it. JS drives it through
+ * The one stack of Valdi and native pages: a Nav3 back stack. JS drives it through
  * NavigationHost (ValdiHost), native pages call it directly. A call that removes pages removes them from the top down,
  * each cancelled, so a pushForResult caller below still exists when its callback runs.
  */
 class Navigator(private var routes: RouteTable) {
     val tabBar: TabBar? get() = routes.tabBar
     val stack = mutableStateListOf<PageEntry>()
-    var sheet by mutableStateOf<PageEntry?>(null)
-        private set
-    var sheetClosing by mutableStateOf(false)
-        private set
     private var nextId = 0
 
     fun reloadRoutes(table: RouteTable) {
@@ -129,16 +115,10 @@ class Navigator(private var routes: RouteTable) {
     }
 
     fun open(
-        route: String, params: Map<String, Any?> = emptyMap(), presentation: Presentation = Presentation.Push,
+        route: String, params: Map<String, Any?> = emptyMap(),
         navigation: ResolvedNavigation = NativeRouteAnimations.Default, onResult: ResultCallback? = null,
     ) {
-        val entry = entry(route, params, presentation, navigation, onResult)
-        if (presentation == Presentation.Push || sheet != null) {
-            stack.add(entry)
-        } else {
-            sheet = entry
-            sheetClosing = false
-        }
+        stack.add(entry(route, params, Presentation.Push, navigation, onResult))
     }
 
     /** The page shown in a tab shell's `tab`, created the first time. */
@@ -147,7 +127,7 @@ class Navigator(private var routes: RouteTable) {
         entry(route, emptyMap(), Presentation.Tab, NativeRouteAnimations.Default, null).also { it.shell = shell }
     }
 
-    /** The page the user sees under any sheet: the stack's top, or for a tab shell its selected page. */
+    /** The page the user sees: the stack's top, or for a tab shell its selected page. */
     fun frontPage(): PageEntry? {
         val top = stack.lastOrNull() ?: return null
         val tab = top.selectedTab ?: return top
@@ -164,8 +144,8 @@ class Navigator(private var routes: RouteTable) {
     private var foreground = true
 
     /**
-     * The pages on screen (the front page and a sheet over it), while the activity is started; called by AppRoot
-     * whenever they change. Pages that came or went get PageViewModel.visible with the reason. A removed page gets
+     * The front page, while the activity is started; called by AppRoot whenever it changes.
+     * Pages that came or went get PageViewModel.visible with the reason. A removed page gets
      * nothing: it is destroyed, as a mini program's onUnload without onHide.
      */
     fun updateVisibility(pages: List<PageEntry>, foreground: Boolean) {
@@ -193,7 +173,7 @@ class Navigator(private var routes: RouteTable) {
             }
             page.setVisibility(true, reason)
             ValdiHost.updateVisibility(page)
-            if (page.definition.kind == "native" && page.presentation in listOf(Presentation.Push, Presentation.Tab)) {
+            if (page.definition.kind == "native") {
                 statusBarStyle = "auto"
             }
         }
@@ -209,29 +189,11 @@ class Navigator(private var routes: RouteTable) {
     }
 
     private fun close(pageId: String, result: Map<String, Any?>, canceled: Boolean) {
-        val current = sheet
-        if (current?.id == pageId) {
-            current.close(result, canceled)
-            sheetClosing = true // SheetHost animates it out, then calls onSheetHidden().
-            return
-        }
         val entry = stack.firstOrNull { it.id == pageId } ?: return
         if (stack.size == 1) return
         entry.close(result, canceled)
         stack.remove(entry)
         entry.remove()
-    }
-
-    fun onSheetHidden() {
-        val current = sheet ?: return
-        sheet = null
-        sheetClosing = false
-        current.remove()
-    }
-
-    /** Animates the sheet out, cancelled. */
-    private fun dismissSheet() {
-        sheet?.takeIf { !sheetClosing }?.let { it.close(emptyMap(), true); sheetClosing = true }
     }
 
     /** Keeps the bottom `count` pages, removing the rest at once (one Nav3 transition), top first. */
@@ -243,35 +205,24 @@ class Navigator(private var routes: RouteTable) {
     }
 
     fun replace(route: String, params: Map<String, Any?>, navigation: ResolvedNavigation) {
-        dismissSheet()
         val old = stack.lastOrNull() ?: return
         stack[stack.lastIndex] = entry(route, params, Presentation.Push, navigation, null)
         old.remove()
     }
 
-    /** The sheet counts as one page; the root never goes. */
+    /** Removes up to `delta` pages; the root never goes. */
     fun back(delta: Int) {
-        var count = delta
-        if (count > 0 && sheet != null) {
-            dismissSheet()
-            count--
-        }
-        keep((stack.size - count).coerceAtLeast(1))
+        keep((stack.size - delta).coerceAtLeast(1))
     }
 
     fun popToRoot() {
-        dismissSheet()
         keep(1)
     }
 
     fun reset(route: String, params: Map<String, Any?>) {
         val removed = stack.toList()
-        val oldSheet = sheet
-        sheet = null
-        sheetClosing = false
         stack.clear()
         stack.add(entry(route, params, Presentation.Push, NativeRouteAnimations.Default, null))
-        oldSheet?.remove()
         removed.asReversed().forEach { it.remove() }
     }
 
@@ -281,7 +232,6 @@ class Navigator(private var routes: RouteTable) {
         require(bar.tabs.any { it.route == tab }) { "Unknown tab: $tab" }
         val index = stack.indexOfLast { it.route == bar.route }
         if (index < 0) return reset(bar.route, mapOf("tab" to tab))
-        dismissSheet()
         keep(index + 1)
         stack[index].selectedTab = tab
     }
@@ -293,12 +243,12 @@ class Navigator(private var routes: RouteTable) {
         shell.selectedTab = tab
     }
 
-    /** Root first, the sheet last; the pages in a tab shell are not on the stack. */
-    fun currentPages(): List<StackPage> = (stack + listOfNotNull(sheet)).map { page ->
+    /** Root first; the pages in a tab shell are not on the stack. */
+    fun currentPages(): List<StackPage> = stack.map { page ->
         StackPage(page.id, page.route, page.params)
     }
 
     fun destroyAll() {
-        (stack + listOfNotNull(sheet)).forEach { page -> page.tabPages.values.forEach { it.destroy() }; page.destroy() }
+        stack.forEach { page -> page.tabPages.values.forEach { it.destroy() }; page.destroy() }
     }
 }

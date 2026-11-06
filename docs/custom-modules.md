@@ -135,7 +135,7 @@ Android 权限/feature、模块自己的 Manifest application 节点、资源和
 | `nfc` | 原有 Android reader mode 核心；iOS 保持不支持 | `permissions`, `native_common` |
 | `app_ui` | 弹窗、菜单、选择器、扫码、附件、Toast/Loading 和原生展示控件 | `native_common` |
 
-`native_common` 只提供共享的 TS 数据校验和辅助函数，没有原生工厂。业务可从 `app_pages/src/api` 使用应用组合的 API；类型、权限和辅助函数直接从对应模块导入，旧服务路径的兼容转发文件已删除。正常运行通过模块工厂获取原生 Host，无需再由 `ValdiHost` 逐个注入。旧安装函数仅保留为显式兼容覆盖入口。
+`native_common` 只提供共享的 TS 数据校验和辅助函数，没有原生工厂。业务可从 `app_pages/src/api` 使用应用组合的 API；类型、权限和辅助函数直接从对应模块导入，旧服务路径的兼容转发文件已删除。正常运行通过模块工厂获取原生 Host，无需再由 `ValdiHost` 逐个注入。生产接口不再暴露安装覆盖函数；测试在原生入口边界提供替身。
 
 这五项使用 `nativeBuild: "host"`：Node 生成 TS 产物及 Kotlin/Objective-C 契约，选中的原生目录由 Gradle/Xcode 编译。这样保留现有 Compose/UIKit 和 SwiftPM 集成，无需复制运行时。蓝牙、Calculator、WebView 继续使用 `nativeBuild: "bazel"` 的独立库方式。
 
@@ -152,19 +152,17 @@ Bazel 原生库和模块工厂注册流程，没有独立的 BLE 构建入口。
 - `src/`：公共 API、参数校验、中心/外设模式、事件分发及原生声明。
 - `android/`：Kotlin 工厂、适配和 BLE 核心。
 - `ios/`：直接实现生成的 Swift 协议及模块工厂，CoreBluetooth 核心随模块编译。
-- `App`：选择使用的模块、通知宿主生命周期，并向蓝牙初始化传入独立权限服务。
+- `App`：选择使用的模块、通知宿主生命周期，由蓝牙模块内部访问共享权限服务。
 
-App 在其长期持有的启动作用域初始化一次：
+业务直接取用公共 API，首次实际操作时自动获取原生对象并绑定事件：
 
 ```ts
-import { initializeBluetooth, bluetoothApi } from 'bluetooth/src/index';
-import * as permissions from 'permissions/src/index';
+import { bluetoothApi } from 'bluetooth/src/index';
 
-initializeBluetooth(permissions);
 const bluetooth = bluetoothApi();
 ```
 
-`permissions` 传入平台信息、权限请求和同一个权限串行队列；模块不反向导入
+蓝牙直接导入 `permissions` 的平台信息、权限请求和同一个权限串行队列；模块不反向导入
 `app_pages`。页面监听归页面所有，连接/扫描/外设服务由应用级会话持有，
 直到业务主动停止或关闭。`BlePage` 仍是 App 的演示页面；它在销毁时移除监听，
 并主动停止该演示页发起的扫描。

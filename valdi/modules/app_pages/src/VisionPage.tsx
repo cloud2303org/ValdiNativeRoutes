@@ -42,6 +42,11 @@ const CPP_VALUES = [3, 1, 4, 1, 5, 9, 2, 6];
  */
 export class VisionPage extends Page<PageViewModel, State, PageContext> {
   state: State = { loading: false };
+  private alive = true;
+
+  onDestroy(): void {
+    this.alive = false;
+  }
 
   private get router(): Router {
     return new Router(this.context);
@@ -155,8 +160,10 @@ export class VisionPage extends Page<PageViewModel, State, PageContext> {
     this.setState({ loading: true, error: undefined, result: undefined });
     try {
       const result = await runDemo();
+      if (!this.alive) return;
       this.setState({ loading: false, result });
     } catch (cause) {
+      if (!this.alive) return;
       this.setState({ loading: false, error: cause instanceof Error ? cause.message : String(cause) });
     }
   };

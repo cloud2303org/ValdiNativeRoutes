@@ -3,6 +3,7 @@ import { Style } from 'valdi_core/src/Style';
 import { systemFont } from 'valdi_core/src/SystemFont';
 import { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
 import { Button } from './Button';
+import { api } from './api';
 import { getAppDb } from './db';
 import { FocusScroller } from './FocusScroller';
 import { FormField } from './FormField';
@@ -20,7 +21,7 @@ interface State {
 }
 
 /**
- * Keyboard test page. The page never reads the keyboard height: the host shrinks it (or lifts the sheet),
+ * Keyboard test page. The page never reads the keyboard height: the host shrinks its viewport,
  * so all it has to do is lay out inside its bounds.
  *
  * @Component({viewModel: 'PageViewModel', context: 'PageContext'})
@@ -45,7 +46,7 @@ export class FormPage extends Page<PageViewModel, State, PageContext> {
   }
 
   private renderScrollForm(): void {
-    const { insets, presentation } = this.viewModel;
+    const { insets } = this.viewModel;
     const { values } = this.state;
     <view style={styles.page}>
       <scroll
@@ -62,7 +63,7 @@ export class FormPage extends Page<PageViewModel, State, PageContext> {
           paddingRight={insets.right + 20}
         >
           <PageHeader
-            title={presentation !== 'push' ? 'Sheet 里的长表单' : '长表单'}
+            title="长表单"
             subtitle="点最下面的备注，看它会不会被键盘挡住"
             onBack={this.handleBack}
           />
@@ -93,18 +94,18 @@ export class FormPage extends Page<PageViewModel, State, PageContext> {
   }
 
   private renderPlainForm(): void {
-    const { insets, presentation } = this.viewModel;
+    const { insets } = this.viewModel;
     const { values } = this.state;
     // The input sits at the bottom, so it rides up with the bottom edge when the host shrinks the page.
     <view
-      style={presentation !== 'push' ? styles.plainSheet : styles.plainPage}
+      style={styles.plainPage}
       paddingTop={insets.top + 12}
       paddingBottom={insets.bottom + 16}
       paddingLeft={insets.left + 20}
       paddingRight={insets.right + 20}
     >
       <PageHeader
-        title={presentation !== 'push' ? 'Sheet 里的输入框' : '底部输入框'}
+        title="底部输入框"
         subtitle="没有 scroll，输入框贴着底部"
         onBack={this.handleBack}
       />
@@ -141,8 +142,12 @@ export class FormPage extends Page<PageViewModel, State, PageContext> {
   private handleSubmit = async () => {
     const filled = Object.values(this.state.values).filter(value => value.trim().length > 0).length;
     const summary = `表单提交了 ${filled} 项`;
-    await getAppDb().submissionQueries.insertSubmission(summary, Date.now());
-    this.router.finish<'form'>({ summary });
+    try {
+      await getAppDb().insertSubmission(summary, Date.now());
+      this.router.finish<'form'>({ summary });
+    } catch (error) {
+      await api.showToast({ title: `保存失败：${error instanceof Error ? error.message : String(error)}`, icon: 'error' });
+    }
   };
 }
 
@@ -160,11 +165,6 @@ const styles = {
     width: '100%',
     height: '100%',
     backgroundColor: '#f3f4f6',
-  }),
-  plainSheet: new Style<View>({
-    width: '100%',
-    height: '100%',
-    backgroundColor: 'white',
   }),
   spacer: new Style<View>({
     flexGrow: 1,

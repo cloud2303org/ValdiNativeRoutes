@@ -182,17 +182,6 @@ export interface AppUIHost {
   hideLoading: () => Promise<void>;
 }
 
-// On globalThis rather than in this module: Valdi may unload a module once no page uses it, and a reloaded module
-// would come back without the host.
-const HOST_KEY = '__valdiRoutesAppUIHost';
-
-/**
- * Optional explicit host override; normal apps use the retained native module factory.
- */
-export function installAppUI(host: AppUIHost): void {
-  (globalThis as any)[HOST_KEY] = host;
-}
-
 export function appUIHost(): AppUIHost {
-  return (globalThis as any)[HOST_KEY] ?? getHost();
+  return getHost();
 }

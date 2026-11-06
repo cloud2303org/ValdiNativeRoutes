@@ -1,6 +1,6 @@
 #!/bin/sh
 # Rebuild the Valdi runtime into android/app/libs/valdi_runtime.aar: libvaldi_runtime.so, Valdi's Kotlin and its own
-# modules (valdi_core, valdi_tsx, client_sql), and the app's C++ (valdi/native: @ExportModule implementations and their
+# modules (valdi_core, valdi_tsx), and the app's C++ (valdi/native: @ExportModule implementations and their
 # bindings), linked into the runtime. app_pages and the npm packages are built by the app's Gradle build
 # (tools/valdi-rolldown), so this is only needed when the pinned Valdi fork/toolchain or valdi/native changes.
 # Builtin modules use the local Node backend by default; compiler changes also require a new export.

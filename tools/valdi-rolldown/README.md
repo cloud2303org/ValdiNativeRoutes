@@ -12,8 +12,9 @@ Release uses the pinned official `hermes-compiler` package. `hermes.ts` checks i
 wraps each CommonJS module as Valdi expects, invokes hermesc, and prepends the Valdi header. A changed upstream
 wrapper/header fails explicitly. Run `pnpm test` at the root for image, compiler/protocol and binding golden checks.
 The application build/dev server needs neither the Valdi toolbox nor the ClientSQL Python generator / SQLite 3.16 validator.
-The existing submission demo uses the checked-in transitional snapshot in `valdi/modules/app_pages/src/sqlgen/`;
-Drizzle will replace it later. The native SQLite implementation remains in the exported runtime.
+The submission demo uses Drizzle schema, queries and migrations under `valdi/modules/app_pages/src/database/`.
+Run `pnpm db:generate` after schema changes and `pnpm db:check` to verify packaged migrations. The native SQLite
+implementation remains in the exported runtime with positional row results and exact execution metadata.
 
 ## Custom fonts
 

@@ -107,15 +107,16 @@ output/user root/repository/disk cache、Gradle user home、Go/Coursier 缓存�
 
 - **Valdi + Hermes + 应用 C++ 运行时**：由 `scripts/export-android.sh` / `export-ios.sh` 导出
   AAR / XCFramework；`valdi/native` 实现和生成绑定也链接在其中。
-- **Valdi 自带的模块**：`valdi/BUILD.bazel` 仍依赖 `valdi_core`、`valdi_tsx`、`client_sql`。
+- **Valdi 自带的模块**：`valdi/BUILD.bazel` 依赖 `valdi_core`、`valdi_tsx` 和作为数据库原生执行层的 `client_sql`。
   它们及传递依赖现在默认使用 Node 编译后端，保留原生库与导出规则。
   [接入范围、测试和源码清理](node-runtime-compiler.md)。
 - **应用图片**：pnpm 的预编译 `sharp`，保留尺寸、density、命名、透明度和 catalog 协议，编码字节可变化。
 - **应用 Release 字节码**：固定的官方 `hermes-compiler`，启动时检查版本与 `hermes.BUILD` 一致，
   Node 保留当前 Valdi 的模块函数包装和文件头；上游协议变化会明确报错。
 - **导出头文件**：fork 内的 `bzl/valdi/node_tools/rewrite_header.mjs` 由 Bazel Node 工具链执行，无 npm 依赖。C++ toolbox 源码、构建目标和入口已删除。
-- **数据库**：原生 ClientSQL SQLite 模块保留；应用查询暂用 `src/sqlgen/` 的固定源码，后续接入 Drizzle。
-  `.sq`、Python 生成器和 SQLite 3.16 校验器已从应用构建移除。
+- **数据库**：Drizzle schema、查询和迁移使用 npm 工具链；ClientSQL 原生执行层通过 Valdi 对象接口随运行时导出，
+  两个 Bazel workspace 应用同一份 `clientsql-drizzle.patch`，补充位置行数组和执行元数据。
+  `pnpm db:generate` 生成迁移，`pnpm db:check` 校验打包常量；`.sq`、旧 `sqlgen` 和 Python 生成器不再使用。
 - **宿主**：Android Gradle / SDK / NDK / CMake；iOS Xcode / XcodeGen / SwiftPM。
 - **视觉依赖**：`vision/scripts/prepare-native.cjs` 按 `vision/vendor-lock.json` 准备 OpenCV Mobile / ncnn。
 

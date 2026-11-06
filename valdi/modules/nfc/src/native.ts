@@ -6,7 +6,8 @@ import type { NativeNFCTag, NFCDiscoveryState, NFCRecord, NFCTechHandle } from '
 
 // The NFC object adapter.ts expects, on top of the host's NfcHost; its Promises go through nativeCall. Native holds one
 // NfcHostEvents for the app's lifetime; listeners subscribe here, so they never cross the bridge. NFC is Android-only:
-// on iOS every call fails with NOT_SUPPORTED before a host is looked up (none is installed there).
+// on iOS this facade rejects with NOT_SUPPORTED before looking up a host. The iOS factory supplies a rejecting host
+// for direct typed callers; it does not enable public NFC support.
 
 // Public schemas own outgoing snapshots. Full-buffer replies reuse their native-backed storage.
 const buffer = (value: Uint8Array): ArrayBuffer =>

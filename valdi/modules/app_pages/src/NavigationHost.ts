@@ -1,4 +1,6 @@
 import type { ResolvedNavigation, RouteDeclaration, StackPage } from './navigation/models';
+import { withGlobalNativeRefs } from 'valdi_core/src/NativeReferences';
+import { getHost } from './AppContext';
 
 /**
  * The host's Navigator as `router` (routes.ts) drives it. The host owns the one stack of Valdi and native pages; calls
@@ -8,13 +10,12 @@ import type { ResolvedNavigation, RouteDeclaration, StackPage } from './navigati
  * @ExportModel({ios: 'VRNavigationHost', android: 'io.valdiroutes.pages.NavigationHost'})
  */
 export interface NavigationHost {
-  /** presentation is 'push', 'sheet' or 'compactSheet'; navigation contains resolved transition options. */
-  push: (route: string, params: any, presentation: string, navigation: ResolvedNavigation) => void;
+  /** Opens a page using resolved platform transition options. */
+  push: (route: string, params: any, navigation: ResolvedNavigation) => void;
   /** onResult is called once, when the page leaves the stack; canceled unless it finished with a result. */
   pushForResult: (
     route: string,
     params: any,
-    presentation: string,
     navigation: ResolvedNavigation,
     onResult: (result: any, canceled: boolean) => void,
   ) => void;
@@ -31,24 +32,14 @@ export interface NavigationHost {
   updateRoutes: (declaration: RouteDeclaration) => void;
 }
 
-// On globalThis rather than in this module, as AppUIHost: a module Valdi unloads and reloads would lose it.
-const HOST_KEY = '__valdiRoutesNavigationHost';
-
-export function installNavigation(host: NavigationHost): void {
-  (globalThis as any)[HOST_KEY] = host;
-}
+let host: NavigationHost | undefined;
 
 export function navigationHost(): NavigationHost {
-  const host: NavigationHost | undefined = (globalThis as any)[HOST_KEY];
-  if (!host) {
-    throw new Error('native navigation is not installed');
-  }
-  return host;
+  return host ??= withGlobalNativeRefs('app-navigation', () => getHost().getNavigationHost());
 }
 
 export function publishRoutes(declaration: RouteDeclaration): void {
   const state = globalThis as any;
-  const host = state[HOST_KEY] as NavigationHost | undefined;
-  if (host) host.updateRoutes(declaration);
+  navigationHost().updateRoutes(declaration);
   state.__valdiRoutesDeclaration = declaration;
 }

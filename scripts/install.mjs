@@ -12,5 +12,5 @@ for (const directory of ['valdi', 'tools/valdi-rolldown']) {
 }
 runPnpm(['--dir', 'tools/valdi-rolldown', 'tsconfig'], root);
 syncNativeModuleRegistration(root);
-console.log('JS dependencies and editor paths are ready.');
+console.log('JS dependencies installed; editor config preparation status is reported above.');
 console.log('First native build: prepare the runtime with scripts/export-android.sh or scripts/export-ios.sh.');

@@ -6,7 +6,7 @@ Template sources: `npm_modules/cli/.bootstrap/modules/polyglot_bridge_module`.
 TS/TSX and resources use the repository's Node pipeline.
 Android/iOS libraries and registration are discovered from module.json.
 The App enables this module by listing `bluetooth` in package.json `valdi.modules`.
-Web/macOS sources are retained from upstream; this App has Android/iOS hosts.
+This module has Android/iOS Bluetooth implementations; it has no Web/macOS implementation.
 Changing native implementations requires rebuilding the application.
 
 Created through the real scaffold command:

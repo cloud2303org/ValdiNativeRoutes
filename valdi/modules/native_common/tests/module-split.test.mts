@@ -52,6 +52,7 @@ function runtime(platform = 'android', sdk = 36, hostFactories: Record<string, (
     }).outputText;
     vm.runInContext(`(function(require,module,exports){${output}\n})`, context, { filename: file })(
       (name: string) => {
+        if (name === 'valdi_core/src/NativeReferences') return { withGlobalNativeRefs: (_name: string, body: () => unknown) => body() };
         if (name === 'valdi_core/src/Device') return { Device: { isAndroid: () => platform === 'android' } };
         if (name === 'bluetooth/src/index') return { bluetoothApi: () => ({}) };
         if (name === 'valibot' || name.startsWith('dayjs')) return requireNpm(name);
@@ -217,32 +218,18 @@ test('Wi-Fi retrieves one factory proxy and subscribes once when marshaling crea
   assert.equal(wifi.wifiHost(), first);
 });
 
-test('explicit Wi-Fi installation binds immediately and replaces a cached factory host', () => {
+test('Wi-Fi exposes only the native factory entry without manual installation', () => {
   let retrievals = 0;
-  let factoryBindings = 0;
-  let overrideBindings = 0;
-  const r = runtime('ios', 0, {
-    wifi: () => {
-      retrievals++;
-      return { setEvents: () => factoryBindings++ };
-    },
-  });
+  let bindings = 0;
+  const host = { setEvents: () => bindings++ };
+  const r = runtime('ios', 0, { wifi: () => { retrievals++; return host; } });
   const wifi = r.load('wifi/src/WifiHost');
-  wifi.wifiHost();
-  const override = { setEvents: () => overrideBindings++ };
-  wifi.installWifiHost(override);
-  assert.equal(overrideBindings, 1, 'installation binds before the next API lookup');
-  assert.equal(wifi.wifiHost(), override);
-  assert.equal(wifi.wifiHost(), override);
-  assert.equal(overrideBindings, 1);
+  assert.equal('installWifiHost' in wifi, false);
+  assert.equal(retrievals, 0, 'loading the facade must not create a host');
+  assert.equal(wifi.wifiHost(), host);
+  assert.equal(wifi.wifiHost(), host);
   assert.equal(retrievals, 1);
-  assert.equal(factoryBindings, 1);
-
-  const explicitOnly = runtime();
-  const installed = explicitOnly.load('wifi/src/WifiHost');
-  installed.installWifiHost(override);
-  assert.equal(installed.wifiHost(), override, 'an explicit install needs no factory host');
-  assert.equal(overrideBindings, 2);
+  assert.equal(bindings, 1);
 });
 
 test('AppUI validates requests and keeps the facade error type and cancel replies', async () => {

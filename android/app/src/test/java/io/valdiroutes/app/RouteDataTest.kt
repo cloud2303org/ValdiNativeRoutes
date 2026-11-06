@@ -1,9 +1,10 @@
 package io.valdiroutes.app
 
+import io.valdiroutes.pages.ResolvedNavigation
 import io.valdiroutes.pages.RouteEntry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -110,28 +111,46 @@ class RouteDataTest {
     }
 
     @Test
-    fun sheetFinishCapturesResultBeforeHideAndKeepsFirstResult() {
+    fun ordinaryPushRetainsRootAndResolvedNavigation() {
         val navigator = navigator()
+        val root = navigator.stack.single()
+        val navigation = ResolvedNavigation("slideUp", 450.0, "push")
+
+        navigator.open("detail", mapOf("id" to 7), navigation)
+        val page = navigator.stack.last()
+
+        assertEquals(listOf(root.id, page.id), navigator.currentPages().map { it.pageId })
+        assertSame(root, navigator.stack.first())
+        assertSame(page, navigator.frontPage())
+        assertEquals(Presentation.Push, page.presentation)
+        assertSame(navigation, page.navigation)
+        assertFalse(root.removed)
+    }
+
+    @Test
+    fun pushFinishCapturesResultOnRemovalAndKeepsFirstResult() {
+        val navigator = navigator()
+        val root = navigator.stack.single()
         var calls = 0
         var received: Map<String, Any?>? = null
         var canceled = true
-        navigator.open("detail", presentation = Presentation.Sheet) { result, wasCanceled ->
+        navigator.open("detail") { result, wasCanceled ->
             calls++
             received = result
             canceled = wasCanceled
         }
-        val sheet = requireNotNull(navigator.sheet)
+        val page = navigator.stack.last()
         val result = Payload()
 
-        navigator.finish(sheet.id, result.data)
-        assertTrue(navigator.sheetClosing)
-        assertNull(received)
+        navigator.finish(page.id, result.data)
+        assertTrue(page.removed)
+        assertSame(root, navigator.stack.single())
+        assertEquals(expected, received)
         result.mutate()
-        // A second result is ignored before validation too: the accepted first result still wins.
-        navigator.finish(sheet.id, mapOf("second" to Any()))
-        navigator.cancel(sheet.id)
-        navigator.onSheetHidden()
-        navigator.onSheetHidden()
+        // A removed page ignores subsequent results before validating them.
+        navigator.finish(page.id, mapOf("second" to Any()))
+        navigator.cancel(page.id)
+        page.remove()
 
         assertEquals(1, calls)
         assertFalse(canceled)
@@ -141,32 +160,107 @@ class RouteDataTest {
     @Test
     fun cancellationReturnsEmptyMapAndRemainsFirstResult() {
         val navigator = navigator()
+        var calls = 0
         var received: Pair<Map<String, Any?>, Boolean>? = null
-        navigator.open("detail", presentation = Presentation.CompactSheet) { result, canceled ->
+        navigator.open("detail") { result, canceled ->
+            calls++
             received = result to canceled
         }
-        val sheet = requireNotNull(navigator.sheet)
+        val page = navigator.stack.last()
 
-        navigator.cancel(sheet.id)
-        navigator.finish(sheet.id, Payload().data)
-        navigator.onSheetHidden()
+        navigator.cancel(page.id)
+        navigator.finish(page.id, Payload().data)
+        navigator.cancel(page.id)
 
+        assertTrue(page.removed)
+        assertEquals(1, calls)
         assertEquals(emptyMap<String, Any?>() to true, received)
     }
 
     @Test
     fun successfulEmptyResultIsDistinctFromCancellation() {
         val navigator = navigator()
+        var calls = 0
         var received: Pair<Map<String, Any?>, Boolean>? = null
-        navigator.open("detail", presentation = Presentation.Sheet) { result, canceled ->
+        navigator.open("detail") { result, canceled ->
+            calls++
             received = result to canceled
         }
-        val sheet = requireNotNull(navigator.sheet)
+        val page = navigator.stack.last()
 
-        navigator.finish(sheet.id, emptyMap())
-        navigator.cancel(sheet.id)
-        navigator.onSheetHidden()
+        navigator.finish(page.id, emptyMap())
+        navigator.cancel(page.id)
 
+        assertEquals(1, calls)
         assertEquals(emptyMap<String, Any?>() to false, received)
+    }
+
+    @Test
+    fun backCancelsTopPageAndRetainsRoot() {
+        val navigator = navigator()
+        val root = navigator.stack.single()
+        val received = mutableListOf<Pair<Map<String, Any?>, Boolean>>()
+        navigator.open("detail") { result, canceled -> received.add(result to canceled) }
+        val page = navigator.stack.last()
+
+        navigator.back()
+        navigator.back()
+        navigator.cancel(root.id)
+        navigator.finish(root.id, emptyMap())
+
+        assertTrue(page.removed)
+        assertFalse(root.removed)
+        assertSame(root, navigator.stack.single())
+        assertSame(root, navigator.frontPage())
+        assertEquals(listOf(emptyMap<String, Any?>() to true), received)
+    }
+
+    @Test
+    fun backDeltaCancelsTopDownOnceAndRetainsRoot() {
+        val navigator = navigator()
+        val root = navigator.stack.single()
+        val canceledPages = mutableListOf<String>()
+        navigator.open("detail") { result, canceled ->
+            assertTrue(canceled)
+            assertTrue(result.isEmpty())
+            canceledPages.add("first")
+        }
+        val first = navigator.stack.last()
+        navigator.open("detail") { result, canceled ->
+            assertTrue(canceled)
+            assertTrue(result.isEmpty())
+            assertFalse(first.removed)
+            canceledPages.add("second")
+        }
+
+        navigator.back(0)
+        assertEquals(3, navigator.currentPages().size)
+        navigator.back(10)
+        navigator.popToRoot()
+
+        assertEquals(listOf("second", "first"), canceledPages)
+        assertSame(root, navigator.stack.single())
+        assertFalse(root.removed)
+    }
+
+    @Test
+    fun replaceAndResetCancelDisplacedPushes() {
+        val navigator = navigator()
+        val received = mutableListOf<Pair<Map<String, Any?>, Boolean>>()
+        navigator.open("detail") { result, canceled -> received.add(result to canceled) }
+        val replaced = navigator.stack.last()
+
+        navigator.replace("detail", emptyMap(), NativeRouteAnimations.Default)
+        assertTrue(replaced.removed)
+        assertEquals(2, navigator.currentPages().size)
+        assertEquals(listOf(emptyMap<String, Any?>() to true), received)
+
+        navigator.open("detail") { result, canceled -> received.add(result to canceled) }
+        val reset = navigator.stack.last()
+        navigator.reset("home", emptyMap())
+
+        assertTrue(reset.removed)
+        assertEquals("home", navigator.currentPages().single().route)
+        assertEquals(List(2) { emptyMap<String, Any?>() to true }, received)
     }
 }

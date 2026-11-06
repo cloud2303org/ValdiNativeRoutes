@@ -1,7 +1,6 @@
 package io.nativeroutes.ble
 
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.collections.set
 
 class PromiseStore<T> {
     private val store = ConcurrentHashMap<String, BleFuture<T>>()

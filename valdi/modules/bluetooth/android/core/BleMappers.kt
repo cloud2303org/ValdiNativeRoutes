@@ -3,7 +3,6 @@ package io.nativeroutes.ble
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.le.ScanResult
-import android.os.Build
 import androidx.core.util.size
 import com.welie.blessed.BluetoothPeripheral
 import java.util.Locale

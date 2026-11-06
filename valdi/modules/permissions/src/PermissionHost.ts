@@ -1,5 +1,3 @@
-import { getHost, getAndroidSdk } from './Permissions';
-
 /** @ExportModel({ios: 'VRPermissionGrant', android: 'io.valdiroutes.permissions.PermissionGrant'}) */
 export interface PermissionGrant {
   permission: string;
@@ -22,22 +20,4 @@ export interface PermissionHost {
   requestMultiple(permissions: string[]): Promise<PermissionGrant[]>;
   /** The app's page in system settings. */
   openSettings(): Promise<void>;
-}
-
-interface Installed {
-  host: PermissionHost;
-  androidSdk: number;
-}
-
-const HOST_KEY = '__valdiRoutesPermissionHost';
-
-/**
- * Optional explicit override. Factory-backed apps read getHost/getAndroidSdk directly.
- */
-export function installPermissionHost(host: PermissionHost, androidSdk: number): void {
-  (globalThis as any)[HOST_KEY] = { host, androidSdk };
-}
-
-export function installedPermissionHost(): Installed {
-  return (globalThis as any)[HOST_KEY] ?? { host: getHost(), androidSdk: getAndroidSdk() };
 }

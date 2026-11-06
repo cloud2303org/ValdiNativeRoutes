@@ -1,10 +1,9 @@
-import type { StructuredObject, StructuredValue } from 'native_common/src/structuredData';
+import type { StructuredObject } from 'native_common/src/structuredData';
 import type { Asset } from 'valdi_core/src/Asset';
 import { publishRoutes } from '../NavigationHost';
 import type { RouteDeclaration } from './models';
 import type { NavigationOptions } from './options';
 
-export type JsonValue = StructuredValue;
 export type JsonObject = StructuredObject;
 export type EmptyParams = Record<string, never>;
 export type PageComponent = abstract new (...args: any[]) => { onRender(): void };

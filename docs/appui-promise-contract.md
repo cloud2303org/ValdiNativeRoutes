@@ -77,7 +77,7 @@ these same imported `SCValdiPromise` types. The compiler imports `showModalWithR
 `showModal(with:)` and similarly shortens the other request methods; attachment selection imports as
 `pickAttachments(withSource:limit:mimeTypes:)`. It explicitly settles
 `SCValdiResolvablePromise<Reply>` from the native completion, retaining that owner until completion. Void uses
-the existing `ValdiVoidPromise` helper, which fulfills with `SCValdiUndefinedValue`; failures call the native
+the module-owned `VRAppUIVoidPromise` helper, which fulfills with `SCValdiUndefinedValue`; failures call the native
 rejection API. Arrays inside attachment results remain part of the generated typed model.
 
 The BLE module's separate Swift generator emits `ValdiPromise<Reply>` / `ValdiPromise<Void>` and uses explicit

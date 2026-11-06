@@ -1,5 +1,5 @@
 // What build.ts (one build) and dev.ts (the dev server) share: the modules, and building them with rolldown.
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { rolldown, RolldownMagicString, type Plugin, type PreRenderedChunk } from 'rolldown';
@@ -8,6 +8,7 @@ import type { ArchiveEntries } from './archive';
 import { sourceFiles, type ValdiModule, type ValdiTsPlugin } from './valdiTs';
 import { availableModuleNames, enabledModuleNames } from './modules.mjs';
 import { assertEnabledImports } from './module-selection';
+import { createEditorConfig } from './editor-config';
 
 
 export const root = path.resolve(import.meta.dirname, '../..');
@@ -93,18 +94,7 @@ function tsSourceFiles(module: ValdiModule): string[] {
   return files;
 }
 
-/**
- * Valdi's own modules the exported runtime carries (//:valdi_runtime's deps and theirs): the only ones a module can
- * import, as the app has no other.
- */
-const RUNTIME_MODULES = ['client_sql', 'coreutils', 'jasmine', 'source_map', 'valdi_core', 'valdi_tsx'];
-
-/**
- * Writes `module`'s tsconfig.json, as `valdi projectsync` did from Bazel: Valdi's base config and globals, the
- * runtime's modules, and every app module (`<module>/…`), each also found in its generated resources (res.ts),
- * which rootDirs merges into the module's own tree for imports. Returns whether it
- * changed. Valdi's sources are read through the bazel-valdi link the exports leave.
- */
+/** Find prepared Valdi sources; a bootstrap editor config does not establish readiness. */
 export function valdiSourceRoot(): string | undefined {
   // `.valdi-sources` is prepare-valdi's link to the output base and is the only one Bazel
   // does not repoint while it runs, so configs written from it stay valid for the job.
@@ -124,31 +114,29 @@ export function valdiSourceRoot(): string | undefined {
   return candidates.find(root => existsSync(path.join(root, 'modules/_configs/base.tsconfig.json')));
 }
 
+/**
+ * Write machine-local editor paths that work through physical or symlink module
+ * entries. Before source preparation, use only the tracked bootstrap base and
+ * local aliases. The boolean means changed; it does not indicate build readiness.
+ */
 export function writeTsconfig(module: ValdiModule, modules: ValdiModule[]): boolean {
-  const relative = (to: string) => {
-    const value = path.relative(module.dir, to).split(path.sep).join('/');
-    return value.startsWith('../') ? value : `./${value}`;
-  };
-  // Never write a config that extends a missing file: it silently drops Valdi's compiler
-  // options (JSX, lib, paths) and every import then fails to resolve.
-  const valdiSources = valdiSourceRoot();
-  if (!valdiSources) return false;
-  const paths: Record<string, string[]> = {};
-  for (const other of modules) {
-    paths[`${other.name}/*`] = [other === module ? './*' : `${relative(other.dir)}/*`, ...other.generatedDirs.map(dir => `${relative(dir)}/*`)];
+  const canonical = (file: string) => existsSync(file) ? realpathSync(file) : path.resolve(file);
+  const canonicalModule = (value: ValdiModule): ValdiModule => ({
+    ...value,
+    dir: canonical(value.dir),
+    generatedDirs: value.generatedDirs.map(canonical),
+    nodeModules: value.nodeModules && canonical(value.nodeModules),
+  });
+  const framework = valdiSourceRoot();
+  const bootstrapBase = path.join(valdi, 'tsconfig.editor-base.json');
+  if (!framework && !existsSync(bootstrapBase)) {
+    throw new Error(`Missing editor bootstrap base: ${bootstrapBase}`);
   }
-  for (const name of RUNTIME_MODULES) {
-    paths[`${name}/*`] = [`${relative(path.join(valdiSources, 'src/valdi_modules/src/valdi', name))}/*`];
-  }
-  paths.tslib = [relative(path.join(valdiSources, 'src/valdi_modules/src/valdi/valdi_core/src/tslib'))];
-  const config = {
-    extends: relative(path.join(valdiSources, 'modules/_configs/base.tsconfig.json')),
-    compilerOptions: {
-      paths,
-      types: [relative(path.join(valdiSources, 'modules/types/Long')), relative(path.join(valdiSources, 'modules/types/globals'))],
-      rootDirs: ['..', relative(genRoot)],
-    },
-  };
+  const config = createEditorConfig(canonicalModule(module), modules.map(canonicalModule), {
+    frameworkSources: framework && canonical(framework),
+    bootstrapBase: canonical(bootstrapBase),
+    generatedRoot: canonical(genRoot),
+  });
   const file = path.join(module.dir, 'tsconfig.json');
   const content = `${JSON.stringify(config, null, 4)}\n`;
   if (existsSync(file) && readFileSync(file, 'utf8') === content) return false;

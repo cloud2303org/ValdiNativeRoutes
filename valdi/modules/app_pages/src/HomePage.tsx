@@ -8,8 +8,7 @@ import { getAppDb } from './db';
 import { PageContext, PageViewModel } from './Page';
 import { HideReason, Page, ShowReason } from './PageComponent';
 import { PageHeader } from './PageHeader';
-import { FormLayout, Presentation, Router } from './navigation';
-import { ClientSQLSubscription } from './sqlgen/SubmissionQueries';
+import { FormLayout, Router } from './navigation';
 
 /** The JS engine running this page, read from the runtime itself. */
 function describeJsEngine(): string {
@@ -39,11 +38,9 @@ interface State {
 
 const OPENS_KEY = 'demo.homeOpens';
 
-const KEYBOARD_CASES: Record<string, { layout: FormLayout; presentation: Presentation }> = {
-  'page-scroll': { layout: 'scroll', presentation: 'push' },
-  'page-plain': { layout: 'plain', presentation: 'push' },
-  'sheet-scroll': { layout: 'scroll', presentation: 'sheet' },
-  'sheet-plain': { layout: 'plain', presentation: 'compactSheet' },
+const KEYBOARD_CASES: Record<string, FormLayout> = {
+  'page-scroll': 'scroll',
+  'page-plain': 'plain',
 };
 
 /**
@@ -60,7 +57,7 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
     visibleSeconds: 0,
   };
 
-  private savedSubscription?: ClientSQLSubscription;
+  private stopSavedCount?: () => void;
 
   onCreate(): void {
     const opens = (api.getStorageSync<number>(OPENS_KEY) ?? 0) + 1;
@@ -70,9 +67,10 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
       const timer = setInterval(() => this.setState({ visibleSeconds: this.state.visibleSeconds + 1 }), 1000);
       return () => clearInterval(timer);
     });
-    this.savedSubscription = getAppDb().submissionQueries.watchCountSubmissions(rows => {
-      this.setState({ savedCount: rows[0]?.count ?? 0 });
-    });
+    this.stopSavedCount = getAppDb().watchSubmissionCount(
+      count => this.setState({ savedCount: count }),
+      error => this.setState({ lastResult: `数据库读取失败：${error.message}` }),
+    );
   }
 
   onShow(reason: ShowReason): void {
@@ -86,7 +84,7 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
   }
 
   onDestroy(): void {
-    this.savedSubscription?.unsubscribe();
+    this.stopSavedCount?.();
   }
 
   private get router(): Router {
@@ -162,8 +160,6 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
           <label style={styles.section} value="键盘" />
           <Button id="page-scroll" title="全屏页 + scroll + 输入框" onTap={this.handleKeyboardCase} />
           <Button id="page-plain" title="全屏页 + 普通 view + 输入框" onTap={this.handleKeyboardCase} />
-          <Button id="sheet-scroll" title="Sheet + scroll + 输入框" onTap={this.handleKeyboardCase} />
-          <Button id="sheet-plain" title="Sheet + 普通 view + 输入框" onTap={this.handleKeyboardCase} />
         </view>
       </scroll>
     </view>;
@@ -262,8 +258,8 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
   };
 
   private handleKeyboardCase = async (id: string) => {
-    const { layout, presentation } = KEYBOARD_CASES[id];
-    const result = await this.router.pushForResult('form', { layout }, presentation);
+    const layout = KEYBOARD_CASES[id];
+    const result = await this.router.pushForResult('form', { layout });
     this.setState({ lastResult: result ? result.summary : '表单取消了' });
   };
 }

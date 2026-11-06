@@ -14,6 +14,7 @@
     "tools/valdi-rolldown/valdiTs.ts",
     "tools/valdi-rolldown/routes-transform.ts",
     "tools/valdi-rolldown/pipeline.ts",
+    "tools/valdi-rolldown/editor-config.ts",
     "tools/valdi-rolldown/modules.mjs",
     "tools/valdi-rolldown/module-selection.ts",
     "tools/valdi-rolldown/archive.ts",

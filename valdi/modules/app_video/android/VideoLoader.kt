@@ -1,6 +1,8 @@
 package io.valdiroutes.video
 
 import android.net.Uri
+import android.content.Context
+import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 import com.snap.valdi.exceptions.ValdiException
@@ -9,6 +11,8 @@ import com.snap.valdi.utils.DisposableUtils
 import com.snap.valdi.utils.ValdiVideoLoader
 import com.snap.valdi.utils.ValdiVideoPlayer
 import com.snap.valdi.utils.ValdiVideoPlayerCreatedCompletion
+import com.snap.valdi.views.ValdiTouchEventResult
+import com.snap.valdi.views.ValdiTouchTarget
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Loads only app-owned session URLs; media URLs themselves are handled by Media3. */
@@ -71,7 +75,7 @@ internal class VideoBinding(
     private val host: VideoHostImpl,
     private val session: VideoSession,
 ) : ValdiVideoPlayer {
-    val anchor = FrameLayout(host.context)
+    val anchor = VideoAnchor(host.context)
     var callbacks: ValdiVideoPlayer.Callbacks? = null
         private set
     var disposed = false
@@ -168,4 +172,11 @@ internal class VideoBinding(
         session.detached(this)
         anchor.removeAllViews()
     }
+}
+
+/** Forward embedded native controls through the same touch contract as Valdi's WebView. */
+internal class VideoAnchor(context: Context) : FrameLayout(context), ValdiTouchTarget {
+    override fun processTouchEvent(event: MotionEvent): ValdiTouchEventResult =
+        if (dispatchTouchEvent(event)) ValdiTouchEventResult.ConsumeEventAndCancelOtherGestures
+        else ValdiTouchEventResult.IgnoreEvent
 }

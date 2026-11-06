@@ -11,12 +11,22 @@ import com.snap.valdi.utils.ValdiMarshaller
 import com.snap.valdi.views.ValdiRecyclableView
 import com.snap.valdi.views.ValdiTouchEventResult
 import com.snap.valdi.views.ValdiTouchTarget
+import io.valdiroutes.app_ui.ui.NativeWheelBody
+import io.valdiroutes.app_ui.ui.WheelDate
+import io.valdiroutes.app_ui.ui.WheelEcho
+import io.valdiroutes.app_ui.ui.WheelItem
+import io.valdiroutes.app_ui.ui.WheelNode
+import io.valdiroutes.app_ui.ui.applyWheelConfigOrReset
+import io.valdiroutes.app_ui.ui.normalizeWheelPath
+import io.valdiroutes.app_ui.ui.replaceWheelPath
+import io.valdiroutes.app_ui.ui.wheelSelection
+import io.valdiroutes.app_ui.ui.wheelTreeColumns
 import io.valdiroutes.pages.ColumnWheelConfig
 import io.valdiroutes.pages.TimeWheelConfig
 import io.valdiroutes.pages.TreeWheelConfig
 import io.valdiroutes.pages.WheelTreeNode
 
-/** Native children own their drags, including at the ends of a wheel, inside Valdi and sheet scroll hosts. */
+/** AppUI owns the wheel controls; this adapter owns Valdi input, models, and callbacks. */
 abstract class ValdiWheelView(context: Context) : NativeWheelBody(context), ValdiTouchTarget,
     ValdiRecyclableView {
     var onChange: ValdiFunction? = null

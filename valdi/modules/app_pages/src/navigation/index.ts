@@ -8,15 +8,14 @@ import { type NavigationOptions, resolveNavigation } from './options';
 
 export type { NavigationOptions } from './options';
 
-export type Presentation = 'push' | 'sheet' | 'compactSheet';
 export type FormLayout = 'scroll' | 'plain';
 export type RouteName = keyof typeof routes.pages;
 export type TabName = NonNullable<typeof routes.tabs>['items'][number]['route'];
 export type RouteParams = { [N in RouteName]: NonNullable<(typeof routes.pages)[N]['_params']> };
 export type RouteResults = { [N in RouteName]: NonNullable<(typeof routes.pages)[N]['_result']> };
 type NavigateArgs<R extends RouteName> = {} extends RouteParams[R]
-  ? [params?: RouteParams[R], presentation?: Presentation, options?: NavigationOptions]
-  : [params: RouteParams[R], presentation?: Presentation, options?: NavigationOptions];
+  ? [params?: RouteParams[R], options?: NavigationOptions]
+  : [params: RouteParams[R], options?: NavigationOptions];
 
 export function readParams<R extends RouteName>(viewModel: PageViewModel): RouteParams[R] {
   return snapshotRouteData(viewModel.params) as RouteParams[R];
@@ -35,20 +34,19 @@ export interface StackPage extends HostStackPage {
 export const router = {
   /** Throws on invalid options, before anything is pushed. */
   push<R extends RouteName>(route: R, ...args: NavigateArgs<R>) {
-    const [params = {}, presentation = 'push', options] = args;
-    navigationHost().push(route, snapshotRouteData(params), presentation, navigationOptions(route, options));
+    const [params = {}, options] = args;
+    navigationHost().push(route, snapshotRouteData(params), navigationOptions(route, options));
   },
 
   /** Resolves with the page's result, or undefined when it closes without one. */
   pushForResult<R extends RouteName>(route: R, ...args: NavigateArgs<R>): Promise<RouteResults[R] | undefined> {
-    const [params = {}, presentation = 'push', options] = args;
+    const [params = {}, options] = args;
     const payload = snapshotRouteData(params);
     const navigation = navigationOptions(route, options);
     return new Promise((resolve, reject) => {
       navigationHost().pushForResult(
         route,
         payload,
-        presentation,
         navigation,
         (result, canceled) => {
           try {
@@ -61,12 +59,12 @@ export const router = {
     });
   },
 
-  /** Replaces the top page (closing a sheet over it first). */
+  /** Replaces the top page. */
   replace<R extends RouteName>(route: R, params: RouteParams[R], options?: NavigationOptions) {
     navigationHost().replace(route, snapshotRouteData(params), navigationOptions(route, options));
   },
 
-  /** Closes the top `delta` pages, sheets and full-screen pages included; never the root. */
+  /** Closes the top `delta` pages, including full-screen covers; never the root. */
   back(delta = 1) {
     navigationHost().back(delta);
   },
@@ -93,7 +91,7 @@ export const router = {
     navigationHost().switchTab(tab);
   },
 
-  /** The stack from its root to the top page, sheet last; tab pages are not on it. */
+  /** The stack from its root to the top page; tab pages are not on it. */
   getCurrentPages(): Promise<StackPage[]> {
     return new Promise((resolve, reject) => navigationHost().currentPages(pages => {
       try {

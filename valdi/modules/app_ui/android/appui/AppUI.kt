@@ -1,6 +1,5 @@
 package io.valdiroutes.app_ui.appui
 
-import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.ComponentActivity
@@ -8,7 +7,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.valdiroutes.app_ui.ui.AttachmentAsset
-import io.valdiroutes.app_ui.ui.AttachmentCache
 import io.valdiroutes.app_ui.ui.AttachmentPicker
 import io.valdiroutes.app_ui.ui.CodeScanner
 import io.valdiroutes.app_ui.ui.ScanCodeResult
@@ -16,9 +14,7 @@ import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withContext
 
 // The native side of `api` (valdi/modules/app_pages/src/api.ts), after ExpoNativeRoutes' AppUI: Valdi pages reach it
 // through AppUIHost, native pages call NativeApp.ui directly. Every page here is drawn by the host, so the modal is

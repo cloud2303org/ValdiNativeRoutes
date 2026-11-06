@@ -16,11 +16,12 @@ const bluetooth = (name: string) => path.join(modules, 'bluetooth/src', name.end
 const requireApp = createRequire(path.join(modules, 'app_pages/package.json'));
 const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 
-// Execute the real service modules, including nativeCall, host installation, the shared
-// permission queue and NFC event/byte adapters. Only Device and native hosts are supplied.
+// Execute the real service modules, including nativeCall, generated native entry lookup, the shared
+// permission queue and NFC event/byte adapters. Only Device and native entries are supplied.
 // Everything stays in memory: no build pipeline, generated files or source links.
-function runtime(platform: 'android' | 'ios', sdk = 36, device?: object, legacyProvider = false) {
+function runtime(platform: 'android' | 'ios', sdk = 36, device?: object) {
   const context = vm.createContext({ console, Error, ArrayBuffer, Uint8Array });
+  const scopes: string[] = [];
   const cache = new Map<string, { exports: any }>();
   const load = (file: string): any => {
     const prior = cache.get(file);
@@ -35,13 +36,14 @@ function runtime(platform: 'android' | 'ios', sdk = 36, device?: object, legacyP
     assert.deepEqual(emitted.diagnostics, [], `transpile diagnostics for ${file}`);
     vm.runInContext(`(function(require,module,exports){${emitted.outputText}\n})`, context, { filename: file })(
       (name: string) => {
+        if (name === 'valdi_core/src/NativeReferences') return { withGlobalNativeRefs: (name: string, body: () => unknown) => {
+          scopes.push(name);
+          try { return body(); } finally { scopes.pop(); }
+        } };
         if (name === 'valdi_core/src/Device')
           return { Device: device ?? { getSystemType: () => platform, isAndroid: () => platform === 'android' } };
         if (name === 'valibot') return requireApp('valibot');
-        const nativeModules = ['Permissions', 'Wifi', 'Nfc'];
-        if (nativeModules.some(module => name === `./${module}`)) return {
-          getHost() { throw Error('Native module collaborator was not installed'); }, getAndroidSdk: () => sdk,
-        };
+        if (Object.hasOwn(nativeModules, name)) return nativeModules[name];
         if (/^(native_common|permissions|wifi|nfc)\//.test(name)) return load(path.join(modules, name + '.ts'));
         assert.ok(name.startsWith('.'), `Unexpected dependency: ${name}`);
         return load(`${path.resolve(path.dirname(file), name)}.ts`);
@@ -68,17 +70,15 @@ function runtime(platform: 'android' | 'ios', sdk = 36, device?: object, legacyP
     },
     async openSettings() {},
   };
+  const nativeModules: Record<string, { getHost: () => any; getAndroidSdk?: () => number }> = {
+    './Permissions': { getHost: () => host, getAndroidSdk: () => sdk },
+    './Wifi': { getHost() { throw Error('Native Wi-Fi entry is unavailable'); } },
+    './Nfc': { getHost() { throw Error('Native NFC entry is unavailable'); } },
+  };
   const permissions = load(service('permissions/index'));
-  load(service('permissions/PermissionHost')).installPermissionHost(host, sdk);
   const blePermissions = load(bluetooth('permissions'));
-  blePermissions.configureBluetoothPermissions(legacyProvider ? {
-    isAndroid: permissions.isAndroid,
-    androidSdk: permissions.androidSdk,
-    requestAndroidPermissions: permissions.requestAndroidPermissions,
-    serializePermissionRequest: permissions.serializePermissionRequest,
-  } : permissions);
   return {
-    load, permissions, blePermissions, host, grants, checks, prompts,
+    load, permissions, blePermissions, host, grants, checks, prompts, nativeModules, scopes,
     ble: load(bluetooth('permission')),
     wifi: () => load(service('wifi/permission')),
   };
@@ -107,6 +107,8 @@ test('Owned service sources pass strict noEmit against the real upstream Device 
     baseUrl: root,
     paths: {
       'valdi_core/*': [path.join(upstream, 'src/valdi_modules/src/valdi/valdi_core/*')],
+      'valdi_tsx/*': [path.join(upstream, 'src/valdi_modules/src/valdi/valdi_tsx/*')],
+      'coreutils/*': [path.join(upstream, 'src/valdi_modules/src/valdi/coreutils/*')],
       '*': [path.join(modules, '*')],
     },
   });
@@ -116,6 +118,29 @@ test('Owned service sources pass strict noEmit against the real upstream Device 
     getCurrentDirectory: () => root,
     getNewLine: () => '\n',
   }));
+});
+
+test('Wi-Fi and NFC bind cached native events under application reference scopes', () => {
+  const f = runtime('android');
+  for (const [entry, module, getter, attribution] of [
+    ['./Wifi', 'wifi/WifiHost', 'wifiHost', 'wifi'],
+    ['./Nfc', 'nfc/NfcHost', 'nfcHost', 'nfc'],
+  ]) {
+    let retrievals = 0;
+    let bindings = 0;
+    f.nativeModules[entry].getHost = () => {
+      retrievals++;
+      assert.equal(f.scopes.at(-1), attribution);
+      return { setEvents: () => { bindings++; assert.equal(f.scopes.at(-1), attribution); } };
+    };
+    const facade = f.load(service(module));
+    assert.equal(retrievals, 0);
+    const host = facade[getter]();
+    assert.equal(facade[getter](), host);
+    assert.equal(retrievals, 1);
+    assert.equal(bindings, 1);
+    assert.deepEqual(f.scopes, []);
+  }
 });
 
 test('PermissionHost grants require canonical values and a result per requested permission', async () => {
@@ -142,7 +167,7 @@ test('PermissionHost checks reject non-boolean values instead of accepting truth
   }
 });
 
-test('Android BLE permission sets and legacy provider keep working', async () => {
+test('BLE permission sets use the shared service without initialization', async () => {
   for (const [sdk, mode, expected] of [
     [36, 'central', ['BLUETOOTH_SCAN', 'BLUETOOTH_CONNECT']],
     [31, 'peripheral', ['BLUETOOTH_ADVERTISE', 'BLUETOOTH_CONNECT']],
@@ -154,9 +179,9 @@ test('Android BLE permission sets and legacy provider keep working', async () =>
     assert.equal(await f.ble.requestBlePermissions(mode), true);
     assert.deepEqual(f.prompts, expected.length ? [expected.map(name => `android.permission.${name}`)] : []);
   }
-  // Execute the BLE entry point using the original provider shape, with mobile permission fields.
+  // Both platforms use the module-owned shared permission service.
   for (const isAndroid of [false, true]) {
-    const f = runtime(isAndroid ? 'android' : 'ios', 36, undefined, true);
+    const f = runtime(isAndroid ? 'android' : 'ios', 36);
     assert.equal(await f.ble.requestBlePermissions(), true);
     assert.deepEqual(f.prompts, isAndroid ? [[
       'android.permission.BLUETOOTH_SCAN', 'android.permission.BLUETOOTH_CONNECT',
@@ -186,7 +211,7 @@ test('Android Wi-Fi SDK sets and Android 12 precise location pairing are preserv
 test('iOS Wi-Fi scan remains unavailable, connect approved and info uses serialized native location flow', async () => {
   const f = runtime('ios', 0);
   const calls: string[] = [];
-  f.load(service('wifi/WifiHost')).installWifiHost({
+  f.nativeModules['./Wifi'].getHost = () => ({
     setEvents() {},
     async getLocationPermissionState() { calls.push('check'); return { status: 'denied', canAskAgain: true }; },
     async requestLocationPermission() { calls.push('request'); return granted; },
@@ -214,7 +239,7 @@ test('Android NFC retain discovery, host tech strings, byte copying and stale ha
     const calls: string[] = [];
     const reply = new Uint8Array([0, 0x90, 0]);
     let sent: Uint8Array | undefined;
-    f.load(service('nfc/NfcHost')).installNfcHost({
+    f.nativeModules['./Nfc'].getHost = () => ({
       setEvents(value: any) { events = value; },
       async startDiscovery() { calls.push('start'); },
       async stopDiscovery() { calls.push('stop'); },
@@ -255,7 +280,7 @@ for (const inputType of ['ArrayBuffer', 'Uint8Array subview']) {
     let events: any;
     let resolve!: (value: Uint8Array) => void;
     let sent: Uint8Array | undefined;
-    f.load(service('nfc/NfcHost')).installNfcHost({
+    f.nativeModules['./Nfc'].getHost = () => ({
       setEvents(value: any) { events = value; },
       async startDiscovery() {},
       transceive(_handle: any, data: Uint8Array) {
@@ -283,7 +308,7 @@ for (const inputType of ['ArrayBuffer', 'Uint8Array subview']) {
 test('NFC native adapter forwards owned command and record bytes without another snapshot', async () => {
   const f = runtime('android');
   const sent: Uint8Array[] = [];
-  f.load(service('nfc/NfcHost')).installNfcHost({
+  f.nativeModules['./Nfc'].getHost = () => ({
     setEvents() {},
     async transceive(_handle: any, data: Uint8Array) { sent.push(data); return data; },
     async writeNdefMessage(_handle: any, records: any[]) {
@@ -305,7 +330,7 @@ test('Android NDEF snapshots nested byte views and strings before asynchronous w
   let records: any[];
   let texts: string[];
   let uris: string[];
-  f.load(service('nfc/NfcHost')).installNfcHost({
+  f.nativeModules['./Nfc'].getHost = () => ({
     setEvents(value: any) { events = value; },
     async startDiscovery() {},
     async writeNdefMessage(_handle: any, value: any[], urls: string[], strings: string[]) {
@@ -340,7 +365,7 @@ test('Android public NFC availability and permission paths preserve host state w
     const f = runtime(platform);
     let calls = 0;
     let state = { supported: true, enabled: true, foreground: true, permissionGranted: false };
-    f.load(service('nfc/NfcHost')).installNfcHost({
+    f.nativeModules['./Nfc'].getHost = () => ({
       setEvents() {},
       async getAvailability() {
         calls++;
@@ -369,7 +394,7 @@ test('Android public NFC availability and permission paths preserve host state w
 
 test('iOS public NFC availability and permission paths stay unavailable without native access', async () => {
   const f = runtime('ios', 0);
-  f.load(service('nfc/NfcHost')).installNfcHost({
+  f.nativeModules['./Nfc'].getHost = () => ({
     setEvents() {},
     async getAvailability() { assert.fail('iOS must not query the native NFC host'); },
   });
@@ -386,7 +411,7 @@ test('iOS public NFC availability and permission paths stay unavailable without 
 test('Android public NFC permission paths retain native error mapping', async () => {
   for (const platform of ['android'] as const) {
     const f = runtime(platform);
-    f.load(service('nfc/NfcHost')).installNfcHost({
+    f.nativeModules['./Nfc'].getHost = () => ({
       setEvents() {},
       async getAvailability() { throw new Error('E_NFC_13019:normal permission missing'); },
     });

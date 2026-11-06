@@ -1,4 +1,3 @@
-import SwiftUI
 import UIKit
 
 extension UIColor {
@@ -22,8 +21,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 }
 
 /// Holds the page stack once the route table has loaded, and presents the full-screen cover. Nothing in UIKit avoids
-/// the keyboard: KeyboardObserver reports its height once, and each page container pads itself (PageContainerView).
-/// Sheets are drawn in the same window by SheetLayerView, not presented modally.
+/// the keyboard: KeyboardObserver reports its height continuously, and each page container pads itself (PageContainerView).
 final class RootController: UIViewController {
     private var navigator: Navigator?
 
@@ -43,7 +41,7 @@ final class RootController: UIViewController {
     override var preferredStatusBarStyle: UIStatusBarStyle { navigator?.statusBarStyle ?? .default }
 }
 
-/// The full-screen cover: its stack, and the sheet above it while the cover is in front.
+/// The full-screen cover with its own stack.
 final class StackHostController: UIViewController {
     private let stack: StackController
     private weak var navigator: Navigator?
@@ -200,52 +198,6 @@ final class CustomTabsController: UIViewController, TabsContainer {
     }
 }
 
-/// What a native page gets: its params, and the navigator it shares with the Valdi pages.
-struct NativePage {
-    let entry: PageEntry
-    let navigator: Navigator
-
-    var params: [String: Any] { entry.params }
-
-    /// Closes this page and delivers the result to whoever opened it with pushForResult.
-    func finish(_ result: [String: Any]) {
-        navigator.finish(entry.id, result: result)
-    }
-
-    func back() { navigator.cancel(entry.id) }
-
-    /// As Page.setStatusBarStyle: "auto", "light" or "dark"; reset to "auto" each time the page comes back.
-    func setStatusBarStyle(_ style: String) {
-        precondition(["auto", "light", "dark"].contains(style), "Bad status bar style: \(style)")
-        navigator.setStatusBarStyle(style)
-    }
-}
-
-/// The native pages, by route: the routes with kind 'native' in routes.ts. A UIKit controller or a SwiftUI view.
-enum NativeScreens {
-    private static var screens: [String: (NativePage) -> UIViewController] = registerDefaults()
-
-    static func register(_ route: String, _ make: @escaping (NativePage) -> UIViewController) {
-        precondition(screens[route] == nil, "Duplicate native screen: \(route)")
-        screens[route] = make
-    }
-
-    static func register<Content: View>(_ route: String, _ make: @escaping (NativePage) -> Content) {
-        register(route) { UIHostingController(rootView: make($0)) as UIViewController }
-    }
-
-    static func contains(_ name: String) -> Bool { screens[name] != nil }
-
-    static func make(_ page: NativePage) -> UIViewController {
-        guard let make = screens[page.entry.definition.nativeName ?? ""] else { fatalError("No native screen registered for \(page.entry.route)") }
-        return make(page)
-    }
-
-    private static func registerDefaults() -> [String: (NativePage) -> UIViewController] {
-        ["picker": { UIHostingController(rootView: PickerScreen(page: $0)) }]
-    }
-}
-
 private func embed(_ child: UIViewController, in parent: UIViewController) {
     parent.addChild(child)
     child.view.frame = parent.view.bounds
@@ -272,7 +224,7 @@ final class PageController: UIViewController {
 
     override func loadView() {
         guard entry.definition.kind == "valdi" else { return super.loadView() }
-        view = PageContainerView(entry: entry, navigator: navigator, followsSafeArea: true)
+        view = PageContainerView(entry: entry, navigator: navigator)
     }
 
     override func viewDidLoad() {
@@ -310,23 +262,19 @@ final class PageController: UIViewController {
 }
 
 /// Holds a page's root view and is the only place that handles the keyboard: the root view's bottom moves up by the
-/// keyboard height, and the bottom inset drops by the part of it the keyboard covers. A fixed-height sheet therefore
-/// shrinks its page, while a compact sheet, sized to its content plus the keyboard, rides up with it.
+/// keyboard height, and the bottom safe-area inset drops by the part of it the keyboard covers.
 final class PageContainerView: UIView {
     let entry: PageEntry
     private let navigator: Navigator
-    /// A full-screen page keeps clear of its own safe area; a sheet sets `baseInsets` itself.
-    private let followsSafeArea: Bool
     /// Insets without the keyboard.
-    var baseInsets = UIEdgeInsets.zero {
+    private var baseInsets = UIEdgeInsets.zero {
         didSet { if baseInsets != oldValue { applyInsets() } }
     }
     private var keyboardSubscription: KeyboardSubscription?
 
-    init(entry: PageEntry, navigator: Navigator, followsSafeArea: Bool) {
+    init(entry: PageEntry, navigator: Navigator) {
         self.entry = entry
         self.navigator = navigator
-        self.followsSafeArea = followsSafeArea
         super.init(frame: .zero)
         keyboardSubscription = KeyboardObserver.shared.observe { [weak self] _ in self?.keyboardDidMove() }
     }
@@ -357,7 +305,7 @@ final class PageContainerView: UIView {
 
     override func safeAreaInsetsDidChange() {
         super.safeAreaInsetsDidChange()
-        if followsSafeArea { baseInsets = safeAreaInsets }
+        baseInsets = safeAreaInsets
     }
 
     override func didMoveToWindow() {
@@ -369,7 +317,7 @@ final class PageContainerView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        if followsSafeArea { baseInsets = safeAreaInsets }
+        baseInsets = safeAreaInsets
         // Created on the first layout, once the insets are known; never again for a page that has left.
         guard let rootView = entry.rootView ?? (entry.removed ? nil : createRootView()) else { return }
         if rootView.superview !== self { addSubview(rootView) }
@@ -383,82 +331,5 @@ final class PageContainerView: UIView {
         entry.rootView = rootView
         entry.appliedInsets = insets
         return rootView
-    }
-}
-
-/// A sheet over the front layer, in the same window (see SheetHostView). 'sheet' is 75% of the window;
-/// 'compactSheet' is its form plus the keyboard, so the whole sheet rides up with the keyboard.
-final class SheetLayerView: UIView {
-    let entry: PageEntry
-    let host = SheetHostView()
-    private let content: PageContainerView
-    private var keyboardSubscription: KeyboardSubscription?
-
-    init(entry: PageEntry, navigator: Navigator) {
-        self.entry = entry
-        content = PageContainerView(entry: entry, navigator: navigator, followsSafeArea: false)
-        super.init(frame: .zero)
-        host.setContent(content)
-        host.onClosed = { [entry] byUser in
-            // Dragged down or scrim tapped: the page did not finish, so it is cancelled.
-            if byUser { entry.close(result: nil, canceled: true) }
-            navigator.onSheetHidden()
-        }
-        addSubview(host)
-        keyboardSubscription = KeyboardObserver.shared.observe { [weak self] _ in self?.updateOpenHeight() }
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        host.frame = bounds
-        // The sheet has no top inset; the page keeps clear of the home indicator.
-        content.baseInsets = UIEdgeInsets(top: 0, left: safeAreaInsets.left, bottom: safeAreaInsets.bottom,
-                                          right: safeAreaInsets.right)
-        updateOpenHeight()
-    }
-
-    override func safeAreaInsetsDidChange() {
-        super.safeAreaInsetsDidChange()
-        setNeedsLayout()
-    }
-
-    private func updateOpenHeight() {
-        let keyboard = KeyboardObserver.shared.height
-        switch entry.presentation {
-        case .compactSheet:
-            host.openHeight = SheetHostView.handleHeight + 340 + max(0, safeAreaInsets.bottom - keyboard) + keyboard
-        default:
-            host.openHeight = bounds.height * 0.75
-        }
-    }
-}
-
-private let fruits = ["苹果", "香蕉", "橙子", "葡萄", "西瓜"]
-
-/// A plain SwiftUI page in the same stack, returning a result to the Valdi page that opened it.
-struct PickerScreen: View {
-    let page: NativePage
-
-    var body: some View {
-        List {
-            Section("SwiftUI 页面，选一项返回给 Valdi 页面") {
-                ForEach(fruits, id: \.self) { fruit in
-                    Button(fruit) { page.finish(["value": fruit]) }
-                }
-            }
-            Button("从原生页 push Valdi 详情页") {
-                page.navigator.open("detail", params: ["id": 100, "from": "原生页"])
-            }
-            Button("原生调用 switchTab('wheels')") { page.navigator.switchTab("wheels") }
-            // Native pages call the same AppUI directly, without going through JS.
-            Button("原生调用 showModal") {
-                Task {
-                    let answer = try await app.ui.showModal(ModalOptions(title: "原生调用", content: "app.ui.showModal"))
-                    _ = try await app.ui.showToast(ToastOptions(title: answer.confirm ? "原生页点了确定" : "原生页点了取消", icon: "none"))
-                }
-            }
-        }
     }
 }

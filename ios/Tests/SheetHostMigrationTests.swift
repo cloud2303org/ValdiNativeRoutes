@@ -79,7 +79,7 @@ final class SheetHostMigrationTests: XCTestCase {
   }
 
   func testEntranceHitTestingTracksRenderedKeyframes() async throws {
-    let shell = SheetHostView()
+    let shell = AppUISheetHostView()
     shell.openHeight = 500
     let content = UIView()
     let button = UIButton(frame: CGRect(x: 20, y: 20, width: 180, height: 90))
@@ -209,28 +209,13 @@ final class SheetHostMigrationTests: XCTestCase {
     }
   }
 
-  func testPickersShareShellAndNavigationDefaultsRemain() async throws {
+  func testPickersShareShellWithSingleHeaderHandle() throws {
     for picker in [ColumnPicker(frame: .zero), TimePicker(frame: .zero)] as [UIView] {
       attach(picker)
       XCTAssertEqual(descendants(picker).filter { $0 is AppUISheetHostView }.count, 1)
       XCTAssertFalse(try host(picker).showsHandle, "The existing header supplies the sole handle")
       picker.removeFromSuperview()
     }
-    let shell = SheetHostView()
-    let content = UIView()
-    shell.setContent(content)
-    shell.openHeight = root.bounds.height * 0.75
-    attach(shell)
-    await settle(shell)
-    XCTAssertTrue(shell.showsHandle)
-    XCTAssertEqual(content.bounds.height, shell.openHeight - SheetHostView.handleHeight, accuracy: 1)
-    shell.openHeight = SheetHostView.handleHeight + 340 + max(0, root.safeAreaInsets.bottom)
-    shell.layoutIfNeeded()
-    XCTAssertEqual(content.bounds.height, 340 + root.safeAreaInsets.bottom, accuracy: 1)
-    let closed = expectation(description: "navigation user dismissal")
-    shell.onClosed = { byUser in XCTAssertTrue(byUser); closed.fulfill() }
-    try tapScrim(shell)
-    await fulfillment(of: [closed], timeout: 3)
   }
 
   func testKeyboardPaddingIsAppliedOnceOnlyToScrollableLayouts() async throws {

@@ -114,7 +114,7 @@ export class RouteAnimationPage extends Page<PageViewModel, {}, PageContext> {
 
   private handleOpen = (name: string) => {
     try {
-      this.router.push('animation', { animation: name }, 'push', EXAMPLES[name].options);
+      this.router.push('animation', { animation: name }, EXAMPLES[name].options);
     } catch (error) {
       api.showToast({ title: String((error as Error).message), icon: 'none' });
     }

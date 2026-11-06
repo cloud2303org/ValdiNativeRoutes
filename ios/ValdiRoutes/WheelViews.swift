@@ -1,8 +1,9 @@
 import UIKit
 import ValdiRuntime
 
-/// The native wheels a Valdi page embeds with `<custom-view>` (WheelPickers.tsx), drawn by NativeRoutesUI as in
-/// the presented pickers. `config` is a generated object, checked and normalized in TS (schemas.ts); `onChange` gets a string or path array
+/// The native wheels a Valdi page embeds with `<custom-view>` (WheelPickers.tsx), using the controls in
+/// app_ui/ios/ui/Picker.swift, as do the presented pickers. `config` is a generated object, checked and normalized in TS
+/// (schemas.ts); `onChange` gets a string or path array
 /// only when the user settles the wheel, never while attributes are applied. A value the page passes back unchanged
 /// leaves the wheel as is, and so does one it passes back late, after the wheel has moved on (isEcho).
 /// Valdi binds each class's own attributes, so the subclasses inherit these two.

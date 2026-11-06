@@ -87,8 +87,6 @@ const dark: ColorTokens = {
 
 export const COLORS = { light, dark } as const;
 
-export type ColorScheme = keyof typeof COLORS;
-
 export type ColorName = keyof ColorTokens;
 
 /** The palette names, to set as colors: `<view backgroundColor={color.surface} />`. */

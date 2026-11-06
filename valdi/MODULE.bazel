@@ -17,6 +17,8 @@ archive_override(
     module_name = "valdi",
     urls = [VALDI_URL],
     strip_prefix = VALDI_PREFIX,
+    patches = ["//bzl/patches:clientsql-drizzle.patch"],
+    patch_strip = 1,
 )
 
 node_compiler_tools = use_repo_rule("//bzl/node_compiler:repositories.bzl", "node_compiler_tools")

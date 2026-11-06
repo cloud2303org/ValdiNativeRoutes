@@ -1,7 +1,6 @@
 import { Style } from 'valdi_core/src/Style';
-import { systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
+import { systemFont } from 'valdi_core/src/SystemFont';
 import { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
-import { Button } from './Button';
 import { PageContext, PageViewModel } from './Page';
 import { Page } from './PageComponent';
 import { PageHeader } from './PageHeader';
@@ -76,8 +75,7 @@ interface State {
 }
 
 /**
- * The wheel components (WheelPickers.tsx) inside a scrolling page. Opened as a sheet from itself, they show that a
- * wheel drag moves neither the scroll view nor the sheet.
+ * The wheel components (WheelPickers.tsx) inside a scrolling page.
  *
  * @Component({viewModel: 'PageViewModel', context: 'PageContext'})
  * @ExportModel({ios: 'VRWheelPage', android: 'io.valdiroutes.pages.WheelPage'})
@@ -98,21 +96,16 @@ export class WheelPage extends Page<PageViewModel, State, PageContext> {
   onRender(): void {
     const { insets, presentation } = this.viewModel;
     const { location, date, sampledAt, region } = this.state;
-    const sheet = presentation === 'sheet' || presentation === 'compactSheet';
 
-    <view style={styles.page} backgroundColor={sheet ? 'white' : '#f3f4f6'}>
+    <view style={styles.page} backgroundColor="#f3f4f6">
       <scroll style={styles.scroll}>
         <view
-          paddingTop={insets.top + (sheet ? 4 : 12)}
+          paddingTop={insets.top + 12}
           paddingBottom={insets.bottom + 32}
           paddingLeft={insets.left + 20}
           paddingRight={insets.right + 20}
         >
-          {sheet ? (
-            <label style={styles.sheetTitle} value="Sheet 里的滚轮" />
-          ) : (
-            <PageHeader title="页面内滚轮" subtitle="ColumnPicker / TimePicker / TreePicker" onBack={this.viewModel.presentation === 'tab' ? undefined : this.handleBack} />
-          )}
+          <PageHeader title="页面内滚轮" subtitle="ColumnPicker / TimePicker / TreePicker" onBack={presentation === 'tab' ? undefined : this.handleBack} />
 
           <label
             style={styles.section}
@@ -137,7 +130,6 @@ export class WheelPage extends Page<PageViewModel, State, PageContext> {
             <TimePicker mode="datetime" value={sampledAt} onChange={this.handleSampledAt} />
           </view>
 
-          {sheet ? undefined : <Button id="sheet" title="在 Sheet 里打开" onTap={this.handleSheet} />}
         </view>
       </scroll>
     </view>;
@@ -151,10 +143,6 @@ export class WheelPage extends Page<PageViewModel, State, PageContext> {
 
   private handleRegion = (region: string[]) => this.setState({ region });
 
-  private handleSheet = () => {
-    this.router.push('wheels', {}, 'sheet');
-  };
-
   private handleBack = () => {
     this.router.back();
   };
@@ -163,7 +151,6 @@ export class WheelPage extends Page<PageViewModel, State, PageContext> {
 const styles = {
   page: new Style<View>({ width: '100%', height: '100%' }),
   scroll: new Style<ScrollView>({ width: '100%', height: '100%' }),
-  sheetTitle: new Style<Label>({ color: '#111827', font: systemSemiboldFont(18), marginBottom: 4 }),
   section: new Style<Label>({ color: '#374151', font: systemFont(14), margin: '16 0 8 0' }),
   card: new Style<View>({ backgroundColor: 'white', borderRadius: 12, padding: '8 12' }),
 };

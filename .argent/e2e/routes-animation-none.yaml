@@ -1,7 +1,7 @@
 steps:
   - run: home
   # Scroll past the last rows first: 路由动画 sits under the bottom tab bar otherwise.
-  - scroll-to: { target: { text: "Sheet + 普通 view + 输入框" } }
+  - scroll-to: { target: { text: "全屏页 + 普通 view + 输入框" } }
   - scroll-to: { target: { text: "路由动画" } }
   - tap: { text: "路由动画" }
   - await: { visible: { text: "每个按钮用对应的 options 打开下一页" } }

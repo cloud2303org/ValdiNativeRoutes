@@ -1,6 +1,6 @@
 #!/bin/sh
 # Rebuild the Valdi runtime into ios/Frameworks/ValdiRuntime.xcframework: the runtime, Valdi's own modules (valdi_core,
-# valdi_tsx, client_sql) and the app's C++ (valdi/native: @ExportModule implementations and their bindings). app_pages
+# valdi_tsx) and the app's C++ (valdi/native: @ExportModule implementations and their bindings). app_pages
 # and the npm packages are built by the app's Xcode build (tools/valdi-rolldown), its Objective-C bindings are
 # ios/Generated/valdi, so this is only needed when the pinned Valdi fork/toolchain or valdi/native changes.
 # Builtin modules use the local Node backend by default; compiler changes also require a new export.

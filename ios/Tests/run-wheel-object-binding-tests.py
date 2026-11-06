@@ -31,7 +31,6 @@ def main():
                root / "ios/Tests/WheelObjectBindingTests.swift",
                root / "ios/Tests/WheelBindingRecorder.h",
                root / "ios/Tests/WheelBindingRecorder.m",
-               root / "ios/ValdiRoutes/SheetHostView.swift",
                root / "ios/Generated/valdi/app_pages",
                root / "ios/Generated/valdi/app_pagesTypes",
                root / "ios/Generated/valdi/AppUI",

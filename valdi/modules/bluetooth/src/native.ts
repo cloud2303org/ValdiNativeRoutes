@@ -1,4 +1,4 @@
-import { nativeCall } from './nativeCall';
+import { nativeCall } from 'native_common/src/nativeCall';
 import {
   type BleAdapterState,
   type BleCharacteristicValue,
@@ -129,5 +129,3 @@ export const nativeBLE = {
     listen('peripheralConnectionStateChange', cb),
   removePeripheralConnectionStateListener: (id: number) => unlisten('peripheralConnectionStateChange', id),
 };
-
-export type NativeBLE = typeof nativeBLE;

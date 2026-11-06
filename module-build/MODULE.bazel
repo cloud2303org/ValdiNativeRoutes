@@ -19,6 +19,8 @@ archive_override(
     module_name = "valdi",
     urls = [VALDI_URL],
     strip_prefix = VALDI_PREFIX,
+    patches = ["//bzl/patches:clientsql-drizzle.patch"],
+    patch_strip = 1,
 )
 
 # Valdi internal sub-modules: local_path_override in Valdi's own MODULE.bazel

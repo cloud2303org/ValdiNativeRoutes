@@ -26,8 +26,7 @@ export type VisibleEffect = () => void | (() => void);
  * background. A page that is closed gets onDestroy only, as a mini program's onUnload.
  *
  * The status bar is one for the app, as ExpoNativeRoutes' StatusBar.setBarStyle: a page sets it to its
- * `statusBarStyle` each time it shows, so going back to a page restores its style. A sheet leaves the one of the page
- * under it.
+ * `statusBarStyle` each time it shows, so going back to a page restores its style.
  *
  * Its type arguments are StatefulComponent's, so a page swaps only the base class: the @Component annotation names
  * PageViewModel and PageContext, and Valdi's compiler needs them used as types in the page's file.
@@ -96,10 +95,7 @@ export abstract class Page<
   }
 
   private applyStatusBar(): void {
-    const { presentation } = this.viewModel;
-    if (presentation !== 'sheet' && presentation !== 'compactSheet') {
-      navigationHost().setStatusBarStyle(this.statusBarStyle);
-    }
+    navigationHost().setStatusBarStyle(this.statusBarStyle);
   }
 
   private stopEffects(): void {

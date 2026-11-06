@@ -1,4 +1,74 @@
 //
+// VRAndroidSplashScreenNativeModule.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+
+//
+// VRAndroidSplashScreenNativeModuleFactory.m
+//
+
+#import "app_pagesTypes.h"
+
+@implementation VRAndroidSplashScreenNativeModuleFactory
+
+- (id<VRAndroidSplashScreenNativeModule>)onLoadModule
+{
+    return [self onLoadModule];
+}
+
+- (NSString *)getModulePath
+{
+    return @"app_pages/src/splash/SplashScreenNative";
+}
+
+- (Protocol *)moduleProtocol
+{
+    return @protocol(VRAndroidSplashScreenNativeModule);
+}
+
+@end
+
+//
+// VRAppContextNativeModule.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+
+//
+// VRAppContextNativeModuleFactory.m
+//
+
+#import "app_pagesTypes.h"
+
+@implementation VRAppContextNativeModuleFactory
+
+- (id<VRAppContextNativeModule>)onLoadModule
+{
+    return [self onLoadModule];
+}
+
+- (NSString *)getModulePath
+{
+    return @"app_pages/src/AppContext";
+}
+
+- (Protocol *)moduleProtocol
+{
+    return @protocol(VRAppContextNativeModule);
+}
+
+@end
+
+//
 // VRColumnWheelConfig.m
 //
 
@@ -106,15 +176,6 @@
 
 
 //
-// VRInstallVisionHost.m
-//
-
-#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
-
-#import "app_pagesTypes.h"
-
-
-//
 // VRNavigationHost.m
 //
 
@@ -171,8 +232,8 @@ static id SCValdiBlockCreateOD_v(SCValdiBlockTrampoline trampoline) {
         { .typeEncoding = nil },
     };
     static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
-        {.name = "push", .selName = nil, .type = "f(s, m<s,u>, s, r:'[0]')"},
-        {.name = "pushForResult", .selName = nil, .type = "f(s, m<s,u>, s, r:'[0]', f(m<s,u>, b))"},
+        {.name = "push", .selName = nil, .type = "f(s, m<s,u>, r:'[0]')"},
+        {.name = "pushForResult", .selName = nil, .type = "f(s, m<s,u>, r:'[0]', f(m<s,u>, b))"},
         {.name = "replace", .selName = nil, .type = "f(s, m<s,u>, r:'[0]')"},
         {.name = "back", .selName = nil, .type = "f(d)"},
         {.name = "popToRoot", .selName = nil, .type = "f()"},
@@ -307,6 +368,15 @@ static id SCValdiBlockCreateOD_v(SCValdiBlockTrampoline trampoline) {
 }
 
 @end
+
+
+//
+// VRRequestInitialContentDraw.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+
+#import "app_pagesTypes.h"
 
 
 //
@@ -784,6 +854,41 @@ static id SCValdiBlockCreateOD_v(SCValdiBlockTrampoline trampoline) {
 
 
 //
+// VRVisionNativeModule.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+
+//
+// VRVisionNativeModuleFactory.m
+//
+
+#import "app_pagesTypes.h"
+
+@implementation VRVisionNativeModuleFactory
+
+- (id<VRVisionNativeModule>)onLoadModule
+{
+    return [self onLoadModule];
+}
+
+- (NSString *)getModulePath
+{
+    return @"app_pages/src/vision/Vision";
+}
+
+- (Protocol *)moduleProtocol
+{
+    return @protocol(VRVisionNativeModule);
+}
+
+@end
+
+//
 // VRVisionPrediction.m
 //
 
@@ -851,6 +956,26 @@ static id SCValdiBlockCreateOD_v(SCValdiBlockTrampoline trampoline) {
 }
 
 @end
+
+
+//
+// VRAndroidSplashScreenHost.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
+
+
+//
+// VRAppContextHost.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_pagesTypes.h"
 
 
 //

@@ -22,7 +22,7 @@ function runtime() {
     }).outputText;
     vm.runInContext(`(function(require,module,exports){${output}\n})`, context)(
       (name: string) => {
-        if (name === './MMKV') return { getHost() { throw Error('native storage is not installed'); } };
+        if (name === './MMKV') return { getHost: () => context.nativeStorageHost };
         if (name.startsWith('native_common/')) return load(path.join(appModule('native_common').dir, name.slice('native_common/'.length) + '.ts'));
         return name.startsWith('.') ? load(path.resolve(path.dirname(file), `${name}.ts`)) : requireApp(name);
       },
@@ -35,12 +35,12 @@ function runtime() {
   evaluate(`
     globalThis.writes = [];
     globalThis.records = new Map();
-    storage.installStorageHost({
+    globalThis.nativeStorageHost = {
       get: key => records.has(key) ? { found: true, payload: records.get(key), error: '' }
                                  : { found: false, payload: {}, error: '' },
       set: request => { writes.push(request); records.set(request.key, request.payload); return true; },
       remove: key => records.delete(key), clear: () => records.clear(),
-    });
+    };
     globalThis.api = storage.storageApi((method, cause) => new Error(method + ': ' + cause.message));
   `);
   return { evaluate };
@@ -83,10 +83,10 @@ test('typed reads do not parse bridge data and corrupt records/write failures re
   const { evaluate } = runtime();
   evaluate("api.setStorageSync('key', { ok: true }); JSON.parse = () => { throw Error('no JSON read bridge'); }");
   assert.equal(evaluate("api.getStorageSync('key').ok"), true);
-  evaluate("storage.installStorageHost({ get: () => ({ found: false, payload: {}, error: 'corrupt record' }) })");
+  evaluate("nativeStorageHost.get = () => ({ found: false, payload: {}, error: 'corrupt record' })");
   assert.throws(() => evaluate("api.getStorageSync('key')"), /getStorageSync: corrupt record/);
   const fresh = runtime();
-  fresh.evaluate('storage.installStorageHost({ set: () => false })');
+  fresh.evaluate('nativeStorageHost.set = () => false');
   assert.throws(() => fresh.evaluate("api.setStorageSync('key', 'value')"), /setStorageSync: the store could not write it/);
 });
 

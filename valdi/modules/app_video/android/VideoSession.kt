@@ -13,7 +13,6 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
-import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -36,6 +35,21 @@ internal class VideoSession(
     val playerView = try {
         (LayoutInflater.from(host.context).inflate(R.layout.valdi_video_player, null) as PlayerView).apply {
             player = this@VideoSession.player
+            setFullscreenButtonClickListener { fullscreen ->
+                if (released || pageReleased) return@setFullscreenButtonClickListener
+                try {
+                    val presentation = host.requirePresentation()
+                    // Media3 also calls this listener from programmatic button-state updates.
+                    if (fullscreen && mode == INLINE) presentation.enterFullscreen(this@VideoSession)
+                    else if (!fullscreen && mode == FULLSCREEN) presentation.exitFullscreen(this@VideoSession)
+                } catch (failure: Exception) {
+                    Log.w("ValdiVideo", "Video presentation unavailable", failure)
+                    android.widget.Toast.makeText(context, failure.message ?: "Fullscreen unavailable",
+                        android.widget.Toast.LENGTH_SHORT).show()
+                } finally {
+                    setFullscreenButtonState(mode != INLINE)
+                }
+            }
         }
     } catch (failure: Exception) {
         player.release()
@@ -115,7 +129,6 @@ internal class VideoSession(
                 updatePlayback()
             }
             publishState()
-            host.presentation?.updatePipActions(this@VideoSession)
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -127,7 +140,6 @@ internal class VideoSession(
             }
             playerView.keepScreenOn = isPlaying
             publishState()
-            host.presentation?.updatePipActions(this@VideoSession)
         }
 
         override fun onPlayerError(failure: PlaybackException) {
@@ -136,20 +148,21 @@ internal class VideoSession(
             desiredRate = 0f
             activeBinding?.let(::deliverSnapshot)
             updatePlayback()
-            host.presentation?.updatePipActions(this@VideoSession)
         }
 
-        override fun onVideoSizeChanged(videoSize: VideoSize) {
-            host.presentation?.updatePipActions(this@VideoSession)
+        override fun onEvents(player: Player, events: Player.Events) {
+            // Media3 batches events after its individual callbacks, including reentrant state changes.
+            // Publish system controls from that coherent state, rather than once per callback.
+            if (!released) host.presentation?.updatePipActions(this@VideoSession)
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-            // PlayerView's native fullscreen controls bypass the TS attribute. Record only user controls;
-            // lifecycle pauses and audio-focus suppression must preserve the desired rate.
-            if (!released && mode == FULLSCREEN &&
+            // All PlayerView commands own intent, in every mode. Ignore our own lifecycle writes
+            // (requestedPlayback is installed before Media3 can reenter) and obsolete queued callbacks.
+            if (!released &&
                 reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST &&
                 playWhenReady == player.playWhenReady && playWhenReady != requestedPlayback) {
-                if (playWhenReady) play() else setRate(0f)
+                setNativePlayback(playWhenReady)
             }
             if (!released && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY) {
                 // This system pause still owns intent after the page releases an active PiP.
@@ -161,7 +174,7 @@ internal class VideoSession(
 
         override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
             if (released) return
-            // Fullscreen PlayerView speed controls change Media3 directly. A session-authored change
+            // PlayerView speed controls change Media3 directly. A session-authored change
             // already installed preferredRate before calling Media3, so only external changes differ.
             if (playbackParameters.speed == player.playbackParameters.speed && playbackParameters.speed != preferredRate) {
                 playbackOwned = true
@@ -240,7 +253,8 @@ internal class VideoSession(
         if (released || mode != INLINE) return
         val binding = activeBinding?.takeIf { !it.disposed && it.bound } ?: return
         movePlayerTo(binding.anchor)
-        playerView.useController = false
+        playerView.useController = true
+        playerView.setFullscreenButtonState(false)
     }
 
     fun movePlayerTo(parent: ViewGroup) {
@@ -259,7 +273,7 @@ internal class VideoSession(
         if (rate > 0f) preferredRate = rate
         desiredRate = rate
         if (desiredRate > 0 && completed) seek(0)
-        updatePlayback()
+        updatePlayback(forcePlayWhenReady = true)
     }
 
     fun play() = setRate(preferredRate)
@@ -302,11 +316,11 @@ internal class VideoSession(
         if (!seekOwned && !released && !pageReleased) seek(position)
     }
 
-    fun togglePlayback() {
+    fun setNativePlayback(play: Boolean) {
         if (released) return
-        // PiP remains controllable after the originating page releases its JS ownership.
+        // Native controls retain PiP ownership after releasePage() severs every JS binding.
         playbackOwned = true
-        applyRate(if (desiredRate > 0f) 0f else preferredRate)
+        applyRate(if (play) preferredRate else 0f)
     }
 
     fun seek(position: Long) {
@@ -317,7 +331,7 @@ internal class VideoSession(
         publishState()
     }
 
-    fun updatePlayback() {
+    fun updatePlayback(forcePlayWhenReady: Boolean = false) {
         if (released) return
         val inlineAttached = activeBinding?.let { it.bound && !it.disposed && it.attached } == true
         val livePip = host.presentation?.isLivePip(this) == true
@@ -328,8 +342,14 @@ internal class VideoSession(
         }
         // Install preference while paused too; changing it never changes desired play/pause intent.
         if (player.playbackParameters.speed != preferredRate) player.setPlaybackSpeed(preferredRate)
-        requestedPlayback = desiredRate > 0f && allowed && error.isEmpty()
-        player.playWhenReady = requestedPlayback
+        val nextPlayback = desiredRate > 0f && allowed && error.isEmpty()
+        val changed = requestedPlayback != nextPlayback
+        requestedPlayback = nextPlayback
+        // Do not turn every layout/lifecycle refresh into another play request after audio-focus loss.
+        // Explicit object/native commands can retry play even when intent was already "playing".
+        if (forcePlayWhenReady || (changed && player.playWhenReady != requestedPlayback)) {
+            player.playWhenReady = requestedPlayback
+        }
         publishState()
     }
 
@@ -451,6 +471,7 @@ internal class VideoSession(
         host.main.removeCallbacks(progress)
         clearBindings()
         player.removeListener(listener)
+        playerView.setFullscreenButtonClickListener(null)
         playerView.player = null
         playerView.keepScreenOn = false
         (playerView.parent as? ViewGroup)?.removeView(playerView)

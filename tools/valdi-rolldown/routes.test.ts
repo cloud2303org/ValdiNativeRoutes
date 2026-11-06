@@ -42,6 +42,12 @@ async function fixture(t: TestContext, dev = false) {
 
 /** Execute actual emitted sources; external runtime dependencies must be supplied explicitly. */
 function execute(f: Awaited<ReturnType<typeof fixture>>, dependencies: Record<string, any> = {}) {
+  const nativeNavigation: Record<string, any> = {};
+  dependencies = {
+    'valdi_core/src/NativeReferences': { withGlobalNativeRefs: (_name: string, body: () => unknown) => body() },
+    './AppContext': { getHost: () => ({ getNavigationHost: () => nativeNavigation }) },
+    ...dependencies,
+  };
   const context = vm.createContext({});
   const cache = new Map<string, any>();
   const loaded: string[] = [];
@@ -60,7 +66,7 @@ function execute(f: Awaited<ReturnType<typeof fixture>>, dependencies: Record<st
     );
     return module.exports;
   };
-  return { routes: load(f.routeFile).routes, load, loaded };
+  return { routes: load(f.routeFile).routes, load, loaded, nativeNavigation };
 }
 
 function addCustomBar(f: Awaited<ReturnType<typeof fixture>>) {
@@ -322,6 +328,13 @@ import type { PageContext, PageViewModel } from './Page';
 router.push('home');
 router.push('picker');
 router.push('detail', { id: 123, from: 'test' });
+router.push('detail', { id: 123, from: 'test' }, { android: { animation: 'fade' } });
+// @ts-expect-error route sheets are not a presentation mode
+router.push('detail', { id: 123, from: 'test' }, 'sheet');
+// @ts-expect-error compact route sheets are not a presentation mode
+router.pushForResult('picker', {}, 'compactSheet');
+// @ts-expect-error there is no separate presentation argument before options
+router.push('detail', { id: 123, from: 'test' }, 'push', { animation: 'none' });
 // @ts-expect-error unknown route
 router.push('absent');
 // @ts-expect-error required params cannot be omitted
@@ -385,7 +398,7 @@ test('old JSON declarations, non-components and unresolved image references are 
 
 test('dev icon bytes change emitted routes and refresh the host; production references stay compact', async t => {
   const f = await fixture(t, true);
-  const { routes, load } = execute(f);
+  const { routes, load, nativeNavigation } = execute(f);
   const host = routes.toHost();
   const data = host.tabBar.tabs[0].iconData;
   assert.ok(data && Buffer.from(data, 'base64').length > 0);
@@ -396,7 +409,7 @@ test('dev icon bytes change emitted routes and refresh the host; production refe
   f.plugin.invalidate(f.routeFile);
   assert.notEqual(execute(f).routes.toHost().tabBar.tabs[0].iconData, data);
   const updates: any[] = [];
-  load(path.join(f.module.dir, 'src/NavigationHost.ts')).installNavigation({ updateRoutes: (declaration: any) => updates.push(declaration) });
+  nativeNavigation.updateRoutes = (declaration: any) => updates.push(declaration);
   // Re-evaluate the actual helper to simulate a changed declaration arriving from the dev daemon.
   const config = load(path.join(f.module.dir, 'src/navigation/config.ts'));
   const changed = config.defineRoutes({ pages: routes.pages, tabs: { items: [{ route: 'home', text: 'Changed', icon: { name: 'tab_home', data } }] } });

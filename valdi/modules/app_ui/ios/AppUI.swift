@@ -1,8 +1,8 @@
 import UIKit
 
-// The native side of `api` (valdi/modules/app_pages/src/api.ts), after ExpoNativeRoutes' AppUI: Valdi pages reach it
-// through AppUIHost, native pages call `app.ui` directly. Every page here is drawn by the host, so the modal and the
-// presentations (AppPresenters, on the NativeRoutesUI components) are always the host's own, over whichever page is on top.
+// The module-owned AppUI service, after ExpoNativeRoutes' AppUI: Valdi pages reach it through AppUIHost.
+// The application host supplies presentation context and page lifecycle updates; AppUI and AppPresenters use
+// module-owned native controls to present over whichever page is on top.
 
 struct ModalOptions {
     var title = ""

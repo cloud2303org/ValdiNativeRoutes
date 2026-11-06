@@ -15,7 +15,7 @@ type Call = {
   reject: (error: Error) => void;
 };
 
-// Execute compiler-emitted production TS. Only Bluetooth.getHost is replaced:
+// Execute compiler-emitted production TS with fixture native, permissions and NativeReferences boundaries:
 // validation, write copying, nativeCall, event fanout and runtime state all run.
 // This capability fake models the required native per-device FIFO. It is not
 // evidence that any platform's native implementation meets that requirement.
@@ -24,6 +24,35 @@ function fixture(t: test.TestContext) {
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const source = path.join(root, 'valdi/modules/bluetooth/src');
   mkdirSync(path.join(directory, 'node_modules'));
+  const sharedPermissions = path.join(directory, 'node_modules/permissions/src');
+  const common = path.join(directory, 'node_modules/native_common/src');
+  const framework = path.join(directory, 'node_modules/valdi_core/src');
+  mkdirSync(sharedPermissions, { recursive: true });
+  mkdirSync(common, { recursive: true });
+  mkdirSync(framework, { recursive: true });
+  for (const file of ['bindMethods', 'nativeCall']) {
+    writeFileSync(path.join(common, `${file}.js`), ts.transpileModule(
+      readFileSync(path.join(root, 'valdi/modules/native_common/src', `${file}.ts`), 'utf8'),
+      { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } },
+    ).outputText);
+  }
+  writeFileSync(path.join(sharedPermissions, 'index.js'), `
+    exports.isAndroid = () => false;
+    exports.androidSdk = () => 0;
+    exports.requestAndroidPermissions = async () => ({ status: 'granted' });
+    let tail = Promise.resolve();
+    exports.serializePermissionRequest = (request, checkActive) => {
+      const result = tail.then(() => { checkActive?.(); return request(); });
+      tail = result.then(() => undefined, () => undefined);
+      return result;
+    };
+  `);
+  writeFileSync(path.join(framework, 'NativeReferences.js'), `
+    exports.withGlobalNativeRefs = (attribution, body) => {
+      if (attribution !== 'bluetooth') throw new Error('Expected Bluetooth callback attribution');
+      return body();
+    };
+  `);
   symlinkSync(path.join(root, 'valdi/node_modules/valibot'), path.join(directory, 'node_modules/valibot'), 'junction');
   for (const file of readdirSync(source)) {
     if (!file.endsWith('.ts') || file.endsWith('.d.ts')) continue;
@@ -75,13 +104,6 @@ function fixture(t: test.TestContext) {
   };
   require('./Bluetooth.js').host = host;
   const api = require('./index.js');
-  api.initializeBluetooth({
-    isAndroid: () => false,
-    androidSdk: () => 0,
-    requestAndroidPermissions: async () => ({ status: 'granted' }),
-    serializePermissionRequest: (request: () => Promise<unknown>, checkActive?: () => void) =>
-      Promise.resolve().then(() => { checkActive?.(); return request(); }),
-  });
   return {
     api: api.bluetoothApi(), admitted, started, active, host, require,
     get events() { return events; },

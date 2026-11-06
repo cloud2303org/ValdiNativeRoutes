@@ -1,4 +1,6 @@
 import * as v from 'valibot';
+import { withGlobalNativeRefs } from 'valdi_core/src/NativeReferences';
+import { getHost } from './AppContext';
 import { router } from './navigation';
 
 /**
@@ -16,19 +18,10 @@ export interface TokenStore {
   clear: () => void;
 }
 
-// On globalThis, as NavigationHost: a module Valdi unloads and reloads would lose it.
-const STORE_KEY = '__valdiRoutesTokenStore';
-
-export function installAuth(store: TokenStore): void {
-  (globalThis as any)[STORE_KEY] = store;
-}
+let store: TokenStore | undefined;
 
 function tokenStore(): TokenStore {
-  const store: TokenStore | undefined = (globalThis as any)[STORE_KEY];
-  if (!store) {
-    throw new Error('the token store is not installed');
-  }
-  return store;
+  return store ??= withGlobalNativeRefs('app-auth', () => getHost().getTokenStore());
 }
 
 const tokenSchema = v.pipe(v.string('token must be a string'), v.regex(/\S/, 'token must not be empty'));

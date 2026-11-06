@@ -3,7 +3,7 @@ steps:
   # iOS only: Android's route options have no fullScreen cover.
   - when: { platform: ios }
     steps:
-      - scroll-to: { target: { text: "Sheet + 普通 view + 输入框" } }
+      - scroll-to: { target: { text: "全屏页 + 普通 view + 输入框" } }
       - scroll-to: { target: { text: "路由动画" } }
       - tap: { text: "路由动画" }
       - await: { visible: { text: "全屏覆盖" } }

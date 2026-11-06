@@ -41,20 +41,6 @@ export interface StorageReadReply {
   error: string;
 }
 
-// On globalThis, as AppUIHost: a module Valdi unloads and reloads would lose it.
-const HOST_KEY = '__valdiRoutesStorageHost';
-
-/**
- * Optional explicit host override for embedders; normal apps use the retained native module factory.
- */
-export function installStorageHost(host: StorageHost): void {
-  (globalThis as any)[HOST_KEY] = host;
-}
-
-function storageHost(): StorageHost {
-  return (globalThis as any)[HOST_KEY] ?? getHost();
-}
-
 const storageKey = v.pipe(v.string('key must be a string'), v.regex(/\S/, 'key must not be empty'));
 
 /** Synchronous storage of plain structured values. Missing keys return undefined; invalid data throws ApiError. */
@@ -69,7 +55,7 @@ export function storageApi(fail: (method: string, cause: unknown) => Error) {
   return {
     getStorageSync<T = unknown>(key: string): T | undefined {
       return sync('getStorageSync', () => {
-        const reply = storageHost().get(v.parse(storageKey, key));
+        const reply = getHost().get(v.parse(storageKey, key));
         if (reply.error) throw new Error(reply.error);
         return reply.found ? (reply.payload.value as T) : undefined;
       });
@@ -78,18 +64,18 @@ export function storageApi(fail: (method: string, cause: unknown) => Error) {
     setStorageSync(key: string, data: unknown): void {
       sync('setStorageSync', () => {
         const payload = { value: snapshotStructuredValue(data, 'storage data') };
-        if (!storageHost().set({ key: v.parse(storageKey, key), payload })) {
+        if (!getHost().set({ key: v.parse(storageKey, key), payload })) {
           throw new Error('the store could not write it');
         }
       });
     },
 
     removeStorageSync(key: string): void {
-      sync('removeStorageSync', () => storageHost().remove(v.parse(storageKey, key)));
+      sync('removeStorageSync', () => getHost().remove(v.parse(storageKey, key)));
     },
 
     clearStorageSync(): void {
-      sync('clearStorageSync', () => storageHost().clear());
+      sync('clearStorageSync', () => getHost().clear());
     },
   };
 }

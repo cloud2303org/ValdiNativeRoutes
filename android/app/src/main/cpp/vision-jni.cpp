@@ -1,4 +1,4 @@
-// JNI adapter for VisionNative.kt: one call, converting native_routes::vision::DemoResult to VisionNative.Result.
+// JNI adapter for VisionHostImpl.kt: one call, converting native_routes::vision::DemoResult to VisionNative.Result.
 #include "VisionCore.hpp"
 
 #include <jni.h>

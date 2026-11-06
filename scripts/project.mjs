@@ -14,6 +14,7 @@ if (forwarded[0] === '--') forwarded.shift();
 function main() {
   if (platform === 'modules' || platform === 'test') {
     checkDependencies(root);
+    run(process.execPath, ['scripts/database.mjs', 'check'], root);
     const sourceOption = forwarded.indexOf('--valdi');
     if (sourceOption >= 0 && !forwarded[sourceOption + 1]) throw new Error('--valdi requires a source directory.');
     if (platform === 'test' && sourceOption >= 0) forwarded[sourceOption + 1] = path.resolve(forwarded[sourceOption + 1]);
@@ -36,7 +37,7 @@ function main() {
       run(process.execPath, ['--test', path.join(valdiSource, 'bzl/valdi/node_tools/rewrite_header.test.mjs')], root);
       // Run tsx's launcher with Node directly: `pnpm exec` resolves the binary differently on
       // Windows and can report `Command "tsx" not found` for the same install.
-      run(process.execPath, [tsx, '--test', 'routes.test.ts', 'navigation-options.test.ts', 'mobile-services.test.ts', 'typed-routing.test.ts', 'typed-storage.test.ts', 'appui-promise.test.ts', 'service-modules.test.ts', 'route-animation-parity.test.ts', 'dev-protocol.test.ts', 'wheel-platform-compat.test.ts', 'webview-module.test.ts', 'webview-page.test.ts', 'resources.test.ts', 'hermes.test.ts', 'module-build.test.ts', 'runtime-module.test.ts', 'scaffold.test.ts', 'swift.test.ts', 'objc-selector.test.ts', 'bluetooth.test.ts', 'bluetooth-execution.test.ts', 'module-selection.test.ts', 'jsx-upstream.test.ts', 'lazy-import.test.ts', 'upstream-runtime.test.ts'], rolldownDir);
+      run(process.execPath, [tsx, '--test', 'routes.test.ts', 'navigation-options.test.ts', 'mobile-services.test.ts', 'typed-routing.test.ts', 'native-module-access.test.ts', 'splash-screen.test.ts', 'editor-config.test.ts', 'typed-storage.test.ts', 'appui-promise.test.ts', 'service-modules.test.ts', 'route-animation-parity.test.ts', 'dev-protocol.test.ts', 'wheel-platform-compat.test.ts', 'webview-module.test.ts', 'webview-page.test.ts', 'resources.test.ts', 'hermes.test.ts', 'module-build.test.ts', 'runtime-module.test.ts', 'scaffold.test.ts', 'swift.test.ts', 'objc-selector.test.ts', 'bluetooth.test.ts', 'bluetooth-execution.test.ts', 'drizzle-driver.test.ts', 'drizzle-migrations.test.ts', 'module-selection.test.ts', 'jsx-upstream.test.ts', 'lazy-import.test.ts', 'upstream-runtime.test.ts'], rolldownDir);
       run(process.execPath, [tsx, '--test', '../../valdi/modules/native_common/tests/module-split.test.mts'], rolldownDir);
       // The goldens compare against the same sources the tests used, whatever link holds them.
       const goldensArgs = ['codegen/goldens.ts', ...forwarded];
@@ -56,6 +57,7 @@ function main() {
   }
   if (platform === 'ios' && process.platform !== 'darwin') throw new Error('build:ios requires macOS and Xcode.');
   checkDependencies(root);
+  run(process.execPath, ['scripts/database.mjs', 'check'], root);
   syncAppConfig(root);
   checkRuntime(root, platform);
   checkSources(root);

@@ -27,7 +27,10 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaSession
+import io.valdiroutes.app.R
 
 /** Presentation is borrowed from the existing Compose Activity, never from another Activity or JS runtime. */
 @OptIn(UnstableApi::class)
@@ -43,6 +46,8 @@ internal class VideoPresentation(
     private var savedBars: Bars? = null
     private var pipConfirmed = false
     private var pipPending = false
+    private var stopped = false
+    private var mediaSession: MediaSession? = null
     private var disposed = false
     private val actionName = "${activity.packageName}.video.CONTROL"
     private val receiver = object : BroadcastReceiver() {
@@ -50,7 +55,8 @@ internal class VideoPresentation(
             val session = active ?: return
             if (intent.action != actionName || intent.getStringExtra("id") != session.id || session.released) return
             when (intent.getStringExtra("command")) {
-                "toggle" -> session.togglePlayback()
+                "play" -> session.setNativePlayback(true)
+                "pause" -> session.setNativePlayback(false)
                 "back" -> session.seek((session.player.currentPosition - 10_000).coerceAtLeast(0))
                 "forward" -> session.seek(session.player.currentPosition + 10_000)
             }
@@ -59,7 +65,10 @@ internal class VideoPresentation(
     }
 
     init {
-        ContextCompat.registerReceiver(activity, receiver, IntentFilter(actionName), ContextCompat.RECEIVER_NOT_EXPORTED)
+        val filter = IntentFilter(actionName).apply {
+            addDataScheme("valdi-video-control")
+        }
+        ContextCompat.registerReceiver(activity, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
     fun supportsPip(): Boolean = activity.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
@@ -86,12 +95,9 @@ internal class VideoPresentation(
         activity.addContentView(content, ViewGroup.LayoutParams(-1, -1))
         session.movePlayerTo(content)
         session.playerView.useController = true
+        session.playerView.setFullscreenButtonState(true)
         val buttons = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
-            addView(Button(activity).apply {
-                text = "Exit fullscreen"
-                setOnClickListener { exitFullscreen(session) }
-            })
             if (supportsPip()) addView(Button(activity).apply {
                 text = "Picture in picture"
                 setOnClickListener {
@@ -138,11 +144,18 @@ internal class VideoPresentation(
         session.playerView.useController = false
         onFullscreenChanged(false)
         try {
+            // A real Media3 session exposes the SAME decoder to system/media-button transports.
+            // Its direct player commands are recorded by VideoSession's native intent listener.
+            // Defer session construction until requested PiP; ordinary page creation pays no IPC cost.
+            mediaSession = MediaSession.Builder(host.context, session.player)
+                .setId("valdi-video-${session.id}")
+                .build()
             check(activity.enterPictureInPictureMode(pipParams(session, sourceRect))) { "System declined picture-in-picture" }
             // Mode is confirmed by onPictureInPictureModeChanged; release() also honors this pending transfer.
             session.updatePlayback()
         } catch (failure: Exception) {
             pipPending = false
+            releaseMediaSession()
             session.mode = VideoSession.FULLSCREEN
             controls?.visibility = View.VISIBLE
             session.playerView.useController = true
@@ -174,21 +187,29 @@ internal class VideoPresentation(
                 val session = active?.takeIf { it.mode == VideoSession.PIP } ?: return@post
                 if (activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && !activity.isFinishing) {
                     finishPip(session)
+                } else if (activity.isFinishing || activity.isDestroyed ||
+                    (stopped && !activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))) {
+                    // onStop may have arrived BEFORE this mode callback. Complete that dismissal here.
+                    host.destroy(session)
                 }
             }
         }
     }
 
     fun onResume() {
+        stopped = false
         if (!activity.isInPictureInPictureMode && !pipPending) {
             active?.takeIf { it.mode == VideoSession.PIP }?.let(::finishPip)
         }
     }
 
     fun onStop() {
-        // Visible PiP is paused but STARTED. STOPPED means dismissal/task removal (or no visible output).
-        // A pending entry is protected: it can cross lifecycle callbacks before the system confirms PiP.
-        if (!pipPending) active?.takeIf { it.mode == VideoSession.PIP }?.let { host.destroy(it) }
+        stopped = true
+        // Do not destroy from a stale session.mode alone. Pending/actual PiP can cross the Activity's
+        // lifecycle callbacks in either order. A subsequent mode-exit callback or detach owns cleanup.
+        if (!pipPending && !activity.isInPictureInPictureMode) {
+            active?.takeIf { it.mode == VideoSession.PIP }?.let { host.destroy(it) }
+        }
     }
 
     private fun finishPip(session: VideoSession) {
@@ -213,12 +234,13 @@ internal class VideoPresentation(
         val aspect = if (size.width > 0 && size.height > 0) {
             (size.width.toDouble() * size.pixelWidthHeightRatio / size.height).coerceIn(1.0 / 2.39, 2.39)
         } else 16.0 / 9.0
-        val playing = session.player.playWhenReady
+        // Publish explicit commands: an old "Play" PendingIntent must never toggle into a pause.
+        val playing = session.player.playWhenReady && session.player.playbackState != Player.STATE_ENDED
         val actions = listOf(
-            action(session, "back", "Back 10 seconds", android.R.drawable.ic_media_rew),
-            action(session, "toggle", if (playing) "Pause" else "Play",
-                if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play),
-            action(session, "forward", "Forward 10 seconds", android.R.drawable.ic_media_ff),
+            action(session, "back", "Back 10 seconds", R.drawable.valdi_video_pip_back),
+            action(session, if (playing) "pause" else "play", if (playing) "Pause" else "Play",
+                if (playing) R.drawable.valdi_video_pip_pause else R.drawable.valdi_video_pip_play),
+            action(session, "forward", "Forward 10 seconds", R.drawable.valdi_video_pip_forward),
         )
         return PictureInPictureParams.Builder()
             .setAspectRatio(Rational((aspect * 1000).toInt().coerceIn(419, 2390), 1000))
@@ -237,7 +259,7 @@ internal class VideoPresentation(
         val pending = PendingIntent.getBroadcast(activity, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return RemoteAction(Icon.createWithResource(activity, icon), title, title, pending).apply {
-            isEnabled = command == "toggle" || session.player.isCurrentMediaItemSeekable
+            isEnabled = command == "play" || command == "pause" || session.player.isCurrentMediaItemSeekable
         }
     }
 
@@ -246,7 +268,9 @@ internal class VideoPresentation(
         active = null
         pipPending = false
         pipConfirmed = false
+        releaseMediaSession()
         session.mode = VideoSession.INLINE
+        session.playerView.setFullscreenButtonState(false)
         (session.playerView.parent as? ViewGroup)?.removeView(session.playerView)
         overlay?.let { (it.parent as? ViewGroup)?.removeView(it) }
         overlay = null
@@ -290,6 +314,12 @@ internal class VideoPresentation(
         active?.let(::remove)
         activity.unregisterReceiver(receiver)
         disposed = true
+    }
+
+    private fun releaseMediaSession() {
+        val previous = mediaSession
+        mediaSession = null
+        previous?.release()
     }
 
     private data class Bars(

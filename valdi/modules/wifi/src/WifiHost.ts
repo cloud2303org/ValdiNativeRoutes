@@ -1,6 +1,7 @@
 import { getHost } from './Wifi';
+import { withGlobalNativeRefs } from 'valdi_core/src/NativeReferences';
 
-/** The Valdi bridge to ExpoNativeRoutes' Wi-Fi core (Android WifiCore, iOS WifiCore), installed by each host. */
+/** The Valdi bridge to ExpoNativeRoutes' Wi-Fi core (Android WifiCore, iOS WifiCore), provided by the native factory. */
 
 /** @ExportModel({ios: 'VRWifiInfo', android: 'io.valdiroutes.wifi.WifiInfo'}) */
 export interface WifiInfoModel {
@@ -63,23 +64,16 @@ export interface WifiHost {
 
 import { wifiEvents } from './native';
 
-const HOST_KEY = '__valdiRoutesWifiHost';
 let factoryHost: WifiHost | undefined;
-let boundHost: WifiHost | undefined;
-
-export function installWifiHost(host: WifiHost): void {
-  (globalThis as any)[HOST_KEY] = host;
-  host.setEvents(wifiEvents);
-  boundHost = host;
-}
 
 // Retain one factory proxy: marshaling the same native host again may create a different JS wrapper.
 // Factory construction already observes native lifecycle; event binding starts on first use.
 export function wifiHost(): WifiHost {
-  const host: WifiHost = (globalThis as any)[HOST_KEY] ?? (factoryHost ??= getHost());
-  if (boundHost !== host) {
+  if (factoryHost) return factoryHost;
+  return withGlobalNativeRefs('wifi', () => {
+    const host = getHost();
     host.setEvents(wifiEvents);
-    boundHost = host;
-  }
-  return host;
+    factoryHost = host;
+    return host;
+  });
 }

@@ -1,11 +1,18 @@
 // Writes every app module's tsconfig.json (pipeline.ts writeTsconfig), in place of `valdi projectsync`: each module
-// sees the runtime's Valdi modules and every app module. new-module.ts runs it; run it after removing a module.
+// sees every selected app module, plus runtime types when prepared. new-module.ts runs it;
+// run it after removing a module.
 //
 //   pnpm tsconfig
 import path from 'node:path';
-import { appModules, writeTsconfig } from './pipeline';
+import { appModules, valdiSourceRoot, writeTsconfig } from './pipeline';
 
 const modules = appModules();
 for (const module of modules) {
   if (writeTsconfig(module, modules)) console.log(`wrote ${path.relative(process.cwd(), path.join(module.dir, 'tsconfig.json'))}`);
+}
+if (valdiSourceRoot()) {
+  console.log('Editor configs use prepared Valdi sources.');
+} else {
+  console.warn('Bootstrap editor configs include TSX settings and local module paths; full Valdi types are not prepared.');
+  console.warn('Prepare framework sources: node scripts/prepare-valdi.mjs');
 }

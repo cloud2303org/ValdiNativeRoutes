@@ -4,18 +4,8 @@ import ValdiRuntime
 enum Presentation: String {
     case push
 
-    /// Fixed height; the keyboard shrinks the page inside it.
-    case sheet
-
-    /// Sized by its page; sits on the keyboard.
-    case compactSheet
-
     /// A page shown in the tab shell, not on the stack.
     case tab
-
-    init(_ value: String) {
-        self = Presentation(rawValue: value) ?? .push
-    }
 }
 
 /// A page's resolved transition (routes.ts resolves the global, route and call layers). iOS has the system push and
@@ -200,9 +190,9 @@ final class StackController: UINavigationController, UINavigationControllerDeleg
     }
 }
 
-/// The navigation state: a UINavigationController, at most one full-screen cover with its own stack, and at most one
-/// sheet above whichever of them is in front, in the same window. JS drives it through NavigationHost (ValdiHost),
-/// native pages call it directly. Every page an operation removes is cancelled, top first.
+/// The navigation state: a UINavigationController and at most one full-screen cover with its own stack.
+/// JS drives it through NavigationHost (ValdiHost), native pages call it directly.
+/// Every page an operation removes is cancelled, top first, unless it finished with a result.
 final class Navigator {
     var tabBar: TabBar? { routes.tabBar }
     var rootRoute: String? { stack?.entries.first?.route }
@@ -210,7 +200,6 @@ final class Navigator {
     /// The page opened with ios.presentation 'fullScreen'; it can't be swiped away, only closed.
     private var cover: StackController?
     private var coverHost: StackHostController?
-    private var sheet: (entry: PageEntry, layer: SheetLayerView)?
 
     private var routes: RouteTable
     private weak var host: UIViewController?
@@ -221,8 +210,8 @@ final class Navigator {
         self.host = host
         // The first page is startApp's (app.ts): JS decides it, once, at startup.
         stack = StackController(root: PageController(entry: entry(routes.root), navigator: self))
-        stack.onChange = { [weak self] in self?.reportTopPage() }
-        reportTopPage()
+        stack.onChange = { [weak self] in self?.updateVisibility() }
+        updateVisibility()
         NotificationCenter.default.addObserver(forName: UIScene.didEnterBackgroundNotification, object: nil, queue: .main) {
             [weak self] _ in self?.setForeground(false)
         }
@@ -262,7 +251,7 @@ final class Navigator {
         updateVisibility()
     }
 
-    /// The page the user sees under any sheet: the front stack's top, or for a tab shell its selected page.
+    /// The page the user sees: the front stack's top, or for a tab shell its selected page.
     private var frontPage: PageEntry? {
         guard let top = cover?.entries.last ?? stack.entries.last else { return nil }
         guard top.definition.kind == "tabs" else { return top }
@@ -270,12 +259,12 @@ final class Navigator {
     }
 
     /**
-     * Pages that came on screen (the front page and a sheet over it, in the foreground) or left it get
+     * Pages that came on screen (the front page, in the foreground) or left it get
      * PageViewModel.visible with the reason. A removed page gets nothing: it is destroyed, as a mini program's onUnload
-     * without onHide. Called after every change of the stacks, the sheet, the selected tab and the foreground.
+     * without onHide. Called after every change of the stacks, the selected tab and the foreground.
      */
     func updateVisibility() {
-        let now = foreground ? [frontPage, sheet?.entry].compactMap { $0 } : []
+        let now = foreground ? [frontPage].compactMap { $0 } : []
         let before = visiblePages
         let wasForeground = visibleInForeground
         visiblePages = now
@@ -291,10 +280,12 @@ final class Navigator {
                 : page.shell != nil && before.contains { $0.shell === page.shell } ? "tab" : "navigation"
             page.setVisibility(true, reason: reason)
             ValdiHost.shared.updateVisibility(page)
-            if page.definition.kind == "native", page.presentation == .push || page.presentation == .tab {
+            if page.definition.kind == "native" {
                 setStatusBarStyle("auto")
             }
         }
+        // AppUI dialogs belong to the current front page, including a shell's selected tab.
+        MainActor.assumeIsolated { AppUI.shared.topPageChanged(frontPage?.id) }
     }
 
     /// `foreground` as of the last updateVisibility.
@@ -315,17 +306,6 @@ final class Navigator {
         host?.setNeedsStatusBarAppearanceUpdate()
         coverHost?.setNeedsStatusBarAppearanceUpdate()
     }
-
-    /// showModal belongs to the page on top: covering or removing it cancels the dialog.
-    private func reportTopPage() {
-        updateVisibility()
-        guard let top = (sheet?.entry ?? cover?.entries.last ?? stack.entries.last)?.id else { return }
-        MainActor.assumeIsolated { AppUI.shared.topPageChanged(top) }
-    }
-
-    /// The front layer, which a sheet covers: the cover when there is one. Never a navigation controller's own view,
-    /// where a navigation bar shown later would land above the sheet.
-    private var front: UIView? { coverHost?.view ?? host?.view }
 
     private func entry(_ route: String, params: [String: Any] = [:], presentation: Presentation = .push,
                        navigation: VRResolvedNavigation = .defaultOptions, onResult: ResultCallback? = nil) -> PageEntry {
@@ -350,13 +330,10 @@ final class Navigator {
         return pages
     }
 
-    func open(_ route: String, params: [String: Any] = [:], presentation: Presentation = .push,
-              navigation: VRResolvedNavigation = .defaultOptions, onResult: ResultCallback? = nil) {
-        let entry = entry(route, params: params, presentation: presentation, navigation: navigation,
-                          onResult: onResult)
-        if presentation != .push && sheet == nil {
-            showSheet(entry)
-        } else if let cover {
+    func open(_ route: String, params: [String: Any] = [:], navigation: VRResolvedNavigation = .defaultOptions,
+              onResult: ResultCallback? = nil) {
+        let entry = entry(route, params: params, navigation: navigation, onResult: onResult)
+        if let cover {
             // One cover at a time: inside it, 'fullScreen' is an ordinary push.
             cover.push(PageController(entry: entry, navigator: self))
         } else if navigation.fullScreen {
@@ -366,28 +343,15 @@ final class Navigator {
         }
     }
 
-    private func showSheet(_ entry: PageEntry) {
-        let layer = SheetLayerView(entry: entry, navigator: self)
-        sheet = (entry, layer)
-        if let front {
-            layer.frame = front.bounds
-            layer.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            front.addSubview(layer)
-        }
-        reportTopPage()
-    }
-
     private func showCover(_ entry: PageEntry) {
         let cover = StackController(root: PageController(entry: entry, navigator: self))
-        cover.onChange = { [weak self] in self?.reportTopPage() }
+        cover.onChange = { [weak self] in self?.updateVisibility() }
         let coverHost = StackHostController(stack: cover, navigator: self)
         coverHost.modalPresentationStyle = .fullScreen
         self.cover = cover
         self.coverHost = coverHost
         host?.present(coverHost, animated: entry.navigation.animated)
-        // A sheet stays in front.
-        if let layer = sheet?.layer { coverHost.view.addSubview(layer) }
-        reportTopPage()
+        updateVisibility()
     }
 
     func finish(_ pageId: String, result: [String: Any]) { close(pageId, result: result, canceled: false) }
@@ -396,11 +360,6 @@ final class Navigator {
 
     /// A page leaves with its own options: one opened without animation also closes without.
     private func close(_ pageId: String, result: [String: Any]?, canceled: Bool) {
-        if let sheet, sheet.entry.id == pageId {
-            sheet.entry.close(result: result, canceled: canceled)
-            sheet.layer.host.dismiss() // Animates out, then onSheetHidden().
-            return
-        }
         if let cover, let entry = cover.entries.first, entry.id == pageId {
             entry.close(result: result, canceled: canceled)
             closeCover(animated: entry.navigation.animated)
@@ -418,35 +377,22 @@ final class Navigator {
     private func closeCover(animated: Bool) {
         guard let cover else { return }
         self.cover = nil
-        if let layer = sheet?.layer, let view = host?.view { view.addSubview(layer) }
         coverHost?.dismiss(animated: animated)
         coverHost = nil
         // Pages pushed inside go with it, cancelled.
         cover.entries.reversed().forEach { $0.remove() }
-        reportTopPage()
+        updateVisibility()
     }
 
-    /// Animates the sheet out, cancelled.
-    private func dismissSheet() {
-        guard let sheet else { return }
-        sheet.entry.close(result: nil, canceled: true)
-        sheet.layer.host.dismiss()
-    }
-
-    /// Replaces the top page of the front stack (the cover's when there is one), after closing a sheet over it.
+    /// Replaces the top page of the front stack (the cover's when there is one).
     func replace(_ route: String, params: [String: Any], navigation: VRResolvedNavigation) {
-        dismissSheet()
         (cover ?? stack).replaceTop(with: PageController(entry: entry(route, params: params, navigation: navigation),
                                                          navigator: self))
     }
 
-    /// The sheet and a full-screen cover's pages count as pages; the root never goes.
+    /// A full-screen cover's pages count as pages; the root never goes.
     func back(_ delta: Int) {
         var count = delta
-        if count > 0, sheet != nil {
-            dismissSheet()
-            count -= 1
-        }
         if count > 0, let cover {
             if count >= cover.entries.count {
                 count -= cover.entries.count
@@ -460,18 +406,12 @@ final class Navigator {
     }
 
     func popToRoot() {
-        dismissSheet()
         closeCover(animated: true)
         stack.keep(1)
     }
 
     /// Clears everything, root included; `route` is the new root.
     func reset(_ route: String, params: [String: Any]) {
-        if let current = sheet {
-            sheet = nil
-            current.layer.removeFromSuperview()
-            current.entry.remove()
-        }
         closeCover(animated: false)
         stack.reset(to: PageController(entry: entry(route, params: params), navigator: self))
     }
@@ -485,7 +425,6 @@ final class Navigator {
         }
         let shell = stack.entries[index]
         shell.selectedTab = tab
-        dismissSheet()
         closeCover(animated: true)
         stack.keep(index + 1)
         // Shown now if the shell is loaded; otherwise when it appears.
@@ -504,18 +443,9 @@ final class Navigator {
         updateVisibility()
     }
 
-    /// Root first, the sheet last; the pages in a tab shell are not on the stack.
+    /// Root first, then the cover's pages; the pages in a tab shell are not on the stack.
     func currentPages() -> [VRStackPage] {
-        let pages = stack.entries + (cover?.entries ?? []) + (sheet.map { [$0.entry] } ?? [])
+        let pages = stack.entries + (cover?.entries ?? [])
         return pages.map { VRStackPage(pageId: $0.id, route: $0.route, params: $0.params) }
-    }
-
-    /// The sheet finished animating out; a drag down or a tap on the scrim closed it as cancelled.
-    func onSheetHidden() {
-        guard let current = sheet else { return }
-        sheet = nil
-        current.layer.removeFromSuperview()
-        current.entry.remove()
-        reportTopPage()
     }
 }

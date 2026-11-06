@@ -9,6 +9,7 @@
   "androidDependencies": [
     "androidx.media3:media3-exoplayer:1.9.3",
     "androidx.media3:media3-exoplayer-hls:1.9.3",
+    "androidx.media3:media3-session:1.9.3",
     "androidx.media3:media3-ui:1.9.3"
   ],
   "androidPermissions": [

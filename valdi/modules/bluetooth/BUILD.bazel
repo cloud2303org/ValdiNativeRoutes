@@ -4,6 +4,10 @@ node_valdi_module(
     name = "bluetooth",
     srcs = glob(["src/**/*.ts", "src/**/*.tsx"]),
     config = "module.json",
+    deps = [
+        "//modules/native_common:native_common_compiled",
+        "//modules/permissions:permissions_compiled",
+    ],
     ios_module_name = "Bluetooth",
     ios_language = "swift",
     res = glob(["res/**"]),

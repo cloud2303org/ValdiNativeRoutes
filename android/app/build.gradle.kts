@@ -127,10 +127,9 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("dev.chrisbanes.haze:haze:1.7.2")
     implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("androidx.core:core-splashscreen:1.2.0")
     implementation("androidx.navigation3:navigation3-runtime:1.1.7")
     implementation("androidx.navigation3:navigation3-ui:1.1.7")
-    implementation("androidx.appcompat:appcompat:1.7.1")
-    implementation("androidx.dynamicanimation:dynamicanimation:1.1.0")
     // Presentations ported from ExpoNativeRoutes android/native/ui: previewImage pages and their Coil loader (AppImages).
     implementation("io.coil-kt.coil3:coil-core:3.3.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")

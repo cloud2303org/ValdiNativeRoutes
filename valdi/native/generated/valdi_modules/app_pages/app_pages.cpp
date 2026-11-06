@@ -1,4 +1,189 @@
 //
+// AndroidSplashScreenHost.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  class AndroidSplashScreenHostProxy: public AndroidSplashScreenHost {
+    public:
+    using PreventAutoHideFn = Valdi::Function<bool()>;
+    using HideFn = Valdi::Function<void()>;
+
+    AndroidSplashScreenHostProxy() = default;
+    ~AndroidSplashScreenHostProxy() override = default;
+
+    bool preventAutoHide() final {
+      return _preventAutoHide();
+    }
+
+    void hide() final {
+      _hide();
+    }
+
+    static void unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, Valdi::Ref<AndroidSplashScreenHostProxy> &out) {
+      out = Valdi::makeShared<AndroidSplashScreenHostProxy>();
+      auto &self = *out;
+      Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._preventAutoHide, self._hide);
+    }
+
+    private:
+    PreventAutoHideFn _preventAutoHide;
+    HideFn _hide;
+  };
+
+  AndroidSplashScreenHost::AndroidSplashScreenHost(): Valdi::CppGeneratedInterface(getRegisteredClass()) {
+  }
+
+  void AndroidSplashScreenHost::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, Valdi::Ref<AndroidSplashScreenHost> &out) {
+    Valdi::CppMarshaller::unmarshallProxyObject<AndroidSplashScreenHostProxy>(exceptionTracker, *getRegisteredClass(), value, out);
+  }
+
+  void AndroidSplashScreenHost::marshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Ref<AndroidSplashScreenHost> &value, Valdi::Value &out) {
+    Valdi::CppMarshaller::marshallProxyObject(exceptionTracker, *getRegisteredClass(), *value, out, [&]() {
+      Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, Valdi::CppMarshaller::methodToFunction<AndroidSplashScreenHost, &AndroidSplashScreenHost::preventAutoHide>(value), Valdi::CppMarshaller::methodToFunction<AndroidSplashScreenHost, &AndroidSplashScreenHost::hide>(value));
+    });
+  }
+
+  Valdi::RegisteredCppGeneratedClass *AndroidSplashScreenHost::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c+ 'snap::valdi_modules::app_pages::AndroidSplashScreenHost'{'preventAutoHide':f|m|(): b, 'hide':f|m|()}");
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
+// AppContextHost.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  class AppContextHostProxy: public AppContextHost {
+    public:
+    using GetNavigationHostFn = Valdi::Function<NavigationHost()>;
+    using GetTokenStoreFn = Valdi::Function<TokenStore()>;
+
+    AppContextHostProxy() = default;
+    ~AppContextHostProxy() override = default;
+
+    NavigationHost getNavigationHost() final {
+      return _getNavigationHost();
+    }
+
+    TokenStore getTokenStore() final {
+      return _getTokenStore();
+    }
+
+    static void unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, Valdi::Ref<AppContextHostProxy> &out) {
+      out = Valdi::makeShared<AppContextHostProxy>();
+      auto &self = *out;
+      Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._getNavigationHost, self._getTokenStore);
+    }
+
+    private:
+    GetNavigationHostFn _getNavigationHost;
+    GetTokenStoreFn _getTokenStore;
+  };
+
+  AppContextHost::AppContextHost(): Valdi::CppGeneratedInterface(getRegisteredClass()) {
+  }
+
+  void AppContextHost::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, Valdi::Ref<AppContextHost> &out) {
+    Valdi::CppMarshaller::unmarshallProxyObject<AppContextHostProxy>(exceptionTracker, *getRegisteredClass(), value, out);
+  }
+
+  void AppContextHost::marshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Ref<AppContextHost> &value, Valdi::Value &out) {
+    Valdi::CppMarshaller::marshallProxyObject(exceptionTracker, *getRegisteredClass(), *value, out, [&]() {
+      Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, Valdi::CppMarshaller::methodToFunction<AppContextHost, &AppContextHost::getNavigationHost>(value), Valdi::CppMarshaller::methodToFunction<AppContextHost, &AppContextHost::getTokenStore>(value));
+    });
+  }
+
+  Valdi::RegisteredCppGeneratedClass *AppContextHost::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c+ 'snap::valdi_modules::app_pages::AppContextHost'{'getNavigationHost':f|m|(): r:'[0]', 'getTokenStore':f|m|(): r:'[1]'}", []() -> Valdi::TypeReferencesVec {
+      return {NavigationHost::getRegisteredClass(), TokenStore::getRegisteredClass()};
+    });
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
+// AppContextModule.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  class AppContextModuleProxy: public AppContextModule {
+    public:
+    using GetHostFn = Valdi::Function<Valdi::Ref<AppContextHost>()>;
+
+    AppContextModuleProxy() = default;
+    ~AppContextModuleProxy() override = default;
+
+    Valdi::Ref<AppContextHost> getHost() final {
+      return _getHost();
+    }
+
+    static void unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, Valdi::Ref<AppContextModuleProxy> &out) {
+      out = Valdi::makeShared<AppContextModuleProxy>();
+      auto &self = *out;
+      Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._getHost);
+    }
+
+    private:
+    GetHostFn _getHost;
+  };
+
+  AppContextModule::AppContextModule(): Valdi::CppGeneratedInterface(getRegisteredClass()) {
+  }
+
+  void AppContextModule::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, Valdi::Ref<AppContextModule> &out) {
+    Valdi::CppMarshaller::unmarshallProxyObject<AppContextModuleProxy>(exceptionTracker, *getRegisteredClass(), value, out);
+  }
+
+  void AppContextModule::marshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Ref<AppContextModule> &value, Valdi::Value &out) {
+    Valdi::CppMarshaller::marshallProxyObject(exceptionTracker, *getRegisteredClass(), *value, out, [&]() {
+      Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, Valdi::CppMarshaller::methodToFunction<AppContextModule, &AppContextModule::getHost>(value));
+    });
+  }
+
+  Valdi::RegisteredCppGeneratedClass *AppContextModule::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c+ 'snap::valdi_modules::app_pages::AppContextModule'{'getHost':f|m|(): r:'[0]'}", []() -> Valdi::TypeReferencesVec {
+      return {AppContextHost::getRegisteredClass()};
+    });
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
+// AppContextModuleFactory.cpp
+//
+
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  AppContextModuleFactory::AppContextModuleFactory() = default;
+  AppContextModuleFactory::~AppContextModuleFactory() = default;
+
+  Valdi::StringBox AppContextModuleFactory::getModulePath() {
+    return Valdi::StringBox::fromCString("app_pages/src/AppContext");
+  }
+}
+
+//
 // ColumnWheelConfig.cpp
 //
 
@@ -209,31 +394,6 @@ namespace snap::valdi_modules::app_pages {
 }
 
 //
-// InstallVisionHost.cpp
-//
-
-#include "valdi_core/cpp/Marshalling/CppGeneratedExportedFunctionUtils.hpp"
-#include "valdi_modules/app_pages/app_pages.hpp"
-
-namespace snap::valdi_modules::app_pages {
-
-  Valdi::RegisteredCppGeneratedClass& InstallVisionHost::registeredSchema() {
-    static auto *kSchema = Valdi::CppGeneratedExportedFunctionUtils::registerFunctionSchema("c 'InstallVisionHost'{'installVisionHost':f(r:'[0]')}", []() -> Valdi::TypeReferencesVec {
-      return {VisionHost::getRegisteredClass()};
-    });
-    return *kSchema;
-  }
-
-  Valdi::Result<InstallVisionHost> InstallVisionHost::resolve(snap::valdi_core::JSRuntime &jsRuntime, const std::shared_ptr<snap::valdi_core::JSRuntimeNativeObjectsManager>& nativeObjectsManager) {
-    return Valdi::CppGeneratedExportedFunctionUtils::resolve<InstallVisionHost>(jsRuntime, nativeObjectsManager, "app_pages/src/vision/VisionHost", registeredSchema());
-  }
-
-  Valdi::Result<Valdi::Ref<Valdi::ValueTypedObject>> InstallVisionHost::resolveAsTypedObject(snap::valdi_core::JSRuntime &jsRuntime, const std::shared_ptr<snap::valdi_core::JSRuntimeNativeObjectsManager>& nativeObjectsManager) {
-    return Valdi::CppGeneratedExportedFunctionUtils::resolveAsTypedObject(jsRuntime, nativeObjectsManager, "app_pages/src/vision/VisionHost", registeredSchema());
-  }
-}
-
-//
 // NavigationHost.cpp
 //
 
@@ -389,7 +549,7 @@ namespace snap::valdi_modules::app_pages {
   }
 
   Valdi::RegisteredCppGeneratedClass *NavigationHost::getRegisteredClass() {
-    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::NavigationHost'{'push':f(s, m<s,u>, s, r:'[0]'), 'pushForResult':f(s, m<s,u>, s, r:'[0]', f(m<s,u>, b)), 'replace':f(s, m<s,u>, r:'[0]'), 'back':f(d), 'popToRoot':f(), 'reset':f(s, m<s,u>), 'switchTab':f(s), 'setStatusBarStyle':f(s), 'currentPages':f(f(a<r:'[1]'>)), 'updateRoutes':f(r:'[2]')}", []() -> Valdi::TypeReferencesVec {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c 'snap::valdi_modules::app_pages::NavigationHost'{'push':f(s, m<s,u>, r:'[0]'), 'pushForResult':f(s, m<s,u>, r:'[0]', f(m<s,u>, b)), 'replace':f(s, m<s,u>, r:'[0]'), 'back':f(d), 'popToRoot':f(), 'reset':f(s, m<s,u>), 'switchTab':f(s), 'setStatusBarStyle':f(s), 'currentPages':f(f(a<r:'[1]'>)), 'updateRoutes':f(r:'[2]')}", []() -> Valdi::TypeReferencesVec {
       return {ResolvedNavigation::getRegisteredClass(), StackPage::getRegisteredClass(), RouteDeclaration::getRegisteredClass()};
     });
 
@@ -646,6 +806,29 @@ namespace snap::valdi_modules::app_pages {
     return kRegisteredClass;
   }
 
+}
+
+//
+// RequestInitialContentDraw.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppGeneratedExportedFunctionUtils.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  Valdi::RegisteredCppGeneratedClass& RequestInitialContentDraw::registeredSchema() {
+    static auto *kSchema = Valdi::CppGeneratedExportedFunctionUtils::registerFunctionSchema("c 'RequestInitialContentDraw'{'requestInitialContentDraw':f(s, f()): b}");
+    return *kSchema;
+  }
+
+  Valdi::Result<RequestInitialContentDraw> RequestInitialContentDraw::resolve(snap::valdi_core::JSRuntime &jsRuntime, const std::shared_ptr<snap::valdi_core::JSRuntimeNativeObjectsManager>& nativeObjectsManager) {
+    return Valdi::CppGeneratedExportedFunctionUtils::resolve<RequestInitialContentDraw>(jsRuntime, nativeObjectsManager, "app_pages/src/splash/InitialContentDraw", registeredSchema());
+  }
+
+  Valdi::Result<Valdi::Ref<Valdi::ValueTypedObject>> RequestInitialContentDraw::resolveAsTypedObject(snap::valdi_core::JSRuntime &jsRuntime, const std::shared_ptr<snap::valdi_core::JSRuntimeNativeObjectsManager>& nativeObjectsManager) {
+    return Valdi::CppGeneratedExportedFunctionUtils::resolveAsTypedObject(jsRuntime, nativeObjectsManager, "app_pages/src/splash/InitialContentDraw", registeredSchema());
+  }
 }
 
 //
@@ -1100,6 +1283,75 @@ namespace snap::valdi_modules::app_pages {
 }
 
 //
+// SplashScreenNativeModule.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  class SplashScreenNativeModuleProxy: public SplashScreenNativeModule {
+    public:
+    using GetHostFn = Valdi::Function<Valdi::Ref<AndroidSplashScreenHost>()>;
+
+    SplashScreenNativeModuleProxy() = default;
+    ~SplashScreenNativeModuleProxy() override = default;
+
+    Valdi::Ref<AndroidSplashScreenHost> getHost() final {
+      return _getHost();
+    }
+
+    static void unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, Valdi::Ref<SplashScreenNativeModuleProxy> &out) {
+      out = Valdi::makeShared<SplashScreenNativeModuleProxy>();
+      auto &self = *out;
+      Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._getHost);
+    }
+
+    private:
+    GetHostFn _getHost;
+  };
+
+  SplashScreenNativeModule::SplashScreenNativeModule(): Valdi::CppGeneratedInterface(getRegisteredClass()) {
+  }
+
+  void SplashScreenNativeModule::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, Valdi::Ref<SplashScreenNativeModule> &out) {
+    Valdi::CppMarshaller::unmarshallProxyObject<SplashScreenNativeModuleProxy>(exceptionTracker, *getRegisteredClass(), value, out);
+  }
+
+  void SplashScreenNativeModule::marshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Ref<SplashScreenNativeModule> &value, Valdi::Value &out) {
+    Valdi::CppMarshaller::marshallProxyObject(exceptionTracker, *getRegisteredClass(), *value, out, [&]() {
+      Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, Valdi::CppMarshaller::methodToFunction<SplashScreenNativeModule, &SplashScreenNativeModule::getHost>(value));
+    });
+  }
+
+  Valdi::RegisteredCppGeneratedClass *SplashScreenNativeModule::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c+ 'snap::valdi_modules::app_pages::SplashScreenNativeModule'{'getHost':f|m|(): r:'[0]'}", []() -> Valdi::TypeReferencesVec {
+      return {AndroidSplashScreenHost::getRegisteredClass()};
+    });
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
+// SplashScreenNativeModuleFactory.cpp
+//
+
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  SplashScreenNativeModuleFactory::SplashScreenNativeModuleFactory() = default;
+  SplashScreenNativeModuleFactory::~SplashScreenNativeModuleFactory() = default;
+
+  Valdi::StringBox SplashScreenNativeModuleFactory::getModulePath() {
+    return Valdi::StringBox::fromCString("app_pages/src/splash/SplashScreenNative");
+  }
+}
+
+//
 // StackPage.cpp
 //
 
@@ -1181,8 +1433,8 @@ namespace snap::valdi_modules::app_pages {
 namespace snap::valdi_modules::app_pages {
 
   Valdi::RegisteredCppGeneratedClass& StartApp::registeredSchema() {
-    static auto *kSchema = Valdi::CppGeneratedExportedFunctionUtils::registerFunctionSchema("c 'StartApp'{'startApp':f(b, r:'[1]', r:'[2]'): r:'[0]'}", []() -> Valdi::TypeReferencesVec {
-      return {RouteDeclaration::getRegisteredClass(), NavigationHost::getRegisteredClass(), TokenStore::getRegisteredClass()};
+    static auto *kSchema = Valdi::CppGeneratedExportedFunctionUtils::registerFunctionSchema("c 'StartApp'{'startApp':f(b): r:'[0]'}", []() -> Valdi::TypeReferencesVec {
+      return {RouteDeclaration::getRegisteredClass()};
     });
     return *kSchema;
   }
@@ -1784,6 +2036,75 @@ namespace snap::valdi_modules::app_pages {
     return kRegisteredClass;
   }
 
+}
+
+//
+// VisionModule.cpp
+//
+
+#include "valdi_core/cpp/Marshalling/CppMarshaller.hpp"
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  class VisionModuleProxy: public VisionModule {
+    public:
+    using GetHostFn = Valdi::Function<Valdi::Ref<VisionHost>()>;
+
+    VisionModuleProxy() = default;
+    ~VisionModuleProxy() override = default;
+
+    Valdi::Ref<VisionHost> getHost() final {
+      return _getHost();
+    }
+
+    static void unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, Valdi::Ref<VisionModuleProxy> &out) {
+      out = Valdi::makeShared<VisionModuleProxy>();
+      auto &self = *out;
+      Valdi::CppMarshaller::unmarshallTypedObject(exceptionTracker, *getRegisteredClass(), value, self._getHost);
+    }
+
+    private:
+    GetHostFn _getHost;
+  };
+
+  VisionModule::VisionModule(): Valdi::CppGeneratedInterface(getRegisteredClass()) {
+  }
+
+  void VisionModule::unmarshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Value &value, Valdi::Ref<VisionModule> &out) {
+    Valdi::CppMarshaller::unmarshallProxyObject<VisionModuleProxy>(exceptionTracker, *getRegisteredClass(), value, out);
+  }
+
+  void VisionModule::marshall(Valdi::ExceptionTracker &exceptionTracker, const Valdi::Ref<VisionModule> &value, Valdi::Value &out) {
+    Valdi::CppMarshaller::marshallProxyObject(exceptionTracker, *getRegisteredClass(), *value, out, [&]() {
+      Valdi::CppMarshaller::marshallTypedObject(exceptionTracker, *getRegisteredClass(), out, Valdi::CppMarshaller::methodToFunction<VisionModule, &VisionModule::getHost>(value));
+    });
+  }
+
+  Valdi::RegisteredCppGeneratedClass *VisionModule::getRegisteredClass() {
+    static auto *kRegisteredClass = Valdi::CppGeneratedClass::registerSchema("c+ 'snap::valdi_modules::app_pages::VisionModule'{'getHost':f|m|(): r:'[0]'}", []() -> Valdi::TypeReferencesVec {
+      return {VisionHost::getRegisteredClass()};
+    });
+
+    return kRegisteredClass;
+  }
+
+}
+
+//
+// VisionModuleFactory.cpp
+//
+
+#include "valdi_modules/app_pages/app_pages.hpp"
+
+namespace snap::valdi_modules::app_pages {
+
+  VisionModuleFactory::VisionModuleFactory() = default;
+  VisionModuleFactory::~VisionModuleFactory() = default;
+
+  Valdi::StringBox VisionModuleFactory::getModulePath() {
+    return Valdi::StringBox::fromCString("app_pages/src/vision/Vision");
+  }
 }
 
 //

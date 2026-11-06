@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 import ValdiRuntime
 
-/// Compile with AppUIPromise.swift, ValdiImageBridge.m and the canonical app_pages bindings.
+/// Compile with app_ui AppUIPromise.swift, VRAppUIVoidPromise.m and canonical AppUI bindings.
 /// These tests use the real runtime's native Promise and marshaller; no Promise stubs or Swift async bridge.
 final class AppUIPromiseTests: XCTestCase {
     func testCompletionRetainsPromiseAfterCallerReleasesIt() {

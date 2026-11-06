@@ -1,4 +1,4 @@
-import { bindMethods } from './bindMethods';
+import { bindMethods } from 'native_common/src/bindMethods';
 import { type WechatBleApi, wechatBle } from './wechat';
 
 // After ExpoNativeRoutes' createBluetoothExtension: the mini-program Bluetooth methods, bound to the one app-wide

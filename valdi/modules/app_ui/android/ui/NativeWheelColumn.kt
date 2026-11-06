@@ -107,14 +107,6 @@ internal class NativeWheelColumn(context: Context) : View(context) {
         invalidate()
     }
 
-    /** Segment switches commit the nearest visible row before changing date/time columns. */
-    fun settleNow() {
-        if (!animating && pointer == -1) return
-        val selected = wheelSnap(position, items.size)
-        stop()
-        commit(selected)
-    }
-
     override fun onDetachedFromWindow() {
         stop()
         super.onDetachedFromWindow()

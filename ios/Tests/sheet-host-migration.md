@@ -1,12 +1,12 @@
 # iOS shared sheet migration
 
 `BottomSheet`, `ScrollBottomSheet`, `ListBottomSheet`, `ColumnPicker`, `TimePicker`,
-`NativeActionSheet`, and the existing AppUI sheet presenters now use `SheetHostView`. The
+`NativeActionSheet`, and the AppUI sheet presenters use the module-owned `AppUISheetHostView`. The
 transplanted scroll negotiation, critical spring and scrim are the actual shell.
 BottomSheet retains its public content/header/footer/actions and keyboard padding.
 Its existing header supplies the handle; the shell's handle is disabled for that
-host only. Navigation continues to use the default shell handle and its existing
-75% or compact detent calculations.
+host only. Route sheets and the App directory's duplicate shell were removed on
+November 6, 2026; these components do not create route pages.
 
 `OverlayPresenter` still owns registration, top/covered state and close results.
 A user gesture requests a controlled close; if the caller leaves `open` true,
@@ -23,9 +23,7 @@ Bottom safe-area/keyboard clearance remains in the column once. Dynamic column
 layout requests a new detent measurement. The inner content stack also requests
 a refit when scrolling content changes without resizing the viewport or panel;
 the public `content` property remains typed as `UIStackView`.
-The shell's default sizing and automatic
-first presentation are unchanged for navigation; controlled overlays explicitly
-present and can reuse the shell after closing.
+Controlled overlays explicitly present and can reuse the shell after closing.
 
 `NativeActionSheet` mounts a `ScrollBottomSheet` in the presenter's window and
 keeps its async/callback APIs. Buttons preserve IDs, disabled/destructive states
@@ -35,10 +33,8 @@ a local scope supplies top status. Completion follows physical close; forced
 navigation/unmount clears a pending selection and preserves its cancellation
 reason. AppPresenters' action-sheet function needs no behavior change.
 
-The background difference is intentional existing configuration: navigation uses
-SheetHostView's white surface and default scrim; AppUI components configure
-UiTheme.surface/UiTheme.scrim and their sheet radius. This migration preserves
-those settings and makes no unrelated navigation styling change.
+AppUI components configure UiTheme.surface/UiTheme.scrim and their sheet radius.
+Their presentation and styling remain independent of page navigation.
 
 ## Validation status and commands
 
@@ -57,16 +53,17 @@ Evidence: `/tmp/valdi-sheet-host-ios-action-sheet-run-20261103/command-1.log`
 and `/tmp/valdi-sheet-host-ios-action-sheet-run-20261103/results.xcresult`.
 This includes the six ActionSheet lifecycle, selection, scope, cancellation,
 and layout tests as well as the unchanged original six sheet tests.
+Those historical runs included the former route shell. The current suite uses
+only the AppUI shell; the route-default geometry checks have been removed.
 
 From repository root:
 
 ```sh
-xcrun swiftc -frontend -parse ios/ValdiRoutes/SheetHostView.swift ios/ValdiRoutes/NativeRoutesUI/BottomSheet.swift ios/Tests/SheetHostMigrationTests.swift
+xcrun swiftc -frontend -parse valdi/modules/app_ui/ios/ui/AppUISheetHostView.swift valdi/modules/app_ui/ios/ui/BottomSheet.swift ios/Tests/SheetHostMigrationTests.swift
 python3 ios/Tests/run-sheet-host-tests.py
 ```
 
-After the parent grants a native build slot and selects/boots a simulator through
-Argent:
+After selecting a simulator through Argent:
 
 ```sh
 python3 ios/Tests/run-sheet-host-tests.py --run --udid "$IOS_SIMULATOR_UDID"
@@ -81,12 +78,12 @@ It does not build or link the Valdi runtime. Tests cover controlled
 scrim dismissal, completion after the spring, close shielding, covered/locked
 interaction, reopening during exit, forced removal during exit, fit/capped/list
 geometry, dynamic content, keyboard-notification padding, picker shell reuse,
-rendered-position hit testing, and navigation default geometry.
+and rendered-position hit testing.
 
 Still required: full application integration validation and interactive QA
 for drag-to-scroll handoff (including inverted scrolls), picker wheel drags,
 keyboard show/hide and focus reveal, safe-area clearance, edge-to-edge image
 preview, title/footer changes, stacked overlays, rotation/resize during settling,
-and navigation 75%/compact sheets. Verify `showBottomSheet()` and picker async
+and component content updates. Verify `showBottomSheet()` and picker async
 results arrive once after physical close, and navigation/unmount cancels them.
 The focused hosted tests do not establish physical-device or Release behavior.

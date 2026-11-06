@@ -22,6 +22,8 @@ function routingRuntime() {
   const modules: Record<string, any> = {
     'valdi_core/src/Device': { Device: { getSystemType: () => 'android', isAndroid: () => true } },
     valibot: requireApp('valibot'),
+    'valdi_core/src/NativeReferences': { withGlobalNativeRefs: (_name: string, body: () => unknown) => body() },
+    './AppContext': { getHost: () => ({ getNavigationHost: () => globals.nativeNavigation }) },
   };
   const load = (file: string): any => {
     if (cache.has(file)) return cache.get(file);
@@ -57,14 +59,14 @@ function routingRuntime() {
   globals.navigation = load(source('navigation/index.ts'));
   globals.data = load(source('navigation/data.ts'));
   evaluate(`
-    host.installNavigation({
+    globalThis.nativeNavigation = {
       push: (...args) => calls.push(['push', ...args]),
       pushForResult: (...args) => calls.push(['pushForResult', ...args]),
       replace: (...args) => calls.push(['replace', ...args]),
       reset: (...args) => calls.push(['reset', ...args]),
       currentPages: done => { globalThis.returnPages = done; },
       updateRoutes: declaration => calls.push(['updateRoutes', declaration]),
-    });
+    };
   `);
   return { evaluate, calls, globals, load };
 }
@@ -125,22 +127,23 @@ test('typed router snapshots structured params/results without JSON transport an
   assert.equal(calls[0][2].label, '中文 🧭');
   assert.equal(calls[0][2].nested[2].n, -4);
   assert.equal(Object.hasOwn(calls[0][2], 'optional'), false);
-  assert.equal(calls[0][4].durationMs, 333);
-  assert.equal(calls[0][4].animation, 'slideRight');
+  assert.equal(calls[0].length, 4);
+  assert.equal(calls[0][3].durationMs, 333);
+  assert.equal(calls[0][3].animation, 'slideRight');
   assert.equal(calls[1][2].nested[2].n, 99);
   assert.equal(calls[2][0], 'reset');
   assert.equal(calls[3][1], '$tabs');
   assert.equal(calls[3][2].tab, 'detail');
   const successful = evaluate(`
     globalThis.resultData = { value: '选中', nested: [null, 2, true] };
-    calls[4][5](resultData, false);
+    calls[4][4](resultData, false);
     resultData.nested[1] = 9;
     resultPromise;
   `);
   assert.equal((await successful).nested[1], 2);
   const canceled = evaluate(`
     globalThis.canceled = navigation.router.pushForResult('picker');
-    calls[5][5]({}, true);
+    calls[5][4]({}, true);
     canceled;
   `);
   assert.equal(await canceled, undefined);
@@ -177,7 +180,7 @@ test('routing rejects non-data payloads before host calls and rejects invalid na
   assert.equal(calls.length, 0);
   const promise = evaluate(`
     globalThis.invalidResult = navigation.router.pushForResult('picker');
-    calls[0][5]({ value() {} }, false);
+    calls[0][4]({ value() {} }, false);
     invalidResult;
   `);
   await assert.rejects(promise, /Invalid route data/);
@@ -185,6 +188,20 @@ test('routing rejects non-data payloads before host calls and rejects invalid na
     globalThis.shared = { text: 'ok' };
     data.snapshotRouteData({ a: shared, b: shared }).b.text;
   `), 'ok', 'repeated noncyclic references are valid and copied independently');
+});
+
+test('routing accepts options directly and rejects removed sheet arguments before native calls', () => {
+  const { evaluate, calls } = routingRuntime();
+  for (const mode of ['sheet', 'compactSheet']) {
+    assert.throws(() => evaluate(`navigation.router.push('detail', {}, '${mode}')`));
+    assert.throws(() => evaluate(`navigation.router.pushForResult('picker', {}, '${mode}')`));
+  }
+  assert.equal(calls.length, 0);
+  evaluate(`navigation.router.push('detail', {}, { android: { animation: 'fade', durationMs: 120 } })`);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].length, 4);
+  assert.equal(calls[0][3].animation, 'fade');
+  assert.equal(calls[0][3].durationMs, 120);
 });
 
 test('startup stays synchronous, installs error handler first, initializes services before authenticated root selection', () => {
@@ -200,15 +217,11 @@ test('startup stays synchronous, installs error handler first, initializes servi
         UncaughtErrorHandlerResult: { CRASH_APPLICATION: 1, IGNORE: 0 },
         setCatchAllUncaughtErrorHandler: () => events.push('handler'),
       },
-      'bluetooth/src/index': { initializeBluetooth: () => events.push('bluetooth') },
-      'permissions/src/index': {},
       './api': { api: {} },
       './auth': {
-        installAuth: () => events.push('auth'),
         auth: { isSignedIn: () => { events.push('signedIn'); return signedIn; } },
       },
       './db': { initializeAppDb: () => events.push('db') },
-      './NavigationHost': { installNavigation: () => events.push('navigation') },
       './routes': { routes: { home: '$tabs', toHost: (root: string) => { events.push('declaration'); return { root }; } } },
       './theme': { installTheme: () => events.push('theme') },
     };
@@ -223,10 +236,10 @@ test('startup stays synchronous, installs error handler first, initializes servi
     vm.runInContext(`(function(require,module,exports){${startupSource}\n})`, context)(
       (name: string) => { assert.ok(mocks[name], name); return mocks[name]; }, module, module.exports,
     );
-    const result = module.exports.startApp(false, {}, {});
+    const result = module.exports.startApp(false);
     assert.equal(result.root, signedIn ? '$tabs' : 'login');
     assert.equal(typeof result.then, 'undefined');
-    assert.deepEqual(events, ['handler', 'bluetooth', 'theme', 'auth', 'db', 'navigation', 'signedIn', 'declaration']);
+    assert.deepEqual(events, ['handler', 'theme', 'db', 'signedIn', 'declaration']);
   }
 });
 
@@ -264,13 +277,12 @@ test('pinned lazy ModuleLoader publishes fresh routes after hot unload and dispo
       exports.UncaughtErrorHandlerResult = { CRASH_APPLICATION: 1, IGNORE: 0 };
       exports.setCatchAllUncaughtErrorHandler = () => events.push('handler');
     `],
-    ['bluetooth/src/index', `exports.initializeBluetooth = () => events.push('bluetooth');`],
-    ['permissions/src/index', ''],
+    ['valdi_core/src/NativeReferences', `exports.withGlobalNativeRefs = (_name, body) => body();`],
+    ['app_pages/src/AppContext', `exports.getHost = () => ({ getNavigationHost: () => globalThis.navigation });`],
     ['app_pages/src/api', `exports.api = {};`],
     ['app_pages/src/db', `exports.initializeAppDb = () => events.push('db');`],
     ['app_pages/src/theme', `exports.installTheme = () => events.push('theme');`],
     ['app_pages/src/auth', `
-      exports.installAuth = store => { globalThis.tokens = store; };
       exports.auth = { isSignedIn: () => globalThis.tokens.has() };
     `],
   ]);
@@ -294,9 +306,11 @@ test('pinned lazy ModuleLoader publishes fresh routes after hot unload and dispo
   let signedIn = false;
   const tokens = { has: () => signedIn };
   const navigation = { updateRoutes: (value: any) => updates.push(value) };
+  globals.tokens = tokens;
+  globals.navigation = navigation;
   const start = loader.load('app_pages/src/app', true).startApp;
-  assert.equal(start(true, navigation, tokens).root, 'login');
-  assert.equal(start(true, navigation, tokens).root, 'login');
+  assert.equal(start(true).root, 'login');
+  assert.equal(start(true).root, 'login');
   assert.equal(updates.length, 0, 'initial startup only returns a declaration');
   sources.set('app_pages/src/routes', routeSource('替换'));
   const unloaded = loader.unload(['app_pages/src/routes'], true, true);
@@ -336,9 +350,9 @@ test('real application generator exports fixed route models and dictionary schem
   assert.match(kotlin, /'items':a<r:'\[0\]'>,'selectedRoute':s,'safeAreaBottom':d/);
   assert.match(kotlin, /'selectTab':f\(s\)/);
   assert.match(kotlin, /onResult: \(result: Map<String, Any\?>, canceled: Boolean\) -> Unit/);
-  assert.match(kotlin, /fun invoke\(debug: Boolean, navigation: NavigationHost, tokens: TokenStore\): RouteDeclaration/);
+  assert.match(kotlin, /fun invoke\(debug: Boolean\): RouteDeclaration/);
   assert.match(kotlin, /'params':m<s,u>/);
-  assert.match(kotlin, /'push':f\(s, m<s,u>, s, r:/);
+  assert.match(kotlin, /'push':f\(s, m<s,u>, r:/);
   assert.match(kotlin, /'currentPages':f\(f\(a<r:/);
   assert.match(objc, /NSArray<VRRouteEntry \*> \* _Nonnull routes/);
   assert.match(objc, /VRRouteTabBar \* _Nullable tabBar/);

@@ -1,4 +1,5 @@
 import { getHost } from './Nfc';
+import { withGlobalNativeRefs } from 'valdi_core/src/NativeReferences';
 
 /** The Valdi bridge to ExpoNativeRoutes' Android NFC core (NfcCore, reader mode). iOS answers "not supported". */
 
@@ -67,20 +68,14 @@ export interface NfcHost {
 
 import { nfcEvents } from './native';
 
-const HOST_KEY = '__valdiRoutesNfcHost';
-
-export function installNfcHost(host: NfcHost): void {
-  (globalThis as any)[HOST_KEY] = host;
-  host.setEvents(nfcEvents);
-}
-
 // Bind the session once, on first use. Factory construction already observes native lifecycle.
 let boundHost: NfcHost | undefined;
 export function nfcHost(): NfcHost {
-  const host: NfcHost = (globalThis as any)[HOST_KEY] ?? getHost();
-  if (boundHost !== host) {
+  if (boundHost) return boundHost;
+  return withGlobalNativeRefs('nfc', () => {
+    const host = getHost();
     host.setEvents(nfcEvents);
     boundHost = host;
-  }
-  return host;
+    return host;
+  });
 }

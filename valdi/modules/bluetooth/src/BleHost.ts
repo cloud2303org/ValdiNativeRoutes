@@ -1,9 +1,10 @@
 /**
- * The Valdi bridge to the native BLE core, owned by the bluetooth module and initialized at App startup. It is capability only:
+ * The Valdi bridge to the native BLE core, owned by the bluetooth module and acquired lazily through getHost().
+ * bleHost() caches the proxy and binds setEvents() under withGlobalNativeRefs('bluetooth'). It is capability only:
  * wechat.ts and peripheral.ts own every mini-program rule (validation, UUIDs, queues, sessions, errCodes) for both
  * platforms. Calls return a native Promise, rejected with the core's `E_BLE_…:message`: a callback created by a page
  * would be disposed with that page and leave the shared queues waiting forever. Events go to the one BleHostEvents
- * given at install time; native.ts fans them out to listeners.
+ * bound on first acquisition; events.ts fans them out to listeners.
  */
 
 /** @ExportModel({ios: 'VRBleServiceData', android: 'io.valdiroutes.bluetooth.BleServiceData'}) */
@@ -294,15 +295,18 @@ export interface BleHost {
 
 import { getHost } from './Bluetooth';
 import { bleEvents } from './events';
+import { withGlobalNativeRefs } from 'valdi_core/src/NativeReferences';
 
 let host: BleHost | undefined;
 
-/** Initialized from the App's retained startup scope, never from a page. */
+/** Acquire lazily, retaining native callbacks for the app even when first called from a page. */
 export function bleHost(): BleHost {
   if (!host) {
-    const instance = getHost();
-    instance.setEvents(bleEvents);
-    host = instance;
+    host = withGlobalNativeRefs('bluetooth', () => {
+      const instance = getHost();
+      instance.setEvents(bleEvents);
+      return instance;
+    });
   }
   return host;
 }

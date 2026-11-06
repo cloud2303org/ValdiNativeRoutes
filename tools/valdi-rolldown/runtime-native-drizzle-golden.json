@@ -1,0 +1,15 @@
+{
+  "description": "Reviewed Node-generated additive Drizzle native ABI, over the historical runtime baseline.",
+  "frameworkCommit": "f5b41aed4780dab6899d74ca755acb411879a315",
+  "sourceSha256": "6ad2c3a06658d049be26ff2e6de95a9618f51415c376f103bc111d1986c13d3a",
+  "patchSha256": "624a79caddf7baeacba2ea77eef5d90bb20729e7c69620bf27ce7a2c176eecff",
+  "files": {
+    "client_sql/android/release/src/client_sql.kt": "d24eb54e48a970ccb8e61b6caeb586660c8052b4781eac3730f2a49b368d2967",
+    "client_sql/cpp/release/src/valdi_modules/client_sql/client_sql.cpp": "10fa74bd7e8c87f4cb23c1b10bbf32f12ff9286b82cd44d137a77aea1a2cf9dd",
+    "client_sql/cpp/release/src/valdi_modules/client_sql/client_sql.hpp": "6d12896833830d8bba3ea4d0248cf2da4b9998294c847b3ace643a1e71340ad5",
+    "client_sql/ios/release/src/SCCClientSQL/SCCClientSQL.h": "d13b3f8025a01d4b8212c465fd006e48a1783bb1f98728593fe382a019bf30fc",
+    "client_sql/ios/release/src/SCCClientSQL/SCCClientSQL.m": "7a41f2488dddaec4cdcf5ba672d57c76b44dfd5a916c088e026bebe2d86f73c6",
+    "client_sql/ios/release/src/SCCClientSQLTypes/SCCClientSQLTypes.h": "c21a464402cb2248a9c4a9c839f26a2dba3b0cc71039a5929da81d7c95a890c0",
+    "client_sql/ios/release/src/SCCClientSQLTypes/SCCClientSQLTypes.m": "195ec5e3e446a1422498a6f3a56519c895eb2131494b41374448e21f536cbaea"
+  }
+}

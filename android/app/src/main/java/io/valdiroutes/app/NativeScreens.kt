@@ -38,8 +38,8 @@ class NativePage(val entry: PageEntry, val navigator: Navigator, val insets: Ins
 }
 
 /**
- * The native pages, by route: the routes with kind 'native' in routes.ts. Registered at startup (App), before the
- * first page opens; a native route without a registration fails when it opens.
+ * The native pages, keyed by nativeName for routes with kind 'native' in routes.ts. Registered at startup (App);
+ * RouteTable.from validates each native route's registration before the first page opens.
  */
 object NativeScreens {
     private val screens = mutableMapOf<String, @Composable (NativePage) -> Unit>()

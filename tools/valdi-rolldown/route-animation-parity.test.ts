@@ -18,7 +18,7 @@ const requireApp = createRequire(path.join(app.dir, 'package.json'));
 const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 type Platform = 'android' | 'ios';
 type Rendered = { kind: unknown; props: Record<string, any> };
-type Push = { route: string; params: { animation: string }; presentation: string; navigation: ResolvedNavigation };
+type Push = { route: string; params: { animation: string }; navigation: ResolvedNavigation };
 const presets = ['default', 'none', 'slideRight', 'slideUp', 'fade', 'zoom'];
 
 /** Execute production Valdi JSX output, Router, payload copier and validator; record only renderer/native boundaries. */
@@ -54,6 +54,11 @@ function runtime(platform: Platform, navigation?: NavigationOptions, routeOption
     } },
     'valdi_core/src/Style': { Style: class {} },
     'valdi_core/src/SystemFont': { systemBoldFont: () => '', systemFont: () => '' },
+    'valdi_core/src/NativeReferences': { withGlobalNativeRefs: (_name: string, body: () => unknown) => body() },
+    './AppContext': { getHost: () => ({ getNavigationHost: () => ({
+      push: (route: string, params: Push['params'], resolved: ResolvedNavigation) =>
+        pushes.push(plain({ route, params, navigation: resolved })),
+    }) }) },
     valibot: requireApp('valibot'),
     tslib: requireApp(path.join(valdiSourceRoot()!, 'src/valdi_modules/src/valdi/valdi_core/src/tslib.js')),
     [source('Button.tsx')]: { Button },
@@ -86,10 +91,6 @@ function runtime(platform: Platform, navigation?: NavigationOptions, routeOption
     );
     return exports;
   }
-  load(source('NavigationHost.ts')).installNavigation({
-    push: (route: string, params: Push['params'], presentation: string, resolved: ResolvedNavigation) =>
-      pushes.push(plain({ route, params, presentation, navigation: resolved })),
-  });
   const page = new (load(pageFile).RouteAnimationPage)();
   page.context = { back: () => { backs++; } };
   const router = new (load(source('navigation/index.ts')).Router)(page.context);
@@ -127,7 +128,7 @@ function expected(name: string, platform: Platform): ResolvedNavigation {
 function assertPush(run: ReturnType<typeof runtime>, name: string, platform: Platform) {
   assert.deepEqual(run.toasts, [], 'selection must not fail validation');
   assert.deepEqual(run.pushes.at(-1), {
-    route: 'animation', params: { animation: name }, presentation: 'push', navigation: expected(name, platform),
+    route: 'animation', params: { animation: name }, navigation: expected(name, platform),
   });
 }
 
@@ -201,7 +202,7 @@ for (const [platform, animation] of [
     const available = platform === 'ios' ? ['default', 'none', 'fullScreen'] : presets;
     run.open(animation);
     assert.deepEqual(run.pushes, [{
-      route: 'animation', params: { animation }, presentation: 'push', navigation: expected('default', platform),
+      route: 'animation', params: { animation }, navigation: expected('default', platform),
     }], 'the existing Router accepts the string parameter with normal navigation defaults');
     run.render(run.pushes[0].params.animation);
     assert.equal(run.header().title, '路由动画');

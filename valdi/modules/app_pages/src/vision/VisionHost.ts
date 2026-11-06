@@ -1,5 +1,8 @@
+import { withGlobalNativeRefs } from 'valdi_core/src/NativeReferences';
+import { getHost } from './Vision';
+
 /**
- * The Valdi bridge to ExpoNativeRoutes' VisionCore (C++, OpenCV mobile + ncnn, statically linked by each host).
+ * The Valdi bridge to VisionCore (C++, OpenCV mobile + ncnn; Android shared vendors, iOS static).
  * Images come back as file:// PNGs in the host's cache instead of the original data URLs.
  */
 
@@ -35,20 +38,13 @@ export interface VisionHost {
   runDemo(done: (error: string, result: VisionDemoResult | undefined) => void): void;
 }
 
-const HOST_KEY = '__valdiRoutesVisionHost';
-
-/** @ExportFunction({ios: 'VRInstallVisionHost', android: 'io.valdiroutes.pages.InstallVisionHost'}) */
-export function installVisionHost(host: VisionHost): void {
-  (globalThis as any)[HOST_KEY] = host;
-}
-
 /** Same entry as `@native-routes/vision`'s runDemo. */
 export function runDemo(): Promise<VisionDemoResult> {
-  const host: VisionHost | undefined = (globalThis as any)[HOST_KEY];
-  if (!host) {
-    return Promise.reject(new Error('native vision is not installed'));
-  }
   return new Promise((resolve, reject) => {
-    host.runDemo((error, result) => (error || !result ? reject(new Error(error || 'no result')) : resolve(result)));
+    withGlobalNativeRefs('vision.runDemo', () => {
+      getHost().runDemo((error, result) =>
+        error || !result ? reject(new Error(error || 'no result')) : resolve(result),
+      );
+    });
   });
 }

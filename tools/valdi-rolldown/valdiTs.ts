@@ -203,7 +203,13 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
     diagnostics() {
       const program = service.getProgram()!;
       const roots = [module.dir, ...module.generatedDirs];
-      const own = program.getSourceFiles().filter(file => roots.some(root => !path.relative(root, file.fileName).startsWith('..')));
+      // A module may install/symlink npm packages inside its directory. Those
+      // declarations remain dependencies, just as when pnpm puts them outside.
+      const own = program.getSourceFiles().filter(file => roots.some(root => {
+        const relative = path.relative(root, file.fileName);
+        return !relative.startsWith('..') && !path.isAbsolute(relative) &&
+          !relative.split(path.sep).includes('node_modules');
+      }));
       const found = [...program.getOptionsDiagnostics(), ...own.flatMap(file => [
         ...program.getSyntacticDiagnostics(file),
         ...program.getSemanticDiagnostics(file),

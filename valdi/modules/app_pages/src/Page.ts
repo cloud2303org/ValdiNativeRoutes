@@ -21,11 +21,11 @@ export interface PageViewModel {
   pageId: string;
   route: string;
   params: any;
-  /** 'push', 'sheet' or 'compactSheet'; 'tab' for a page shown in the tab shell (routes.tabs), which has nothing to close. */
+  /** 'push'; 'tab' for a page shown in the tab shell (routes.tabs), which has nothing to close. */
   presentation: string;
   /**
    * Areas the page must keep its content out of. The host already subtracts whatever it handles itself:
-   * a sheet gets no top inset and the bottom inset drops to 0 while the keyboard covers the navigation bar.
+   * the bottom inset drops to 0 while the keyboard covers the navigation bar.
    * Default tabs retain the official platform container's insets. A custom tab root absolutely overlays pages:
    * only system safe area goes to pages; the host never measures or adds the custom bar's height.
    * Business code shares its chosen bar height and content padding.
@@ -33,7 +33,7 @@ export interface PageViewModel {
   insets: PageInsets;
   /**
    * Whether the page is on screen: on top of its stack (or of the full-screen cover), the selected page of the tab
-   * shell on top, a sheet, or the page under a sheet; and the app in the foreground. A page that leaves the stack
+   * shell on top; and the app in the foreground. A page that leaves the stack
    * isn't hidden first, it is destroyed. PageComponent turns changes into onShow/onHide.
    */
   visible: boolean;

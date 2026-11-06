@@ -1,11 +1,7 @@
 import { setCatchAllUncaughtErrorHandler, UncaughtErrorHandlerResult } from 'valdi_core/src/UncaughtErrorHandler';
 import { getModuleLoader } from 'valdi_core/src/ModuleLoaderGlobal';
-import { initializeBluetooth } from 'bluetooth/src/index';
-import * as permissions from 'permissions/src/index';
 import { api } from './api';
-import type { TokenStore } from './auth';
 import { initializeAppDb } from './db';
-import { installNavigation, NavigationHost } from './NavigationHost';
 import type { RouteDeclaration } from './navigation/models';
 import { installTheme } from './theme';
 
@@ -19,14 +15,11 @@ import { installTheme } from './theme';
  *
  * @ExportFunction({ios: 'VRStartApp', android: 'io.valdiroutes.pages.StartApp'})
  */
-export function startApp(debug: boolean, navigation: NavigationHost, tokens: TokenStore): RouteDeclaration {
+export function startApp(debug: boolean): RouteDeclaration {
   installErrorHandler(debug);
-  initializeBluetooth(permissions);
   installTheme();
-  getModuleLoader().load('app_pages/src/auth', true).installAuth(tokens);
   installDatabase();
   installApi();
-  installNavigation(navigation);
   if (debug && !disposeRouteReload) {
     // The observer belongs to this app module; ModuleLoader disposes it when the
     // observing module unloads. Load fresh exports after doUnload has completed.
@@ -47,7 +40,7 @@ function currentRoutes(): typeof import('./routes')['routes'] {
   return getModuleLoader().load('app_pages/src/routes', true).routes;
 }
 
-/** Consult the current auth module after token-store installation and after reload. */
+/** Consult the current auth module and its lazy native token store after reload. */
 function rootRoute(home: string): string {
   const { auth } = getModuleLoader().load('app_pages/src/auth', true) as typeof import('./auth');
   return auth.isSignedIn() ? home : 'login';

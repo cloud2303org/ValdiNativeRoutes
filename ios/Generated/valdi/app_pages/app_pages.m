@@ -1,4 +1,86 @@
 //
+// VRAndroidSplashScreenNativeModule.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "app_pages.h"
+
+@interface VRAndroidSplashScreenNativeModule: SCValdiProxyMarshallableObject
+
+@end
+
+@implementation VRAndroidSplashScreenNativeModule
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "getHost", .selName = "getHost", .type = "f|m|(): r:'[0]'"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRAndroidSplashScreenHost",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeProtocol);
+}
+
+@end
+
+NSInteger VRAndroidSplashScreenNativeModuleMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRAndroidSplashScreenNativeModule> _Nonnull instance) {
+    return SCValdiMarshallableObjectMarshallInterface(marshaller, instance, [VRAndroidSplashScreenNativeModule class]);
+}
+
+
+//
+// VRAndroidSplashScreenNativeModuleFactory.m
+//
+
+#import "app_pages.h"
+
+
+//
+// VRAppContextNativeModule.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "app_pages.h"
+
+@interface VRAppContextNativeModule: SCValdiProxyMarshallableObject
+
+@end
+
+@implementation VRAppContextNativeModule
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "getHost", .selName = "getHost", .type = "f|m|(): r:'[0]'"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRAppContextHost",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeProtocol);
+}
+
+@end
+
+NSInteger VRAppContextNativeModuleMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRAppContextNativeModule> _Nonnull instance) {
+    return SCValdiMarshallableObjectMarshallInterface(marshaller, instance, [VRAppContextNativeModule class]);
+}
+
+
+//
+// VRAppContextNativeModuleFactory.m
+//
+
+#import "app_pages.h"
+
+
+//
 // VRColumnWheelConfig.m
 //
 
@@ -60,58 +142,6 @@ NSInteger VRCppMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRCpp> _No
 
 
 //
-// VRInstallVisionHost.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-#import <ValdiRuntime/SCValdiMarshallableObjectRegistry.h>
-
-#import "app_pages.h"
-
-@implementation VRInstallVisionHost
-
-+ (NSString *)modulePath
-{
-    return @"app_pages/src/vision/VisionHost";
-}
-
-+ (BOOL)asyncStrictMode
-{
-    return NO;
-}
-- (void)installVisionHostWithHost:(id<VRVisionHost> _Nonnull)host{
-    VRInstallVisionHostBlock callBlock = (VRInstallVisionHostBlock)self.callBlock;
-    callBlock(host);
-}
-
-+ (void)invokeWithJSRuntimeProvider:(id<SCValdiJSRuntime> _Nonnull (^ _Nonnull)(void))jsRuntimeProvider host:(id<VRVisionHost> _Nonnull)host completionHandler:(void (^ _Nonnull)(void))completionHandler
-{
-    id<SCValdiJSRuntime> runtime = jsRuntimeProvider();
-    [runtime dispatchInJsThread:^{
-        VRInstallVisionHost *function = [VRInstallVisionHost functionWithJSRuntime:runtime];
-        VRInstallVisionHostBlock callBlock = (VRInstallVisionHostBlock)function.callBlock;
-        callBlock(host);
-        completionHandler();
-    } attribution:@"generated.invokeWithJSRuntime:app_pages/src/vision/VisionHost#installVisionHost"];
-}
-
-+ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
-{
-    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
-        {.name = "installVisionHost", .selName = nil, .type = "f(r:'[0]')"},
-        {.name = nil},
-    };
-    static const char *const kIdentifiers[] = {
-        "VRVisionHost",
-        nil
-    };
-    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeFunction);
-}
-
-@end
-
-
-//
 // VRNavigationHost.m
 //
 
@@ -145,6 +175,54 @@ NSInteger VRCppMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRCpp> _No
 #import <ValdiRuntime/SCValdiJSConversionUtils.h>
 
 #import "app_pages.h"
+
+
+//
+// VRRequestInitialContentDraw.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectRegistry.h>
+
+#import "app_pages.h"
+
+@implementation VRRequestInitialContentDraw
+
++ (NSString *)modulePath
+{
+    return @"app_pages/src/splash/InitialContentDraw";
+}
+
++ (BOOL)asyncStrictMode
+{
+    return NO;
+}
+- (BOOL)requestInitialContentDrawWithContextId:(NSString * _Nonnull)contextId ready:(VRRequestInitialContentDrawReadyBlock _Nonnull)ready{
+    VRRequestInitialContentDrawBlock callBlock = (VRRequestInitialContentDrawBlock)self.callBlock;
+    return callBlock(contextId, ready);
+}
+
++ (void)invokeWithJSRuntimeProvider:(id<SCValdiJSRuntime> _Nonnull (^ _Nonnull)(void))jsRuntimeProvider contextId:(NSString * _Nonnull)contextId ready:(VRRequestInitialContentDrawReadyBlock _Nonnull)ready completionHandler:(void (^ _Nonnull)(BOOL))completionHandler
+{
+    id<SCValdiJSRuntime> runtime = jsRuntimeProvider();
+    [runtime dispatchInJsThread:^{
+        VRRequestInitialContentDraw *function = [VRRequestInitialContentDraw functionWithJSRuntime:runtime];
+        VRRequestInitialContentDrawBlock callBlock = (VRRequestInitialContentDrawBlock)function.callBlock;
+        BOOL result = callBlock(contextId, ready);
+        completionHandler(result);
+    } attribution:@"generated.invokeWithJSRuntime:app_pages/src/splash/InitialContentDraw#requestInitialContentDraw"];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "requestInitialContentDraw", .selName = nil, .type = "f(s, f()): b"},
+        {.name = nil},
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeFunction);
+}
+
+@end
 
 
 //
@@ -210,14 +288,14 @@ NSInteger VRCppMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRCpp> _No
 
 #import "app_pages.h"
 
-static SCValdiFieldValue SCValdiFunctionInvokeOBOO_o(const void *function, SCValdiFieldValue* fields) {
-    const void * result = ((const void * (*) (const void *, BOOL, const void *, const void * ))function)(SCValdiFieldValueGetPtr(fields[0]), SCValdiFieldValueGetBool(fields[1]), SCValdiFieldValueGetPtr(fields[2]), SCValdiFieldValueGetPtr(fields[3]));
+static SCValdiFieldValue SCValdiFunctionInvokeOB_o(const void *function, SCValdiFieldValue* fields) {
+    const void * result = ((const void * (*) (const void *, BOOL ))function)(SCValdiFieldValueGetPtr(fields[0]), SCValdiFieldValueGetBool(fields[1]));
     return SCValdiFieldValueMakePtr(result);
 }
 
-static id SCValdiBlockCreateOBOO_o(SCValdiBlockTrampoline trampoline) {
-    return ^const void *(BOOL p0, const void * p1, const void * p2) {
-        return SCValdiFieldValueGetPtr(trampoline(nil, SCValdiFieldValueMakeBool(p0), SCValdiFieldValueMakePtr(p1), SCValdiFieldValueMakePtr(p2)));
+static id SCValdiBlockCreateOB_o(SCValdiBlockTrampoline trampoline) {
+    return ^const void *(BOOL p0) {
+        return SCValdiFieldValueGetPtr(trampoline(nil, SCValdiFieldValueMakeBool(p0)));
     };
 }
 
@@ -232,18 +310,18 @@ static id SCValdiBlockCreateOBOO_o(SCValdiBlockTrampoline trampoline) {
 {
     return NO;
 }
-- (VRRouteDeclaration * _Nonnull)startAppWithDebug:(BOOL)debug navigation:(VRNavigationHost * _Nonnull)navigation tokens:(VRTokenStore * _Nonnull)tokens{
+- (VRRouteDeclaration * _Nonnull)startAppWithDebug:(BOOL)debug{
     VRStartAppBlock callBlock = (VRStartAppBlock)self.callBlock;
-    return callBlock(debug, navigation, tokens);
+    return callBlock(debug);
 }
 
-+ (void)invokeWithJSRuntimeProvider:(id<SCValdiJSRuntime> _Nonnull (^ _Nonnull)(void))jsRuntimeProvider debug:(BOOL)debug navigation:(VRNavigationHost * _Nonnull)navigation tokens:(VRTokenStore * _Nonnull)tokens completionHandler:(void (^ _Nonnull)(VRRouteDeclaration * _Nonnull))completionHandler
++ (void)invokeWithJSRuntimeProvider:(id<SCValdiJSRuntime> _Nonnull (^ _Nonnull)(void))jsRuntimeProvider debug:(BOOL)debug completionHandler:(void (^ _Nonnull)(VRRouteDeclaration * _Nonnull))completionHandler
 {
     id<SCValdiJSRuntime> runtime = jsRuntimeProvider();
     [runtime dispatchInJsThread:^{
         VRStartApp *function = [VRStartApp functionWithJSRuntime:runtime];
         VRStartAppBlock callBlock = (VRStartAppBlock)function.callBlock;
-        VRRouteDeclaration * _Nonnull result = callBlock(debug, navigation, tokens);
+        VRRouteDeclaration * _Nonnull result = callBlock(debug);
         completionHandler(result);
     } attribution:@"generated.invokeWithJSRuntime:app_pages/src/app#startApp"];
 }
@@ -251,16 +329,14 @@ static id SCValdiBlockCreateOBOO_o(SCValdiBlockTrampoline trampoline) {
 + (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
 {
     static const SCValdiMarshallableObjectBlockSupport kBlocks[] = {
-        { .typeEncoding = "oboo:o", .invoker = &SCValdiFunctionInvokeOBOO_o, .factory = &SCValdiBlockCreateOBOO_o },
+        { .typeEncoding = "ob:o", .invoker = &SCValdiFunctionInvokeOB_o, .factory = &SCValdiBlockCreateOB_o },
         { .typeEncoding = nil },
     };
     static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
-        {.name = "startApp", .selName = nil, .type = "f(b, r:'[0]', r:'[1]'): r:'[2]'"},
+        {.name = "startApp", .selName = nil, .type = "f(b): r:'[0]'"},
         {.name = nil},
     };
     static const char *const kIdentifiers[] = {
-        "VRNavigationHost",
-        "VRTokenStore",
         "VRRouteDeclaration",
         nil
     };
@@ -325,6 +401,47 @@ static id SCValdiBlockCreateOBOO_o(SCValdiBlockTrampoline trampoline) {
 
 
 //
+// VRVisionNativeModule.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "app_pages.h"
+
+@interface VRVisionNativeModule: SCValdiProxyMarshallableObject
+
+@end
+
+@implementation VRVisionNativeModule
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "getHost", .selName = "getHost", .type = "f|m|(): r:'[0]'"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRVisionHost",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeProtocol);
+}
+
+@end
+
+NSInteger VRVisionNativeModuleMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRVisionNativeModule> _Nonnull instance) {
+    return SCValdiMarshallableObjectMarshallInterface(marshaller, instance, [VRVisionNativeModule class]);
+}
+
+
+//
+// VRVisionNativeModuleFactory.m
+//
+
+#import "app_pages.h"
+
+
+//
 // VRVisionPrediction.m
 //
 
@@ -340,6 +457,73 @@ static id SCValdiBlockCreateOBOO_o(SCValdiBlockTrampoline trampoline) {
 #import <ValdiRuntime/SCValdiJSConversionUtils.h>
 
 #import "app_pages.h"
+
+
+//
+// VRAndroidSplashScreenHost.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "app_pages.h"
+
+@interface VRAndroidSplashScreenHost: SCValdiProxyMarshallableObject
+
+@end
+
+@implementation VRAndroidSplashScreenHost
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "preventAutoHide", .selName = "preventAutoHide", .type = "f|m|(): b"},
+        {.name = "hide", .selName = "hide", .type = "f|m|()"},
+        {.name = nil},
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeProtocol);
+}
+
+@end
+
+NSInteger VRAndroidSplashScreenHostMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRAndroidSplashScreenHost> _Nonnull instance) {
+    return SCValdiMarshallableObjectMarshallInterface(marshaller, instance, [VRAndroidSplashScreenHost class]);
+}
+
+
+//
+// VRAppContextHost.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "app_pages.h"
+
+@interface VRAppContextHost: SCValdiProxyMarshallableObject
+
+@end
+
+@implementation VRAppContextHost
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "getNavigationHost", .selName = "getNavigationHost", .type = "f|m|(): r:'[0]'"},
+        {.name = "getTokenStore", .selName = "getTokenStore", .type = "f|m|(): r:'[1]'"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRNavigationHost",
+        "VRTokenStore",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeProtocol);
+}
+
+@end
+
+NSInteger VRAppContextHostMarshall(SCValdiMarshallerRef  _Nonnull marshaller, id<VRAppContextHost> _Nonnull instance) {
+    return SCValdiMarshallableObjectMarshallInterface(marshaller, instance, [VRAppContextHost class]);
+}
 
 
 //

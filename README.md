@@ -1,6 +1,6 @@
 # Valdi Native Routes
 
-页面全部用 Valdi（TSX）写，原生负责路由。Android 用 Compose Navigation 3 管页面栈，iOS 用 UIKit 的 UINavigationController。
+业务页面用 Valdi（TSX）写，保留一个原生选择页用于互操作示例。原生负责路由：Android 用 Compose Navigation 3 管页面栈，iOS 用 UIKit 的 UINavigationController。
 
 媒体示例从首页进入：[`Lottie 动画`](docs/lottie-demo.md) 使用官方 `<animatedimage>`，
 [`原生视频播放器`](docs/video-demo.md) 使用官方 `<video>` 接入 Android Media3 和 iOS AVPlayer，
@@ -11,9 +11,10 @@
 valdi/                  Valdi 工作区（Bazel），只用来编 Valdi 运行时
   BUILD.bazel           valdi_runtime：导出成 valdi_runtime.aar / ValdiRuntime.xcframework
   package.json          Valdi 命令行工具，以及页面用的 npm 包（dependencies）
-  modules/app_pages/    所有页面
+  modules/app_pages/    业务页面、应用路由与初始化
     src/Page.ts         页面和宿主之间的契约：PageViewModel、PageContext
-    src/routes.ts       路由表、参数和结果类型、getRoutesJson()（给原生读）
+    src/routes.ts       类型化路由声明、参数和结果类型，由 StartApp(debug) 返回给原生
+  modules/              AppUI、视频、蓝牙、存储等能力及其平台实现
 tools/valdi-rolldown/   我们自己的 Valdi 模块构建（代替 Valdi 的编译器）：编译、打包、热重载、原生绑定生成
 android/                普通 Gradle 工程，Compose + Nav3
   app/libs/             valdi_runtime.aar（导出产物，不进 git）
@@ -26,6 +27,8 @@ scripts/
   export-ios.sh         重新导出 Valdi 运行时 xcframework
   hotreload.sh          热重载（tools/valdi-rolldown 的 pnpm dev）
 ```
+
+模块和两端宿主的职责、共享实现与生成代码边界见[代码组织](docs/code-organization.md)。
 
 ## 运行
 
@@ -115,29 +118,23 @@ node scripts/ios-project.mjs         # brew install xcodegen；按 valdi.app 配
 
 真机运行要在 `project.yml` 里填 `DEVELOPMENT_TEAM`。
 
-**UI 测试**用 [argent](https://www.npmjs.com/package/@swmansion/argent)（`npm i -g @swmansion/argent`）：`.argent/e2e/*.yaml` 是测试流程，按页面上的文字找元素、点击、断言，同一份在 iOS 模拟器和 Android 模拟器上跑，不经过 AI。`scripts/e2e.sh [ios|android]` 依次在两个平台上跑全部流程，设备由 `IOS_DEVICE` / `ANDROID_DEVICE` 指定，只用这两台（Android 默认是远程模拟器 `100.78.189.64:5555`，先 `adb connect`）。跑之前它会打开 iOS 模拟器的 `ApplicationAccessibilityEnabled`（不开的话 argent 读不到 UILabel 的文字），在 Android 上预先授予 app 的运行时权限（否则系统授权框会挡住后面所有测试），并放一张测试照片（`.argent/fixtures/e2e-photo.jpg`）给相册选图用。`.argent/e2e/` 覆盖了原来的 38 个 XCUITest，只在 iOS 上跑的有 4 个：两个依赖模拟器没有摄像头、`fullScreen` 打开方式 Android 没有、Android 的 Toast 不在无障碍树里。测试密码在 `.argent/secrets.env`（不进 git）。iOS 页面开了 Valdi 的无障碍树（`ValdiHost.swift` 的 `enableAccessibility`），argent 和 VoiceOver 才读得到 Valdi 页面的内容。
+**UI 测试**用 [argent](https://www.npmjs.com/package/@swmansion/argent)（`npm i -g @swmansion/argent`）：`.argent/e2e/*.yaml` 是测试流程，按页面上的文字找元素、点击、断言，同一份在 iOS 模拟器和 Android 模拟器上跑，不经过 AI。`scripts/e2e.sh [ios|android]` 依次在两个平台上跑全部流程，设备由 `IOS_DEVICE` / `ANDROID_DEVICE` 指定，只用这两台（Android 默认是远程模拟器 `100.78.189.64:5555`，先 `adb connect`）。跑之前它会打开 iOS 模拟器的 `ApplicationAccessibilityEnabled`（不开的话 argent 读不到 UILabel 的文字），在 Android 上预先授予 app 的运行时权限（否则系统授权框会挡住后面所有测试），并放一张测试照片（`.argent/fixtures/e2e-photo.jpg`）给相册选图用。`.argent/e2e/` 覆盖路由、输入和 AppUI 等行为；移除路由 Sheet 后，相应的五个专用流程已删除。平台限定流程保留各自的条件。测试密码在 `.argent/secrets.env`（不进 git）。iOS 页面开了 Valdi 的无障碍树（`ValdiHost.swift` 的 `enableAccessibility`），argent 和 VoiceOver 才读得到 Valdi 页面的内容。
 
 ## 设计
 
-**路由表在 TS 里。** `routes.ts` 声明每个路由是 Valdi 页面还是原生页面，以及组件路径。原生启动时通过 `@ExportFunction` 生成的 `Routes.getRoutesJson()` 读取，不需要生成清单文件。
+**路由表在 TS 里。** `routes.ts` 声明每个路由是 Valdi 页面还是原生页面，以及组件路径。原生启动时调用生成的 `StartApp(debug)`，接收结构化的路由声明，不需要生成清单文件。路由支持普通页面、tab 和 iOS 的 `fullScreen` 导航选项，不支持 `sheet` 或 `compactSheet` 展示方式。
 
-**参数和返回值都是 JSON。** `router.push` 把参数 `JSON.stringify` 成字符串交给原生，原生原样转交，页面用 `readParams` 解析；`finish` 的结果也一样。页面之间的跳转在运行时不校验参数，靠 `RouteParams` / `RouteResults` 的 TS 类型约束；`routes.ts` 里的 `RoutesAreJson` 要求它们只含 JSON 值，写了 `Date`、`Map`、函数这类过不了 `JSON.stringify` 的类型会编译失败。以后加外部链接（deep link）时，只给开放 `link` 的路由加 valibot schema，在解析链接的地方校验一次（格式和 ExpoNativeRoutes 一样：固定路径，参数放在 `?params=<JSON>`）。
+**参数和返回值用结构化数据传递。** `router.push` 和 `finish` 直接跨原生绑定传对象，不经过 JSON 字符串。TS 的 `RouteParams` / `RouteResults` 检查路由对应的入参和结果类型；运行时还会快照数据并拒绝函数、循环引用等非法载荷，避免调用后修改原对象影响已提交的导航。
 
 **每个页面一个 Valdi 根 view，由宿主持有。** `PageEntry` 持有 `ValdiRootView`。Nav3 会释放被覆盖页面的 composition，所以根 view 不能放在 Compose 里；`AndroidView` 释放时只把它摘下来，页面真正出栈后才 `destroy()`。
 
-**页面通过 context 调路由。** `PageContext` 里是 `push`、`pushForResult`、`finish`、`back` 四个回调，Kotlin 实现，TS 侧包成类型化的 `Router`。`push` 的第四个参数是导航选项（见“路由动画”），TS 合并好再交给原生。
+**路由通过原生 host 调用。** 全局 `NavigationHost` 提供导航能力，页面的 `PageContext` 只提供 `finish` 和 `back`。TS 侧包成类型化的 `router` / `Router`，调用为 `router.push(route, params, options)` 或 `router.pushForResult(route, params, options)`；第三个参数是导航选项，TS 合并好再交给原生。
 
 **inset 由宿主算好放进 viewModel。** 开了 edge-to-edge，页面按 `viewModel.insets` 自己留边。Valdi 自带的 `Device.getDisplayTopInset()` 在 Android 上一直是 0，不用它。
 
-**键盘只由宿主处理一次，页面不读键盘高度。** 宿主读一次 `WindowInsets.ime`，规则只有一条：给容器的内容底部加一段键盘高度的 padding。窗口开了 edge-to-edge，系统不会再缩窗口；Sheet 也不是 Dialog，所以没有第二个地方在避让键盘。
+**页面键盘只由宿主处理一次，页面不读键盘高度。** Android 宿主读 `WindowInsets.ime`，给页面容器底部加键盘高度的 padding。窗口开了 edge-to-edge，系统不会再缩窗口；页面在变矮后的范围内布局，`FocusScroller` 将输入框滚到可见区域。AppUI 弹层独立处理自己的键盘避让。
 
-| 场景 | 宿主 | 页面 |
-|---|---|---|
-| 全屏页 | 内容底部加键盘 padding，页面变矮；导航栏被键盘盖住时 bottom inset 变成 0 | 在自己的范围里布局 |
-| `sheet`（固定高度） | Sheet 高度不变，内容加键盘 padding，页面变矮 | `FocusScroller` 把输入框滚到可见区域 |
-| `compactSheet`（按内容） | Sheet 高度 = 内容 + 键盘 padding，整个 Sheet 跟着键盘升高 | 不用做任何事 |
-
-**Sheet 是 `SheetHostView`**，从 Software Mansion 的 react-native-bottom-sheet（MIT）移植的 Android 核心，去掉了 RN 绑定：跟手拖动、按速度和距离吸附、弹簧动画、遮罩、点遮罩和返回键关闭。内容里有 scroll 时，往下拖要等内容滚到顶才接手拖 Sheet。Sheet 本身完全不知道键盘，键盘按上面的规则在外面处理。Sheet 和下面的页面在同一个窗口，里面是独立的 Valdi 根 view。
+**Sheet 仅作为 AppUI 弹层组件保留。** `app_ui` 模块里的 `SheetHostView`（Android）和 `AppUISheetHostView`（iOS）从 Software Mansion 的 react-native-bottom-sheet（MIT）移植，供 BottomSheet、选择器等内容使用。它不再承载路由页面；路由层不再有独立 Sheet 状态、尺寸公式或关闭回调。
 
 ## 弹窗与提示 API
 
@@ -165,11 +162,11 @@ let answer = try await app.ui.showModal(ModalOptions(title: "确认操作", cont
 _ = try await app.ui.showToast(ToastOptions(title: "已同步", icon: "none"))
 ```
 
-- **桥接**：`AppUIHost.ts` 里的 `AppUIHost` 是一组回调（`@ExportModel`），宿主用 Kotlin/Swift 实现，启动时通过 `@ExportFunction installAppUI` 装进 JS，和读路由表一样。
-- **Modal**：所有 `showModal` 共用一个串行队列，前一个完全关闭后才显示下一个，关闭动画结束后才返回结果。弹出时归属当时最上层的页面（Sheet 在上就是 Sheet），这个页面被覆盖或移除时按取消结束。返回键、点遮罩都算取消。Android 是 Compose 自己的窗口，iOS 是加在窗口最上层的 view，所以都盖得住 Sheet。输入框的键盘：Android 用弹窗窗口的 IME inset，iOS 用 `KeyboardObserver`，只在键盘真的挡住卡片时把卡片往上推。
+- **桥接**：`AppUIHost.ts` 里的 `AppUIHost` 是一组回调（`@ExportModel`），宿主用 Kotlin/Swift 实现，通过生成的 `@ExportModule` / `getHost()` 获取；业务无需手动安装。
+- **Modal**：所有 `showModal` 共用一个串行队列，前一个完全关闭后才显示下一个，关闭动画结束后才返回结果。弹出时归属当时最上层的页面，这个页面被覆盖或移除时按取消结束。返回键、点遮罩都算取消。Android 是 Compose 自己的窗口，iOS 是加在窗口最上层的 view。输入框的键盘：Android 用弹窗窗口的 IME inset，iOS 用 `KeyboardObserver`，只在键盘真的挡住卡片时把卡片往上推。
 - **Toast / Loading**：各占一个独立窗口，在 Modal 之上，Toast 又在 Loading 之上。`mask: true` 时吞掉触摸（Android 也吞掉返回键）。Loading 一直显示到 `hideLoading`。
 - 外观照 ExpoNativeRoutes 原生 Dialog/Toast 的 token：卡片宽度不超过 360、圆角 20、内边距 24，标题 18/26，按钮高 48、圆角 14。
-- **Android 注意**：交给 JS 长期持有的原生函数，属于传递它时所在的 `createScopedJSRuntime` 作用域；这个作用域对象被回收后，JS 再调用会报 `Cannot unwrap native function … reference was disposed`。所以 `ValdiHost` 开一个 `hosts` 作用域并一直持有，所有 host 都在里面安装。iOS 的 `runtime.jsRuntime()` 随 runtime 存活，没有这个问题。
+- **Android 注意**：交给 JS 长期持有的原生函数，属于传递它时所在的 `createScopedJSRuntime` 作用域；这个作用域对象被回收后，JS 再调用会报 `Cannot unwrap native function … reference was disposed`。所以 `ValdiHost` 仍保留应用启动的 `hosts` 作用域；延迟获取认证、导航和注册长期事件时使用官方 `withGlobalNativeRefs`，不依赖首次调用的页面寿命。
 
 ## 选择与展示 API
 
@@ -186,7 +183,7 @@ _ = try await app.ui.showToast(ToastOptions(title: "已同步", icon: "none"))
 - 选出来的文件复制在应用自己的缓存目录里，`clearAttachmentCache` 清掉；不再用这些路径时再调。
 - 扫码 `scanCode`：只支持相机（`onlyFromCamera` 省略或为 true），返回 `result` 和 `scanType`（`QR_CODE`、`EAN_13`、`EAN_8`、`CODE_128`、`CODE_39`、`UPC_A`），关闭扫码页是 `scanCode:fail cancel`。Android 是 CameraX + ML Kit，iOS 是 AVFoundation。
 
-原生实现是 ExpoNativeRoutes 原生 UI 库的对应组件（含扫码和附件选择）。Android 用 Compose，放在 `io.nativeroutes.ui`，图片用 coil3 加载；iOS 用 UIKit，放在 `ValdiRoutes/NativeRoutesUI/`，图片用 SDWebImage 加载。每个弹层都盖在整个窗口上，所以也盖得住 Sheet，Toast 和 Loading 始终在最上层。iOS 26 起，iPhone 上的系统操作菜单是浮动菜单，没有取消按钮，点外面就是取消。原生页面也可以直接调用 `NativeApp.ui` / `app.ui` 上的同名方法。示例页是首页“更多示例”里的“选择器、日期、图片预览”（`PresentationPage.tsx`）。
+原生实现是 ExpoNativeRoutes 原生 UI 库的对应组件（含扫码和附件选择）。Android 用 Compose，放在 `io.nativeroutes.ui`，图片用 coil3 加载；iOS 用 UIKit，放在 `ValdiRoutes/NativeRoutesUI/`，图片用 SDWebImage 加载。每个弹层都盖在整个窗口上，Toast 和 Loading 始终在最上层。iOS 26 起，iPhone 上的系统操作菜单是浮动菜单，没有取消按钮，点外面就是取消。原生页面也可以直接调用 `NativeApp.ui` / `app.ui` 上的同名方法。示例页是首页“更多示例”里的“选择器、日期、图片预览”（`PresentationPage.tsx`）。
 
 ## OpenCV 与 ncnn
 
@@ -216,25 +213,27 @@ await api.createBLEConnection({ deviceId });
 
 小程序的 Wi-Fi 和 NFC 接口，也合并在 `api` 里：`api.startWifi`、`stopWifi`、`connectWifi`、`getWifiList`、`getConnectedWifi`、`setWifiList`、`on/offWifiConnected`、`on/offWifiConnectedWithPartialInfo`、`on/offGetWifiList`、`getWifiPermissionState`、`requestWifiPermission`、`openWifiPermissionSettings`，以及 `api.getNFCAdapter()`（`startDiscovery`、`onDiscovered`、`getNfcA()`、`getIsoDep()`、`getNdef()` 等）。TS 层 `wechat.ts`、`errors.ts`、`permission.ts`、`adapter.ts` 直接使用 `WifiHost` / `NfcHost`（`@ExportProxy`）生成的类型，桥接和蓝牙一样：原生 Promise 加一个事件出口，只返回 Promise。NFC 只有 Android，iOS 上返回 `NOT_SUPPORTED`。示例页是首页“更多示例”里的“Wi-Fi 与 NFC”（`DevicePage.tsx`）。
 
-和蓝牙一样，`api` 跟应用同寿命：宿主启动时在常驻的 JS 作用域里装好，页面关闭不会释放；页面只停掉自己开始的扫描、移除自己的监听。
+和蓝牙一样，`api` 跟应用同寿命：首次实际使用时自动获取原生 host，长期事件登记在全局原生引用作用域，页面关闭不会释放应用会话；页面只停掉自己开始的扫描、移除自己的监听。
 
 ## 原生调用与页面
+
+原生服务统一通过生成的 `@ExportModule` / `getHost()` 获取，业务无需调用安装函数。认证、导航和 Vision 的工厂注册、延迟创建及回调所有权见 [原生模块入口](docs/native-module-access.md)。
 
 Valdi 把页面传给原生的 JS 函数登记在当时的页面名下（根 Context），页面销毁时一起清掉；原生之后再调用，只会在日志里报 `Cannot unwrap JS value reference … as it was disposed`（Valdi 文档 `advanced-native-references.md`）。页面在退出动画结束时销毁。蓝牙、Wi-Fi、NFC 和权限的状态是整个应用共用的：比如连接中途返回，结果回调丢了，`wechat.ts` 的设备队列就会一直等着，之后所有页面都用不了这个设备。
 
 - **异步调用返回原生 Promise。** `BleHost`、`WifiHost`、`NfcHost`、`PermissionHost` 的方法都返回 `Promise<T>`，由 `nativeCall.ts` 调用，页面不再给原生任何函数。原生 Promise 不登记在页面名下，页面关了照样完成。
-- **事件只有一个出口。** 启动时在常驻作用域里调用 `install…Host` 时 `setEvents`，原生只持有这一份；页面的监听登记在 JS 里（`ble/events.ts`、`wifi/native.ts`、`nfc/native.ts`），不过桥。
+- **事件只有一个出口。** 蓝牙、Wi-Fi、NFC 在首次使用时于 `withGlobalNativeRefs` 内获取 host 并执行一次 `setEvents`，原生持有这一份出口；页面监听登记在各模块的 JS 分发器中，单独取消。
 - **错误信息**：Android 会把失败包成 `类名: '…'`，`nativeCall` 去掉这层，`E_BLE_…`、`E_WIFI_…` 等错误码照常解析。
-- **iOS 的符号**：以前的 `ValdiPages.xcframework` 不导出 `SCValdiPromise`、`SCValdiUndefinedValue` 这些类符号，Swift 一引用就链接失败，所以带值的 Promise 用 `SCValdiResolvablePromise` 创建，`Promise<void>` 由 Objective-C 的 `ValdiVoidPromise`（`AppUI/ValdiImageBridge.m`）创建。现在的 `ValdiRuntime.xcframework` 导出 valdi_core 的整套 Objective-C API（`valdi/.bazelrc` 的 `-fvisibility=default`），这些绕法可以简化，但还没改。
-- **模块不被卸载**：内存警告时 Valdi 会卸载既不被活着的页面、也不被原生 import 的 JS 模块。`api` 里放着这些状态，所以由 `startAppServices`（`db.ts`，原生 import）引用，并在启动时创建。
-- toast、modal、选择器这类 UI 调用和原生 AppUI 之间仍用 `done` 回调：结果只关系到发起的页面，页面关了丢掉也没关系。
+- **iOS 的符号**：当前 `ValdiRuntime.xcframework` 导出 valdi_core 的 Objective-C API。宿主图片加载器位于 `Images/AppImages.swift`，直接使用 `SCValdiImage`；旧宿主 `ValdiImageBridge` / `ValdiVoidPromise` 已删除。AppUI 的原生 Promise 由模块自身的 `AppUIPromise` / `VRAppUIVoidPromise` 管理。
+- **模块不被卸载**：内存警告时 Valdi 会卸载既不被活着的页面、也不被原生 import 的 JS 模块。`api` 里放着这些状态，所以由原生持有的 `startApp` 模块引用；创建 JS 门面本身不触发原生 host 初始化。
+- toast、modal、选择器这类 UI 调用通过原生 Promise 返回；展示归属仍由原生页面生命周期管理。
 
 ## 路由动画
 
 照 ExpoNativeRoutes 的 `NativeRouteAnimations`：全局 `NAVIGATION`、路由的 `options`、每次调用的 `options` 三层合并，后面的覆盖前面的，每层可以有 `android` / `ios` 分支。`routes.ts` 的 `resolveNavigation` 在 TS 里校验并合并成本平台的 `{animation, durationMs, presentation}`，写错直接抛错，不会推页面。
 
 ```ts
-this.router.push('detail', { id: 1, from: 'home' }, 'push', {
+this.router.push('detail', { id: 1, from: 'home' }, {
   android: { animation: 'fade', durationMs: 200 },
   ios: { presentation: 'fullScreen' },
 });
@@ -245,14 +244,21 @@ this.router.push('detail', { id: 1, from: 'home' }, 'push', {
 - **iOS**：只有 `default`（`UINavigationController` 自带的 push、pop 和边缘侧滑）和 `none`；写别的名字会报错。`ios.presentation: 'fullScreen'` 全屏盖住整个导航栈，里面有自己的栈，再 push 的页面留在里面，关掉时一起取消；它不能侧滑关闭。一次只有一层全屏。
 - 示例页是首页“更多示例”里的“路由动画”（`RouteAnimationPage.tsx`）。
 
-## SQLite（ClientSQL）
+## SQLite 与 Drizzle
 
-应用构建已移除 `.sq` 生成流程、vendored Python 生成器和 SQLite 3.16 校验器。现有三份查询代码原样固定在
-`modules/app_pages/src/sqlgen/`，作为接入 Drizzle 前的过渡源码；不再自动生成。`src/db.ts` 仍打开共享的 `AppDb`，
-表单保存、计数订阅、事务和数据库调试视图沿用现有实现，数据库文件标识与 schema version 不变。
-Drizzle 尚未接入，后续一起替换 schema、驱动和迁移；原生 SQLite 模块继续随运行时导出。
+表结构在 `valdi/modules/app_pages/src/database/schema.ts`，查询使用 Drizzle，官方 ClientSQL 原生执行层通过 Valdi
+对象接口执行参数化 SQL。结果按列顺序传递，SQL 参数和二进制数据不经过 JSON 字符串。
+ClientSQL 负责连接、调度和事务协调；业务表和迁移记录只由 Drizzle 管理，旧 `sqlgen/` 过渡代码已删除。
+使用全新的 `valdiroutes_app_drizzle.sqlite`，不导入旧数据库。
 
-数据库在启动时由宿主调用 `startAppServices()`（`db.ts`，`@ExportFunction`）打开，不能等页面第一次用到时再打开。原因是 ClientSQL 返回的连接由原生函数组成，Valdi 会把它们和创建时所在的 Context 绑在一起：在首页里打开，连接就属于首页的根 view。Android 按返回键退出时 Activity 销毁，根 view 一起销毁，之后所有查询都失败，计数显示 0。宿主在常驻的 JS 作用域里调用它，连接就一直有效。以后新增应用级、返回原生对象的服务（例如 `persistence`），也要在这里创建。
+修改 schema 后运行 `pnpm db:generate`，审查并提交 SQL、Kit journal/snapshot 和生成的迁移常量。
+`pnpm db:check` 检查打包输入；模块构建、两端宿主构建和测试都会执行它。运行时在同一事务中执行迁移与
+迁移记录写入，拒绝变化的历史和未知的新版本。OTA 回滚不会回滚数据库，具体限制见
+[数据库接口和迁移](docs/drizzle-database.md)。
+
+连接由 `startApp()` 调用 `initializeAppDb()` 在应用作用域创建。页面持有可取消的查询订阅，数据库操作等待
+迁移完成；原生回调注册使用明确归属的全局引用作用域，避免返回页面时回调已被销毁。
+新增的 `queryRows` / `run` 原生接口需要匹配的 AAR / XCFramework，旧运行时会明确拒绝接入。
 
 ## 页面生命周期和状态栏
 
@@ -266,11 +272,11 @@ Drizzle 尚未接入，后续一起替换 schema、驱动和迁移；原生 SQLi
 | `onUnload` | `onDestroy()`；页面关闭时不先调 `onHide`，和小程序一样 |
 
 - **`whileVisible(effect)`**：页面可见时运行，隐藏或销毁时调用它返回的清理函数，适合扫描、轮询这类只在可见时要做的事。
-- **可见**的意思是：栈顶（或全屏 cover 的栈顶）、tab 壳里选中的那页、sheet 本身和 sheet 下面那页，并且 app 在前台。
+- **可见**的意思是：栈顶（或全屏 cover 的栈顶）、tab 壳里选中的那页，并且 app 在前台。
 - **怎么算**：宿主根据导航状态算出来，通过 PageViewModel 的 `visible` / `visibilityReason` 传给页面，不看 UIKit 的 appear/disappear，所以 `showModal`、`previewImage` 这些弹出层不会让页面 hide。
 - **前后台**：iOS 只看 UIScene 的进入后台和回到前台，所以控制中心、权限弹框不算后台；安卓看 `MainActivity` 的 start/stop，所以打开系统相册、文件选择、相机会触发 `onHide('background')` / `onShow('foreground')`，和小程序一样。
 
-**状态栏**：整个 app 一个，和 ExpoNativeRoutes 的 `StatusBar.setBarStyle` 一样。`Page` 有个属性 `statusBarStyle`（`'auto'` 跟主题走，默认；`'light'` 白色图标，给深色页面；`'dark'`），页面每次 onShow 时把它设上去，所以返回上一页会恢复上一页的样式；页面显示中要改就调 `this.setStatusBarStyle(...)`。sheet 不设，沿用下面那页的。原生页每次出现时恢复 `'auto'`，要别的样式调 `NativePage.setStatusBarStyle`。iOS 由根控制器（和全屏 cover）的 `preferredStatusBarStyle` 显示，安卓用 `WindowInsetsControllerCompat` 同时设置状态栏和导航栏的图标。
+**状态栏**：整个 app 一个，和 ExpoNativeRoutes 的 `StatusBar.setBarStyle` 一样。`Page` 有个属性 `statusBarStyle`（`'auto'` 跟主题走，默认；`'light'` 白色图标，给深色页面；`'dark'`），页面每次 onShow 时把它设上去，所以返回上一页会恢复上一页的样式；页面显示中要改就调 `this.setStatusBarStyle(...)`。原生页每次出现时恢复 `'auto'`，要别的样式调 `NativePage.setStatusBarStyle`。iOS 由根控制器（和全屏 cover）的 `preferredStatusBarStyle` 显示，安卓用 `WindowInsetsControllerCompat` 同时设置状态栏和导航栏的图标。
 
 ## 存储
 
@@ -292,7 +298,7 @@ Valdi 的 Kotlin 代码用 rules_kotlin 2.3.10 编译；宿主 Gradle 是 Kotlin
 
 **Bazel 8 和 Valdi 命令行工具的补丁。** Valdi 0.2.1 本身用 Bazel 8.2.1（`valdi/.bazelversion`），但命令行工具 1.2.1 的 `bootstrap` 模板还停在 Valdi 0.1.x：Bazel 7.2.1、protobuf 27.0、rules_java 7.4.0、rules_kotlin 1.9.0、rules_jvm_external 6.2，`projectsync` 也只认 Bazel 7 的外部仓库名（`valdi~`），不认 Bazel 8 的（`valdi+`）。`valdi/patches/@snap__valdi@1.2.1.patch`（`pnpm patch`，登记在 `pnpm-workspace.yaml`）把模板改成和 Valdi 0.2.1 一致，并让 `projectsync` 认 `+`。这个项目自己的 `.bazelversion`、`MODULE.bazel`、`.bazelrc` 也按同样的版本改过（另加 `platforms` 依赖和两个 Bazel 8 参数）。升级命令行工具时先看上游是否已修复，修复了就删掉补丁。Bazel 的磁盘缓存在 `~/.cache/bazel-disk-cache`，空闲时自动清理到 30 GB 以内（`.bazelrc` 的 `--experimental_disk_cache_gc_max_size`）。
 
-ClientSQL 的 rules_python 导入路径修复已迁入 fork。应用 Node 构建已移除旧 SQL 生成器；框架自己的构建路径继续保留该修复。
+框架源码保留未使用的上游模块；应用复用 ClientSQL 原生执行层，不使用旧 SQL API 生成器。
 
 ### Hermes V1
 
@@ -309,12 +315,12 @@ Hermes 固定为 `260318099.0.4`，构建定义和生成头文件在 fork 的 `t
 - iOS 导出头文件修复：导出的 xcframework 里 `SCValdiDrawingModuleFactory.h` 引用了 drawing 模块的 `SCCDrawingTypes.h`，但没打包进去，宿主一 `import ValdiRuntime` 就编译失败。fork 的导出规则把 drawing 模块的 ObjC 头加进导出列表。
 - fork 的 `third-party/hermes_v1/no_fbjni.patch` 允许未接入 fbjni 的宿主构建，但不会把 JSI finalizer 线程附加到 JVM。以后若引入需要访问 JNI 的 JSI finalizer，必须重新处理该线程的 JVM 附加。
 
-iOS 宿主和 Android 结构一样：`ValdiHost.swift` 读路由表、按组件创建生成的根 view 类（`VRHomePage` 等），`Navigator.swift` 管一个 `UINavigationController`（`StackController`）、最多一层全屏 cover 和一个 Sheet。Valdi 页面自己画标题栏，所以导航栏只在原生页显示，隐藏导航栏后关掉的侧滑返回另外打开。用户侧滑或点原生返回按钮离开的页面按取消处理。
+iOS 宿主和 Android 结构一样：`ValdiHost.swift` 读路由表、按组件创建根 view，`Navigator.swift` 管一个 `UINavigationController`（`StackController`）和最多一层全屏 cover。Valdi 页面自己画标题栏，所以导航栏只在原生页显示，隐藏导航栏后关掉的侧滑返回另外打开。用户侧滑或点原生返回按钮离开的页面按取消处理。
 
-iOS 的键盘和 Sheet 与 Android 同一套规则，也各自独立：
+iOS 的页面键盘和 AppUI Sheet 各自独立：
 
 - **键盘**：`KeyboardObserver.swift` 移植自 react-native-keyboard-controller 1.22.6（MIT）。每帧读键盘在屏幕上的真实位置（iOS 26+ 用 `keyboardLayoutGuide` 上的零高度 view，更早的系统找系统键盘 view），再按系统键盘动画的曲线往前预测两帧；交互式收起用 KVO 跟。它只报高度。SwiftUI 的键盘避让全部关掉（`.ignoresSafeArea(.keyboard)`），只有 `PageContainerView` 处理键盘：根 view 底部让出键盘高度，bottom inset 减去被键盘盖住的部分。跟踪 view 要在键盘出现前就挂进窗口，键盘弹出时才挂上去的 view 会直接排到终点，跟不上动画。
-- **Sheet**：`SheetHostView.swift` 移植自 Software Mansion 的 react-native-bottom-sheet 0.16.2 的 iOS 实现（MIT）：临界阻尼弹簧做成 keyframe 动画、遮罩、点遮罩和下拉关闭、内容可滚动时先滚到顶再接手拖 Sheet、高度不超过状态栏以下。它和下面的页面在同一个窗口（`SheetLayer`），不用系统 sheet。Sheet 完全不知道键盘：宿主只设 `openHeight`（`sheet` 是窗口的 75%，`compactSheet` 是 24 + 340 + 底部 inset + 键盘高度），内容里的键盘由 `PageContainerView` 处理。
+- **AppUI Sheet**：`app_ui/ios/ui/AppUISheetHostView.swift` 保留弹簧动画、遮罩、拖动和滚动手势协调，由 AppUI 组件按自己的内容和可用空间测量，不创建路由页面。App 目录中的旧路由 Sheet 容器已删除。
 
 Android release 开了 R8（`isMinifyEnabled`、`isShrinkResources`），APK 从约 66 MB 降到约 32 MB（dex 从 39 MB 到 5 MB）。Valdi 运行时和生成的绑定类（`generated/valdi/`，现在是 app 自己的源码，按 Valdi 的注解保留）由 aar 自带的 `proguard.txt` 保留，`app/proguard-rules.pro` 只补它没覆盖的：Valdi 的 `JNI_OnLoad` 按名字注册 native 方法（包括 Java 不调用的），删掉一个加载 so 就崩；ML Kit 用反射创建 `ComponentRegistrar`，R8 full mode 会删掉它们的无参构造。我们自己的 native 代码按名字找的类用 `@Keep`（`VisionNative.Result`）。只写不读的字段也会被删：`ValdiHost.hostScope` 只是为了让常驻 JS 作用域不被回收，所以加了 `@Keep`，否则 release 里 host 全部失效（`Cannot unwrap native function … reference was disposed`）。以后新增"只为持有"的字段、或者被 JNI / 反射按名字访问的类，都要同样处理。iOS 不需要：`ValdiRuntime.xcframework` 是动态库，按名字查类在运行时到库里找，App 的 release 构建不会裁掉它。
 
@@ -370,7 +376,7 @@ iOS 是 `scripts/export-ios.sh release`、`project.yml` 的 `VALDI_OTA_URL`、`s
 - **编译**：TypeScript LanguageService 做类型检查（有错构建就失败），`.tsx` 用 Valdi 自己的 JSX 转换（`vendor/companion/`，MIT），再由 rolldown 输出 CommonJS：每个源文件是一个入口，输出一个 Valdi 模块文件，懒加载和内存警告时卸载都和原来一样；npm 代码按引用关系拆分（见“npm 依赖”）。
 - **打包**：`.valdimodule`（zstd 压缩的 ValdiPacket）。debug 是 JS 加内联 source map；release 用官方预编译 `hermes-compiler` 编成 Hermes 字节码，由 Node 补齐 Valdi 模块包装和文件头，source map 单独放 `<module>.map.json`。
 - **图片**：`res/` 生成 `res.ts` 和 `res.assetcatalog`；Android 输出 5 种密度的 webp 和 keep.xml，iOS 输出 `app_pages.bundle`（@2x/@3x）。
-- **数据库**：应用不再运行 SQL 代码生成。当前 `src/sqlgen/` 为保留存储行为的固定过渡源码，后续由 Drizzle schema、驱动与迁移接管；原生 SQLite 能力保留。
+- **数据库**：Drizzle 管理 schema、类型化查询和 SQL 迁移；原生 SQLite 执行参数绑定和事务。迁移常量在构建时校验，手机端不运行 Drizzle Kit。
 - **原生绑定**：`codegen.ts` 是 Valdi 编译器绑定生成的 TS 移植，从 `@ExportModel`、`@ExportProxy`、`@ExportFunction`、`@ExportModule`、`@ExportEnum` 生成 Kotlin、Objective-C 和 C++，结果提交进 git。`npx tsx codegen/goldens.ts` 拿 Valdi 源码里的编译器 golden（`tools/ci/compiler_goldens`）逐字节对比三种语言；app_pages 的输出也和 Valdi 的 Bazel 构建一致。构建只跑 `--check`，过期就失败并给出命令；改了导出给原生的接口后手动重新生成：
 
   ```sh
@@ -410,4 +416,4 @@ TS 声明一个 `@ExportModule` 的 `.d.ts`，C++ 实现它，JS 像普通模块
 
 ## 已知问题
 
-- **Valdi 输入框在慢速滚动时会弹出长按菜单。** 手指按在输入框上、慢慢拖动超过约 400ms，滚动已经开始了，Valdi 仍然把触摸事件转给输入框，没有发取消；输入框和手指一起移动，Android 就判定为长按，弹出 "Paste"。全屏页和 Sheet 里都会出现，是 Valdi 的行为（`TouchDispatcherImpl` 只取消手势识别器，不取消 `ValdiEditText` 这种直接处理触摸的目标）。
+- **Valdi 输入框在慢速滚动时会弹出长按菜单。** 手指按在输入框上、慢慢拖动超过约 400ms，滚动已经开始了，Valdi 仍然把触摸事件转给输入框，没有发取消；输入框和手指一起移动，Android 就判定为长按，弹出 "Paste"。页面中会出现，是 Valdi 的行为（`TouchDispatcherImpl` 只取消手势识别器，不取消 `ValdiEditText` 这种直接处理触摸的目标）。

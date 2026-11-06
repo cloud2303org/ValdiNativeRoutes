@@ -34,15 +34,14 @@ final class ValdiHost {
         MainActor.assumeIsolated { AppUI.imageLoader = AppImages.load }
         let runtime = self.runtime
         videoService.registerModules { VRRegisterNativeModules(runtime) }
-        VRInstallVisionHost.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, host: visionHost) {}
+        AppNativeModules.register(runtime, navigationHost: navigationHost)
         // App-wide objects (the SQLite connection, api, the router) are created here, not in a page.
         #if DEBUG
         let debug = true
         #else
         let debug = false
         #endif
-        VRStartApp.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, debug: debug, navigation: navigationHost,
-                          tokens: tokenStore.store) { declaration in
+        VRStartApp.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, debug: debug) { declaration in
             // Validate before confirming the OTA launch; an invalid startup declaration must not become active.
             let table = RouteTable(declaration)
             // The modules loaded and ran: a newly installed package is good. Only then look for the next one.
@@ -69,14 +68,12 @@ final class ValdiHost {
 
     /// `router` (routes.ts) lands here on the JS thread; the navigator lives on the main thread.
     private lazy var navigationHost = VRNavigationHost(
-        push: { [weak self] route, params, presentation, navigation in
-            self?.onNavigator { $0.open(route, params: params, presentation: Presentation(presentation),
-                                        navigation: navigation) }
+        push: { [weak self] route, params, navigation in
+            self?.onNavigator { $0.open(route, params: params, navigation: navigation) }
         },
-        pushForResult: { [weak self] route, params, presentation, navigation, onResult in
+        pushForResult: { [weak self] route, params, navigation, onResult in
             self?.onNavigator {
-                $0.open(route, params: params, presentation: Presentation(presentation),
-                        navigation: navigation) { result, canceled in onResult(result, canceled) }
+                $0.open(route, params: params, navigation: navigation) { result, canceled in onResult(result, canceled) }
             }
         },
         replace: { [weak self] route, params, navigation in
@@ -103,12 +100,6 @@ final class ValdiHost {
     private func onNavigator(_ action: @escaping (Navigator) -> Void) {
         DispatchQueue.main.async { [weak self] in self?.navigator.map(action) }
     }
-
-    /// `runDemo` of vision/VisionHost.ts, on the C++ VisionCore.
-    private let visionHost = VisionHostImpl()
-
-    /// auth.ts's token, in the Keychain.
-    private let tokenStore = TokenStoreImpl()
 
     func createPage(_ entry: PageEntry, insets: UIEdgeInsets, navigator: Navigator) -> SCValdiRootView {
         let viewModel = viewModel(entry, insets)
@@ -188,87 +179,5 @@ final class ValdiHost {
             finish: { result in DispatchQueue.main.async { navigator.finish(entry.id, result: result) } },
             back: { DispatchQueue.main.async { navigator.cancel(entry.id) } }
         )
-    }
-}
-
-// Use the generated data models unchanged; this table only indexes and validates the declaration for UIKit.
-typealias RouteDefinition = VRRouteEntry
-typealias Tab = VRRouteTab
-typealias TabBar = VRRouteTabBar
-
-/// What startApp returns: a typed declaration, indexed by route name for native navigation.
-struct RouteTable {
-    private let routes: [String: VRRouteEntry]
-    let tabBar: VRRouteTabBar?
-    let root: String
-
-    func contains(_ route: String) -> Bool { routes[route] != nil }
-
-    func withRoot(_ route: String) -> RouteTable {
-        precondition(contains(route), "Unknown root route: \(route)")
-        return RouteTable(routes: routes, tabBar: tabBar, root: route)
-    }
-
-    subscript(route: String) -> VRRouteEntry {
-        guard let definition = routes[route] else { preconditionFailure("Unknown route: \(route)") }
-        return definition
-    }
-
-    /// Kept separate so malformed native/OTA declarations can be checked without trapping a test process.
-    static func tabBarError(_ bar: TabBar) -> String? {
-        switch bar.mode ?? "default" {
-        case "default":
-            return bar.component == nil ? nil : "Default tab bar cannot have a custom component"
-        case "custom":
-            guard let component = bar.component,
-                  component.range(of: #"^[^@\s]+@[^/\s]+/src/[^\s]+$"#, options: .regularExpression) != nil else {
-                return "Custom tab bar requires a canonical Valdi component path"
-            }
-            return nil
-        default:
-            return "Invalid tab bar mode: \(bar.mode ?? "")"
-        }
-    }
-
-    init(_ declaration: VRRouteDeclaration) {
-        var routes: [String: VRRouteEntry] = [:]
-        for entry in declaration.routes {
-            precondition(!entry.route.isEmpty && routes[entry.route] == nil, "Invalid or duplicate route: \(entry.route)")
-            precondition(["valdi", "native", "tabs"].contains(entry.kind), "Invalid route kind: \(entry.kind)")
-            if entry.kind == "valdi" {
-                precondition(!(entry.component ?? "").isEmpty, "Missing Valdi component for \(entry.route)")
-            }
-            if entry.kind == "native" {
-                precondition(NativeScreens.contains(entry.nativeName ?? ""),
-                             "Native page for route \(entry.route) is not registered: \(entry.nativeName ?? "")")
-            }
-            routes[entry.route] = entry
-        }
-        precondition(routes[declaration.root] != nil, "Unknown root route: \(declaration.root)")
-        if let bar = declaration.tabBar {
-            if let error = Self.tabBarError(bar) { preconditionFailure(error) }
-            let names = bar.tabs.map(\.route)
-            precondition(!names.isEmpty && Set(names).count == names.count && names.contains(bar.initial),
-                         "Invalid tab declaration")
-            precondition(routes[bar.route]?.kind == "tabs", "Unknown tab shell: \(bar.route)")
-            precondition(names.allSatisfy { routes[$0] != nil && routes[$0]?.kind != "tabs" }, "Unknown tab route")
-        }
-        self.init(routes: routes, tabBar: declaration.tabBar, root: declaration.root)
-    }
-
-    private init(routes: [String: VRRouteEntry], tabBar: VRRouteTabBar?, root: String) {
-        self.routes = routes
-        self.tabBar = tabBar
-        self.root = root
-    }
-}
-
-/// SCValdiComponentContainerView uses the same inflation path as runtime.loadView(withComponentPath:...).
-/// The business component rejects touches outside its visual region through Valdi's hitTest attribute.
-/// Drop any remaining hit on this empty outer viewport, allowing UIKit to continue to the page below.
-final class TabBarRootView: SCValdiComponentContainerView {
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        let hit = super.hitTest(point, with: event)
-        return hit === self ? nil : hit
     }
 }

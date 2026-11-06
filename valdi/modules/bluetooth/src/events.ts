@@ -1,7 +1,7 @@
 import type { BleHostEvents } from './BleHost';
 
-// The one event sink handed to native at install time (from the host's retained JS scope, so it lives as long as the
-// app), fanned out here to the listeners native.ts registers. Listener callbacks therefore never cross the bridge.
+// The one event sink handed to native on first use inside withGlobalNativeRefs, so it lives as long as the app,
+// fanned out here to the listeners native.ts registers. Listener callbacks therefore never cross the bridge.
 
 type Event<K extends keyof BleHostEvents> = Parameters<BleHostEvents[K]>[0];
 

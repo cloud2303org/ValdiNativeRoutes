@@ -20,8 +20,7 @@ def main():
     if args.output:
         output.mkdir(parents=True, exist_ok=False)
     ui = root / "valdi/modules/app_ui/ios/ui"
-    sources = [root / "ios/ValdiRoutes/SheetHostView.swift",
-               root / "ios/Tests/SheetHostMigrationTests.swift",
+    sources = [root / "ios/Tests/SheetHostMigrationTests.swift",
                root / "ios/Tests/ActionSheetMigrationTests.swift"]
     sources += [ui / (name + ".swift") for name in (
         "BottomSheet", "OverlayScope", "OverlayActions", "PopupActionButtons",

@@ -1,6 +1,6 @@
 import { Device } from 'valdi_core/src/Device';
 import { nativeCall } from 'native_common/src/nativeCall';
-import { installedPermissionHost } from './PermissionHost';
+import { getHost, getAndroidSdk } from './Permissions';
 
 // Runtime permissions for `api` (Bluetooth, Wi-Fi, NFC), on the host's PermissionHost. The prompt queue and the
 // granted/denied/blocked bookkeeping are after ExpoNativeRoutes' device-permissions.
@@ -22,7 +22,7 @@ export const ANDROID_PERMISSIONS = {
 export const isAndroid = (): boolean => Device.isAndroid();
 
 /** Build.VERSION.SDK_INT; 0 on iOS. */
-export const androidSdk = (): number => (isAndroid() ? installedPermissionHost().androidSdk : 0);
+export const androidSdk = (): number => (isAndroid() ? getAndroidSdk() : 0);
 
 export type DevicePermissionStatus = 'granted' | 'undetermined' | 'denied' | 'blocked' | 'unavailable';
 export interface DevicePermissionResult {
@@ -32,7 +32,7 @@ export interface DevicePermissionResult {
 }
 
 const check = async (permission: string): Promise<boolean> => {
-  const result = await nativeCall(() => installedPermissionHost().host.check(permission));
+  const result = await nativeCall(() => getHost().check(permission));
   if (typeof result !== 'boolean') throw new Error('native permissions returned an invalid check result');
   return result;
 };
@@ -41,7 +41,7 @@ type PermissionGrantResult = 'granted' | 'denied' | 'never_ask_again';
 
 /** Hosts normalize OS-specific results at their boundary; unknown values are host errors. */
 async function requestMultiple(permissions: string[]): Promise<Record<string, PermissionGrantResult>> {
-  const results = await nativeCall(() => installedPermissionHost().host.requestMultiple(permissions));
+  const results = await nativeCall(() => getHost().requestMultiple(permissions));
   const map: Record<string, PermissionGrantResult> = {};
   results.forEach(grant => {
     const result = grant.result;
@@ -121,5 +121,5 @@ export function requestAndroidPermissions(
 
 /** Call only from an explicit user action after explaining why a permission is needed. */
 export function openDevicePermissionSettings(): Promise<void> {
-  return nativeCall(() => installedPermissionHost().host.openSettings());
+  return nativeCall(() => getHost().openSettings());
 }

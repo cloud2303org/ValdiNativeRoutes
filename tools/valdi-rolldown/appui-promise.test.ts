@@ -41,7 +41,7 @@ const asset = { id: '1', uri: 'file:///picker/one.jpg', name: 'one.jpg', mimeTyp
 const presentation = { confirm: true, cancel: false, value: 'one', index: 0 };
 
 /** Native services outside AppUI are isolated; AppUIHost, api, schemas and storage execute their real compiler output. */
-function runtime(install = true) {
+function runtime(available = true) {
   const calls: { method: HostMethod; args: any[] }[] = [];
   const handlers: Partial<Record<HostMethod, (...args: any[]) => any>> = {};
   const defaults: Record<HostMethod, any> = {
@@ -75,7 +75,12 @@ function runtime(install = true) {
     vm.runInContext(`(function(require,module,exports){${emit(file)}\n})`, context, { filename: file })(
       (name: string) => {
         if (Object.hasOwn(modules, name)) return modules[name];
-        if (name === './AppUI') return { getHost() { throw Error('native AppUI is not installed'); } };
+        if (name === './AppUI') return {
+          getHost() {
+            if (!available) throw Error('native AppUI is not installed');
+            return host;
+          },
+        };
         if (name === './MMKV') return { getHost() { throw Error('native storage is not installed'); } };
         if (/^(app_ui|mmkv|native_common)\//.test(name)) return load(path.join(app.dir, '..', name + '.ts'));
         assert.ok(name.startsWith('.'), `Unexpected module: ${name}`);
@@ -91,7 +96,6 @@ function runtime(install = true) {
     calls.push({ method, args });
     return handlers[method] ? handlers[method]!(...args) : Promise.resolve(defaults[method]);
   }]));
-  if (install) bridge.installAppUI(host);
   const { api, ApiError } = load(path.join(app.dir, 'src/api.ts'));
   return { api, ApiError, calls, handlers, bridge, host, cache, load };
 }
@@ -313,7 +317,7 @@ test('validation rejects before native invocation and absent host errors keep me
   await assert.rejects(missing.api.hideToast(), failure(missing.ApiError, 'hideToast', 'native AppUI is not installed'));
 });
 
-test('host installation survives module reload and in-flight work needs no caller-page callback', async () => {
+test('native factory retains the host across module reload and in-flight work needs no caller-page callback', async () => {
   const { api, handlers, bridge, host, cache, load } = runtime();
   let settle!: (value: any) => void;
   handlers.showModal = () => new Promise(resolve => { settle = resolve; });

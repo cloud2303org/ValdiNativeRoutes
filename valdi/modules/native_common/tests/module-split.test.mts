@@ -15,7 +15,7 @@ const modules = path.join(root, 'valdi/modules');
 const names = ['native_common', 'mmkv', 'permissions', 'wifi', 'nfc', 'app_ui'];
 const dependencies: Record<string, string[]> = {
   native_common: [],
-  mmkv: ['native_common'],
+  mmkv: [],
   permissions: ['native_common'],
   wifi: ['native_common', 'permissions'],
   nfc: ['native_common', 'permissions'],
@@ -120,23 +120,38 @@ test('six independent Node modules compile TS and bindings into temporary output
   }
 });
 
-test('disabled declared dependencies fail selection checks without auto-enabling', () => {
+test('disabled source dependencies fail selection checks without auto-enabling', () => {
   for (const name of names.filter(name => name !== 'native_common')) {
     const files = readdirSync(path.join(modules, name, 'src'))
       .filter(file => file.endsWith('.ts'))
       .map(file => path.join(modules, name, 'src', file));
-    assert.throws(() => assertEnabledImports(files, modules, names, [name]), /disabled module/);
+    for (const missing of dependencies[name]) {
+      const enabled = [name, ...dependencies[name].filter(dependency => dependency !== missing)];
+      assert.throws(
+        () => assertEnabledImports(files, modules, names, enabled),
+        new RegExp(`disabled module "${missing}"`),
+        `${name} must reject a disabled source dependency`,
+      );
+    }
     assert.doesNotThrow(() => assertEnabledImports(files, modules, names, [name, ...dependencies[name]]));
   }
 });
 
 test('factory-backed storage preserves snapshots, null/missing distinction and facade ApiError identity', () => {
   const r = runtime();
-  const records = new Map<string, any>();
+  // Stand in for native persistence, which encodes on write and decodes on read.
+  // The JS facade forwards structured values; it does not clone them.
+  const records = new Map<string, string>();
   r.hosts.mmkv = {
-    get: (key: string) => ({ found: records.has(key), payload: records.get(key) ?? {}, error: '' }),
+    get: (key: string) => ({
+      found: records.has(key),
+      payload: records.has(key) ? JSON.parse(records.get(key)!) : {},
+      error: '',
+    }),
     set: ({ key, payload }: any) => {
-      records.set(key, payload);
+      const encoded = JSON.stringify(payload);
+      if (!Object.prototype.hasOwnProperty.call(JSON.parse(encoded), 'value')) return false;
+      records.set(key, encoded);
       return true;
     },
     remove: (key: string) => records.delete(key),

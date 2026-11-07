@@ -7,6 +7,10 @@ export interface OtaInfo {
   bundleVersion: string;
   /** A downloaded version to apply on the next cold start. */
   pendingBundleVersion?: string;
+  /** This runtime started by activating a different OTA bundle. */
+  isNewVersion: boolean;
+  /** Present only when isNewVersion is true. */
+  previousBundleVersion?: string;
 }
 
 /** @ExportProxy({ios: 'VROtaHost', android: 'io.valdiroutes.ota.OtaHost'}) */

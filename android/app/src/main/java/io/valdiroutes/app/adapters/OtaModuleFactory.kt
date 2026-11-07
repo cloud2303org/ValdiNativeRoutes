@@ -37,6 +37,8 @@ private class OtaHostImpl : OtaHost {
                             embeddedBundleVersion = info.embeddedBundleVersion,
                             bundleVersion = info.bundleVersion,
                             pendingBundleVersion = info.pendingBundleVersion,
+                            isNewVersion = info.isNewVersion,
+                            previousBundleVersion = info.previousBundleVersion,
                         ))
                     } catch (error: Throwable) {
                         promise.fulfillFailure(error)

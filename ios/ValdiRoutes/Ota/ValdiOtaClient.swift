@@ -11,6 +11,8 @@ final class ValdiOtaClient: @unchecked Sendable {
         let embeddedBundleVersion: String
         let bundleVersion: String
         let pendingBundleVersion: String?
+        let isNewVersion: Bool
+        let previousBundleVersion: String?
     }
 
     struct Configuration: Decodable {
@@ -70,6 +72,8 @@ final class ValdiOtaClient: @unchecked Sendable {
     private var started = false
     private var startupError: Error?
     private var active: Snapshot?
+    private var isNewVersion = false
+    private var previousBundleVersion: String?
     private var flight: (id: UUID, task: Task<Void, Error>)?
     private static let packageLimit = 64 << 20
 
@@ -109,8 +113,10 @@ final class ValdiOtaClient: @unchecked Sendable {
                 var state = try readState()
                 if state.binary != binaryIdentity { state = State(binary: binaryIdentity) }
                 var selected: Snapshot?
+                var previous: String?
                 if let pending = state.pending {
                     if let package = try? open(pending) {
+                        previous = state.current ?? configuration.bundleVersion
                         selected = package
                         state.current = pending
                     }
@@ -123,6 +129,10 @@ final class ValdiOtaClient: @unchecked Sendable {
                 // No package is exposed and no previous package is removed before this succeeds.
                 try persist(state)
                 active = selected
+                if let previous, selected?.version != previous {
+                    previousBundleVersion = previous
+                    isNewVersion = true
+                }
                 cleanup(state)
                 return active
             } catch {
@@ -164,7 +174,8 @@ final class ValdiOtaClient: @unchecked Sendable {
             return Info(enabled: enabled, appVersion: configuration.appVersion,
                         embeddedBundleVersion: configuration.bundleVersion,
                         bundleVersion: active?.version ?? configuration.bundleVersion,
-                        pendingBundleVersion: pending)
+                        pendingBundleVersion: pending, isNewVersion: isNewVersion,
+                        previousBundleVersion: previousBundleVersion)
         }
     }
 

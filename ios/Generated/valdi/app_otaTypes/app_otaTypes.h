@@ -30,7 +30,17 @@
 */
 @property (copy, nonatomic) NSString * _Nullable pendingBundleVersion;
 
-- (instancetype _Nonnull)initWithEnabled:(BOOL)enabled appVersion:(NSString * _Nonnull)appVersion embeddedBundleVersion:(NSString * _Nonnull)embeddedBundleVersion bundleVersion:(NSString * _Nonnull)bundleVersion;
+/**
+* This runtime started by activating a different OTA bundle.
+*/
+@property (assign, nonatomic) BOOL isNewVersion;
+
+/**
+* Present only when isNewVersion is true.
+*/
+@property (copy, nonatomic) NSString * _Nullable previousBundleVersion;
+
+- (instancetype _Nonnull)initWithEnabled:(BOOL)enabled appVersion:(NSString * _Nonnull)appVersion embeddedBundleVersion:(NSString * _Nonnull)embeddedBundleVersion bundleVersion:(NSString * _Nonnull)bundleVersion isNewVersion:(BOOL)isNewVersion;
 
 @end
 

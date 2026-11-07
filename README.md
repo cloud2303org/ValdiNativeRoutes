@@ -356,6 +356,9 @@ SHA256、条目及 packet 哈希，再按目标顺序重建并用 default ZSTD �
 默认启动后静默检查。JS 通过 `app_ota/src` 的 `getInfo()` 和 `checkForUpdate()`
 调用原生 `OtaHost` proxy；两者返回 Promise，状态由原生客户端持有。
 手动检查等待同一次后台下载完成，返回当前运行版本和待生效版本，下次冷启动生效。
+有待生效版本时，业务可提示“更新已准备好，关闭并重新打开 App 后生效”，不自动退出或重建 Runtime。
+下次启动实际切换到不同版本时，`isNewVersion` 为 `true`，`previousBundleVersion` 给出旧版本号；
+之后普通启动为 `false`，业务可以据此展示更新成功提示。从后台回到前台不算冷启动。
 调用方式见 [OTA 接口说明](docs/ota.md#javascript-and-native-access)。
 
 ```sh

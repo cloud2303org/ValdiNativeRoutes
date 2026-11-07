@@ -15,7 +15,8 @@ function fixture(platform = 'android') {
   let finish: ((value: unknown) => void) | undefined;
   const info = {
     enabled: true, appVersion: '1.0', embeddedBundleVersion: 'pages-001',
-    bundleVersion: 'pages-002', pendingBundleVersion: 'pages-003',
+    bundleVersion: 'pages-002', pendingBundleVersion: 'pages-003' as string | undefined,
+    isNewVersion: false, previousBundleVersion: undefined as string | undefined,
   };
   const host = {
     getInfo: () => failure ? Promise.reject(failure) : Promise.resolve(info),
@@ -63,6 +64,7 @@ for (const platform of ['android', 'ios']) {
     assert.deepEqual(f.calls, ['scope:app-ota', 'host']);
     assert.equal(f.api.confirmLaunch, undefined);
     assert.equal(f.api.restart, undefined);
+    assert.equal(f.api.reload, undefined);
   });
 }
 
@@ -92,6 +94,18 @@ test('disabled status is returned without hiding native version information', as
   assert.equal((await f.api.getInfo()).embeddedBundleVersion, 'pages-001');
 });
 
+test('the facade exposes the native activation flag without inferring it from pending', async () => {
+  const f = fixture();
+  assert.equal((await f.api.getInfo()).isNewVersion, false);
+  f.info.isNewVersion = true;
+  f.info.previousBundleVersion = 'pages-001';
+  f.info.pendingBundleVersion = undefined;
+  const info = await f.api.getInfo();
+  assert.equal(info.isNewVersion, true);
+  assert.equal(info.previousBundleVersion, 'pages-001');
+  assert.equal(info.bundleVersion, 'pages-002');
+});
+
 test('unsupported platforms reject without loading the native host', async () => {
   const f = fixture('web');
   await assert.rejects(f.api.getInfo(), /Android.*iOS/);
@@ -110,12 +124,16 @@ test('OTA generates a native host proxy, info model and module factory', () => {
   assert.match(kotlin, /fun checkForUpdate\(\): Promise<OtaInfo>/);
   assert.match(kotlin, /class OtaInfo/);
   assert.match(kotlin, /pendingBundleVersion: String\?/);
+  assert.match(kotlin, /isNewVersion: Boolean/);
+  assert.match(kotlin, /previousBundleVersion: String\?/);
   assert.match(kotlin, /OtaNativeModuleFactory/);
   assert.match(kotlin, /return "app_ota\/src\/Ota"/);
   assert.match(objc, /@protocol VROtaHost/);
   assert.match(objc, /SCValdiPromise<VROtaInfo \*> \* _Nonnull\)getInfo/);
   assert.match(objc, /SCValdiPromise<VROtaInfo \*> \* _Nonnull\)checkForUpdate/);
   assert.match(objc, /VROtaNativeModuleFactory/);
+  assert.match(objc, /isNewVersion/);
+  assert.match(objc, /previousBundleVersion/);
   assert.match(objc, /return @"app_ota\/src\/Ota"/);
 });
 

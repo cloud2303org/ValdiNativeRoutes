@@ -80,6 +80,8 @@ internal class ValdiOtaClient(
         val embeddedBundleVersion: String,
         val bundleVersion: String,
         val pendingBundleVersion: String?,
+        val isNewVersion: Boolean = false,
+        val previousBundleVersion: String? = null,
     )
 
     private data class Descriptor(val sha256: String, val size: Long)
@@ -97,6 +99,7 @@ internal class ValdiOtaClient(
     private val packages = File(this.root, "packages")
     private var started = false
     private var active: Snapshot? = null
+    private var activatedFrom: String? = null
 
     /** Selection is immutable for this client/process. All state errors propagate to the platform adapter. */
     fun start(): Snapshot? = synchronized(lock) {
@@ -108,11 +111,14 @@ internal class ValdiOtaClient(
         val previous = readState()
         var state = if (previous.binary == binary) previous else State(binary)
         var selected: Snapshot? = null
+        var promotedFrom: String? = null
         state.pending?.let { pending ->
             selected = openPackage(pending)
             if (selected == null) {
                 state = state.copy(pending = null)
             } else {
+                val previousVersion = state.current ?: config.bundleVersion
+                if (pending != previousVersion) promotedFrom = previousVersion
                 state = state.copy(current = pending, pending = null)
             }
         }
@@ -123,6 +129,7 @@ internal class ValdiOtaClient(
         // Promotion/reset must be durable before exposing the snapshot or deleting previous packages.
         if (state != previous) writeState(state)
         active = selected
+        activatedFrom = promotedFrom
         started = true
         cleanup(state)
         // Only this first start owns abandoned work. No check can create live work before this lock releases.
@@ -139,7 +146,8 @@ internal class ValdiOtaClient(
             check(state.binary == binary) { "Installed binary changed" }
             state.pending
         } else null
-        Info(enabled, config.appVersion, config.bundleVersion, active?.version ?: config.bundleVersion, pending)
+        Info(enabled, config.appVersion, config.bundleVersion, active?.version ?: config.bundleVersion, pending,
+            isNewVersion = activatedFrom != null, previousBundleVersion = activatedFrom)
     }
 
     /** Blocking, single-flight. All concurrent callers receive the same staged result or failure. */

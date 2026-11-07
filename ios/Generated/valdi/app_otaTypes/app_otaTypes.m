@@ -14,10 +14,12 @@
 @dynamic embeddedBundleVersion;
 @dynamic bundleVersion;
 @dynamic pendingBundleVersion;
+@dynamic isNewVersion;
+@dynamic previousBundleVersion;
 
-- (instancetype _Nonnull)initWithEnabled:(BOOL)enabled appVersion:(NSString * _Nonnull)appVersion embeddedBundleVersion:(NSString * _Nonnull)embeddedBundleVersion bundleVersion:(NSString * _Nonnull)bundleVersion
+- (instancetype _Nonnull)initWithEnabled:(BOOL)enabled appVersion:(NSString * _Nonnull)appVersion embeddedBundleVersion:(NSString * _Nonnull)embeddedBundleVersion bundleVersion:(NSString * _Nonnull)bundleVersion isNewVersion:(BOOL)isNewVersion
 {
-    return [super initWithFieldValues:nil, enabled, appVersion, embeddedBundleVersion, bundleVersion, nil];
+    return [super initWithFieldValues:nil, enabled, appVersion, embeddedBundleVersion, bundleVersion, nil, isNewVersion, nil];
 }
 
 + (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
@@ -28,6 +30,8 @@
         {.name = "embeddedBundleVersion", .selName = nil, .type = "s"},
         {.name = "bundleVersion", .selName = nil, .type = "s"},
         {.name = "pendingBundleVersion", .selName = nil, .type = "s?"},
+        {.name = "isNewVersion", .selName = nil, .type = "b"},
+        {.name = "previousBundleVersion", .selName = nil, .type = "s?"},
         {.name = nil},
     };
     return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);

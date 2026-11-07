@@ -20,6 +20,14 @@ private func digest(_ data: Data) -> String {
     SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
 }
 
+private func expectActivation(_ info: ValdiOtaClient.Info, isNewVersion: Bool,
+                              previous: String?, _ context: String) throws {
+    try expect(info.isNewVersion == isNewVersion,
+               "\(context): isNewVersion expected \(isNewVersion), got \(info.isNewVersion)")
+    try expect(info.previousBundleVersion == previous,
+               "\(context): previousBundleVersion expected \(previous ?? "nil"), got \(info.previousBundleVersion ?? "nil")")
+}
+
 private final class Fixture {
     let http: URL
     let base: String
@@ -37,11 +45,14 @@ private final class Fixture {
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
     }
     deinit { try? fm.removeItem(at: root) }
-    func config(url: String? = nil, appVersion: String = "0.1") -> ValdiOtaClient.Configuration {
+    func config(url: String? = nil, appVersion: String = "0.1",
+                bundleVersion: String = "pages-001") -> ValdiOtaClient.Configuration {
         ValdiOtaClient.Configuration(appVersion: appVersion, url: url ?? base,
-                                    publicKey: key.publicKey.pemRepresentation, modules: modules)
+                                    publicKey: key.publicKey.pemRepresentation, modules: modules,
+                                    bundleVersion: bundleVersion)
     }
     func client(url: String? = nil, identity: String = "native/1", timeout: TimeInterval = 2,
+                bundleVersion: String = "pages-001",
                 codec: any ValdiOtaFileCodec = ValdiOtaNativeCodec()) throws -> ValdiOtaClient {
         var builtins: [String: URL] = [:]
         for name in modules {
@@ -49,7 +60,7 @@ private final class Fixture {
                 builtins[name + suffix] = bundled.appendingPathComponent(name + suffix)
             }
         }
-        return try ValdiOtaClient(configuration: config(url: url), root: root.appendingPathComponent("ota"),
+        return try ValdiOtaClient(configuration: config(url: url, bundleVersion: bundleVersion), root: root.appendingPathComponent("ota"),
                                   binaryIdentity: identity, bundledModules: builtins, timeout: timeout, codec: codec)
     }
     var stateURL: URL { root.appendingPathComponent("ota/state.json") }
@@ -302,6 +313,165 @@ private enum Tests {
                 try expect(try f.requests().isEmpty, "unavailable adapter uses no network")
             }
             #endif
+            try await test("activation bundled to new uses configured embedded previous and remains stable", http: http, base: base) { f in
+                let bundled = try f.client(bundleVersion: "embedded-custom")
+                _ = try bundled.start()
+                try expectActivation(try bundled.getInfo(), isNewVersion: false, previous: nil, "first install")
+                try f.publish("new")
+                try await bundled.checkForUpdate()
+                try expectActivation(try bundled.getInfo(), isNewVersion: false, previous: nil, "staging alone")
+                let client = try f.client(bundleVersion: "embedded-custom")
+                try expect(try client.start()?.version == "new", "verified pending selected")
+                let initial = try client.getInfo()
+                try expectActivation(initial, isNewVersion: true, previous: "embedded-custom", "bundled promotion")
+                let durable = try f.state()
+                try expect(durable["current"] as? String == "new" && durable["pending"] == nil, "promotion persisted")
+                try expect(Set(durable.keys) == ["binary", "current"], "no persisted seen or acknowledgement flags")
+                for _ in 0..<3 {
+                    try expect(try client.start()?.version == "new", "repeated start stays selected")
+                    try expectActivation(try client.getInfo(), isNewVersion: true, previous: "embedded-custom", "repeated info")
+                }
+                try f.publish("later", files: f.files("later"))
+                try await client.checkForUpdate()
+                try expectActivation(try client.getInfo(), isNewVersion: true, previous: "embedded-custom", "later pending")
+                let later = try f.client(bundleVersion: "embedded-custom")
+                _ = try later.start()
+                try expectActivation(try later.getInfo(), isNewVersion: true, previous: "new", "later instance")
+                try expect(try client.start()?.version == "new", "other instance cannot change running selection")
+                try expectActivation(try client.getInfo(), isNewVersion: true, previous: "embedded-custom", "other instance promoted")
+                try expectActivation(initial, isNewVersion: true, previous: "embedded-custom", "immutable info value")
+            }
+            try await test("activation current to new uses same binary durable current", http: http, base: base) { f in
+                let current = try await f.activated("old")
+                try f.publish("new", files: f.files("new"))
+                try await current.checkForUpdate()
+                let next = try f.client()
+                try expect(try next.start()?.version == "new", "new package selected")
+                try expectActivation(try next.getInfo(), isNewVersion: true, previous: "old", "current promotion")
+                try expect(Set(try f.state().keys) == ["binary", "current"], "state protocol unchanged")
+                try expect(!fm.fileExists(atPath: f.package("old").path), "old current cleaned after promotion")
+            }
+            try await test("activation fresh instance with already current has no activation", http: http, base: base) { f in
+                let promoted = try await f.activated("current")
+                try expectActivation(try promoted.getInfo(), isNewVersion: true, previous: "pages-001", "first engine")
+                for _ in 0..<3 {
+                    let fresh = try f.client()
+                    try expect(try fresh.start()?.version == "current", "already current selected")
+                    try expectActivation(try fresh.getInfo(), isNewVersion: false, previous: nil, "fresh engine")
+                    _ = try fresh.start()
+                    try expectActivation(try fresh.getInfo(), isNewVersion: false, previous: nil, "fresh repeated start")
+                }
+                try expectActivation(try promoted.getInfo(), isNewVersion: true, previous: "pages-001", "original engine")
+            }
+            try await test("activation verified pending remembers durable current even if old package is corrupt", http: http, base: base) { f in
+                let current = try await f.activated("old")
+                try f.publish("new")
+                try await current.checkForUpdate()
+                try write(Data("corrupt old".utf8), f.package("old").appendingPathComponent("manifest.sig"))
+                let next = try f.client()
+                try expect(try next.start()?.version == "new", "valid pending selected without reopening old current")
+                try expectActivation(try next.getInfo(), isNewVersion: true, previous: "old", "durable previous")
+            }
+            try await test("activation unchanged selected version never claims a new version", http: http, base: base) { f in
+                let staging = try f.client(bundleVersion: "older-embedded")
+                _ = try staging.start()
+                try f.publish("pages-001")
+                try await staging.checkForUpdate()
+                let next = try f.client()
+                try expect(try next.start()?.version == "pages-001", "verified pending equal to embedded selected")
+                try expectActivation(try next.getInfo(), isNewVersion: false, previous: nil, "equal version promotion")
+                let fresh = try f.client()
+                _ = try fresh.start()
+                try expectActivation(try fresh.getInfo(), isNewVersion: false, previous: nil, "already current equal version")
+            }
+            try await test("activation first install and reset without promotion have no activation", http: http, base: base) { f in
+                let first = try f.client()
+                _ = try first.start()
+                try expectActivation(try first.getInfo(), isNewVersion: false, previous: nil, "first install")
+                try f.publish("orphan")
+                try await first.checkForUpdate()
+                try fm.removeItem(at: f.stateURL)
+                let reset = try f.client()
+                try expect(try reset.start() == nil, "missing state discards orphan pending")
+                try expectActivation(try reset.getInfo(), isNewVersion: false, previous: nil, "state reset")
+                try expect(Set(try f.state().keys) == ["binary"], "reset state remains minimal")
+            }
+            try await test("activation changed binary identity discards current and pending", http: http, base: base) { f in
+                let current = try await f.activated("old")
+                try f.publish("pending")
+                try await current.checkForUpdate()
+                let next = try f.client(identity: "native/2")
+                try expect(try next.start() == nil, "new binary stays embedded")
+                try expectActivation(try next.getInfo(), isNewVersion: false, previous: nil, "binary identity reset")
+                try expect(try f.state()["binary"] as? String == "native/2", "new identity persisted")
+                try expect(Set(try f.state().keys) == ["binary"], "no old activation state crosses binary identity")
+            }
+            try await test("activation disabled URL ignores valid pending and corrupt state", http: http, base: base) { f in
+                try await f.stage("pending")
+                for corrupt in [false, true] {
+                    if corrupt { try write(Data("invalid state".utf8), f.stateURL) }
+                    let before = try Data(contentsOf: f.stateURL)
+                    try f.resetNetwork()
+                    let disabled = try f.client(url: "")
+                    try expect(try disabled.start() == nil, "disabled stays embedded")
+                    try await disabled.checkForUpdate()
+                    try expectActivation(try disabled.getInfo(), isNewVersion: false, previous: nil, "disabled")
+                    try expect(try Data(contentsOf: f.stateURL) == before, "disabled does not persist")
+                    try expect(try f.requests().isEmpty, "disabled does not use network")
+                }
+            }
+            try await test("activation corrupt pending fallback to current has no activation", http: http, base: base) { f in
+                let current = try await f.activated("old")
+                try f.publish("pending", files: f.files("pending"))
+                try await current.checkForUpdate()
+                try write(Data("corrupt".utf8), f.package("pending").appendingPathComponent("modules/app_pages.valdimodule"))
+                let next = try f.client()
+                try expect(try next.start()?.version == "old", "corrupt pending falls back to verified current")
+                try expectActivation(try next.getInfo(), isNewVersion: false, previous: nil, "current fallback")
+                try expect(try f.state()["pending"] == nil, "bad pending cleared durably")
+                try expect(Set(try f.state().keys) == ["binary", "current"], "fallback creates no blacklist")
+            }
+            try await test("activation corrupt pending fallback to bundled has no activation", http: http, base: base) { f in
+                try await f.stage("pending")
+                try write(Data("bad signature".utf8), f.package("pending").appendingPathComponent("manifest.sig"))
+                let next = try f.client()
+                try expect(try next.start() == nil, "invalid pending falls back bundled")
+                try expectActivation(try next.getInfo(), isNewVersion: false, previous: nil, "bundled fallback")
+                try expect(Set(try f.state().keys) == ["binary"], "bad pending cleared without activation state")
+            }
+            for hasCurrent in [false, true] {
+                try await test("activation atomic promotion write failure never exposes success current=\(hasCurrent)", http: http, base: base) { f in
+                    let source = hasCurrent ? try await f.activated("old") : try f.client()
+                    _ = try source.start()
+                    try f.publish("pending", files: f.files("pending"))
+                    try await source.checkForUpdate()
+                    let saved = try Data(contentsOf: f.stateURL)
+                    let ota = f.stateURL.deletingLastPathComponent()
+                    try fm.removeItem(at: ota.appendingPathComponent("staging"))
+                    defer { try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: ota.path) }
+                    try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: ota.path)
+                    let failed = try f.client()
+                    let startup = try await rejects { _ = try failed.start() }
+                    try expect((startup as NSError).userInfo[NSFilePathErrorKey] as? String == f.stateURL.path,
+                               "failure reaches atomic promotion write: \(startup)")
+                    try expect(try Data(contentsOf: f.stateURL) == saved, "failed write preserves durable selection")
+                    try expect(fm.fileExists(atPath: f.package("pending").path), "pending preserved for fresh retry")
+                    try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: ota.path)
+                    for _ in 0..<2 {
+                        let infoError = try await rejects { _ = try failed.getInfo() }
+                        let startError = try await rejects { _ = try failed.start() }
+                        try expect(String(describing: infoError) == String(describing: startup), "failed info exposes only sticky error")
+                        try expect(String(describing: startError) == String(describing: startup), "failed startup stays failed")
+                    }
+                    let recovered = try f.client()
+                    try expect(try recovered.start()?.version == "pending", "fresh engine retries promotion")
+                    try expectActivation(try recovered.getInfo(), isNewVersion: true,
+                                         previous: hasCurrent ? "old" : "pages-001", "recovered promotion")
+                    let fresh = try f.client()
+                    _ = try fresh.start()
+                    try expectActivation(try fresh.getInfo(), isNewVersion: false, previous: nil, "fresh after recovery")
+                }
+            }
             try await test("info reports embedded without network and requires successful startup", http: http, base: base) { f in
                 let client = try f.client()
                 try await rejects { _ = try client.getInfo() }

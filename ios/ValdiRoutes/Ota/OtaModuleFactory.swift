@@ -40,8 +40,10 @@ private final class OtaHostImpl: NSObject, VROtaHost {
                 let info = try await work()
                 let model = VROtaInfo(enabled: info.enabled, appVersion: info.appVersion,
                                       embeddedBundleVersion: info.embeddedBundleVersion,
-                                      bundleVersion: info.bundleVersion)
+                                      bundleVersion: info.bundleVersion,
+                                      isNewVersion: info.isNewVersion)
                 model.pendingBundleVersion = info.pendingBundleVersion
+                model.previousBundleVersion = info.previousBundleVersion
                 promise.fulfill(withSuccessValue: model)
             } catch {
                 let message = (error as? ValdiOtaError)?.description ?? error.localizedDescription

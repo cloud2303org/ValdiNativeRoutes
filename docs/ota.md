@@ -54,11 +54,18 @@ import { getInfo, checkForUpdate } from 'app_ota/src';
 
 const info = await getInfo();
 // enabled, appVersion, embeddedBundleVersion, bundleVersion,
-// pendingBundleVersion (absent when nothing is staged)
+// pendingBundleVersion (absent when nothing is staged),
+// isNewVersion, previousBundleVersion
+
+if (info.isNewVersion) {
+  // Business code can show a notice here:
+  // `${info.previousBundleVersion} -> ${info.bundleVersion}`
+}
 
 const afterCheck = await checkForUpdate();
 if (afterCheck.pendingBundleVersion) {
-  // Downloaded and ready for the next cold start.
+  // Show: "Update ready. Close and reopen the app to apply it."
+  // Keep the user in the app; the next cold start applies it.
 }
 ```
 
@@ -69,9 +76,18 @@ already running automatic or manual check. Errors reject the Promise.
 download only changes `pendingBundleVersion`. With an empty update URL or in
 a Debug build, `enabled` is false and checking performs no network work.
 
-The app silently checks after StartApp and route validation. It shows no
-update prompt and never restarts itself. A valid pending package becomes
-current on the next cold start. There is no launch-confirmation API.
+`isNewVersion` is true only for the client session that successfully activates a
+different bundle. `previousBundleVersion` is present only then. Both values stay
+fixed for that session; a subsequent startup on the already-current bundle
+reports false and no previous version. This is activation information, not a
+render or health signal. The client does not display a notice or persist a
+notice acknowledgment.
+
+The app silently checks after StartApp and route validation. Business UI can
+prompt when `pendingBundleVersion` is present: "Update ready. Close and reopen
+the app to apply it." The client never quits or restarts the app and exposes no
+reload API. Returning from the background is not a cold start. A valid pending
+package becomes current on the next cold start. There is no launch-confirmation API.
 
 Native callers use `ValdiOta.getInfo()` and
 `ValdiOta.checkForUpdateOrThrow()` on either platform. Android calls are blocking
@@ -312,9 +328,9 @@ and store distribution policy are outside this client's implementation.
 
 ## Download and activation
 
-The existing host checks once in the background after `StartApp` and route
-validation. No polling timer, update prompt, JS runtime reload, or new public JS
-update API is added by this change.
+The host checks once in the background after `StartApp` and route validation.
+Business UI uses `getInfo()` / `checkForUpdate()` to decide when to show a reopen
+notice. There is no polling timer, forced exit, or in-process JS runtime reload.
 
 Downloads stream into private temporary files, with bounded metadata reads,
 exact payload lengths, SHA256 verification, finite timeouts and no redirects.

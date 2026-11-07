@@ -47,7 +47,204 @@ class ValdiOtaClientTest {
         assertNull(before.pendingBundleVersion)
         val next = f.client()
         assertEquals("v1", next.start()!!.version)
-        assertInfo(next, running = "v1")
+        assertInfo(next, running = "v1", isNewVersion = true, previous = "pages-001")
+    }
+
+    @Test fun firstInstallInfoHasNoActivation() = Fixture().use { f ->
+        val client = f.client()
+        repeat(3) {
+            assertNull(client.start())
+            assertInfo(client)
+        }
+        val next = f.client()
+        assertNull(next.start())
+        assertInfo(next)
+        assertEquals(setOf("binary", "current", "pending"), f.state().keys)
+    }
+
+    @Test fun bundledPromotionReportsConfiguredEmbeddedIdentity() = Fixture().use { f ->
+        val staging = f.client(bundleVersion = "bundled-custom")
+        assertNull(staging.start())
+        f.publish("v1")
+        assertTrue(staging.checkForUpdate())
+        val client = f.client(bundleVersion = "bundled-custom")
+        val selected = client.start()
+        repeat(3) {
+            assertSame(selected, client.start())
+            assertInfo(client, embedded = "bundled-custom", running = "v1",
+                isNewVersion = true, previous = "bundled-custom")
+        }
+        val next = f.client(bundleVersion = "bundled-custom")
+        assertEquals("v1", next.start()!!.version)
+        assertInfo(next, embedded = "bundled-custom", running = "v1")
+        assertEquals(setOf("binary", "current", "pending"), f.state().keys)
+    }
+
+    @Test fun v1ToV2ActivationInfoStaysFixedForSessionWhilePendingChanges() = Fixture().use { f ->
+        f.current("v1")
+        f.stage("v2")
+        val client = f.client()
+        val selected = client.start()
+        assertEquals("v2", selected!!.version)
+        assertInfo(client, running = "v2", isNewVersion = true, previous = "v1")
+        val before = client.getInfo()
+        f.failWrites = true
+        val next = f.client()
+        assertEquals("v2", next.start()!!.version)
+        assertInfo(next, running = "v2")
+        repeat(3) {
+            assertSame(selected, client.start())
+            assertInfo(client, running = "v2", isNewVersion = true, previous = "v1")
+        }
+        f.failWrites = false
+        f.publish("v3")
+        assertTrue(client.checkForUpdate())
+        f.offer(null)
+        assertFalse(client.checkForUpdate())
+        repeat(3) {
+            assertSame(selected, client.start())
+            assertInfo(client, running = "v2", pending = "v3", isNewVersion = true, previous = "v1")
+        }
+        assertEquals("v1", before.previousBundleVersion)
+        assertTrue(before.isNewVersion)
+        assertNull(before.pendingBundleVersion)
+        assertEquals(setOf("binary", "current", "pending"), f.state().keys)
+    }
+
+    @Test fun activationUsesDurableCurrentIdentityEvenWhenOldPackageIsCorrupt() = Fixture().use { f ->
+        f.current("v1")
+        f.stage("v2")
+        File(f.pkg("v1"), "modules/app.valdimodule").delete()
+        val client = f.client()
+        assertEquals("v2", client.start()!!.version)
+        assertInfo(client, running = "v2", isNewVersion = true, previous = "v1")
+    }
+
+    @Test fun pendingMatchingEmbeddedIdentityIsNotANewVersion() = Fixture().use { f ->
+        f.stage("v1")
+        val client = f.client(bundleVersion = "v1")
+        assertEquals("v1", client.start()!!.version)
+        assertInfo(client, embedded = "v1", running = "v1")
+        assertEquals(JsonNull, f.state().getValue("pending"))
+    }
+
+    @Test fun pendingMatchingCurrentIdentityIsNotANewVersion() = Fixture().use { f ->
+        f.current("v1")
+        File(f.root, "state.json").writeText(f.state().withFields { put("pending", "v1") }.toString())
+        val client = f.client()
+        assertEquals("v1", client.start()!!.version)
+        assertInfo(client, running = "v1")
+        assertEquals(JsonNull, f.state().getValue("pending"))
+    }
+
+    @Test fun sameEmbeddedAndCurrentOffersDoNotReportActivation() = Fixture().use { f ->
+        f.current("v1")
+        val client = f.client()
+        val selected = client.start()
+        for (version in listOf("pages-001", "v1")) {
+            val requests = f.count("$version/manifest.json")
+            f.publish(version)
+            assertFalse(client.checkForUpdate())
+            assertSame(selected, client.start())
+            assertInfo(client, running = "v1")
+            assertEquals(requests, f.count("$version/manifest.json"))
+        }
+    }
+
+    @Test fun corruptPendingFallbackNeverReportsActivation() {
+        for (hasCurrent in listOf(false, true)) {
+            for (damage in listOf("body", "signature", "manifest", "missing")) Fixture().use { f ->
+                if (hasCurrent) f.current("v1")
+                f.stage("v2")
+                when (damage) {
+                    "body" -> File(f.pkg("v2"), "modules/app.valdimodule").writeText("evil")
+                    "signature" -> File(f.pkg("v2"), "manifest.sig").writeText("AAAA")
+                    "manifest" -> File(f.pkg("v2"), "manifest.json").appendText(" ")
+                    else -> File(f.pkg("v2"), "modules/app.valdimodule").delete()
+                }
+                val client = f.client()
+                assertEquals(if (hasCurrent) "v1" else null, client.start()?.version)
+                assertInfo(client, running = if (hasCurrent) "v1" else "pages-001")
+                assertEquals(JsonNull, f.state().getValue("pending"))
+            }
+        }
+    }
+
+    @Test fun changedBinaryDiscardsOldCurrentAndPendingWithoutActivation() = Fixture().use { f ->
+        f.current("v1")
+        f.stage("v2")
+        val client = f.client(binary = "installed-2")
+        repeat(3) {
+            assertNull(client.start())
+            assertInfo(client)
+        }
+        assertEquals("installed-2", f.state().getValue("binary").jsonPrimitive.content)
+        assertFalse(f.pkg("v1").exists())
+        assertFalse(f.pkg("v2").exists())
+    }
+
+    @Test fun disabledUrlDoesNotActivateVerifiedPending() = Fixture().use { f ->
+        f.current("v1")
+        f.stage("v2")
+        val before = File(f.root, "state.json").readBytes()
+        val requests = f.count("latest.json")
+        f.failWrites = true
+        val client = f.client(enabled = false)
+        repeat(3) {
+            assertNull(client.start())
+            assertFalse(client.checkForUpdate())
+            assertInfo(client, enabled = false)
+        }
+        assertArrayEquals(before, File(f.root, "state.json").readBytes())
+        assertEquals(requests, f.count("latest.json"))
+    }
+
+    @Test fun failedPromotionExposesNoInfoAndSuccessfulRetryReportsActivation() {
+        for (hasCurrent in listOf(false, true)) Fixture().use { f ->
+            if (hasCurrent) f.current("v1")
+            f.stage("v2")
+            val before = File(f.root, "state.json").readBytes()
+            val client = f.client()
+            f.failWrites = true
+            repeat(2) {
+                assertThrows(IOException::class.java) { client.start() }
+                assertThrows(IllegalStateException::class.java) { client.getInfo() }
+            }
+            assertArrayEquals(before, File(f.root, "state.json").readBytes())
+            assertTrue(f.pkg("v2").isDirectory)
+            if (hasCurrent) assertTrue(f.pkg("v1").isDirectory)
+            f.failWrites = false
+            assertEquals("v2", client.start()!!.version)
+            repeat(3) {
+                assertInfo(client, running = "v2", isNewVersion = true,
+                    previous = if (hasCurrent) "v1" else "pages-001")
+                assertEquals("v2", client.start()!!.version)
+            }
+            val next = f.client()
+            assertEquals("v2", next.start()!!.version)
+            assertInfo(next, running = "v2")
+        }
+    }
+
+    @Test fun promotionWriteThrowingAfterCommitDoesNotLeakActivationOnRetry() {
+        for (hasCurrent in listOf(false, true)) Fixture().use { f ->
+            if (hasCurrent) f.current("v1")
+            f.stage("v2")
+            val client = f.client()
+            f.failAfterWrites = true
+            assertThrows(IOException::class.java) { client.start() }
+            assertThrows(IllegalStateException::class.java) { client.getInfo() }
+            assertEquals("v2", f.state().getValue("current").jsonPrimitive.content)
+            assertEquals(JsonNull, f.state().getValue("pending"))
+            f.failAfterWrites = false
+            repeat(3) {
+                assertEquals("v2", client.start()!!.version)
+                assertInfo(client, running = "v2")
+            }
+            val next = f.client()
+            assertEquals("v2", next.start()!!.version)
+            assertInfo(next, running = "v2")
+        }
     }
 
     @Test fun infoUsesProcessSnapshotInsteadOfDurableCurrentAndRetainsPendingAcrossChecks() = Fixture().use { f ->
@@ -185,12 +382,15 @@ class ValdiOtaClientTest {
         val bundled = mutableMapOf<String, ByteArray>()
         val logs = mutableListOf<String>()
         var failWrites = false
-        fun client(binary: String = "installed-1", enabled: Boolean = true, modules: Set<String> = setOf("app")) = ValdiOtaClient(
-            root, ValdiOtaClient.Config("0.1", if (enabled) url else "", pem, modules), binary,
+        var failAfterWrites = false
+        fun client(binary: String = "installed-1", enabled: Boolean = true, modules: Set<String> = setOf("app"),
+            bundleVersion: String = "pages-001") = ValdiOtaClient(
+            root, ValdiOtaClient.Config("0.1", if (enabled) url else "", pem, modules, bundleVersion), binary,
             bundled = { bundled[it]?.inputStream() },
             stateWriter = { file, bytes ->
                 if (failWrites) throw IOException("injected state write failure")
                 ValdiOtaClient.writeStateAtomically(file, bytes)
+                if (failAfterWrites) throw IOException("injected failure after state commit")
             },
             log = { message, error -> logs += "$message: ${error.message}" },
         )
@@ -911,8 +1111,11 @@ class ValdiOtaClientTest {
     }
 
     companion object {
-        private fun assertInfo(client: ValdiOtaClient, enabled: Boolean = true, running: String = "pages-001", pending: String? = null) {
-            assertEquals(ValdiOtaClient.Info(enabled, "0.1", "pages-001", running, pending), client.getInfo())
+        private fun assertInfo(client: ValdiOtaClient, enabled: Boolean = true, running: String = "pages-001",
+            pending: String? = null, isNewVersion: Boolean = false, previous: String? = null,
+            embedded: String = "pages-001") {
+            assertEquals(ValdiOtaClient.Info(enabled, "0.1", embedded, running, pending, isNewVersion, previous),
+                client.getInfo())
         }
 
         private fun module(text: String) = mapOf("modules/app.valdimodule" to text.toByteArray())

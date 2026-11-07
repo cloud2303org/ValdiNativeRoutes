@@ -1,10 +1,11 @@
-// Publisher-only split Valdi archives. No native compatibility decisions or network/tool installation.
+// Publisher-only split Valdi archives; CLI packing can prepare the fixed diff tool.
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { accessSync, constants, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { zstdCompressSync, zstdDecompressSync } from 'node:zlib';
+import { cachedHdiffz, prepareHdiffz } from './hdiff-tool.mjs';
 
 export const MAX_BYTES = 64 * 1024 * 1024;
 export const MAX_METADATA = 1024 * 1024;
@@ -89,7 +90,7 @@ function isHbc(name, bytes) {
     bytes.readBigUInt64LE(4) === 0x1f1903c103bc1fc6n && bytes.readUInt32LE(12) > 0;
 }
 
-/** Explicit environment override, repository tool, then PATH. Never downloads or uses another checkout. */
+/** Offline discovery: explicit override, repository tool, PATH, then prepared cache. */
 export function findHdiffz({ root, env = process.env } = {}) {
   const executable = file => {
     try { accessSync(file, constants.X_OK); return statSync(file).isFile(); } catch { return false; }
@@ -105,7 +106,17 @@ export function findHdiffz({ root, env = process.env } = {}) {
       if (executable(file)) return file;
     }
   }
-  throw new Error('Delta base requires hdiffz: set VALDI_HDIFFZ, install ota/tools/hdiffz(.exe), or add hdiffz to PATH. No tool is downloaded.');
+  const cached = root && cachedHdiffz(root);
+  if (cached) return cached;
+  throw new Error('Delta base requires hdiffz: run pnpm ota:tool, set VALDI_HDIFFZ, install ota/tools/hdiffz(.exe), or add hdiffz to PATH.');
+}
+
+export async function ensureHdiffz({ root, env = process.env } = {}) {
+  try { return findHdiffz({ root, env }); }
+  catch (error) {
+    if (env.VALDI_HDIFFZ || !error.message.startsWith('Delta base requires hdiffz:')) throw error;
+    return prepareHdiffz({ root });
+  }
 }
 
 /** Returns {descriptor, manifest, entries} or null when complete metadata + unique payloads are not smaller. */

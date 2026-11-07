@@ -71,6 +71,26 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+      - name: Restore publisher HDiff tool
+        id: hdiff
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: .tools/hdiffpatch
+          key: hdiff-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/hdiff-tool.json', 'scripts/hdiff-tool.mjs') }}
+      - name: Prepare pinned HDiff publisher tool
+        env:
+          NODE_USE_ENV_PROXY: '1'
+          HTTPS_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
+          HTTP_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
+        run: |
+          node scripts/hdiff-tool.mjs
+          exit $LASTEXITCODE
+      - name: Save publisher HDiff tool
+        if: steps.hdiff.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: .tools/hdiffpatch
+          key: hdiff-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/hdiff-tool.json', 'scripts/hdiff-tool.mjs') }}
       - name: Use the installed pnpm launcher at the pinned version
         run: |
           $expected = (Get-Content package.json -Raw | ConvertFrom-Json).packageManager -replace '^pnpm@', ''

@@ -18,7 +18,7 @@ function fixture(t) {
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, content);
   };
-  for (const name of ['ota.mjs', 'ota-delta.mjs', 'native-cpp.mjs', 'prerequisites.mjs', 'native-modules.mjs', 'module-platform-config.mjs', 'app-config.mjs']) {
+  for (const name of ['ota.mjs', 'ota-delta.mjs', 'hdiff-tool.mjs', 'hdiff-tool.json', 'native-cpp.mjs', 'prerequisites.mjs', 'native-modules.mjs', 'module-platform-config.mjs', 'app-config.mjs']) {
     const file = path.join(root, 'scripts', name);
     mkdirSync(path.dirname(file), { recursive: true });
     cpSync(path.join(repository, 'scripts', name), file);

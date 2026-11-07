@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { findHdiffz } from '../ota-delta.mjs';
 
-export const hdiffSkip = 'Optional HDiff integration: set VALDI_HDIFFZ to an executable hdiffz, install ota/tools/hdiffz(.exe), or add hdiffz to PATH. No tool is downloaded.';
+export const hdiffSkip = 'Optional HDiff integration: run pnpm ota:tool, set VALDI_HDIFFZ to an executable hdiffz, install ota/tools/hdiffz(.exe), or add hdiffz to PATH. Tests do not download tools.';
 
 export function optionalHdiffz({ root = path.resolve(import.meta.dirname, '../..'), env = process.env } = {}) {
   try { return findHdiffz({ root, env }); }

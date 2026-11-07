@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { nativeCppInputs } from './native-cpp.mjs';
 import { pnpmInvocation } from './prerequisites.mjs';
 import { enabledModuleNames } from '../tools/valdi-rolldown/modules.mjs';
-import { MAX_BYTES, MAX_ENTRIES, MAX_METADATA, checkDeltaDescriptor, checkVersion, createDelta, findHdiffz, parseArchive, validateDelta } from './ota-delta.mjs';
+import { MAX_BYTES, MAX_ENTRIES, MAX_METADATA, checkDeltaDescriptor, checkVersion, createDelta, ensureHdiffz, parseArchive, validateDelta } from './ota-delta.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const inputs = JSON.parse(readFileSync(path.join(root, 'ota/fingerprint.json'), 'utf8'));
@@ -275,7 +275,7 @@ export function readBase({ base, baseVersion, platform, appVersion }) {
   return { version, archive, archivePath };
 }
 
-function pack(platform, appVersion, version, options) {
+async function pack(platform, appVersion, version, options) {
   checkAppVersion(appVersion);
   checkVersion(version);
   const selected = new Map();
@@ -288,11 +288,11 @@ function pack(platform, appVersion, version, options) {
   }
   if (!enabledModuleNames(root).includes('app_pages')) throw new Error('Enable app_pages in package.json valdi.modules for OTA');
   const base = readBase({ base: selected.get('--base'), baseVersion: selected.get('--base-version'), platform, appVersion });
-  const hdiffz = base ? findHdiffz({ root }) : undefined;
   const directory = path.join(root, 'ota/dist');
   if (existsSync(path.join(directory, platform, appVersion, version))) throw new Error('Package exists; use a new version.');
   // Load the publisher's key only for this explicit command, before creating build outputs.
   const privateKey = readFileSync(path.join(root, 'ota/private.pem'));
+  const hdiffz = base ? await ensureHdiffz({ root }) : undefined;
   const entries = platform === 'android' ? collectAndroid(base?.archivePath) : collectIos(base?.archivePath);
   const destination = publishPackage({ directory, platform, appVersion, version, entries, privateKey, base, hdiffz });
   console.log(`${path.relative(root, destination)} (${entries.length} full files)`);
@@ -326,14 +326,14 @@ function keygen() {
   console.log('ota/private.pem, ota/public.pem');
 }
 
-function main() {
+async function main() {
   const [command, platform, ...rest] = process.argv.slice(2);
   if (command === 'keygen') keygen();
   else if (!platforms.includes(platform)) throw new Error(`Usage: see the top of ${path.relative(root, fileURLToPath(import.meta.url))}`);
   else if (command === 'valdi-hash' && rest.length === 1) {
     if (!['debug', 'release'].includes(rest[0])) throw new Error('Expected debug or release runtime configuration');
     console.log(JSON.stringify({ platform, config: rest[0], valdi: valdiHash(), native: nativeHash() }));
-  } else if (command === 'pack' && rest.length >= 2) pack(platform, rest[0], rest[1], rest.slice(2));
+  } else if (command === 'pack' && rest.length >= 2) await pack(platform, rest[0], rest[1], rest.slice(2));
   else if (command === 'check-export' && rest.length === 1) {
     checkExport(platform, JSON.parse(readFileSync(rest[0], 'utf8')));
   } else if (command === 'app-info' && rest.length === 3) {
@@ -343,5 +343,5 @@ function main() {
 
 if (process.argv[1] && existsSync(process.argv[1]) &&
     realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
-  try { main(); } catch (error) { console.error(error.message); process.exitCode = 1; }
+  main().catch(error => { console.error(error.message); process.exitCode = 1; });
 }

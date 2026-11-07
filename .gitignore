@@ -25,6 +25,7 @@ ota/dist/
 
 # CI logs, upstream comparison reports and simulator archives.
 /.ci/
+/.release*/
 /ios/build-device/
 /ios/Generated/AppInfo.plist
 /ios/Generated/AppEntitlements.entitlements

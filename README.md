@@ -33,6 +33,13 @@ scripts/
 
 模块和两端宿主的职责、共享实现与生成代码边界见[代码组织](docs/code-organization.md)。
 
+## 发行模板
+
+模板版本由根 `package.json` 的 `version` 标识。可从 GitHub Releases 下载固定版本源码包，
+修改应用配置后执行 `pnpm install --frozen-lockfile`，再执行 `pnpm android` 或 `pnpm ios`。
+首次仍需本机原生工具链和构建；不是免编译的 APK / IPA。
+下载、版本含义、后续同步及发布步骤见[模板发行说明](docs/template-releases.md)。
+
 ## 运行
 
 应用名、Android applicationId、iOS Bundle ID 与新模块命名默认值统一在根目录

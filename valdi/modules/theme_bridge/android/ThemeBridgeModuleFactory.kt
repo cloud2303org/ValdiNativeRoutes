@@ -11,7 +11,7 @@ import kotlinx.serialization.json.jsonObject
  * The app's design tokens, owned here so pure native UI and Valdi pages read one source.
  * tokens.json ships in the app's assets and is parsed once on first access.
  * To add or change a token: edit tokens.json; both platforms and Valdi pick it up.
- * To access from pure native UI: ThemeTokensStore.instance (light/dark/shared).
+ * Pure native UI calls ThemeTokensStore.initialize(context), then reads ThemeTokensStore.tokens.
  */
 object ThemeTokensStore {
     var tokens: ThemeTokens = ThemeTokens(mapOf(), mapOf(), mapOf())

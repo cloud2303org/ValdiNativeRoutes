@@ -14,7 +14,7 @@ import { getHost } from 'theme_bridge/src/ThemeBridge';
 
 declare const runtime: ValdiRuntime;
 
-/** The token payload the native host returns at startup; empty palettes mean the store failed to load. */
+/** The token payload the native host returns at startup. */
 const native = getHost().getTokens();
 
 export type ColorTokens = { readonly [name: string]: string };

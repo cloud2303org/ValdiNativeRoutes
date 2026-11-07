@@ -2,6 +2,8 @@ name: Application CI
 
 on:
   push:
+    branches:
+      - '**' # Tag pushes use release.yml; the same commit is tested on its branch.
   pull_request:
   workflow_dispatch:
     inputs:

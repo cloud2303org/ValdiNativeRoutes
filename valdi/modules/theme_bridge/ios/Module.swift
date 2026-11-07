@@ -2,7 +2,7 @@ import Foundation
 import ValdiRuntime
 
 final class ThemeBridgeImplementation: VRThemeBridgeNativeModule {
-    private let host = VRThemeHost(getTokens: { ThemeTokensStore.shared.tokens })
+    private let host = VRThemeHost(getTokens: { try ThemeTokensStore.shared.tokens })
     func getHost() -> VRThemeHost { host }
 }
 

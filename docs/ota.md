@@ -292,11 +292,35 @@ scripts/ota-pack-ios.sh 1.0 pages-002 \
 ```
 
 Both `scripts/ota-pack-android.sh` and `scripts/ota-pack-ios.sh` forward these
-optional base arguments. Delta packing requires a locally installed `hdiffz`,
-discovered in order from `VALDI_HDIFFZ`, repository `ota/tools/hdiffz` (or
-`hdiffz.exe`), then `PATH`. An explicit base with no tool fails with an actionable
-error. There is no network bootstrap or automatic tool download. Full-only
-packing needs no HDiff tool.
+optional base arguments. Delta packing discovers `hdiffz` in order from
+`VALDI_HDIFFZ`, repository `ota/tools/hdiffz` (or `hdiffz.exe`), `PATH`, then the
+prepared cache. When no tool exists, packing with `--base` automatically downloads
+the official **HDiffPatch 5.1.3** binary for the host and verifies its pinned
+SHA256. Downloads and executable receipts are cached under
+`.tools/hdiffpatch/5.1.3/<platform>-<arch>/`, outside Git. Subsequent packs reuse
+the cache; changed executable bytes are repaired during preparation.
+
+Prepare it ahead of time, for offline publishing or CI:
+
+```sh
+pnpm ota:tool
+# Force a fixed-source build instead of the official binary:
+pnpm ota:tool --source
+```
+
+macOS (Intel/Apple Silicon), Linux and Windows use official host binaries.
+Hosts without a matching binary build the pinned source archive automatically.
+Source builds require `make`, a C/C++ compiler and zlib development headers
+(MinGW on Windows). A failed binary download or checksum does not silently
+switch to source: fix connectivity and retry, or explicitly choose `--source`.
+`scripts/hdiff-tool.json` pins release assets and source hashes. Explicit invalid
+`VALDI_HDIFFZ` overrides still fail instead of installing a different tool.
+Full-only packing and native app builds do not install this publisher tool.
+Android/iOS continue compiling the existing vendored HPatch decoder; downloaded
+desktop executables are never included in an app.
+
+The application CI prepares/caches the tool before tests so real diff
+generation/application tests run. Ordinary local tests remain offline.
 
 For the first OTA after a native release, retain that binary's exact embedded
 `app_pages.valdimodule` and use its configured `bundleVersion` as
@@ -375,10 +399,11 @@ The script tests use temporary signing keys and directories:
 node --test scripts/tests/ota.test.mjs scripts/tests/ota-delta.test.mjs scripts/tests/prerequisites.test.mjs
 ```
 
-With no local `hdiffz`, only the two real patch-generation/application
+With no local or cached `hdiffz`, only the two real patch-generation/application
 integrations skip with setup instructions; schema, full-file, CLI and discovery
 checks still run. Supply `VALDI_HDIFFZ`, a repository tool or a PATH executable
-to run the complete suite. An invalid explicit override is an error.
+to run the complete suite, or run `pnpm ota:tool` first. An invalid explicit
+override is an error.
 
 Platform clients have focused JVM/Foundation regression runners covering actual
 file operations and loopback HTTP fixtures:
@@ -388,8 +413,13 @@ python3 android/app/src/test/ValdiOtaRun.py
 ios/Tests/run-ota-client-tests.sh
 ```
 
-Delta fixture runners require the same locally installed `hdiffz` discovery
-above. The standalone Android runner uses cached Kotlin/JUnit artifacts and
+For standalone native delta runners, point the override at the prepared tool:
+
+```sh
+export VALDI_HDIFFZ="$(node scripts/hdiff-tool.mjs)"
+```
+
+The standalone Android runner uses cached Kotlin/JUnit artifacts and
 builds the host JNI codec. Ordinary `:app:testDebugUnitTest` runs the full-file
 engine cases; the dedicated split/codec classes require the runner's
 `OTA_SPLIT_FIXTURES` and skip explicitly when it is absent. Set `OTA_TEST_OUTPUT` to

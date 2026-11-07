@@ -35,6 +35,8 @@ function fixture(t, config = 'debug') {
   mkdirSync(path.join(root, 'scripts'));
   cpSync(path.join(repository, 'scripts/ota.mjs'), path.join(root, 'scripts/ota.mjs'));
   cpSync(path.join(repository, 'scripts/ota-delta.mjs'), path.join(root, 'scripts/ota-delta.mjs'));
+  cpSync(path.join(repository, 'scripts/hdiff-tool.mjs'), path.join(root, 'scripts/hdiff-tool.mjs'));
+  cpSync(path.join(repository, 'scripts/hdiff-tool.json'), path.join(root, 'scripts/hdiff-tool.json'));
   cpSync(path.join(repository, 'scripts/prerequisites.mjs'), path.join(root, 'scripts/prerequisites.mjs'));
   cpSync(path.join(repository, 'scripts/native-cpp.mjs'), path.join(root, 'scripts/native-cpp.mjs'));
   cpSync(path.join(repository, 'scripts/native-modules.mjs'), path.join(root, 'scripts/native-modules.mjs'));

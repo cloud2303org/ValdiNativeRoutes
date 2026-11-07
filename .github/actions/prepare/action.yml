@@ -43,3 +43,18 @@ runs:
       id: toolchain
       shell: bash
       run: node scripts/ci.mjs toolchain
+    - name: Restore publisher HDiff tool
+      id: hdiff
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: .tools/hdiffpatch
+        key: hdiff-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/hdiff-tool.json', 'scripts/hdiff-tool.mjs') }}
+    - name: Prepare pinned HDiff publisher tool
+      shell: bash
+      run: node scripts/hdiff-tool.mjs
+    - name: Save publisher HDiff tool
+      if: steps.hdiff.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: .tools/hdiffpatch
+        key: hdiff-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/hdiff-tool.json', 'scripts/hdiff-tool.mjs') }}

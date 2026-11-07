@@ -1,5 +1,6 @@
 {
   "private": true,
+  "version": "0.1.0",
   "packageManager": "pnpm@10.32.1",
   "valdi": {
     "app": {
@@ -52,6 +53,8 @@
     "build:android": "node scripts/project.mjs android",
     "build:ios": "node scripts/project.mjs ios",
     "test": "node scripts/project.mjs test",
+    "ota:tool": "node scripts/hdiff-tool.mjs",
+    "release:pack": "node scripts/release.mjs",
     "new-module": "node tools/valdi-rolldown/node_modules/tsx/dist/cli.mjs tools/valdi-rolldown/new-module.ts",
     "tsconfig": "node tools/valdi-rolldown/node_modules/tsx/dist/cli.mjs tools/valdi-rolldown/tsconfig.ts",
     "test:e2e:android": "sh scripts/e2e.sh android",

@@ -42,10 +42,7 @@ final class ValdiHost {
         let debug = false
         #endif
         VRStartApp.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, debug: debug) { declaration in
-            // Validate before confirming the OTA launch; an invalid startup declaration must not become active.
             let table = RouteTable(declaration)
-            // The modules loaded and ran: a newly installed package is good. Only then look for the next one.
-            ValdiOta.confirmLaunch()
             Task.detached(priority: .background) { await ValdiOta.checkForUpdate() }
             DispatchQueue.main.async { [self] in
                 started = table

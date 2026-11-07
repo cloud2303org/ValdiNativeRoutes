@@ -256,7 +256,7 @@ ClientSQL 负责连接、调度和事务协调；业务表和迁移记录只由 
 
 修改 schema 后运行 `pnpm db:generate`，审查并提交 SQL、Kit journal/snapshot 和生成的迁移常量。
 `pnpm db:check` 检查打包输入；模块构建、两端宿主构建和测试都会执行它。运行时在同一事务中执行迁移与
-迁移记录写入，拒绝变化的历史和未知的新版本。OTA 回滚不会回滚数据库，具体限制见
+迁移记录写入，拒绝变化的历史和未知的新版本。重新发布旧业务内容也不会撤销数据库迁移，具体限制见
 [数据库接口和迁移](docs/drizzle-database.md)。
 
 连接由 `startApp()` 调用 `initializeAppDb()` 在应用作用域创建。页面持有可取消的查询订阅，数据库操作等待
@@ -330,42 +330,57 @@ Android release 开了 R8（`isMinifyEnabled`、`isShrinkResources`），APK 从
 
 ## 线上热更新（OTA）
 
-和 CodePush 一样，发版后下发新的 Valdi 模块（代码和图片一起），下次冷启动生效。只更新 `tools/valdi-rolldown` 构建的应用模块（`valdi/modules` 下的每个模块，npm 包打在里面），Valdi 自带的模块（`valdi_core` 等）跟着安装包走。
+OTA 使用静态文件服务，按平台和 App 版本手动绑定，不计算原生源码兼容指纹。
+只更新 `app_pages` 的 `.valdimodule`、可选 source map 和所属资源；其他应用/Valdi 模块连同
+JS 封装均随原生安装包发布。Release 归档内是 Hermes 字节码，原生实现（包括 `app_pages` 的 C++）
+仍需 APK/IPA 更新。必须先安装包含新客户端、版本配置和原生 codec 集成的原生包。
 
-**加载。** Valdi 读模块前先问 runtime 的 custom module provider，返回 null 才读安装包里的 `.valdimodule`。图片的清单（名字、宽高）在 `.valdimodule` 里，图片文件在外面（Android 是 drawable，iOS 是 `<module>.bundle`），和 RN 的 AssetRegistry 加 `--assets-dest` 一样。`custom_module_assets.patch` 给 provider 加了一个可选方法，Valdi 找模块图片前先问它（Android `resolveAssetUrl`，iOS `assetURLForModule:resourcePath:`），返回 `file://` 地址就用热更新包里的图，返回 null 用安装包里的。宿主的 provider 在 `ValdiOta.kt` / `ValdiOta.swift`（iOS 的 provider 本身是 Objective-C 的 `ValdiOtaModules`：Swift 的 `throws -> Data` 表达不了"没有错误、用安装包里的"）。原生 Tab 栏图标也先问 `ValdiOta.image`。
+`appVersion` 来自 Android `versionName` / iOS `CFBundleShortVersionString`；
+根 `package.json` 的 `valdi.ota.bundleVersion` 标识原生包内嵌业务版本（初始 `pages-001`），
+生成的 `valdi_ota.json` 记录它和 `modules: ["app_pages"]`。`latest.json` 请求带
+`platform`、`appVersion`、`bundleVersion` 查询参数；业务版本取本进程运行的 active 快照或内嵌版本，
+绝不取 pending，也不随运行中持久化 current 的变化而改变。
 
-**按 App 版本下发，指纹兜底。** 热更新包针对一个 App 版本（Android `versionName`，iOS `CFBundleShortVersionString`，`project.yml` 的 `MARKETING_VERSION`），打包时指定，这个版本的安装包都会收到。前提是这个版本的原生部分没变，指纹用来检查这一点。指纹由四部分组成：
-- 导出时记下的 Valdi 部分：Valdi fork 提交、依赖规则补丁、启用模块的 C++ 目录及链接规则，写在 `libs/valdi_ota.json`、`ios/Frameworks/valdi_ota.json` 里；
-- `codegen.ts` 从 `@Export…` 生成的原生绑定（`android/app/generated/valdi/`、`ios/Generated/valdi/`，去掉注释后计算）；
-- `ota/fingerprint.json` 列出的原生源码；
-- debug/release：包里是 Hermes 字节码，只发 release。
+ECDSA P-256 签名的 schemaVersion=1 完整清单始终保留 full 文件；可选 split delta 按归档条目选择
+copy、full（raw / default-ZSTD）或仅限 HBC 的 HDIFFSF20/zlib patch。客户端核对 base 的精确压缩
+SHA256、条目及 packet 哈希，再按目标顺序重建并用 default ZSTD 压缩；最终压缩 SHA256/大小必须
+与签名 full 描述完全一致。缺失 codec/base、校验或重压缩失败都回退下载原始 full。
+客户端文件读写分块进行；C 编码器会读取最多 64 MiB 的整个输入，不能把整条管线称为流式或以此推断总内存。
 
-开了热更新（`VALDI_OTA_URL` 不为空）的 release 构建会把指纹记到 `ota/releases/<platform>/<App 版本>.json`，这个文件要和发版一起提交。之后再构建同一个版本时，如果原生部分不一样，构建会失败并指出哪部分变了：已经发出去的版本要升版本号，还没发的版本就删掉这个记录文件。打热更新包时会拿当前代码的指纹和记录比对，不一致就拒绝打包。客户端也会检查 manifest 里的版本和指纹。所以只改 TS 实现、文案、图片，可以热更新；改了导出给原生的接口、原生代码或 Valdi 本身，就只能发新版本。
+签名验证后在独立临时目录准备并逐文件校验，整套准备好才标记 pending，下次冷启动统一选择。
+进程内不替换模块集合，也不原地修改 active。
+下次启动验证 pending 文件后直接将其持久化为 current，不需要启动确认。
+正常退出或崩溃不会使该版本作废，也没有失败版本黑名单；业务问题通过发布修复版本处理。
+需要恢复旧业务内容时，以新版本号重新发布旧内容。数据库迁移不会随业务包切换撤销。
 
-**包和服务器。** `ota/dist/` 就是要放到服务器上的静态文件，每个 App 版本可以有多个热更新版本，`latest.json` 指向当前下发的那个（改它就能回退到旧包）：
-
-```text
-<platform>/<App 版本>/latest.json             {"version": "…"}
-<platform>/<App 版本>/<version>/manifest.json 平台、App 版本、指纹、版本、每个文件的 sha256
-<platform>/<App 版本>/<version>/manifest.sig  manifest.json 的 ECDSA P-256 签名
-<platform>/<App 版本>/<version>/modules/…     <module>.valdimodule、<module>.map.json
-<platform>/<App 版本>/<version>/res/…         Android drawable-<dpi>/<module>_<name>.webp，iOS <module>.bundle/<name>@<n>x.png
-```
-
-客户端先校验签名、平台、App 版本、指纹和版本号，再逐个下载文件并校验 sha256，全部通过后整个目录改名到 `files/valdi-ota/packages/<version>`。包和版本号一一对应，同一个版本号不能重新打包。
-
-**生效和回滚。** 启动时选定这次进程用的包，进程内不再换（内存警告卸载的模块也从同一个包重新加载）。新包第一次启动时是 pending；`startApp` 返回后确认，变成 current，上一个包删掉。pending 的包启动后没能确认（崩溃、JS 启动报错），下次启动就回到上一个包，这个版本记为失败、不再下载。读不了的包同样处理。安装了新的安装包（指纹或安装时间变了）就清空所有热更新包。确认之后才在后台检查更新，下载的包下次冷启动生效。
+默认启动后静默检查。JS 通过 `app_ota/src` 的 `getInfo()` 和 `checkForUpdate()`
+调用原生 `OtaHost` proxy；两者返回 Promise，状态由原生客户端持有。
+手动检查等待同一次后台下载完成，返回当前运行版本和待生效版本，下次冷启动生效。
+调用方式见 [OTA 接口说明](docs/ota.md#javascript-and-native-access)。
 
 ```sh
-node scripts/ota.mjs keygen                  # 只需一次：ota/private.pem（不进 git）和 ota/public.pem（编进安装包）
-scripts/export-android.sh release            # 发版：release 运行时
-cd android && ./gradlew :app:assembleRelease -PvaldiOtaUrl=https://ota.example.com   # 记下 ota/releases/android/<versionName>.json
-scripts/ota-pack-android.sh 0.1 0.1-h1       # 热更新：在发版的代码上改 TS / 图片后打包，输出到 ota/dist/android/0.1/0.1-h1
+# 已有的签名密钥继续使用；只有首次没有密钥时运行 node scripts/ota.mjs keygen。
+# 先准备匹配的 Release runtime；原生导出过期检查仍然有效。
+(cd android && ./gradlew :app:assembleRelease -PvaldiOtaUrl=https://ota.example.com)
+# 在仓库根目录手动指定接收更新的 App 版本和不可重复使用的更新版本。
+node scripts/ota.mjs pack android 0.1 pages-002
+# 可选：旧 package 目录推导 base 版本并校验平台/App 版本。
+node scripts/ota.mjs pack android 0.1 pages-002 --base ota/dist/android/0.1/pages-001
+# 或指定旧归档及其业务版本；两种 base 形式均需本地 hdiffz。
+VALDI_HDIFFZ=/path/to/hdiffz node scripts/ota.mjs pack android 0.1 pages-002 \
+  --base /path/to/old.valdimodule --base-version pages-001
 ```
 
-iOS 是 `scripts/export-ios.sh release`、`project.yml` 的 `VALDI_OTA_URL`、`scripts/ota-pack-ios.sh <App 版本> <version>`。本地测试：`(cd ota/dist && python3 -m http.server 8765)`，`adb reverse tcp:8765 tcp:8765`，用 `-PvaldiOtaUrl=http://127.0.0.1:8765` 构建（`network_security_config.xml` 只对 127.0.0.1/localhost 放开明文 HTTP）。
+iOS 通过 Release 构建设置 `VALDI_OTA_URL`，打包命令为 `node scripts/ota.mjs pack ios 1.0 pages-002`；
+两端 `scripts/ota-pack-*.sh` 支持相同 base 参数。工具依次从 `VALDI_HDIFFZ`、
+`ota/tools/hdiffz(.exe)`、`PATH` 查找；没有工具时显式 base 报错，不联网安装，full-only 无此依赖。
+编译器以 `--module app_pages --hermes-base <旧归档>` 构建，通过 Hermes `-base-bytecode` 复用旧 HBC，
+不使用 `deltaprep`。仅当完整 delta 元数据和 payload 总量小于目标归档时才附带 delta。
 
-`ota-pack-*.sh` 由 `ota.mjs` 调 `tools/valdi-rolldown` 的 `build.ts --release` 编出模块（字节码和 `<module>.map.json`）和图片，和安装包里的是同一套构建；不用重新导出运行时，字节码用的是 pnpm 安装的同版本 `hermes-compiler`，无需 toolbox。
+发布时上传完整版本目录，最后替换 `latest.json`；静态服务须保留 full、所有引用的 delta 路径，
+以及仍需下载或用于后续打包的相关 base 版本。兼容性由发布者手动负责；不兼容的原生 API/Hermes
+变更应提升原生 App 版本并发布新安装包。没有发布后台也可以使用。
+Debug 和空更新地址均只使用安装包。签名、协议、目录、版本管理和测试方式见 [OTA 说明](docs/ota.md)。
 
 ## 构建（tools/valdi-rolldown）
 
@@ -401,7 +416,7 @@ TS 声明一个 `@ExportModule` 的 `.d.ts`，C++ 实现它，JS 像普通模块
 - **生成**：`codegen.ts --cpp-modules-out ../../valdi/modules` 写出模块自己的 `cpp/generated/valdi_modules/<模块>/<模块>.{hpp,cpp}`；默认只生成有手写 C++ 的模块及其生成类型依赖，命名空间 `snap::valdi_modules::app_pages`，和 Valdi 编译器的输出一样。`Cpp.d.ts` 生成接口 `CppModule`（每个函数一个纯虚方法，常量是无参方法）和工厂 `CppModuleFactory`；同时也生成 Kotlin / Objective-C 的同名接口，没人实现，不影响。模块和模型要像其他注解一样写上 `ios` / `android` 名字，否则 Kotlin 默认落在 `com.snap.modules.app_pages`，和模块的包冲突，生成会失败（Valdi 的编译器也一样）。
 - **实现**：继承 `CppModuleFactory`，重写 `onLoadModule()` 返回 `CppModule` 的实现，再用 `Valdi::RegisterModuleFactory::registerTyped<…>()` 静态注册。运行时创建时收集这些注册，JS 第一次读 `app_pages/src/cpp/Cpp` 时调用工厂。
 - **编进运行时**：`//modules/app_pages/cpp:native`（手写实现，`alwayslink`），以及它显式依赖的 `:bindings` 和 `//modules/app_foundation/cpp:bindings`通过 `valdi_exported_library` 的 `native_deps`（fork 中的原生导出规则扩展）链接进 `libvaldi_runtime.so` 和 `ValdiRuntime.xcframework`。不在 CMake / Xcode 里单独编：`libvaldi_runtime.so` 静态链接 libc++、只导出 JNI 符号，单独编的 so 会带另一份 libc++，跨 so 传 `shared_ptr`、抛异常都不安全。代价是改了 C++ 要重新导出（增量编译）。
-- **检查**：导出脚本先检查 C++ 绑定没过期；导出时 `valdi_ota.json` 记下 启用模块 C++ 目录及链接规则的哈希，Gradle 的 `valdiCodegenCheck` 和 Xcode 的 “Valdi bindings check” 比对它（`scripts/ota.mjs check-export`），改了 C++ 没重新导出就构建失败并给出命令。模块 C++ 目录也算进 OTA 指纹：C++ 在安装包里，不能热更新。
+- **检查**：导出脚本先检查 C++ 绑定没过期；导出时 `valdi_ota.json` 记下 启用模块 C++ 目录及链接规则的哈希，Gradle 的 `valdiCodegenCheck` 和 Xcode 的 “Valdi bindings check” 比对它（`scripts/ota.mjs check-export`），改了 C++ 没重新导出就构建失败并给出命令。C++ 在安装包里，不能热更新；OTA 接收版本由发布者手动指定。
 - **耗时的计算**：同步调用期间 JS 线程被占住。要在后台算，用回调参数，C++ 在自己的线程（`Valdi::DispatchQueue::create`）算完再调回调，Valdi 会把调用转回 JS 线程。
 
 ## npm 依赖

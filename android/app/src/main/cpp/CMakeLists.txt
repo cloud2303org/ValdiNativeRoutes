@@ -2,7 +2,7 @@
 # packages/vision/android/CMakeLists.txt without Nitro. Android OpenCV Mobile components and ncnn are
 # separate imported shared libraries from vision/vendor/install/android-arm64/shared.
 cmake_minimum_required(VERSION 3.22)
-project(ValdiRoutesVision CXX)
+project(ValdiRoutesVision C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(NOT ANDROID_ABI STREQUAL "arm64-v8a")
@@ -16,3 +16,9 @@ target_include_directories(valdi_routes_vision PRIVATE ${VISION_ROOT}/cpp)
 target_compile_options(valdi_routes_vision PRIVATE -fexceptions -frtti)
 # ncnn's Android asset readers reference AAsset* from the NDK system library.
 target_link_libraries(valdi_routes_vision native_routes_vision_vendors android)
+
+# The OTA decoder has no Valdi/Hermes or C++ dependency and can run before the runtime starts.
+get_filename_component(OTA_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../ota/native" ABSOLUTE)
+add_subdirectory("${OTA_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/ota")
+add_library(valdi_ota_patch SHARED ota-jni.c)
+target_link_libraries(valdi_ota_patch PRIVATE valdi_ota_core)

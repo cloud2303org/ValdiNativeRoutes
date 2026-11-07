@@ -1,8 +1,13 @@
 package io.valdiroutes.mmkv
 
-import org.json.JSONArray
-import org.json.JSONObject
-import org.json.JSONTokener
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.double
 
 /** Persist the structured envelope directly; no legacy value decoding or conversion. */
 internal object StorageCodec {
@@ -11,14 +16,12 @@ internal object StorageCodec {
     fun decode(stored: String?): Read {
         if (stored == null) return Read(false, emptyMap())
         return try {
-            val reader = JSONTokener(stored)
-            val value = reader.nextValue()
-            require(reader.nextClean() == '\u0000') { "Trailing data in stored value" }
-            require(value is JSONObject && value.has("value")) { "Invalid storage envelope" }
-            @Suppress("UNCHECKED_CAST")
-            Read(true, unwrap(value) as Map<String, Any?>)
-        } catch (error: Exception) {
-            Read(false, emptyMap(), "Invalid stored value: ${error.message ?: "decode failed"}")
+            val value = Json.parseToJsonElement(stored)
+            require(value is JsonObject && value.containsKey("value")) { "Invalid storage envelope" }
+            Read(true, value.mapValues { unwrap(it.value) })
+        } catch (_: Exception) {
+            // Parser diagnostics can contain stored secrets, including object keys and values.
+            Read(false, emptyMap(), "Invalid stored value: invalid JSON storage envelope")
         }
     }
 
@@ -27,25 +30,33 @@ internal object StorageCodec {
         return wrap(payload).toString()
     }
 
-    // JSONObject(Map) drops null entries. Explicit JSON nulls must survive at every dictionary level.
-    private fun wrap(value: Any?): Any = when (value) {
-        null -> JSONObject.NULL
-        is Map<*, *> -> JSONObject().apply {
+    private fun wrap(value: Any?): JsonElement = when (value) {
+        null -> JsonNull
+        is Map<*, *> -> JsonObject(buildMap {
             value.forEach { (key, item) ->
                 require(key is String) { "Storage dictionary keys must be strings" }
                 put(key, wrap(item))
             }
+        })
+        is List<*> -> JsonArray(value.map { wrap(it) })
+        is String -> JsonPrimitive(value)
+        is Boolean -> JsonPrimitive(value)
+        is Number -> {
+            require(value.toDouble().isFinite()) { "Storage numbers must be finite" }
+            JsonPrimitive(value)
         }
-        is List<*> -> JSONArray().apply { value.forEach { put(wrap(it)) } }
-        is String, is Boolean -> value
-        is Number -> value.also { require(it.toDouble().isFinite()) { "Storage numbers must be finite" } }
         else -> throw IllegalArgumentException("Storage payload must contain only structured values")
     }
 
-    private fun unwrap(value: Any?): Any? = when {
-        value == null || value === JSONObject.NULL -> null
-        value is JSONObject -> value.keys().asSequence().associateWith { unwrap(value.get(it)) }
-        value is JSONArray -> (0 until value.length()).map { unwrap(value.get(it)) }
-        else -> value
+    private fun unwrap(value: JsonElement): Any? = when (value) {
+        JsonNull -> null
+        is JsonObject -> value.mapValues { unwrap(it.value) }
+        is JsonArray -> value.map { unwrap(it) }
+        is JsonPrimitive -> when {
+            value.isString -> value.content
+            else -> value.booleanOrNull ?: value.content.toIntOrNull() ?: value.content.toLongOrNull() ?: value.double.also {
+                require(it.isFinite()) { "Storage numbers must be finite" }
+            }
+        }
     }
 }

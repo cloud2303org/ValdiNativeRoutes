@@ -1,32 +1,29 @@
-// Over-the-air updates of the Valdi modules: the signing key, the binaries' release records and signed packages.
+// Static full-file OTA updates. Compatibility is selected manually by platform and app version.
 //   node scripts/ota.mjs keygen                                  ota/private.pem (keep out of git) and ota/public.pem
 //   node scripts/ota.mjs valdi-hash <android|ios> <debug|release>  JSON the export scripts write next to their output
 //   node scripts/ota.mjs check-export <android|ios> <valdi_ota.json>  fails when module C++ changed since that export
-//   node scripts/ota.mjs app-info <android|ios> <valdi_ota.json> <app version> <update url> [--record]
+//   node scripts/ota.mjs app-info <android|ios> <valdi_ota.json> <app version> <update url>
 //                                                                the app's valdi_ota.json (Gradle, ios/project.yml)
-//   node scripts/ota.mjs pack <android|ios> <app version> <version>  ota/dist/<platform>/<app version>/<version>/
+//   node scripts/ota.mjs pack <android|ios> <app version> <version> [--base <package dir|archive> [--base-version <version>]]
 //
-// A package targets an app version (versionName, CFBundleShortVersionString): the binaries of that version take it.
-// The binary's native side must be what the package was built against: the Valdi toolchain, the bindings generated
-// from the modules' @Export declarations, the native sources (ota/fingerprint.json). Their hashes make the binary's
-// fingerprint; a release build with updates on records it in ota/releases/<platform>/<app version>.json (--record,
-// checked in), and fails when that version was recorded with another: a changed native side needs a new app version. `pack`
-// fails, naming what changed, when the tree's isn't the recorded one; the client checks it too (the manifest's).
+// The publisher owns native compatibility: incompatible native changes require a new app version.
+// Runtime export hashes below remain build-integrity checks; they do not decide OTA eligibility.
 //
 // ota/dist is what the update server serves, as static files:
 //   <platform>/<app version>/latest.json                {"version": "<version>"}
-//   <platform>/<app version>/<version>/manifest.json    platform, appVersion, fingerprint, version, files: {path: sha256}
+//   <platform>/<app version>/<version>/manifest.json    schemaVersion, platform, appVersion, version, files: {path: {sha256,size}}
 //   <platform>/<app version>/<version>/manifest.sig     base64 ECDSA P-256 / SHA-256 signature of manifest.json
 //   <platform>/<app version>/<version>/<path>           modules/<module>.{valdimodule,map.json}, res/…
 import { createHash, createPrivateKey, generateKeyPairSync, sign } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { nativeModuleInputs } from './native-modules.mjs';
-import { readAppConfig } from './app-config.mjs';
 import { nativeCppInputs } from './native-cpp.mjs';
+import { pnpmInvocation } from './prerequisites.mjs';
+import { enabledModuleNames } from '../tools/valdi-rolldown/modules.mjs';
+import { MAX_BYTES, MAX_ENTRIES, MAX_METADATA, checkDeltaDescriptor, checkVersion, createDelta, findHdiffz, parseArchive, validateDelta } from './ota-delta.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const inputs = JSON.parse(readFileSync(path.join(root, 'ota/fingerprint.json'), 'utf8'));
@@ -57,44 +54,11 @@ function digest(entries) {
 
 const fileEntries = (paths) => paths.flatMap((rel) => walk(rel)).map((rel) => [rel, readFileSync(path.join(root, rel))]);
 
-/** Generated code without comments and indentation: doc comments in TS don't change the native contract. */
-const stripComments = (text) =>
-  text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line && !/^(\/\*|\*|\/\/)/.test(line))
-    .join('\n');
-
-/** Where tools/valdi-rolldown/codegen.ts writes each platform's native bindings, and what they are. */
-const bindingSources = {
-  android: { dir: 'android/app/generated/valdi', extensions: ['.kt'] },
-  ios: { dir: 'ios/Generated/valdi', extensions: ['.h', '.m', '.swift'] },
-};
-
 /** The exported runtime's toolchain and module-owned C++ sources, bindings, and build rules. */
 const valdiHash = () => digest([
   ...fileEntries([...new Set([...inputs.valdi, ...nativeCppInputs(root)])]),
   ['compiler-backend', 'node'],
 ]);
-
-/**
- * The native bindings generated from the modules' @Export declarations, as they are when the binary is built:
- * codegen.ts writes them outside an export, so a changed native interface needs no new one. They sit outside the
- * native half's paths and count without their comments: a doc comment in TypeScript doesn't change the native contract.
- */
-function bindingsHash(platform) {
-  const { dir, extensions } = bindingSources[platform];
-  const bindings = walk(dir)
-    .filter((rel) => extensions.some((ext) => rel.endsWith(ext)))
-    .map((rel) => [path.relative(dir, rel), stripComments(readFileSync(path.join(root, rel), 'utf8'))]);
-  const moduleBindings = JSON.parse(execFileSync(process.execPath, [
-    path.join(root, 'tools/valdi-rolldown/node_modules/tsx/dist/cli.mjs'),
-    path.join(root, 'tools/valdi-rolldown/module-bindings.ts'), platform,
-  ], { cwd: root, encoding: 'utf8' }));
-  bindings.push(...moduleBindings.map(([name, content]) => [name, stripComments(content)]));
-  if (bindings.length === 0) throw new Error(`No generated bindings in ${dir}: run tools/valdi-rolldown/codegen.ts`);
-  return digest(bindings);
-}
 
 /**
  * Module-owned C++ implementations, bindings and build rules. This conservative
@@ -112,175 +76,245 @@ function checkExport(platform, info) {
 }
 
 /**
- * The modules tools/valdi-rolldown builds, as the release app's build does (Gradle's valdiModules, the Xcode "Valdi
- * modules" phase): Hermes bytecode with their maps, and the images in the platform's layout. Returns the output
- * directory, to be removed by the caller.
+ * Arguments for the parent-owned compiler: only the business module is OTA-owned.
+ * The old compressed archive lets Hermes reuse its bytecode string table with -base-bytecode.
  */
-function buildModules(platform) {
-  const built = mkdtempSync(path.join(tmpdir(), 'valdi-ota-'));
+export function moduleBuildArguments({ platform, built, baseArchive }) {
+  if (!platforms.includes(platform)) throw new Error('Invalid build platform');
   const images = platform === 'android' ? ['--res', path.join(built, 'res')] : ['--ios-res', built];
-  execFileSync('pnpm', ['exec', 'tsx', 'build.ts', '--release', '--out', built, ...images], {
-    cwd: path.join(root, 'tools/valdi-rolldown'),
-    stdio: ['ignore', 'ignore', 'inherit'],
-  });
-  return built;
+  return ['exec', 'tsx', 'build.ts', '--release', '--module', 'app_pages', '--out', built, ...images,
+    ...(baseArchive ? ['--hermes-base', baseArchive] : [])];
 }
 
-/** What the parts of a fingerprint are, for the errors that name the changed ones. */
-const partNames = {
-  config: 'the Valdi runtime build (debug/release export)',
-  valdi: 'the Valdi fork/toolchain or module-owned C++ (ota/fingerprint.json "valdi")',
-  bindings: 'the native bindings (a native interface of a module)',
-  native: 'the native sources (ota/fingerprint.json "<platform>")',
-};
-
-/**
- * The hashes a binary's native side is made of, and their fingerprint. `valdi` is the export's (`info`, what the
- * binary links) when given, else the tree's: a package is built from the tree.
- */
-function fingerprintParts(platform, info) {
-  if (info && info.platform !== platform) throw new Error(`Export info is for ${info.platform}, not ${platform}.`);
-  const app = readAppConfig(root);
-  const parts = {
-    config: info ? info.config : 'release',
-    valdi: info ? info.valdi : valdiHash(),
-    bindings: bindingsHash(platform),
-    native: digest([
-      ...fileEntries([...new Set([...inputs[platform], ...nativeModuleInputs(platform), ...(app.icon ? [app.icon] : [])])]),
-      ['app-identity', JSON.stringify(app)],
-    ]),
-  };
-  const fingerprint = sha256(`${platform}\n${parts.config}\n${parts.valdi}\n${parts.bindings}\n${parts.native}\n`).slice(0, 32);
-  return { fingerprint, ...parts };
+function buildModules(platform, baseArchive) {
+  const built = mkdtempSync(path.join(tmpdir(), 'valdi-ota-'));
+  const invocation = pnpmInvocation(moduleBuildArguments({ platform, built, baseArchive }));
+  try {
+    execFileSync(invocation.command, invocation.args, {
+      cwd: path.join(root, 'tools/valdi-rolldown'),
+      stdio: ['ignore', 'ignore', 'inherit'],
+    });
+    return built;
+  } catch (error) {
+    rmSync(built, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 const checkAppVersion = (appVersion) => {
-  if (!versionPattern.test(appVersion)) throw new Error(`Invalid app version '${appVersion}': ${versionPattern}`);
+  if (typeof appVersion !== 'string' || !versionPattern.test(appVersion)) {
+    throw new Error(`Invalid version '${appVersion}': ${versionPattern}`);
+  }
 };
-const recordPath = (platform, appVersion) => path.join(root, 'ota/releases', platform, `${appVersion}.json`);
-const readRecord = (platform, appVersion) => {
-  const file = recordPath(platform, appVersion);
-  return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : undefined;
-};
-/** The parts of `actual` that differ from `recorded`, described. */
-const changedParts = (recorded, actual) =>
-  Object.keys(partNames).filter((part) => recorded[part] !== actual[part]).map((part) => `  ${partNames[part]}`);
-
 /**
  * The app's own Valdi modules, as tools/valdi-rolldown built them into `built` (app_pages, with the npm packages it
  * imports bundled in): <module>.valdimodule and its map. Valdi's own (valdi_core, ...) belong to the binary.
  */
 function moduleEntries(built) {
-  const modules = readdirSync(built).filter((name) => name.endsWith('.valdimodule'));
-  if (modules.length === 0) throw new Error(`tools/valdi-rolldown built no modules into ${built}`);
-  return modules.flatMap((file) => {
-    const map = file.replace(/\.valdimodule$/, '.map.json');
-    return [file, ...(existsSync(path.join(built, map)) ? [map] : [])].map((name) => [
-      `modules/${name}`,
-      readFileSync(path.join(built, name)),
-    ]);
-  });
+  const file = 'app_pages.valdimodule';
+  if (!existsSync(path.join(built, file))) throw new Error(`tools/valdi-rolldown built no app_pages module into ${built}`);
+  const map = 'app_pages.map.json';
+  return [file, ...(existsSync(path.join(built, map)) ? [map] : [])].map(name => [
+    `modules/${name}`, readFileSync(path.join(built, name)),
+  ]);
 }
 
 /** Package entries (path in the package → bytes): modules/<module>.{valdimodule,map.json} and res/<platform layout>. */
-function collectAndroid() {
-  const built = buildModules('android');
-  const entries = moduleEntries(built);
-  // The modules' res/ images, as Android resources: drawable-<density>/<module>_<name>.webp.
-  const res = path.join(built, 'res');
-  for (const density of readdirSync(res).filter((name) => name.startsWith('drawable'))) {
-    for (const file of readdirSync(path.join(res, density))) {
-      entries.push([`res/${density}/${file}`, readFileSync(path.join(res, density, file))]);
+function collectAndroid(baseArchive) {
+  const built = buildModules('android', baseArchive);
+  try {
+    const entries = moduleEntries(built);
+    // The modules' res/ images, as Android resources: drawable-<density>/<module>_<name>.webp.
+    const res = path.join(built, 'res');
+    for (const density of (existsSync(res) ? readdirSync(res) : []).filter((name) => name.startsWith('drawable'))) {
+      for (const file of readdirSync(path.join(res, density)).filter(name => name.startsWith('app_pages_'))) {
+        entries.push([`res/${density}/${file}`, readFileSync(path.join(res, density, file))]);
+      }
     }
-  }
-  rmSync(built, { recursive: true, force: true });
-  return entries;
+    return entries;
+  } finally { rmSync(built, { recursive: true, force: true }); }
 }
 
-function collectIos() {
-  const built = buildModules('ios');
-  const entries = moduleEntries(built);
-  // The modules' res/ images, as the app carries them: <module>.bundle/<name>@<scale>x.png.
-  for (const bundle of readdirSync(built).filter((name) => name.endsWith('.bundle'))) {
-    for (const file of readdirSync(path.join(built, bundle)).filter((name) => !name.startsWith('.') && name !== 'Info.plist')) {
-      entries.push([`res/${bundle}/${file}`, readFileSync(path.join(built, bundle, file))]);
+function collectIos(baseArchive) {
+  const built = buildModules('ios', baseArchive);
+  try {
+    const entries = moduleEntries(built);
+    // The modules' res/ images, as the app carries them: <module>.bundle/<name>@<scale>x.png.
+    for (const bundle of readdirSync(built).filter((name) => name === 'app_pages.bundle')) {
+      for (const file of readdirSync(path.join(built, bundle)).filter((name) => !name.startsWith('.') && name !== 'Info.plist')) {
+        entries.push([`res/${bundle}/${file}`, readFileSync(path.join(built, bundle, file))]);
+      }
     }
-  }
-  rmSync(built, { recursive: true, force: true });
-  return entries;
+    return entries;
+  } finally { rmSync(built, { recursive: true, force: true }); }
 }
 
-/**
- * A package of the tree's modules for the `appVersion` binaries, whose release recorded their native side: the tree's
- * must be the same, or the modules may use what those binaries don't have.
- */
-function pack(platform, appVersion, version) {
+/** Complete version description; unchanged bytes can be reused by the clients. */
+export function createManifest({ platform, appVersion, version, modules = ['app_pages'], entries, deltas = [] }) {
+  if (!platforms.includes(platform)) throw new Error(`Invalid platform '${platform}'`);
   checkAppVersion(appVersion);
-  if (!versionPattern.test(version)) throw new Error(`Invalid version '${version}': ${versionPattern}`);
-  const recorded = readRecord(platform, appVersion);
-  if (!recorded) {
-    throw new Error(
-      `No release of ${platform} ${appVersion} recorded (${path.relative(root, recordPath(platform, appVersion))}): its release build records it.`,
-    );
+  checkAppVersion(version);
+  if (version.toLowerCase() === 'latest.json') throw new Error('Update version latest.json is reserved for the index');
+  if (!Array.isArray(modules) || modules.length !== 1 || modules[0] !== 'app_pages') {
+    throw new Error('OTA module inventory must contain only app_pages');
   }
-  const parts = fingerprintParts(platform);
-  if (parts.fingerprint !== recorded.fingerprint) {
-    throw new Error(
-      `The tree's native side is not ${platform} ${appVersion}'s; changed since its release:\n${changedParts(recorded, parts).join('\n')}\n` +
-        'Its binaries can\'t take these modules: release a new app version, or pack from that release\'s code.',
-    );
+  if (!Array.isArray(entries)) throw new Error('Invalid OTA entries');
+  if (!Array.isArray(deltas) || deltas.length > 8) throw new Error('OTA supports at most 8 deltas');
+  const bases = new Set();
+  for (const delta of deltas) {
+    checkDeltaDescriptor(delta);
+    if (bases.has(delta.baseVersion) || delta.baseVersion === version) throw new Error('Invalid or duplicate delta base version');
+    bases.add(delta.baseVersion);
   }
-  const entries = platform === 'android' ? collectAndroid() : collectIos();
-
-  const out = path.join(root, 'ota/dist', platform, appVersion);
-  const dir = path.join(out, version);
-  // Clients never download a version they know again: a changed package needs a new version.
-  if (existsSync(dir)) throw new Error(`${path.relative(root, dir)} exists; packages are immutable, use a new version.`);
   const files = {};
-  for (const [name, bytes] of entries) {
-    mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
-    writeFileSync(path.join(dir, name), bytes);
-    files[name] = sha256(bytes);
+  let total = 0;
+  for (const [name, bytes] of [...entries].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) {
+    const module = /^modules\/([a-z][a-z0-9_]*)\.(valdimodule|map\.json)$/.exec(name);
+    let owned = module ? modules.includes(module[1]) : false;
+    if (platform === 'android' && /^res\/drawable(?:-[A-Za-z0-9-]+)?\/[A-Za-z0-9_@][A-Za-z0-9._@-]*$/.test(name)) {
+      const file = name.split('/')[2];
+      owned = modules.some(id => file.startsWith(`${id}_`));
+    } else if (platform === 'ios') {
+      const resource = /^res\/([a-z][a-z0-9_]*)\.bundle\/[A-Za-z0-9_@][A-Za-z0-9._@-]*$/.exec(name);
+      if (resource) owned = modules.includes(resource[1]);
+    }
+    if (!owned || Object.hasOwn(files, name) || !Buffer.isBuffer(bytes)) throw new Error(`Invalid or duplicate OTA file '${name}'`);
+    if (module?.[2] === 'valdimodule' && bytes.length === 0) throw new Error(`Empty module '${name}'`);
+    total += bytes.length;
+    if (total > 64 * 1024 * 1024) throw new Error('OTA package exceeds 64 MiB');
+    files[name] = { sha256: sha256(bytes), size: bytes.length };
   }
-  const manifest = Buffer.from(
-    `${JSON.stringify({ platform, appVersion, fingerprint: parts.fingerprint, version, files }, null, 2)}\n`,
-  );
-  const key = createPrivateKey(readFileSync(path.join(root, 'ota/private.pem')));
-  writeFileSync(path.join(dir, 'manifest.json'), manifest);
-  writeFileSync(path.join(dir, 'manifest.sig'), sign('sha256', manifest, { key, dsaEncoding: 'der' }).toString('base64'));
-  // Last, so a client never sees a version whose files aren't all there.
-  writeFileSync(path.join(out, 'latest.json'), `${JSON.stringify({ version })}\n`);
-  console.log(`${path.relative(root, dir)} (${Object.keys(files).length} files)`);
+  if (Object.keys(files).length > 4096) throw new Error('OTA package exceeds 4096 files');
+  for (const module of modules) {
+    if (!Object.hasOwn(files, `modules/${module}.valdimodule`)) throw new Error(`Missing module '${module}'`);
+  }
+  return { schemaVersion: 1, platform, appVersion, version, files, ...(deltas.length ? { deltas } : {}) };
 }
 
-/**
- * The app's valdi_ota.json (ValdiOta.kt, ValdiOta.swift): its version and fingerprint, the update server, the key
- * packages are signed with. `record` (release builds): records the fingerprint as the version's, or fails when the
- * version was recorded with another.
- */
-function appInfo(platform, info, appVersion, url, record) {
-  checkAppVersion(appVersion);
-  const parts = fingerprintParts(platform, info);
-  if (record) {
-    if (info.config !== 'release') {
-      throw new Error(`Packages carry release modules (Hermes bytecode); export the runtime with: scripts/export-${platform}.sh release`);
+/** Sign and stage completely before replacing the index. Does not upload anything. */
+export function publishPackage({ directory, platform, appVersion, version, modules = ['app_pages'], entries, privateKey,
+  base, hdiffz, deltas = [] }) {
+  const identity = { platform, appVersion, version, modules, entries };
+  createManifest(identity);
+  if (!Array.isArray(deltas)) throw new Error('Invalid deltas');
+  const packages = [...deltas];
+  const targetArchive = entries.find(([name]) => name === 'modules/app_pages.valdimodule')[1];
+  if (base) {
+    const delta = createDelta({ platform, appVersion, version, baseVersion: base.version, baseArchive: base.archive, targetArchive, hdiffz, root });
+    if (delta) packages.push(delta);
+  }
+  const payloads = packages.flatMap(delta => validateDelta(delta, identity, targetArchive));
+  const allEntries = [...entries, ...payloads];
+  if (allEntries.length > MAX_ENTRIES || new Set(allEntries.map(([name]) => name)).size !== allEntries.length) {
+    throw new Error('OTA package exceeds 4096 files or contains duplicate delta files');
+  }
+  if (allEntries.reduce((sum, [, bytes]) => sum + bytes.length, 0) > MAX_BYTES) throw new Error('OTA package exceeds 64 MiB');
+  const manifest = Buffer.from(`${JSON.stringify(createManifest({ ...identity, deltas: packages.map(delta => delta.descriptor) }), null, 2)}\n`);
+  if (manifest.length > 1024 * 1024) throw new Error('OTA manifest exceeds 1 MiB');
+  const key = createPrivateKey(privateKey);
+  if (key.asymmetricKeyType !== 'ec' || key.asymmetricKeyDetails?.namedCurve !== 'prime256v1') {
+    throw new Error('OTA signing requires an ECDSA P-256 private key');
+  }
+  const signature = sign('sha256', manifest, { key, dsaEncoding: 'der' }).toString('base64');
+  const out = path.join(directory, platform, appVersion);
+  const destination = path.join(out, version);
+  if (existsSync(destination)) throw new Error(`${destination} exists; packages are immutable, use a new version.`);
+  mkdirSync(out, { recursive: true });
+  const work = mkdtempSync(path.join(out, '.publish-'));
+  try {
+    const staged = path.join(work, 'package');
+    mkdirSync(staged);
+    for (const [name, bytes] of allEntries) {
+      const file = path.join(staged, name);
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, bytes);
     }
-    const recorded = readRecord(platform, appVersion);
-    const file = path.relative(root, recordPath(platform, appVersion));
-    if (!recorded) {
-      mkdirSync(path.dirname(recordPath(platform, appVersion)), { recursive: true });
-      writeFileSync(recordPath(platform, appVersion), `${JSON.stringify(parts, null, 2)}\n`);
-      console.error(`Recorded ${platform} ${appVersion}'s native side in ${file}; check it in with the release.`);
-    } else if (recorded.fingerprint !== parts.fingerprint) {
-      throw new Error(
-        `${platform} ${appVersion} was released with another native side (${file}); changed since:\n` +
-          `${changedParts(recorded, parts).join('\n')}\n` +
-          `Its packages would reach this binary too: give it a new app version. If ${appVersion} was never released, remove ${file}.`,
-      );
+    writeFileSync(path.join(staged, 'manifest.json'), manifest);
+    writeFileSync(path.join(staged, 'manifest.sig'), signature);
+    renameSync(staged, destination);
+    const latest = path.join(work, 'latest.json');
+    writeFileSync(latest, `${JSON.stringify({ version })}\n`);
+    renameSync(latest, path.join(out, 'latest.json'));
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+  return destination;
+}
+
+/** Load an immutable old package or an explicit archive; validates identity and exact source bytes. */
+export function readBase({ base, baseVersion, platform, appVersion }) {
+  if (!base) {
+    if (baseVersion !== undefined) throw new Error('--base-version requires --base');
+    return undefined;
+  }
+  const source = path.resolve(base);
+  let version = baseVersion, archivePath = source, descriptor;
+  const sourceStat = statSync(source, { throwIfNoEntry: false });
+  if (!sourceStat) throw new Error(`Base package/archive does not exist: ${source}`);
+  if (sourceStat.isDirectory()) {
+    const manifestPath = path.join(source, 'manifest.json');
+    if (statSync(manifestPath).size > MAX_METADATA) throw new Error('Base manifest exceeds 1 MiB');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    if (manifest.schemaVersion !== 1 || manifest.platform !== platform || manifest.appVersion !== appVersion) {
+      throw new Error('Base package platform/appVersion must match the target');
+    }
+    version = manifest.version;
+    if (baseVersion !== undefined && version !== baseVersion) throw new Error('--base-version disagrees with base package');
+    descriptor = manifest.files?.['modules/app_pages.valdimodule'];
+    archivePath = path.join(source, 'modules/app_pages.valdimodule');
+    if (!realpathSync(archivePath).startsWith(realpathSync(source) + path.sep)) throw new Error('Base archive escapes package directory');
+    if (!descriptor || !Number.isSafeInteger(descriptor.size) || descriptor.size <= 0 || descriptor.size > MAX_BYTES ||
+        !/^[a-f0-9]{64}$/.test(descriptor.sha256)) throw new Error('Invalid base archive descriptor');
+  } else if (!source.endsWith('.valdimodule') || !version) throw new Error('An old .valdimodule file requires --base-version <version>');
+  checkVersion(version);
+  const size = statSync(archivePath).size;
+  if (size <= 0 || size > MAX_BYTES || (descriptor && size !== descriptor.size)) throw new Error('Base archive length mismatch or exceeds 64 MiB');
+  const archive = readFileSync(archivePath);
+  if (descriptor && sha256(archive) !== descriptor.sha256) throw new Error('Base archive hash mismatch');
+  parseArchive(archive);
+  return { version, archive, archivePath };
+}
+
+function pack(platform, appVersion, version, options) {
+  checkAppVersion(appVersion);
+  checkVersion(version);
+  const selected = new Map();
+  for (let i = 0; i < options.length; i += 2) {
+    const flag = options[i], value = options[i + 1];
+    if (!['--base', '--base-version'].includes(flag) || selected.has(flag) || !value || value.startsWith('--')) {
+      throw new Error('Invalid pack option: use --base <package dir|old.valdimodule> [--base-version <version>]');
+    }
+    selected.set(flag, value);
+  }
+  if (!enabledModuleNames(root).includes('app_pages')) throw new Error('Enable app_pages in package.json valdi.modules for OTA');
+  const base = readBase({ base: selected.get('--base'), baseVersion: selected.get('--base-version'), platform, appVersion });
+  const hdiffz = base ? findHdiffz({ root }) : undefined;
+  const directory = path.join(root, 'ota/dist');
+  if (existsSync(path.join(directory, platform, appVersion, version))) throw new Error('Package exists; use a new version.');
+  // Load the publisher's key only for this explicit command, before creating build outputs.
+  const privateKey = readFileSync(path.join(root, 'ota/private.pem'));
+  const entries = platform === 'android' ? collectAndroid(base?.archivePath) : collectIos(base?.archivePath);
+  const destination = publishPackage({ directory, platform, appVersion, version, entries, privateKey, base, hdiffz });
+  console.log(`${path.relative(root, destination)} (${entries.length} full files)`);
+}
+
+function appInfo(platform, info, appVersion, url) {
+  checkAppVersion(appVersion);
+  if (info.platform !== platform) throw new Error(`Export info is for ${info.platform}, not ${platform}.`);
+  if (url) {
+    if (info.config !== 'release') throw new Error('OTA requires a Release runtime export.');
+    const base = new URL(url);
+    if (!['https:', 'http:'].includes(base.protocol) || base.username || base.password || base.search || base.hash) {
+      throw new Error('OTA URL must be an HTTP(S) base URL without credentials, query or fragment.');
     }
   }
-  const publicKey = readFileSync(path.join(root, 'ota/public.pem'), 'utf8');
-  return JSON.stringify({ appVersion, fingerprint: parts.fingerprint, url, publicKey });
+  if (!enabledModuleNames(root).includes('app_pages')) throw new Error('Enable app_pages in package.json valdi.modules for OTA');
+  const config = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const embedded = config.valdi?.ota?.bundleVersion;
+  const bundleVersion = embedded === undefined ? 'pages-001' : embedded;
+  checkVersion(bundleVersion);
+  return JSON.stringify({ appVersion, url, publicKey: readFileSync(path.join(root, 'ota/public.pem'), 'utf8'),
+    bundleVersion, modules: ['app_pages'] });
 }
 
 function keygen() {
@@ -292,15 +326,22 @@ function keygen() {
   console.log('ota/private.pem, ota/public.pem');
 }
 
-const [command, platform, ...rest] = process.argv.slice(2);
-if (command === 'keygen') keygen();
-else if (!platforms.includes(platform)) throw new Error(`Usage: see the top of ${path.relative(root, fileURLToPath(import.meta.url))}`);
-else if (command === 'valdi-hash' && rest.length === 1) {
-  console.log(JSON.stringify({ platform, config: rest[0], valdi: valdiHash(), native: nativeHash() }));
-} else if (command === 'pack' && rest.length === 2) pack(platform, rest[0], rest[1]);
-else if (command === 'check-export' && rest.length === 1) {
-  checkExport(platform, JSON.parse(readFileSync(rest[0], 'utf8')));
-} else if (command === 'app-info' && (rest.length === 3 || (rest.length === 4 && rest[3] === '--record'))) {
-  console.log(appInfo(platform, JSON.parse(readFileSync(rest[0], 'utf8')), rest[1], rest[2], rest.length === 4));
+function main() {
+  const [command, platform, ...rest] = process.argv.slice(2);
+  if (command === 'keygen') keygen();
+  else if (!platforms.includes(platform)) throw new Error(`Usage: see the top of ${path.relative(root, fileURLToPath(import.meta.url))}`);
+  else if (command === 'valdi-hash' && rest.length === 1) {
+    if (!['debug', 'release'].includes(rest[0])) throw new Error('Expected debug or release runtime configuration');
+    console.log(JSON.stringify({ platform, config: rest[0], valdi: valdiHash(), native: nativeHash() }));
+  } else if (command === 'pack' && rest.length >= 2) pack(platform, rest[0], rest[1], rest.slice(2));
+  else if (command === 'check-export' && rest.length === 1) {
+    checkExport(platform, JSON.parse(readFileSync(rest[0], 'utf8')));
+  } else if (command === 'app-info' && rest.length === 3) {
+    console.log(appInfo(platform, JSON.parse(readFileSync(rest[0], 'utf8')), rest[1], rest[2]));
+  } else throw new Error(`Usage: see the top of ${path.relative(root, fileURLToPath(import.meta.url))}`);
 }
-else throw new Error(`Usage: see the top of ${path.relative(root, fileURLToPath(import.meta.url))}`);
+
+if (process.argv[1] && existsSync(process.argv[1]) &&
+    realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
+  try { main(); } catch (error) { console.error(error.message); process.exitCode = 1; }
+}

@@ -122,9 +122,9 @@ const styles = {
   // The navigation bar stays fixed; only the remaining page height is the scroll viewport.
   scroll: new Style<ScrollView>({ width: '100%', height: 0, flexGrow: 1 }),
   text: new Style<Label>({
-    color: '#374151',
+    color: color.text,
     font: systemFont(15),
     marginBottom: 16,
   }),
-  section: new Style<Label>({ color: '#6b7280', font: systemFont(13), margin: '12 0 8 0' }),
+  section: new Style<Label>({ color: color.muted, font: systemFont(13), margin: '12 0 8 0' }),
 };

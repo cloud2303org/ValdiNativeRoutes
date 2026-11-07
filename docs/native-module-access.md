@@ -23,13 +23,17 @@ setup; it does not require JS to call an installation function.
 
 ## App capabilities
 
-`AppNativeModules.kt` and `AppNativeModules.swift` register the two shared app entries:
+`AppNativeModules.kt` and `AppNativeModules.swift` register the shared app entries:
 
 - `app_foundation/src/host/AppContext` exposes only the minimal navigation host. The application factory
   retains its owner. Authentication and Zustand state belong to the app.
 - `app_vision/src/Vision` exposes the existing Vision implementation.
   The host is created on first access. The Android JNI implementation and its
   shared OpenCV/ncnn dependencies remain unchanged; iOS retains static vendors.
+- `app_ota/src/Ota` exposes the existing native OTA client through `OtaHost`.
+  Its Promise methods read native version state or check/download an update.
+  The `app_ota/src` facade retains the proxy in a global-reference scope.
+  See [OTA access](ota.md#javascript-and-native-access).
 
 Both hosts additionally register `app_foundation/src/splash/SplashScreenNative`
 for the synchronous startup splash policy. See [SplashScreen](splash-screen.md).

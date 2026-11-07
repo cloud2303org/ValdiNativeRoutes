@@ -2,6 +2,7 @@ import { Component } from 'valdi_core/src/Component';
 import { Style } from 'valdi_core/src/Style';
 import { systemBoldFont, systemFont } from 'valdi_core/src/SystemFont';
 import { Label, View } from 'valdi_tsx/src/NativeTemplateElements';
+import { color, tokens } from './theme';
 
 export interface PageHeaderViewModel {
   title: string;
@@ -28,24 +29,24 @@ export class PageHeader extends Component<PageHeaderViewModel> {
 
 const styles = {
   header: new Style<View>({
-    paddingBottom: 16,
+    paddingBottom: tokens.space.lg,
   }),
   back: new Style<View>({
     alignSelf: 'flex-start',
-    padding: '8 0',
-    marginBottom: 4,
+    padding: `${tokens.space.sm} 0`,
+    marginBottom: tokens.space.xs,
   }),
   backLabel: new Style<Label>({
-    color: '#2563eb',
-    font: systemFont(16),
+    color: color.primary,
+    font: systemFont(tokens.font.button),
   }),
   title: new Style<Label>({
-    color: '#111827',
-    font: systemBoldFont(26),
+    color: color.ink,
+    font: systemBoldFont(tokens.font.heading),
   }),
   subtitle: new Style<Label>({
-    color: '#6b7280',
-    font: systemFont(14),
-    marginTop: 4,
+    color: color.muted,
+    font: systemFont(tokens.font.section + 1),
+    marginTop: tokens.space.xs,
   }),
 };

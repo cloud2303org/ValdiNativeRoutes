@@ -355,7 +355,7 @@ export class VideoPage extends Page<PageViewModel, State, PageContext> {
 
 const styles = {
   page: new Style<View>({ width: '100%', height: '100%', backgroundColor: color.canvas }),
-  player: new Style<View>({ height: 200, width: '100%', backgroundColor: '#101828', marginBottom: 12 }),
+  player: new Style<View>({ height: 200, width: '100%', backgroundColor: color.playerBackground, marginBottom: 12 }),
   status: new Style<Label>({ font: systemSemiboldFont(16), color: color.text, marginBottom: 12 }),
   text: new Style<Label>({ font: systemFont(12), color: color.muted, numberOfLines: 0, marginBottom: 12 }),
   error: new Style<Label>({ font: systemFont(12), color: color.danger, numberOfLines: 0, marginBottom: 12 }),

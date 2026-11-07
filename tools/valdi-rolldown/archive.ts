@@ -9,21 +9,28 @@ const PADDED = 0x80000000;
 
 export type ArchiveEntries = Map<string, Buffer>;
 
-export function unpack(file: Buffer): ArchiveEntries {
-  const data = zstdDecompressSync(file);
-  if (data.readUInt32LE(0) !== MAGIC) throw new Error('Not a Valdi archive');
+export function unpack(file: Buffer, maxBytes = 64 * 1024 * 1024): ArchiveEntries {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 8) throw new Error('Invalid archive output limit');
+  const data = zstdDecompressSync(file, { maxOutputLength: maxBytes });
+  if (data.length < 8 || data.readUInt32LE(0) !== MAGIC) throw new Error('Not a Valdi archive');
   const end = 8 + data.readUInt32LE(4);
+  if (end !== data.length) throw new Error('Invalid archive packet length or trailing bytes');
   const entries: ArchiveEntries = new Map();
   let offset = 8;
   const field = () => {
+    if (offset + 4 > end) throw new Error('Truncated archive field length');
     const raw = data.readUInt32LE(offset);
     const size = raw & (PADDED - 1);
+    const next = offset + 4 + size + (raw & PADDED ? padding(size) : 0);
+    if (next > end) throw new Error('Truncated archive field');
     const bytes = data.subarray(offset + 4, offset + 4 + size);
-    offset += 4 + size + (raw & PADDED ? padding(size) : 0);
+    offset = next;
     return bytes;
   };
   while (offset < end) {
-    const name = field().toString('utf8');
+    if (entries.size >= 4096) throw new Error('Too many archive entries');
+    const name = new TextDecoder('utf-8', { fatal: true }).decode(field());
+    if (!name || entries.has(name)) throw new Error('Empty or duplicate archive entry');
     entries.set(name, Buffer.from(field()));
   }
   return entries;

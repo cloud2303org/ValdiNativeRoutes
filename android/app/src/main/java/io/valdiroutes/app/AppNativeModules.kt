@@ -20,6 +20,8 @@ internal object AppNativeModules {
         ModuleFactoryRegistry.registerModuleFactory { vision }
         val splash = SplashScreenModuleFactoryImpl()
         ModuleFactoryRegistry.registerModuleFactory { splash }
+        val ota = OtaModuleFactory()
+        ModuleFactoryRegistry.registerModuleFactory { ota }
     }
 }
 

@@ -121,7 +121,14 @@ maven.install(
     ],
     repositories = MAVEN_REPOSITORIES + ["https://jitpack.io"],
 )
-use_repo(maven, "android_mvn", "android_ide_common_30_1_3", "rules_android_maven", "bluetooth_mvn")
+maven.install(
+    name = "serialization_mvn",
+    artifacts = [
+        "org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.9.0",
+    ],
+    repositories = MAVEN_REPOSITORIES,
+)
+use_repo(maven, "android_mvn", "android_ide_common_30_1_3", "rules_android_maven", "bluetooth_mvn", "serialization_mvn")
 
 node_valdi_environment = use_repo_rule("//bzl/node_module:repositories.bzl", "node_valdi_environment")
 node_valdi_environment(name = "node_valdi_local", project = "//:MODULE.bazel")

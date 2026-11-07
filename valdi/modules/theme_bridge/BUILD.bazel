@@ -1,0 +1,17 @@
+load("//bzl/node_module:module.bzl", "node_valdi_module")
+
+node_valdi_module(
+    name = "theme_bridge",
+    srcs = glob(["src/**/*.ts", "src/**/*.tsx"]),
+    config = "module.json",
+    ios_module_name = "ThemeBridge",
+    ios_language = "swift",
+    res = glob(["res/**"]),
+    android_srcs = glob(["android/**/*.kt"]),
+    android_deps = [
+        "@serialization_mvn//:org_jetbrains_kotlinx_kotlinx_serialization_json_jvm",
+    ],
+    ios_srcs = glob(["ios/**/*.m"]),
+    ios_hdrs = glob(["ios/**/*.h"]),
+    swift_srcs = glob(["ios/**/*.swift"]),
+)

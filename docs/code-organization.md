@@ -14,6 +14,8 @@
   应用主题及共享页面组件在 `src/components/`。
 - `app_vision`：Vision 的类型、生成 getter 和调用封装。OpenCV/ncnn 的链接、
   平台实现和工厂注册由原生应用装配。
+- `app_ota`：OTA 状态与检查下载的生成 proxy、类型和 JS 入口。
+  原生应用持有客户端和工厂；它复用启动时的客户端，不另存 JS 状态。
 - `app_ui`：弹窗、提示、选择器、BottomSheet、图片预览及原生控件。
   `src/wheels/` 拥有可复用的页面内滚轮、模型和校验；Android 内嵌滚轮和
   弹层滚轮共享这里的原生基础实现。
@@ -114,14 +116,26 @@ Manifest、JNI、R8 或自定义视图使用的类名；这不是每个目录都
 
 `android/app/generated/valdi`、`ios/Generated/valdi` 和
 模块自己的 `cpp/generated/` 来自 TS 声明的 codegen，不手改。
+`nativeBuild: "bazel"` 模块的 Kotlin、Objective-C／Swift 绑定由模块自身编译；
+默认宿主 codegen 会清理它们在宿主生成目录中的旧副本，`--check` 只报告待清理项，
+避免同一类型同时进入模块库和 App。显式指定模块的独立生成仍然可用。
 Android 主源码与测试由 Gradle 按 source set 发现；iOS 在新增 Swift 文件后通过
 `node scripts/ios-project.mjs` 重新生成 Xcode 工程。
 
 本轮模块提取会改变原生声明的模块路径、生成文件归属和 schema 标识；
 滚轮模型的 Android 包也随所属 AppUI 模块调整。原生自定义视图类名保持不变。
 生成绑定和链接进 runtime 的 C++ 必须一起重新生成、导出和构建。
-原生文件移动、注释和依赖声明同样属于 OTA 原生输入，会更新兼容性指纹；
-需要新的原生安装包，不能作为旧二进制的纯 JS 更新发布。
+原生实现或导出契约的变化需要新的原生安装包，不能由 OTA 更新。
+OTA 按 App 版本手动绑定，不再根据文件移动、注释等源码变化生成兼容指纹；发布者负责原生 API 兼容性。
+OTA 只拥有 `app_pages` 归档、可选 map 和所属资源，其他应用/Valdi 模块（含 JS 封装）保持原生内嵌；
+切换到该协议需要新的原生客户端。`appVersion` 取原生版本，根 `package.json` 的
+`valdi.ota.bundleVersion` 记录内嵌业务版本，生成配置固定 `modules: ["app_pages"]`。
+检查更新时查询本进程 active 或内嵌业务版本，绝不使用 pending。签名完整清单保留 full fallback，
+可选 delta 按条目 copy/full/HDIFFSF20-zlib patch 后以 default ZSTD 重建，最终压缩哈希和大小必须
+与签名 full 一致，否则下载原始 full。完整准备后下次冷启动验证并持久化为 current，
+无需启动确认；退出或崩溃不触发自动业务回滚，也不记录失败版本黑名单。
+C 编码器读取有 64 MiB 上限的整个输入，整条流程不保证流式内存。
+打包参数、本地 hdiffz 前置条件和服务端 full/base/delta 保留规则见 [OTA 说明](ota.md)。
 
 源码与测试布局按实际 package 对齐。权限/BLE 单测通过模块加载边界替换原生实现，
 不向生产代码重新加入注入接口。真实系统权限、蓝牙、NFC、PiP 等行为仍需对应设备验证；
@@ -156,6 +170,6 @@ C++ 的声明、实现和生成绑定按模块归属：
 运行时工作区使用生成的 `modules/runtime-packages.bazelrc` 排除这些父 package，
 同时允许嵌套的 `modules/<模块>/cpp` package；新增模块后重新生成绑定即可更新清单。
 
-OTA/导出检查保守地记录所有启用模块的 `cpp/` 目录、宿主链接规则和 package 清单。
+运行时导出检查保守地记录所有启用模块的 `cpp/` 目录、宿主链接规则和 package 清单。
 C++ 或规则变化需要重新导出运行时；纯页面 TS 修改不因此要求重导出。
 这里只调整编译依赖边界，不把增量构建改善当作已测得的启动加速。

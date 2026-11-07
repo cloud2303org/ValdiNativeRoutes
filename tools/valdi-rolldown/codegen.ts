@@ -17,7 +17,8 @@
 // to these default roots, preserving complete runtime output when synchronizing a canonical modules directory.
 // Also writes runtime-packages.bazelrc excluding exact parent packages for all available modules, including disabled ones.
 // Canonical C++ command (from this directory): npx tsx codegen.ts --cpp-modules-out ../../valdi/modules
-// Other outputs retain all-host generation without a module; --cpp-out retains the generic flat layout.
+// Other outputs retain all-host generation without a module; host Kotlin/ObjC sync removes Bazel-owned root copies.
+// --cpp-out retains the generic flat layout and --cpp-modules-out keeps its independent runtime closure.
 // At least one output is needed. Files are written only when their content changes.
 // --check writes nothing and fails, listing them, when files would change: the build runs it, developers run the
 // generator when they change a native interface.
@@ -97,19 +98,24 @@ const changed: string[] = [];
 if (cppPlan) changed.push(...syncCppModules(cppPlan, cppModulesOut!, check).map(shown));
 if (!name) {
   const enabled = new Set(enabledModuleNames(root));
-  for (const disabled of availableModuleNames(root).filter(value => !enabled.has(value))) {
-    const iosName = moduleConfig(disabled).iosModuleName ?? disabled;
+  for (const module of availableModuleNames(root)) {
+    const disabled = !enabled.has(module);
+    const config = moduleConfig(module);
+    if (!disabled && config.nativeBuild !== 'bazel') continue;
+    const iosName = config.iosModuleName ?? module;
     const obsolete = {
-      android: [`${disabled}.kt`],
-      ios: [iosName, `${iosName}Types`],
-      cpp: [`valdi_modules/${disabled}`],
+      android: [`${module}.kt`],
+      // Enabled Bazel modules own these canonical files, but neighboring files in their directories may be handwritten.
+      ios: disabled ? [iosName, `${iosName}Types`] : [iosName, `${iosName}Types`]
+        .flatMap(name => ['h', 'm', 'swift'].map(extension => `${name}/${name}.${extension}`)),
+      cpp: disabled ? [`valdi_modules/${module}`] : [],
     };
     for (const platform of ['android', 'ios', 'cpp'] as const) {
       if (!outputs[platform]) continue;
       for (const file of obsolete[platform]) {
         const output = path.resolve(outputs[platform]!, file);
         if (!existsSync(output)) continue;
-        changed.push(`${shown(output)} (disabled module; remove)`);
+        changed.push(`${shown(output)} (${disabled ? 'disabled module' : 'Bazel-owned module'}; remove)`);
         if (!check) rmSync(output, { recursive: true, force: true });
       }
     }

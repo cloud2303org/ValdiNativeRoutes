@@ -3,6 +3,7 @@ import { Style } from 'valdi_core/src/Style';
 import { systemFont } from 'valdi_core/src/SystemFont';
 import { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
 import { Button } from '../../components/Button';
+import { color, tokens } from '../../components/theme';
 import { api } from '../../services/api';
 import { getAppDb } from '../../services/database';
 import { FocusScroller } from '../../components/FocusScroller';
@@ -155,7 +156,7 @@ const styles = {
   page: new Style<View>({
     width: '100%',
     height: '100%',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: color.canvas,
   }),
   scroll: new Style<ScrollView>({
     width: '100%',
@@ -164,14 +165,14 @@ const styles = {
   plainPage: new Style<View>({
     width: '100%',
     height: '100%',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: color.canvas,
   }),
   spacer: new Style<View>({
     flexGrow: 1,
   }),
   hint: new Style<Label>({
-    color: '#6b7280',
-    font: systemFont(13),
-    marginBottom: 8,
+    color: color.muted,
+    font: systemFont(tokens.font.section),
+    marginBottom: tokens.space.sm,
   }),
 };

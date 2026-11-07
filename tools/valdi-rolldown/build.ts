@@ -6,6 +6,7 @@
 // Fonts are bundled in the .valdimodule as res/<name>.ttf on both platforms.
 //
 //   pnpm build [--release] [--minify] [--compare] [--out <dir>] [--res <dir>] [--ios-res <dir>]
+//              [--module <name>] [--hermes-base <previous.valdimodule>]
 //
 // Debug builds are JavaScript with each file's source map inline. --release: Hermes bytecode, as Valdi's release
 // builds ship (and minified), with the maps in <module>.map.json next to the archive.
@@ -17,7 +18,7 @@ import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
-import { pack, type ArchiveEntries } from './archive';
+import { pack, unpack, type ArchiveEntries } from './archive';
 import {
   appModule,
   appModules,
@@ -25,6 +26,7 @@ import {
   buildModule,
   genDir,
   inlineSourceMaps,
+  moduleConfig,
   precompile,
   sourceMapJson,
   writeTsconfig,
@@ -35,9 +37,17 @@ import { sourceFiles, valdiTs } from './valdiTs';
 import { buildNodeModules, copyModuleTree } from '../../scripts/node-modules.mjs';
 import { availableModuleNames, pruneDisabledModuleOutputs } from './modules.mjs';
 
-const option = (name: string) => {
+const value = (name: string) => {
   const index = process.argv.indexOf(name);
-  return index >= 0 ? path.resolve(process.argv[index + 1]) : undefined;
+  if (index < 0) return undefined;
+  if (process.argv.lastIndexOf(name) !== index || !process.argv[index + 1] || process.argv[index + 1].startsWith('--')) {
+    throw new Error(`${name} requires exactly one value`);
+  }
+  return process.argv[index + 1];
+};
+const option = (name: string) => {
+  const argument = value(name);
+  return argument === undefined ? undefined : path.resolve(argument);
 };
 const archivesOnly = option('--out');
 const out = archivesOnly ?? path.join(import.meta.dirname, 'out');
@@ -45,22 +55,35 @@ const androidRes = option('--res');
 const iosRes = option('--ios-res');
 const release = process.argv.includes('--release');
 const minify = release || process.argv.includes('--minify');
+const selected = value('--module');
+const baseFile = option('--hermes-base');
+if (baseFile && (!release || !selected)) throw new Error('--hermes-base requires --release and one --module');
 // Validate references before starting native module actions.
-const modules = appModules();
+const allModules = appModules();
+const modules = selected ? allModules.filter(module => module.name === selected) : allModules;
+if (selected && modules.length !== 1) throw new Error(`Module '${selected}' is not enabled`);
 if (!modules.length) throw new Error('No enabled App modules. Set package.json valdi.modules before building.');
+if (baseFile && moduleConfig(selected!).nativeBuild === 'bazel') {
+  throw new Error('--hermes-base requires a source-built module; Bazel-owned archives are already compiled');
+}
+const baseArchive = baseFile ? unpack(readFileSync(baseFile)) : undefined;
 const available = availableModuleNames(path.resolve(import.meta.dirname, '../..'));
-pruneDisabledModuleOutputs(out, available, modules.map(module => module.name));
-if (iosRes) pruneDisabledModuleOutputs(iosRes, available, modules.map(module => module.name));
+if (!selected) {
+  pruneDisabledModuleOutputs(out, available, allModules.map(module => module.name));
+  if (iosRes) pruneDisabledModuleOutputs(iosRes, available, allModules.map(module => module.name));
+}
 
 if (archivesOnly) {
   mkdirSync(out, { recursive: true });
 } else {
-  rmSync(out, { recursive: true, force: true });
+  rmSync(selected ? path.join(out, selected) : out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
 }
 
-if (androidRes) rmSync(androidRes, { recursive: true, force: true });
-const bazelOutputs = buildNodeModules(androidRes ? 'android' : 'ios', release);
+if (androidRes && !selected) rmSync(androidRes, { recursive: true, force: true });
+const bazelOutputs = !selected || moduleConfig(selected).nativeBuild === 'bazel'
+  ? buildNodeModules(androidRes ? 'android' : 'ios', release)
+  : new Map();
 for (const [name, compiled] of bazelOutputs) {
   rmSync(genDir(name), { recursive: true, force: true });
   copyModuleTree(path.join(compiled, 'resources/ts'), genDir(name));
@@ -69,7 +92,7 @@ for (const [name, compiled] of bazelOutputs) {
 // modules' tsconfig.json. Rewrite them at the sources this host really has, so the
 // bundle reads the module tsconfig instead of failing every bare import (a no-op when
 // this host has no fetched Valdi sources).
-for (const module of modules) writeTsconfig(module, modules);
+for (const module of modules) writeTsconfig(module, allModules);
 for (const module of modules) {
   const compiled = bazelOutputs.get(module.name);
   if (compiled) {
@@ -119,7 +142,7 @@ for (const module of modules) {
 async function write(name: string, built: Built) {
   if (release) {
     writeFileSync(path.join(out, `${name}.map.json`), sourceMapJson(name, built));
-    await precompile(built.entries);
+    await precompile(built.entries, { baseArchive });
   } else {
     inlineSourceMaps(built);
   }

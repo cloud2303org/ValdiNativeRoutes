@@ -79,7 +79,12 @@ function validateBytecode(bytecode: Buffer, bytecodeVersion: number, name: strin
   }
 }
 
-export async function precompile(entries: ArchiveEntries): Promise<void> {
+export interface PrecompileOptions {
+  /** Previous published execution bytecode, indexed by the same archive entry names. */
+  baseArchive?: ArchiveEntries;
+}
+
+export async function precompile(entries: ArchiveEntries, options: PrecompileOptions = {}): Promise<void> {
   const modules = [...entries].filter(([name]) => name.endsWith('.js'));
   if (!modules.length) return;
   const { executable, bytecodeVersion } = hermesCompiler();
@@ -89,6 +94,14 @@ export async function precompile(entries: ArchiveEntries): Promise<void> {
     return false;
   });
   if (!pending.length) return;
+  for (const [name] of pending) {
+    const previous = options.baseArchive?.get(name);
+    if (!previous) continue;
+    if (previous.length < 4 || previous.readUInt32LE(0) !== MODULE_MAGIC) {
+      throw new Error(`Base archive entry ${name} is not Release bytecode`);
+    }
+    validateBytecode(previous.subarray(4), bytecodeVersion, `base ${name}`);
+  }
   const dir = mkdtempSync(path.join(tmpdir(), 'valdi-hermes-'));
   try {
     let next = 0;
@@ -99,10 +112,17 @@ export async function precompile(entries: ArchiveEntries): Promise<void> {
         const input = path.join(dir, `${index}.js`);
         const output = path.join(dir, `${index}.hbc`);
         writeFileSync(input, formatJsModule(source.toString('utf8')));
+        const base = options.baseArchive?.get(name);
+        const baseArgs: string[] = [];
+        if (base) {
+          const baseFile = path.join(dir, `${index}.base.hbc`);
+          writeFileSync(baseFile, base.subarray(4));
+          baseArgs.push(`-base-bytecode=${baseFile}`);
+        }
         // Same strict/block-scoping/optimization and stripping settings as HermesJavaScriptCompiler.cpp.
         try {
           await run(executable, ['-emit-binary', '-O', '-strict', '-Xes6-block-scoping', '-fno-static-builtins',
-            '-fstrip-function-names', '-g0', '-emit-async-break-check', '-out', output, input]);
+            '-fstrip-function-names', '-g0', '-emit-async-break-check', ...baseArgs, '-out', output, input]);
         } catch (cause) {
           throw new Error(`Hermes compilation failed for ${name}: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
         }

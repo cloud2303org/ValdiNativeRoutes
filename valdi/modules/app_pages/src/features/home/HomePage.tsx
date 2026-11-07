@@ -4,6 +4,7 @@ import { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
 import { ApiError, api } from '../../services/api';
 import { auth } from '../../services/auth';
 import { Button } from '../../components/Button';
+import { color, tokens } from '../../components/theme';
 import { getAppDb } from '../../services/database';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { HideReason, Page, ShowReason } from 'app_foundation/src/page/PageComponent';
@@ -259,7 +260,7 @@ const styles = {
   page: new Style<View>({
     width: '100%',
     height: '100%',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: color.canvas,
   }),
   scroll: new Style<ScrollView>({
     width: '100%',
@@ -267,13 +268,13 @@ const styles = {
   }),
   content: new Style<View>({}),
   section: new Style<Label>({
-    color: '#6b7280',
-    font: systemSemiboldFont(13),
+    color: color.muted,
+    font: systemSemiboldFont(tokens.font.section),
     margin: '12 0 8 0',
   }),
   result: new Style<Label>({
-    color: '#059669',
-    font: systemFont(14),
-    marginBottom: 4,
+    color: color.success,
+    font: systemFont(tokens.font.segment),
+    marginBottom: tokens.space.xs,
   }),
 };

@@ -21,10 +21,12 @@ object ValdiNativeModules {
         ModuleFactoryRegistry.registerModuleFactory { factory5 }
         val factory6 = io.valdiroutes.permissions.PermissionModuleFactoryImpl(context.applicationContext)
         ModuleFactoryRegistry.registerModuleFactory { factory6 }
-        val factory7 = com.snap.valdi.modules.webview.WebViewNativeModuleFactoryImpl()
+        val factory7 = io.valdiroutes.app.modules.theme_bridge.ThemeBridgeModuleFactoryImpl(context.applicationContext)
         ModuleFactoryRegistry.registerModuleFactory { factory7 }
-        val factory8 = io.valdiroutes.wifi.WifiModuleFactoryImpl(context.applicationContext)
+        val factory8 = com.snap.valdi.modules.webview.WebViewNativeModuleFactoryImpl()
         ModuleFactoryRegistry.registerModuleFactory { factory8 }
+        val factory9 = io.valdiroutes.wifi.WifiModuleFactoryImpl(context.applicationContext)
+        ModuleFactoryRegistry.registerModuleFactory { factory9 }
     }
 
     fun registerViewBinders(context: Context, runtime: ValdiRuntimeManager) {

@@ -146,14 +146,13 @@ export function syncModulePlatformConfig(root, modules, app = readAppConfig(root
     for (const name of module.iosFrameworks ?? []) dependencies.set(name, { sdk: `${name}.framework` });
   }
   // JSON is YAML. This overlay is included by XcodeGen, whose relative paths start in ios/Generated.
+  // Module native sources (host modules only; bazel modules link through libvaldi_modules_ios.a) and
+  // every module's raw assets, which the app's resources carry for both host and bazel modules.
   const sources = modules.filter(module => module.nativeBuild === 'host' &&
     existsSync(path.join(root, `valdi/modules/${module.name}/ios`)))
-    .flatMap(module => [
-      { path: `../../valdi/modules/${module.name}/ios`, group: `Modules/${module.name}` },
-      ...(existsSync(path.join(root, `valdi/modules/${module.name}/assets`))
-        ? [{ path: `../../valdi/modules/${module.name}/assets`, group: `Modules/${module.name}`, buildPhase: 'resources' }]
-        : []),
-    ]);
+    .map(module => ({ path: `../../valdi/modules/${module.name}/ios`, group: `Modules/${module.name}` }))
+    .concat(modules.filter(module => existsSync(path.join(root, `valdi/modules/${module.name}/assets`)))
+      .map(module => ({ path: `../../valdi/modules/${module.name}/assets`, group: `Modules/${module.name}`, buildPhase: 'resources' })));
   write(path.join(root, 'ios/Generated/Modules.yml'), `${JSON.stringify({
     packages, targets: { [app.name]: { sources, dependencies: [...dependencies.values()] } },
   }, null, 2)}\n`);

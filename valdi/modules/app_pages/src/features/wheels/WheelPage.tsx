@@ -1,6 +1,7 @@
 import { Style } from 'valdi_core/src/Style';
 import { systemFont } from 'valdi_core/src/SystemFont';
 import { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
+import { color, tokens } from '../../components/theme';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { Page } from 'app_foundation/src/page/PageComponent';
 import { PageHeader } from '../../components/PageHeader';
@@ -97,7 +98,7 @@ export class WheelPage extends Page<PageViewModel, State, PageContext> {
     const { insets, presentation } = this.viewModel;
     const { location, date, sampledAt, region } = this.state;
 
-    <view style={styles.page} backgroundColor="#f3f4f6">
+    <view style={styles.page} backgroundColor={color.canvas}>
       <scroll style={styles.scroll}>
         <view
           paddingTop={insets.top + 12}
@@ -151,6 +152,6 @@ export class WheelPage extends Page<PageViewModel, State, PageContext> {
 const styles = {
   page: new Style<View>({ width: '100%', height: '100%' }),
   scroll: new Style<ScrollView>({ width: '100%', height: '100%' }),
-  section: new Style<Label>({ color: '#374151', font: systemFont(14), margin: '16 0 8 0' }),
-  card: new Style<View>({ backgroundColor: 'white', borderRadius: 12, padding: '8 12' }),
+  section: new Style<Label>({ color: color.text, font: systemFont(tokens.font.segment), margin: '16 0 8 0' }),
+  card: new Style<View>({ backgroundColor: color.surface, borderRadius: tokens.radius.control, padding: '8 12' }),
 };

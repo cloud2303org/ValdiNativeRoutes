@@ -91,8 +91,6 @@ object ValdiHost {
                         // Includes lazy bridge property decoding and the existing native route validation.
                         val table = StartupTrace.section("routes.decode_and_validate") { RouteTable.from(declaration) }
                         StartupTrace.mark("routes.ready_on_js")
-                        // The modules loaded and ran: a newly installed package is good. Only then look for the next one.
-                        StartupTrace.section("ota.confirm_launch") { ValdiOta.confirmLaunch() }
                         thread(name = "ValdiOta") { ValdiOta.checkForUpdate() }
                         val mainDispatch = StartupTrace.start("routes.post_to_main_callback")
                         main.post {

@@ -34,6 +34,8 @@ function fixture(t, config = 'debug') {
   write('tools/valdi-rolldown/runtime-module.ts', 'original Node compiler');
   mkdirSync(path.join(root, 'scripts'));
   cpSync(path.join(repository, 'scripts/ota.mjs'), path.join(root, 'scripts/ota.mjs'));
+  cpSync(path.join(repository, 'scripts/ota-delta.mjs'), path.join(root, 'scripts/ota-delta.mjs'));
+  cpSync(path.join(repository, 'scripts/prerequisites.mjs'), path.join(root, 'scripts/prerequisites.mjs'));
   cpSync(path.join(repository, 'scripts/native-cpp.mjs'), path.join(root, 'scripts/native-cpp.mjs'));
   cpSync(path.join(repository, 'scripts/native-modules.mjs'), path.join(root, 'scripts/native-modules.mjs'));
   cpSync(path.join(repository, 'scripts/module-platform-config.mjs'), path.join(root, 'scripts/module-platform-config.mjs'));

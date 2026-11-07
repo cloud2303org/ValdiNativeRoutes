@@ -27,9 +27,11 @@ android {
     // tools/valdi-rolldown/codegen.ts and checked in; valdiCodegenCheck below fails the build when they're stale.
     sourceSets["main"].kotlin.directories.add("generated/valdi")
     sourceSets["main"].res.srcDir("build/generated/valdi-app/res")
-    // Media3's asset:///flower.mp4 source reads the parent-owned CC0 demo from Android assets.
-    if (selectedNativeModules.any { (it as Map<*, *>)["name"] == "app_video" }) {
-        sourceSets["main"].assets.srcDir(valdiRepoRoot.resolve("valdi/modules/app_video/assets"))
+    // Raw module assets (app_video's Media3 demo, theme_bridge's tokens.json): any enabled module's assets/ dir.
+    selectedNativeModules.forEach { value ->
+        val config = value as Map<*, *>
+        val assetsDirectory = valdiRepoRoot.resolve("valdi/modules/${config["name"]}/assets")
+        if (assetsDirectory.isDirectory) sourceSets["main"].assets.srcDir(assetsDirectory)
     }
     selectedNativeModules.forEach { value ->
         val config = value as Map<*, *>
@@ -94,9 +96,8 @@ val valdiNativeModules = tasks.register<Exec>("valdiNativeModules") {
 tasks.named("preBuild") { dependsOn(valdiNativeModules) }
 
 dependencies {
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     testImplementation("junit:junit:4.13.2")
-    // Exercise the storage persistence codec on the JVM; Android supplies org.json in production.
-    testImplementation("org.json:json:20250517")
 
     // The Valdi runtime and Valdi's own modules, produced by scripts/export-android.sh; app_pages and the npm packages
     // come from valdiModules below, their Kotlin bindings from generated/valdi.
@@ -141,22 +142,16 @@ kotlin {
 }
 
 /**
- * valdi_ota.json in the app's assets (ValdiOta.kt), from scripts/ota.mjs app-info: the app version packages target,
- * this binary's fingerprint (the export's Valdi half in libs/valdi_ota.json, the Kotlin bindings in generated/valdi,
- * the native files listed in ota/fingerprint.json), the update server and the key packages are signed with. A release
- * build with updates on records the fingerprint as its version's (ota/releases/android/<versionName>.json), or fails
- * when that version was released with another: see scripts/ota.mjs. Runs `node` from the PATH Gradle was started with.
+ * Static OTA configuration: the manually targeted app version, module inventory, base URL and public signing key.
+ * Runtime export checks are separate from OTA compatibility, which the publisher manages.
  */
 abstract class ValdiOtaInfo : DefaultTask() {
     @get:InputFile abstract val exportInfo: RegularFileProperty
-    /** What the fingerprint hashes besides the export info: ota.mjs, ota/fingerprint.json and what it lists, the bindings. */
-    @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE) abstract val fingerprintFiles: ConfigurableFileCollection
+    @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE) abstract val configurationFiles: ConfigurableFileCollection
     @get:Internal abstract val repoRoot: DirectoryProperty
     @get:InputFile abstract val publicKey: RegularFileProperty
     @get:Input abstract val appVersion: Property<String>
     @get:Input abstract val updateUrl: Property<String>
-    /** The release record, when this build makes one: an output, so the task runs again when it's removed or edited. */
-    @get:Optional @get:OutputFile abstract val releaseRecord: RegularFileProperty
     @get:OutputDirectory abstract val outputDir: DirectoryProperty
     @get:Inject abstract val execOperations: ExecOperations
 
@@ -168,7 +163,7 @@ abstract class ValdiOtaInfo : DefaultTask() {
                 listOf(
                     "node", repoRoot.get().asFile.resolve("scripts/ota.mjs").path, "app-info", "android",
                     exportInfo.get().asFile.path, appVersion.get(), updateUrl.get(),
-                ) + if (releaseRecord.isPresent) listOf("--record") else emptyList(),
+                ),
             )
             standardOutput = out
         }
@@ -281,23 +276,19 @@ tasks.named("preBuild") { dependsOn(valdiCodegenCheck) }
 
 androidComponents {
     val repo = rootProject.projectDir.parentFile
-    @Suppress("UNCHECKED_CAST")
-    val nativeInputs = (JsonSlurper().parse(repo.resolve("ota/fingerprint.json")) as Map<String, Any>)["android"] as List<String>
     onVariants { variant ->
         val info = tasks.register<ValdiOtaInfo>("${variant.name}ValdiOtaInfo") {
             exportInfo = file("libs/valdi_ota.json")
-            fingerprintFiles.from(
+            configurationFiles.from(
                 repo.resolve("scripts/ota.mjs"),
+                repo.resolve("scripts/ota-delta.mjs"),
+                repo.resolve("scripts/prerequisites.mjs"),
+                repo.resolve("scripts/native-cpp.mjs"),
                 repo.resolve("package.json"),
                 repo.resolve("ota/fingerprint.json"),
-                nativeInputs.map(repo::resolve),
-                fileTree("generated/valdi"),
-                fileTree(repo.resolve("valdi/modules")) { include("*/src/**", "*/module.json", "*/BUILD.bazel", "*/android/**") },
-                fileTree(repo.resolve("tools/valdi-rolldown")) {
-                    include("module-bindings.ts", "codegen/**", "pipeline.ts", "valdiTs.ts", "modules.mjs", "module-selection.ts")
-                },
+                repo.resolve("tools/valdi-rolldown/modules.mjs"),
+                fileTree(repo.resolve("valdi/modules")) { include("*/BUILD.bazel") },
             )
-            (appConfig["icon"] as? String)?.let { fingerprintFiles.from(repo.resolve(it)) }
             repoRoot = repo
             publicKey = repo.resolve("ota/public.pem")
             val version = variant.outputs.single().versionName.orNull ?: throw GradleException("The app has no versionName")
@@ -306,7 +297,6 @@ androidComponents {
             // modules they were built with, and pnpm dev's.
             val url = if (variant.buildType == "release") providers.gradleProperty("valdiOtaUrl").getOrElse("") else ""
             updateUrl = url
-            if (url.isNotEmpty()) releaseRecord = repo.resolve("ota/releases/android/$version.json")
         }
         variant.sources.assets?.addGeneratedSourceDirectory(info, ValdiOtaInfo::outputDir)
 

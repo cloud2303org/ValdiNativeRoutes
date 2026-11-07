@@ -44,6 +44,12 @@ void VRRegisterNativeModules(SCValdiRuntime *runtime) {
         [runtime registerNativeModuleFactory:[factoryClass new]];
     }
     {
+        Class factoryClass = NSClassFromString(@"VRThemeBridgeModuleFactory");
+        if (!factoryClass || ![factoryClass conformsToProtocol:@protocol(SCNValdiCoreModuleFactory)])
+            [NSException raise:NSInternalInconsistencyException format:@"Missing Swift module factory: VRThemeBridgeModuleFactory"];
+        [runtime registerNativeModuleFactory:[factoryClass new]];
+    }
+    {
         Class factoryClass = NSClassFromString(@"VRWifiModuleFactory");
         if (!factoryClass || ![factoryClass conformsToProtocol:@protocol(SCNValdiCoreModuleFactory)])
             [NSException raise:NSInternalInconsistencyException format:@"Missing Swift module factory: VRWifiModuleFactory"];

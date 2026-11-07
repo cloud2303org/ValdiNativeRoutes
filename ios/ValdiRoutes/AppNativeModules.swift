@@ -5,6 +5,7 @@ import ValdiRuntime
 enum AppNativeModules {
     static func register(_ runtime: SCValdiRuntime, navigationHost: VRNavigationHost) {
         runtime.registerNativeModuleFactory(AppContextModuleFactory(navigationHost: navigationHost))
+        runtime.registerNativeModuleFactory(OtaModuleFactory())
         runtime.registerNativeModuleFactory(VisionModuleFactory())
         runtime.registerNativeModuleFactory(SplashScreenModuleFactory())
     }

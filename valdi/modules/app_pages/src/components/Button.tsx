@@ -2,6 +2,7 @@ import { Component } from 'valdi_core/src/Component';
 import { Style } from 'valdi_core/src/Style';
 import { systemSemiboldFont } from 'valdi_core/src/SystemFont';
 import { Label, View } from 'valdi_tsx/src/NativeTemplateElements';
+import { color, tokens } from './theme';
 
 export interface ButtonViewModel {
   /** Passed back to onTap, so one handler can serve a group of buttons. */
@@ -25,20 +26,20 @@ export class Button extends Component<ButtonViewModel> {
 }
 
 const base = new Style<View>({
-  height: 46,
-  marginBottom: 10,
-  borderRadius: 12,
+  height: tokens.size.button - 2,
+  marginBottom: tokens.space.sm + 2,
+  borderRadius: tokens.radius.control,
   justifyContent: 'center',
   alignItems: 'center',
 });
 
 const labelBase = new Style<Label>({
-  font: systemSemiboldFont(16),
+  font: systemSemiboldFont(tokens.font.button),
 });
 
 const styles = {
-  primary: base.extend({ backgroundColor: '#2563eb' }),
-  secondary: base.extend({ backgroundColor: '#e5e7eb' }),
-  primaryLabel: labelBase.extend({ color: 'white' }),
-  secondaryLabel: labelBase.extend({ color: '#111827' }),
+  primary: base.extend({ backgroundColor: color.buttonPrimary }),
+  secondary: base.extend({ backgroundColor: color.buttonSecondary }),
+  primaryLabel: labelBase.extend({ color: color.buttonOnPrimary }),
+  secondaryLabel: labelBase.extend({ color: color.buttonOnSecondary }),
 };

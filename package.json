@@ -17,8 +17,12 @@
         "iosPrefix": "VR"
       }
     },
+    "ota": {
+      "bundleVersion": "pages-001"
+    },
     "modules": [
       "app_foundation",
+      "app_ota",
       "app_pages",
       "app_ui",
       "app_video",
@@ -29,6 +33,7 @@
       "native_common",
       "nfc",
       "permissions",
+      "theme_bridge",
       "valdi_webview",
       "wifi"
     ]

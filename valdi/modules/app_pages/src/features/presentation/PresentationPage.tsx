@@ -3,6 +3,7 @@ import { systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
 import { ImageView, Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
 import { ApiError, api } from '../../services/api';
 import { Button } from '../../components/Button';
+import { color, tokens } from '../../components/theme';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { Page } from 'app_foundation/src/page/PageComponent';
 import { PageHeader } from '../../components/PageHeader';
@@ -236,17 +237,17 @@ export class PresentationPage extends Page<PageViewModel, State, PageContext> {
 }
 
 const styles = {
-  page: new Style<View>({ width: '100%', height: '100%', backgroundColor: '#f3f4f6' }),
+  page: new Style<View>({ width: '100%', height: '100%', backgroundColor: color.canvas }),
   scroll: new Style<ScrollView>({ width: '100%', height: '100%' }),
-  result: new Style<Label>({ color: '#059669', font: systemFont(13), marginBottom: 12 }),
-  section: new Style<Label>({ color: '#6b7280', font: systemSemiboldFont(13), margin: '12 0 8 0' }),
+  result: new Style<Label>({ color: color.success, font: systemFont(tokens.font.section), marginBottom: tokens.space.md }),
+  section: new Style<Label>({ color: color.muted, font: systemSemiboldFont(tokens.font.section), margin: '12 0 8 0' }),
   thumbs: new Style<View>({ flexDirection: 'row', justifyContent: 'space-between' }),
   chosen: new Style<View>({ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }),
   thumb: new Style<ImageView>({
     width: '31%',
     aspectRatio: 1,
-    borderRadius: 12,
+    borderRadius: tokens.radius.control,
     objectFit: 'cover',
-    backgroundColor: '#e5e7eb',
+    backgroundColor: color.handle,
   }),
 };

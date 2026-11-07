@@ -130,6 +130,48 @@ test('invalid JavaScript fails compilation without replacing the source entry', 
   assert.equal(entries.get(name), source);
 });
 
+test('base compilation matches the official compiler and leaves new files on the normal path', async t => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'valdi-hermes-base-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));
+  const name = 'src/page.js';
+  const previous = new Map([[name, Buffer.from('"use strict";\nexports.value = { removed: "old-only-string", stable: "kept" };')]]);
+  await precompile(previous);
+  const source = '"use strict";\nexports.value = { stable: "kept", added: "new-string" };';
+  const fresh = 'exports.newPage = "added page";';
+  const target = new Map([[name, Buffer.from(source)], ['src/new.js', Buffer.from(fresh)]]);
+  await precompile(target, { baseArchive: previous });
+  const input = path.join(dir, 'reference.js');
+  const base = path.join(dir, 'previous.hbc');
+  const output = path.join(dir, 'reference.hbc');
+  writeFileSync(input, formatJsModule(source));
+  writeFileSync(base, previous.get(name)!.subarray(4));
+  execFileSync(hermesCompiler().executable, [
+    '-emit-binary', '-O', '-strict', '-Xes6-block-scoping', '-fno-static-builtins',
+    '-fstrip-function-names', '-g0', '-emit-async-break-check',
+    `-base-bytecode=${base}`, '-out', output, input,
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  assert.deepEqual(target.get(name)!.subarray(4), readFileSync(output));
+  const normal = new Map([[name, Buffer.from(source)], ['src/new.js', Buffer.from(fresh)]]);
+  await precompile(normal);
+  assert.notDeepEqual(target.get(name), normal.get(name), 'the old string table must actually participate');
+  assert.deepEqual(target.get('src/new.js'), normal.get('src/new.js'));
+  assert.equal(previous.get(name)!.readBigUInt64LE(4), 0x1f1903c103bc1fc6n);
+});
+
+test('incompatible or non-Release base entries fail before replacing any target source', async () => {
+  const name = 'src/page.js';
+  const old = new Map([[name, Buffer.from('exports.value = 1;')]]);
+  await precompile(old);
+  const badVersion = Buffer.from(old.get(name)!);
+  badVersion.writeUInt32LE(badVersion.readUInt32LE(12) + 1, 12);
+  for (const bytes of [Buffer.from('exports.debug = true;'), badVersion, old.get(name)!.subarray(0, 8)]) {
+    const source = Buffer.from('exports.value = 2;');
+    const target = new Map([[name, source], ['src/new.js', Buffer.from('exports.newPage = 1;')]]);
+    await assert.rejects(precompile(target, { baseArchive: new Map([[name, bytes]]) }), /base|bytecode/i);
+    assert.equal(target.get(name), source);
+  }
+});
+
 test('upstream module protocol drift is rejected before emitting Release bytecode', t => {
   const dir = mkdtempSync(path.join(tmpdir(), 'valdi-hermes-contract-'));
   t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));

@@ -3,6 +3,7 @@ import { systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
 import { Label, ScrollView, TextField, View } from 'valdi_tsx/src/NativeTemplateElements';
 import { api } from '../../services/api';
 import { Button } from '../../components/Button';
+import { color, tokens } from '../../components/theme';
 import type { BLEPeripheralServer, BluetoothDevice } from 'bluetooth/src/index';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { Page } from 'app_foundation/src/page/PageComponent';
@@ -405,14 +406,14 @@ export class BlePage extends Page<PageViewModel, State, PageContext> {
 }
 
 const styles = {
-  page: new Style<View>({ width: '100%', height: '100%', backgroundColor: '#f3f4f6' }),
+  page: new Style<View>({ width: '100%', height: '100%', backgroundColor: color.canvas }),
   scroll: new Style<ScrollView>({ width: '100%', height: '100%' }),
-  section: new Style<Label>({ color: '#6b7280', font: systemSemiboldFont(13), margin: '12 0 8 0' }),
-  row: new Style<View>({ backgroundColor: '#ffffff', borderRadius: 12, padding: '10 14', marginBottom: 8 }),
-  rowTitle: new Style<Label>({ color: '#111827', font: systemSemiboldFont(15) }),
-  rowDetail: new Style<Label>({ color: '#6b7280', font: systemFont(12), marginTop: 2 }),
-  result: new Style<Label>({ color: '#059669', font: systemFont(14), marginBottom: 8 }),
-  inputBox: new Style<View>({ backgroundColor: '#ffffff', borderRadius: 12, padding: '0 14', marginBottom: 8 }),
-  input: new Style<TextField>({ width: '100%', height: 44, font: systemFont(14), color: '#111827' }),
-  log: new Style<Label>({ color: '#374151', font: systemFont(12), marginBottom: 4 }),
+  section: new Style<Label>({ color: color.muted, font: systemSemiboldFont(tokens.font.section), margin: '12 0 8 0' }),
+  row: new Style<View>({ backgroundColor: color.surface, borderRadius: tokens.radius.control, padding: '10 14', marginBottom: tokens.space.sm }),
+  rowTitle: new Style<Label>({ color: color.ink, font: systemSemiboldFont(tokens.font.title) }),
+  rowDetail: new Style<Label>({ color: color.muted, font: systemFont(tokens.font.body), marginTop: 2 }),
+  result: new Style<Label>({ color: color.success, font: systemFont(tokens.font.segment), marginBottom: tokens.space.sm }),
+  inputBox: new Style<View>({ backgroundColor: color.surface, borderRadius: tokens.radius.control, padding: '0 14', marginBottom: tokens.space.sm }),
+  input: new Style<TextField>({ width: '100%', height: 44, font: systemFont(tokens.font.segment), color: color.ink }),
+  log: new Style<Label>({ color: color.text, font: systemFont(tokens.font.body), marginBottom: tokens.space.xs }),
 };

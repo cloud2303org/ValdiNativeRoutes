@@ -2,6 +2,7 @@ import { Style } from 'valdi_core/src/Style';
 import { systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
 import { ImageView, Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
 import { Button } from '../../components/Button';
+import { color, tokens } from '../../components/theme';
 import { BUILD_INFO, CppStats, sha256, stats } from '../../cpp/Cpp';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { Page } from 'app_foundation/src/page/PageComponent';
@@ -170,17 +171,17 @@ export class VisionPage extends Page<PageViewModel, State, PageContext> {
 }
 
 const styles = {
-  page: new Style<View>({ width: '100%', height: '100%', backgroundColor: '#f3f4f6' }),
+  page: new Style<View>({ width: '100%', height: '100%', backgroundColor: color.canvas }),
   scroll: new Style<ScrollView>({ width: '100%', height: '100%' }),
-  body: new Style<Label>({ color: '#374151', font: systemFont(15), marginBottom: 8 }),
-  muted: new Style<Label>({ color: '#6b7280', font: systemFont(13), marginBottom: 8 }),
-  section: new Style<Label>({ color: '#111827', font: systemSemiboldFont(17), margin: '20 0 8 0' }),
-  status: new Style<Label>({ color: '#374151', font: systemFont(14), margin: '4 0 12 0' }),
-  error: new Style<Label>({ color: '#d92d20', font: systemFont(14), marginBottom: 12 }),
-  card: new Style<View>({ backgroundColor: '#ffffff', borderRadius: 16, padding: 16, marginBottom: 12 }),
-  cardTitle: new Style<Label>({ color: '#111827', font: systemSemiboldFont(16), marginBottom: 8 }),
-  line: new Style<Label>({ color: '#1f2937', font: systemFont(14), marginBottom: 4 }),
-  score: new Style<Label>({ color: '#1e62d0', font: systemSemiboldFont(14) }),
-  image: new Style<ImageView>({ width: '100%', objectFit: 'contain', backgroundColor: '#f3f4f6', borderRadius: 8 }),
-  response: new Style<View>({ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }),
+  body: new Style<Label>({ color: color.text, font: systemFont(15), marginBottom: tokens.space.sm }),
+  muted: new Style<Label>({ color: color.muted, font: systemFont(tokens.font.section), marginBottom: tokens.space.sm }),
+  section: new Style<Label>({ color: color.ink, font: systemSemiboldFont(17), margin: '20 0 8 0' }),
+  status: new Style<Label>({ color: color.text, font: systemFont(tokens.font.segment), margin: '4 0 12 0' }),
+  error: new Style<Label>({ color: color.danger, font: systemFont(tokens.font.segment), marginBottom: tokens.space.md }),
+  card: new Style<View>({ backgroundColor: color.surface, borderRadius: tokens.space.lg, padding: tokens.space.lg, marginBottom: tokens.space.md }),
+  cardTitle: new Style<Label>({ color: color.ink, font: systemSemiboldFont(tokens.font.button), marginBottom: tokens.space.sm }),
+  line: new Style<Label>({ color: color.text, font: systemFont(tokens.font.segment), marginBottom: tokens.space.xs }),
+  score: new Style<Label>({ color: color.primary, font: systemSemiboldFont(tokens.font.segment) }),
+  image: new Style<ImageView>({ width: '100%', objectFit: 'contain', backgroundColor: color.canvas, borderRadius: tokens.radius.medium }),
+  response: new Style<View>({ flexDirection: 'row', justifyContent: 'space-between', marginTop: tokens.space.xs }),
 };

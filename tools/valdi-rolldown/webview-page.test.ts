@@ -62,7 +62,11 @@ function fixture() {
     'app_foundation/src/page/PageComponent': { Page },
     '../../components/Button': {},
     '../../components/NavigationBar': {},
-    '../../components/theme': { color: {}, tokens: { font: {}, space: {} } },
+    '../../components/theme': {
+      color: {},
+      tokens: { font: {}, space: {} },
+      COLORS: { light: { text: '#172033', canvas: '#f5f7fb', primary: '#1e62d0', buttonOnPrimary: '#ffffff' } },
+    },
   };
   vm.runInNewContext(`(function(require,exports){${code}\n})`)(
     (name: string) => {

@@ -6,13 +6,15 @@ import { Button } from '../../components/Button';
 import { NavigationBar } from '../../components/NavigationBar';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { Page } from 'app_foundation/src/page/PageComponent';
-import { color, tokens } from '../../components/theme';
+import { COLORS, color, tokens } from '../../components/theme';
 
+// Colors interpolate from the tokens, so the WebView page follows the app theme. This is the light
+// set: the offline HTML does not reload on appearance change, matching how a real web page would ship.
 const HTML = `<!doctype html>
 <html lang="zh-CN"><head><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Valdi WebView</title>
-<style>body{font:16px -apple-system,sans-serif;padding:20px;color:#172033;background:#f5f7fb}
-button{font:inherit;padding:12px;border:0;border-radius:10px;background:#1e62d0;color:white}</style>
+<style>body{font:16px -apple-system,sans-serif;padding:20px;color:${COLORS.light.text};background:${COLORS.light.canvas}}
+button{font:inherit;padding:12px;border:0;border-radius:10px;background:${COLORS.light.primary};color:${COLORS.light.buttonOnPrimary}}</style>
 </head><body><h2>WebView 已接入</h2><p>这是随应用加载的离线 HTML，不依赖网络。</p>
 <button id="send" onclick="window.Valdi.postMessage('来自网页的消息')">发送消息给 Valdi</button>
 </body></html>`;

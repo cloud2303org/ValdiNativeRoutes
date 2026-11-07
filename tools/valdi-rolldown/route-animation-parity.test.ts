@@ -64,6 +64,11 @@ function runtime(platform: Platform, navigation?: NavigationOptions, routeOption
     tslib: requireApp(path.join(valdiSourceRoot()!, 'src/valdi_modules/src/valdi/valdi_core/src/tslib.js')),
     [source('components/Button.tsx')]: { Button },
     [source('components/PageHeader.tsx')]: { PageHeader },
+    [source('components/theme.ts')]: {
+      color: {},
+      tokens: { font: {}, space: {}, radius: {}, size: {}, icon: {}, motion: {} },
+    },
+    'theme_bridge/src/ThemeBridge': { getHost: () => ({ getTokens: () => ({ light: {}, dark: {}, shared: {} }) }) },
     [foundation('page/PageComponent.ts')]: { Page: class {} },
     [source('services/api.ts')]: { api: { showToast: (value: unknown) => toasts.push(value) } },
     [source('routes.ts')]: { routes: {

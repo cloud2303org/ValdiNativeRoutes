@@ -4,6 +4,7 @@ import { systemBoldFont, systemFont } from 'valdi_core/src/SystemFont';
 import { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
 import { api } from '../../services/api';
 import { Button } from '../../components/Button';
+import { color, tokens } from '../../components/theme';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { Page } from 'app_foundation/src/page/PageComponent';
 import { PageHeader } from '../../components/PageHeader';
@@ -126,10 +127,10 @@ export class RouteAnimationPage extends Page<PageViewModel, {}, PageContext> {
 }
 
 const styles = {
-  page: new Style<View>({ width: '100%', height: '100%', backgroundColor: '#f3f4f6' }),
+  page: new Style<View>({ width: '100%', height: '100%', backgroundColor: color.canvas }),
   scroll: new Style<ScrollView>({ width: '100%', height: '100%' }),
   content: new Style<View>({ width: '100%' }),
-  title: new Style<Label>({ color: '#111827', font: systemBoldFont(30), marginBottom: 8 }),
-  text: new Style<Label>({ color: '#374151', font: systemFont(15), marginBottom: 16, numberOfLines: 0 }),
-  caption: new Style<Label>({ color: '#1e62d0', font: systemFont(14), marginBottom: 16 }),
+  title: new Style<Label>({ color: color.ink, font: systemBoldFont(tokens.font.heading), marginBottom: tokens.space.sm }),
+  text: new Style<Label>({ color: color.text, font: systemFont(15), marginBottom: tokens.space.lg, numberOfLines: 0 }),
+  caption: new Style<Label>({ color: color.primary, font: systemFont(tokens.font.segment), marginBottom: tokens.space.lg }),
 };

@@ -3,6 +3,7 @@ import { systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
 import { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
 import { api } from '../../services/api';
 import { Button } from '../../components/Button';
+import { color, tokens } from '../../components/theme';
 import type { NFCDiscoveredCallback } from 'nfc/src/adapter';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { Page } from 'app_foundation/src/page/PageComponent';
@@ -145,8 +146,8 @@ export class DevicePage extends Page<PageViewModel, State, PageContext> {
 }
 
 const styles = {
-  page: new Style<View>({ width: '100%', height: '100%', backgroundColor: '#f3f4f6' }),
+  page: new Style<View>({ width: '100%', height: '100%', backgroundColor: color.canvas }),
   scroll: new Style<ScrollView>({ width: '100%', height: '100%' }),
-  section: new Style<Label>({ color: '#6b7280', font: systemSemiboldFont(13), margin: '12 0 8 0' }),
-  log: new Style<Label>({ color: '#374151', font: systemFont(12), marginBottom: 4 }),
+  section: new Style<Label>({ color: color.muted, font: systemSemiboldFont(tokens.font.section), margin: '12 0 8 0' }),
+  log: new Style<Label>({ color: color.text, font: systemFont(tokens.font.body), marginBottom: tokens.space.xs }),
 };

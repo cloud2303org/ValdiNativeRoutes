@@ -4,6 +4,7 @@ import { IRenderedElement } from 'valdi_core/src/IRenderedElement';
 import { Style } from 'valdi_core/src/Style';
 import { systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
 import { Label, TextField, TextFieldReturnKeyText, TextView, View } from 'valdi_tsx/src/NativeTemplateElements';
+import { color, tokens } from './theme';
 
 export interface FormFieldViewModel {
   id: string;
@@ -77,35 +78,35 @@ export class FormField extends Component<FormFieldViewModel> {
 }
 
 const boxBase = new Style<View>({
-  padding: '0 12',
-  borderRadius: 10,
-  backgroundColor: 'white',
+  padding: `0 ${tokens.space.md}`,
+  borderRadius: tokens.radius.compact,
+  backgroundColor: color.surface,
   justifyContent: 'center',
 });
 
 const styles = {
   field: new Style<View>({
-    marginBottom: 14,
+    marginBottom: tokens.space.md + 2,
   }),
   label: new Style<Label>({
-    color: '#374151',
-    font: systemSemiboldFont(14),
-    marginBottom: 6,
+    color: color.text,
+    font: systemSemiboldFont(tokens.font.section + 1),
+    marginBottom: tokens.space.tight,
   }),
   box: boxBase.extend({ height: 44 }),
-  multilineBox: boxBase.extend({ height: 120, padding: '8 12' }),
+  multilineBox: boxBase.extend({ height: 120, padding: `${tokens.space.sm} ${tokens.space.md}` }),
   input: new Style<TextField>({
     width: '100%',
     height: 44,
-    font: systemFont(16),
-    color: '#111827',
-    placeholderColor: '#9ca3af',
+    font: systemFont(tokens.font.button),
+    color: color.ink,
+    placeholderColor: color.chevron,
   }),
   multilineInput: new Style<TextView>({
     width: '100%',
     height: '100%',
-    font: systemFont(16),
-    color: '#111827',
-    placeholderColor: '#9ca3af',
+    font: systemFont(tokens.font.button),
+    color: color.ink,
+    placeholderColor: color.chevron,
   }),
 };

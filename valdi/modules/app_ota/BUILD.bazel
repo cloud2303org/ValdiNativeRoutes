@@ -1,0 +1,8 @@
+load("//bzl/node_module:module.bzl", "node_valdi_module")
+
+# The application supplies the OTA client and registers its generated factory.
+node_valdi_module(
+    name = "app_ota",
+    srcs = glob(["src/**/*.ts"]),
+    config = "module.json",
+)

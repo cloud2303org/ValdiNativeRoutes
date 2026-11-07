@@ -9,3 +9,6 @@
 # ML Kit (scanCode) creates its component registrars by reflection from the manifest; R8 full mode keeps the classes
 # but drops their no-arg constructors.
 -keep class * implements com.google.firebase.components.ComponentRegistrar { <init>(); }
+
+# File-only OTA codec JNI entry points are called before Valdi/JS startup.
+-keep class io.valdiroutes.app.OtaNative { *; }

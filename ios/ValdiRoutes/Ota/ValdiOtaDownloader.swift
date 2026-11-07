@@ -41,6 +41,12 @@ final class ValdiOtaDownloader: NSObject, URLSessionDataDelegate, @unchecked Sen
                                          destination: destination, timeout: timeout).run()
     }
 
+    /// Intermediate split input: bounded IO; the assembled signed final file authenticates its contents.
+    static func file(_ url: URL, limit: Int, to destination: URL, timeout: TimeInterval) async throws {
+        _ = try await ValdiOtaDownloader(url: url, limit: limit, expected: nil,
+                                         destination: destination, timeout: timeout).run()
+    }
+
     private func run() async throws -> Data {
         if let destination {
             guard FileManager.default.createFile(atPath: destination.path, contents: nil) else {
@@ -98,7 +104,10 @@ final class ValdiOtaDownloader: NSObject, URLSessionDataDelegate, @unchecked Sen
         }
         received += data.count
         if let handle {
-            do { try handle.write(contentsOf: data); hasher.update(data: data) }
+            do {
+                try handle.write(contentsOf: data)
+                if expected != nil { hasher.update(data: data) }
+            }
             catch { failure = error; dataTask.cancel() }
         } else {
             metadata.append(data)

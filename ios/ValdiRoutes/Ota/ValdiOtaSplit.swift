@@ -47,69 +47,51 @@ enum ValdiOtaSplit {
     private static let fm = FileManager.default
     private struct Delta {
         let baseVersion: String
-        let baseSha256: String
         let path: String
-        let descriptor: ValdiOtaClient.Descriptor
+        let size: Int
     }
     private struct Download {
         let path: String
-        let descriptor: ValdiOtaClient.Descriptor
+        let size: Int
         let encoding: String
     }
     private struct Entry {
         let name: String
-        let descriptor: ValdiOtaClient.Descriptor
+        let size: Int
         let operation: String
-        let baseSha256: String?
         let download: Download?
     }
     private struct Source {
         let file: URL
-        let descriptor: ValdiOtaClient.Descriptor
+        let size: Int
     }
 
-    static func apply(manifest: Data, remote: URL, appVersion: String, version: String,
+    static func apply(manifest: Data, remote: URL,
                       baseVersion: String, baseFile: URL, baseDirectory: URL?,
                       target: URL, descriptor: ValdiOtaClient.Descriptor,
                       work: URL, codec: any ValdiOtaFileCodec, timeout: TimeInterval) async throws -> Bool {
         let deltas = try descriptors(manifest)
-        guard deltas.contains(where: { $0.baseVersion == baseVersion }) else { return false }
-        let source = try fingerprint(baseFile, inside: baseDirectory)
-        guard let delta = deltas.first(where: { $0.baseVersion == baseVersion && $0.baseSha256 == source.sha256 }) else { return false }
+        guard let delta = deltas.first(where: { $0.baseVersion == baseVersion }) else { return false }
+        try checkRegular(baseFile, inside: baseDirectory)
+        _ = try fileSize(baseFile)
         let directory = work.appendingPathComponent(".delta-" + UUID().uuidString, isDirectory: true)
         try fm.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: directory) }
-        let compressedBase = directory.appendingPathComponent("base.zst")
-        try fm.copyItem(at: baseFile, to: compressedBase)
-        try verify(compressedBase, source)
         let metadataFile = directory.appendingPathComponent("metadata.json")
-        try await ValdiOtaDownloader.file(remote.appendingPathComponent(delta.path), descriptor: delta.descriptor,
+        try await ValdiOtaDownloader.file(remote.appendingPathComponent(delta.path), limit: delta.size,
                                           to: metadataFile, timeout: timeout)
         let metadataHandle = try FileHandle(forReadingFrom: metadataFile)
         defer { try? metadataHandle.close() }
         let metadata = try metadataHandle.read(upToCount: metadataLimit + 1) ?? Data()
-        guard metadata.count == delta.descriptor.size,
+        guard metadata.count <= metadataLimit,
               let object = try JSONSerialization.jsonObject(with: metadata) as? [String: Any],
-              Set(object.keys) == Set(["schemaVersion", "algorithm", "format", "compression", "platform", "appVersion", "baseVersion", "version", "baseSha256", "targetSha256", "basePacketSha256", "targetPacketSha256", "targetPacketSize", "entries"]),
-              integer(object["schemaVersion"]) == 1,
-              object["algorithm"] as? String == "hdiffpatch", object["format"] as? String == "HDIFFSF20",
-              object["compression"] as? String == "zlib", object["platform"] as? String == "ios",
-              object["appVersion"] as? String == appVersion, object["version"] as? String == version,
-              object["baseVersion"] as? String == baseVersion, object["baseSha256"] as? String == source.sha256,
-              object["targetSha256"] as? String == descriptor.sha256,
-              let oldHash = object["basePacketSha256"] as? String, hashValid(oldHash),
-              let packetHash = object["targetPacketSha256"] as? String, hashValid(packetHash),
-              let packetSize = integer(object["targetPacketSize"]), packetSize >= 8,
               let rawEntries = object["entries"] as? [[String: Any]], rawEntries.count <= 4096 else {
-            throw ValdiOtaError("Invalid split metadata/identity")
+            throw ValdiOtaError("Invalid split entries")
         }
-        let entries = try parseEntries(rawEntries, baseVersion: baseVersion, packetSize: packetSize,
-                                       metadataSize: delta.descriptor.size)
+        let (entries, packetSize) = try parseEntries(rawEntries, baseVersion: baseVersion, metadataSize: metadata.count)
         let oldPacket = directory.appendingPathComponent("base.packet")
-        try codec.decode(compressedBase, to: oldPacket, maxOutput: limit)
-        let oldPacketDescriptor = try fingerprint(oldPacket)
-        guard oldPacketDescriptor.sha256 == oldHash else { throw ValdiOtaError("Split base packet SHA mismatch") }
-        let old = try extract(oldPacket, size: oldPacketDescriptor.size, into: directory)
+        try codec.decode(baseFile, to: oldPacket, maxOutput: limit)
+        let old = try extract(oldPacket, size: fileSize(oldPacket), into: directory)
         let targetPacket = directory.appendingPathComponent("target.packet")
         let writer = try output(targetPacket)
         defer { try? writer.close() }
@@ -118,36 +100,34 @@ enum ValdiOtaSplit {
             let outputFile = directory.appendingPathComponent("target-entry-\(index)")
             switch entry.operation {
             case "copy":
-                guard let source = old[entry.name], source.descriptor.sha256 == entry.descriptor.sha256,
-                      source.descriptor.size == entry.descriptor.size,
-                      entry.baseSha256 == nil || entry.baseSha256 == source.descriptor.sha256 else {
+                guard let source = old[entry.name], source.size == entry.size else {
                     throw ValdiOtaError("Split copy base mismatch")
                 }
                 try fm.copyItem(at: source.file, to: outputFile)
             case "full", "patch":
                 let download = entry.download!
                 let payload = directory.appendingPathComponent("payload-\(index)")
-                try await ValdiOtaDownloader.file(remote.appendingPathComponent(download.path), descriptor: download.descriptor,
+                try await ValdiOtaDownloader.file(remote.appendingPathComponent(download.path), limit: download.size,
                                                   to: payload, timeout: timeout)
                 if entry.operation == "patch" {
-                    guard let source = old[entry.name], source.descriptor.sha256 == entry.baseSha256,
+                    guard let source = old[entry.name],
                           try hbc(source.file, name: entry.name) else { throw ValdiOtaError("Split patch base/envelope mismatch") }
-                    try codec.patch(source.file, patch: payload, to: outputFile, expectedSize: entry.descriptor.size)
+                    try codec.patch(source.file, patch: payload, to: outputFile, expectedSize: entry.size)
                     guard try hbc(outputFile, name: entry.name) else { throw ValdiOtaError("Split patch target is not HBC") }
                 } else if download.encoding == "zstd" {
-                    try codec.decode(payload, to: outputFile, maxOutput: entry.descriptor.size)
+                    try codec.decode(payload, to: outputFile, maxOutput: entry.size)
                 } else {
                     try fm.moveItem(at: payload, to: outputFile)
                 }
             default: throw ValdiOtaError("Invalid split operation")
             }
-            try verify(outputFile, entry.descriptor)
+            guard try fileSize(outputFile) == entry.size else { throw ValdiOtaError("Split entry length mismatch") }
             try field(Data(entry.name.utf8), to: writer)
-            try writer.write(contentsOf: fieldHeader(entry.descriptor.size))
+            try writer.write(contentsOf: fieldHeader(entry.size))
             let reader = try FileHandle(forReadingFrom: outputFile)
-            do { try stream(reader, to: writer, count: entry.descriptor.size); try reader.close() }
+            do { try stream(reader, to: writer, count: entry.size); try reader.close() }
             catch { try? reader.close(); throw error }
-            try writer.write(contentsOf: Data(repeating: 0, count: padding(entry.descriptor.size)))
+            try writer.write(contentsOf: Data(repeating: 0, count: padding(entry.size)))
             // Keep at most the old entries and one newly assembled entry on disk.
             try fm.removeItem(at: outputFile)
             let payload = directory.appendingPathComponent("payload-\(index)")
@@ -155,10 +135,8 @@ enum ValdiOtaSplit {
         }
         try writer.synchronize()
         try writer.close()
-        try verify(targetPacket, ValdiOtaClient.Descriptor(sha256: packetHash, size: packetSize))
         let archive = directory.appendingPathComponent("target.zst")
-        // ZSTD's one-shot encoder may need destination capacity above its eventual
-        // compressed length. Bound the file by the package cap, then verify exact bytes.
+        // Bound recompression by the package cap, then authenticate the exact final compressed bytes.
         try codec.encode(targetPacket, to: archive, maxOutput: limit)
         // Equivalent decompressed bytes are insufficient. The full signed compressed descriptor wins.
         try verify(archive, descriptor)
@@ -172,62 +150,53 @@ enum ValdiOtaSplit {
         guard let array = raw as? [[String: Any]], array.count <= 8 else { throw ValdiOtaError("Invalid deltas array") }
         var versions = Set<String>()
         return try array.map { object in
-            guard Set(object.keys) == Set(["baseVersion", "baseSha256", "path", "sha256", "size"]),
-                  let version = object["baseVersion"] as? String, validVersion(version), versions.insert(version).inserted,
-                  let hash = object["baseSha256"] as? String, hashValid(hash),
+            guard let version = object["baseVersion"] as? String, validVersion(version), versions.insert(version).inserted,
                   let path = object["path"] as? String, path == "deltas/\(version)/manifest.json",
-                  let descriptor = descriptor(object), descriptor.size <= metadataLimit else {
+                  let size = integer(object["size"]), size <= metadataLimit else {
                 throw ValdiOtaError("Invalid signed delta descriptor")
             }
-            return Delta(baseVersion: version, baseSha256: hash, path: path, descriptor: descriptor)
+            return Delta(baseVersion: version, path: path, size: size)
         }
     }
 
-    private static func parseEntries(_ objects: [[String: Any]], baseVersion: String, packetSize: Int,
-                                     metadataSize: Int) throws -> [Entry] {
+    private static func parseEntries(_ objects: [[String: Any]], baseVersion: String,
+                                     metadataSize: Int) throws -> ([Entry], Int) {
         var names = Set<String>(), total = 8, downloaded = metadataSize
         let entries = try objects.map { object -> Entry in
             guard let name = object["name"] as? String, validName(name), names.insert(name).inserted,
-                  let target = descriptor(object), let operation = object["operation"] as? String else {
+                  let size = integer(object["size"]), let operation = object["operation"] as? String else {
                 throw ValdiOtaError("Invalid split entry")
             }
             let nameSize = name.utf8.count
-            let addition = 8 + nameSize + padding(nameSize) + target.size + padding(target.size)
-            guard addition <= packetSize - total else { throw ValdiOtaError("Split entry packet size exceeds bound") }
+            let addition = 8 + nameSize + padding(nameSize) + size + padding(size)
+            guard addition <= limit - total else { throw ValdiOtaError("Split entry packet size exceeds bound") }
             total += addition
-            let base = object["baseSha256"] as? String
-            if object["baseSha256"] != nil && (base == nil || !hashValid(base!)) { throw ValdiOtaError("Invalid entry base hash") }
-            let common: Set<String> = ["name", "sha256", "size", "operation", "baseSha256"]
             var download: Download?
-            if operation == "copy" {
-                guard Set(object.keys).isSubset(of: common) else { throw ValdiOtaError("Invalid copy fields") }
-            } else {
-                guard operation == "full" || operation == "patch", Set(object.keys).isSubset(of: common.union(["download"])),
+            if operation != "copy" {
+                guard operation == "full" || operation == "patch",
                       let raw = object["download"] as? [String: Any],
-                      Set(raw.keys) == Set(["path", "sha256", "size", "encoding"]),
-                      let payload = descriptor(raw), let path = raw["path"] as? String,
+                      let payloadSize = integer(raw["size"]), let path = raw["path"] as? String,
                       let encoding = raw["encoding"] as? String else { throw ValdiOtaError("Invalid split download") }
                 let prefix = "deltas/\(baseVersion)/payload/"
                 guard path.hasPrefix(prefix) else { throw ValdiOtaError("Split payload escaped base") }
                 let suffix: String
                 if operation == "patch" {
-                    guard base != nil, name.hasSuffix(".js"), encoding == "hdiffpatch-zlib" else { throw ValdiOtaError("Invalid patch descriptor") }
+                    guard name.hasSuffix(".js"), encoding == "hdiffpatch-zlib" else { throw ValdiOtaError("Invalid patch descriptor") }
                     suffix = ".hdiff"
                 } else {
                     guard encoding == "raw" || encoding == "zstd" else { throw ValdiOtaError("Invalid full encoding") }
                     suffix = encoding == "raw" ? ".bin" : ".zst"
-                    if encoding == "raw" && payload.size != target.size { throw ValdiOtaError("Raw entry length mismatch") }
+                    if encoding == "raw" && payloadSize != size { throw ValdiOtaError("Raw entry length mismatch") }
                 }
                 let tail = String(path.dropFirst(prefix.count))
                 guard tail.hasSuffix(suffix), hashValid(String(tail.dropLast(suffix.count))),
-                      payload.size <= limit - downloaded else { throw ValdiOtaError("Invalid payload path/budget") }
-                downloaded += payload.size
-                download = Download(path: path, descriptor: payload, encoding: encoding)
+                      payloadSize <= limit - downloaded else { throw ValdiOtaError("Invalid payload path/budget") }
+                downloaded += payloadSize
+                download = Download(path: path, size: payloadSize, encoding: encoding)
             }
-            return Entry(name: name, descriptor: target, operation: operation, baseSha256: base, download: download)
+            return Entry(name: name, size: size, operation: operation, download: download)
         }
-        guard total == packetSize else { throw ValdiOtaError("Split packet length mismatch") }
-        return entries
+        return (entries, total)
     }
 
     private static func extract(_ packet: URL, size: Int, into directory: URL) throws -> [String: Source] {
@@ -264,7 +233,7 @@ enum ValdiOtaSplit {
                 try writer.close()
             } catch { try? writer.close(); throw error }
             guard try read(pad).allSatisfy({ $0 == 0 }) else { throw ValdiOtaError("Invalid base archive padding") }
-            entries[name] = Source(file: file, descriptor: try fingerprint(file))
+            entries[name] = Source(file: file, size: count)
         }
         return entries
     }
@@ -309,10 +278,6 @@ enum ValdiOtaSplit {
         try writer.write(contentsOf: bytes)
         try writer.write(contentsOf: Data(repeating: 0, count: padding(bytes.count)))
     }
-    private static func descriptor(_ object: [String: Any]) -> ValdiOtaClient.Descriptor? {
-        guard let hash = object["sha256"] as? String, hashValid(hash), let size = integer(object["size"]) else { return nil }
-        return ValdiOtaClient.Descriptor(sha256: hash, size: size)
-    }
     private static func integer(_ raw: Any?) -> Int? {
         guard let n = raw as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(), n.doubleValue.isFinite,
               n.doubleValue >= 0, n.doubleValue <= Double(limit), n.doubleValue.rounded() == n.doubleValue else { return nil }
@@ -337,8 +302,8 @@ enum ValdiOtaSplit {
             entry = parent
         }
     }
-    private static func fingerprint(_ file: URL, inside directory: URL? = nil) throws -> ValdiOtaClient.Descriptor {
-        try checkRegular(file, inside: directory)
+    private static func verify(_ file: URL, _ expected: ValdiOtaClient.Descriptor) throws {
+        try checkRegular(file, inside: nil)
         let reader = try FileHandle(forReadingFrom: file)
         defer { try? reader.close() }
         var hash = SHA256(), size = 0
@@ -346,10 +311,15 @@ enum ValdiOtaSplit {
             guard chunk.count <= limit - size else { throw ValdiOtaError("Split file exceeds limit") }
             hash.update(data: chunk); size += chunk.count
         }
-        return ValdiOtaClient.Descriptor(sha256: hash.finalize().map { String(format: "%02x", $0) }.joined(), size: size)
+        guard size == expected.size,
+              hash.finalize().map({ String(format: "%02x", $0) }).joined() == expected.sha256 else {
+            throw ValdiOtaError("Split SHA256/length mismatch")
+        }
     }
-    private static func verify(_ file: URL, _ expected: ValdiOtaClient.Descriptor) throws {
-        let actual = try fingerprint(file)
-        guard actual.size == expected.size && actual.sha256 == expected.sha256 else { throw ValdiOtaError("Split SHA256/length mismatch") }
+    private static func fileSize(_ file: URL) throws -> Int {
+        guard let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize, size >= 0, size <= limit else {
+            throw ValdiOtaError("Split file exceeds limit")
+        }
+        return size
     }
 }

@@ -16,147 +16,118 @@ import kotlinx.serialization.json.jsonObject
 /** Split packets never enter a byte array: only metadata, names and 64KiB IO buffers do. */
 internal class OtaSplit(
     private val codec: OtaFileCodec,
-    private val download: (path: String, sha256: String, size: Long, output: File) -> Unit,
+    private val download: (path: String, size: Long, output: File) -> Unit,
 ) {
     private data class Digest(val hash: String, val size: Long)
     private data class Field(val offset: Long, val size: Long)
-    private data class Entry(val name: String, val digest: Digest, val operation: String,
-        val baseHash: String?, val payload: JsonObject?)
+    private data class Entry(val name: String, val size: Long, val operation: String, val payload: JsonObject?)
 
-    fun rebuild(full: JsonObject, appVersion: String, baseVersion: String, version: String,
+    fun rebuild(full: JsonObject, baseVersion: String,
         targetHash: String, targetSize: Long, work: File, output: File, baseSource: () -> InputStream?): Boolean {
         val deltas = full.getValue("deltas").jsonArray
         check(deltas.size <= 8) { "Too many delta descriptors" }
-        val candidates = (0 until deltas.size).map { index ->
-            deltas[index].jsonObject.also {
-                val base = it.otaString("baseVersion")
-                check(validVersion(base) && it.otaString("path") == "deltas/$base/manifest.json") { "Invalid delta path" }
-                sha(it.getValue("baseSha256"))
-                digest(it, METADATA_LIMIT)
-            }
-        }
-        val applicable = candidates.filter { it.otaString("baseVersion") == baseVersion }
-        if (applicable.isEmpty()) return false
+        val selected = deltas.firstOrNull { it.jsonObject.otaString("baseVersion") == baseVersion }?.jsonObject
+            ?: return false
+        check(validVersion(baseVersion) && selected.otaString("path") == "deltas/$baseVersion/manifest.json") { "Invalid delta path" }
         // Base candidates are confined to this process's snapshot or its embedded app_pages.
         val base = File(work, "base.zst")
         val stream = baseSource() ?: return false
         stream.use { input ->
             FileOutputStream(base).use { out -> transfer(input, out, LIMIT); out.fd.sync() }
         }
-        val actualBase = digestFile(base, LIMIT)
-        val selected = applicable.firstOrNull { it.otaString("baseSha256") == actualBase.hash } ?: return false
         val metadata = File(work, "manifest.json")
-        val metadataDigest = digest(selected, METADATA_LIMIT)
-        download(selected.otaString("path"), metadataDigest.hash, metadataDigest.size, metadata)
-        verify(metadata, metadataDigest)
+        val metadataSize = size(selected, METADATA_LIMIT)
+        download(selected.otaString("path"), metadataSize, metadata)
         val json = parseOtaObject(metadata.readText(Charsets.UTF_8))
-        check(integer(json.getValue("schemaVersion")) == 1L &&
-            json.otaString("algorithm") == "hdiffpatch" && json.otaString("format") == "HDIFFSF20" &&
-            json.otaString("compression") == "zlib") { "Unsupported split format" }
-        check(json.otaString("platform") == "android" && json.otaString("appVersion") == appVersion &&
-            json.otaString("baseVersion") == baseVersion && json.otaString("version") == version) { "Split identity mismatch" }
-        check(sha(json.getValue("baseSha256")) == actualBase.hash &&
-            sha(json.getValue("targetSha256")) == targetHash) { "Split archive mismatch" }
-        val basePacketHash = sha(json.getValue("basePacketSha256"))
-        val targetPacket = Digest(sha(json.getValue("targetPacketSha256")), integer(json.getValue("targetPacketSize")))
-        check(targetPacket.size in 8..LIMIT) { "Invalid target packet size" }
-
+        // Split hashes and identity hints are informational. Only the signed full descriptor
+        // authenticates the completed compressed archive; sizes here bound reconstruction IO.
         val rawEntries = json.getValue("entries").jsonArray
         check(rawEntries.size <= MAX_ENTRIES) { "Too many split entries" }
         val names = HashSet<String>()
         var packetSize = 8L
-        var payloadSize = metadataDigest.size
+        var payloadSize = metadataSize
         val entries = (0 until rawEntries.size).map { index ->
             val entry = rawEntries[index].jsonObject
             val name = entry.otaString("name")
             check(validName(name) && names.add(name)) { "Invalid or duplicate archive name" }
-            val value = digest(entry, LIMIT)
-            packetSize += fieldSize(name.toByteArray(Charsets.UTF_8).size.toLong()) + fieldSize(value.size)
-            check(packetSize <= targetPacket.size) { "Split entries exceed target packet" }
+            val entrySize = size(entry, LIMIT)
+            packetSize += fieldSize(name.toByteArray(Charsets.UTF_8).size.toLong()) + fieldSize(entrySize)
+            check(packetSize <= LIMIT) { "Split entries exceed packet limit" }
             val operation = entry.otaString("operation")
             val payload = if (entry.containsKey("download")) entry.getValue("download").jsonObject else null
-            val baseHash = if (entry.containsKey("baseSha256")) sha(entry.getValue("baseSha256")) else null
             when (operation) {
                 "copy" -> check(payload == null) { "Copy has a payload" }
                 "full", "patch" -> {
                     check(payload != null) { "Missing split payload" }
-                    val content = digest(payload, LIMIT)
-                    payloadSize += content.size
+                    val contentSize = size(payload, LIMIT)
+                    payloadSize += contentSize
                     check(payloadSize <= LIMIT) { "Split payload budget exceeded" }
                     val encoding = payload.otaString("encoding")
                     val extension = when (encoding) {
                         "raw" -> { check(operation == "full"); "bin" }
                         "zstd" -> { check(operation == "full"); "zst" }
-                        "hdiffpatch-zlib" -> { check(operation == "patch" && baseHash != null); "hdiff" }
+                        "hdiffpatch-zlib" -> { check(operation == "patch"); "hdiff" }
                         else -> error("Unsupported split payload encoding")
                     }
                     check(payload.otaString("path").matches(Regex("deltas/${Regex.escape(baseVersion)}/payload/[0-9a-f]{64}\\.$extension"))) {
                         "Invalid split payload path"
                     }
-                    if (encoding == "raw") check(content == value) { "Raw payload descriptor mismatch" }
+                    if (encoding == "raw") check(contentSize == entrySize) { "Raw payload length mismatch" }
                 }
                 else -> error("Unsupported split operation")
             }
-            Entry(name, value, operation, baseHash, payload)
+            Entry(name, entrySize, operation, payload)
         }
-        check(packetSize == targetPacket.size) { "Split packet length mismatch" }
         val oldPacket = File(work, "base.packet")
         check(codec.decode(base, oldPacket, LIMIT) == 0) { "Cannot decode base archive" }
-        check(digestFile(oldPacket, LIMIT).hash == basePacketHash) { "Base packet hash mismatch" }
         val old = index(oldPacket, names)
         val staged = entries.mapIndexed { index, entry ->
             val target = File(work, "entry-$index")
             when (entry.operation) {
                 "copy" -> {
                     val field = old[entry.name] ?: error("Missing copy base")
-                    check(field.size == entry.digest.size) { "Copy length mismatch" }
+                    check(field.size == entry.size) { "Copy length mismatch" }
                     extract(oldPacket, field, target)
-                    verify(target, entry.digest)
-                    if (entry.baseHash != null) check(entry.baseHash == entry.digest.hash) { "Copy base hash mismatch" }
                 }
                 "full", "patch" -> {
                     val payload = entry.payload!!
-                    val content = digest(payload, LIMIT)
                     val encoded = File(work, "payload-$index")
-                    download(payload.otaString("path"), content.hash, content.size, encoded)
-                    verify(encoded, content)
+                    download(payload.otaString("path"), size(payload, LIMIT), encoded)
                     when (payload.otaString("encoding")) {
                         "raw" -> check(encoded.renameTo(target)) { "Cannot stage raw entry" }
-                        "zstd" -> check(codec.decode(encoded, target, entry.digest.size) == 0) { "Cannot decode entry" }
+                        "zstd" -> check(codec.decode(encoded, target, entry.size) == 0) { "Cannot decode entry" }
                         else -> {
                             val field = old[entry.name] ?: error("Missing patch base")
                             val oldEntry = File(work, "old-$index")
                             extract(oldPacket, field, oldEntry)
-                            check(digestFile(oldEntry, LIMIT).hash == entry.baseHash) { "Patch base hash mismatch" }
                             check(isHbc(entry.name, oldEntry)) { "Only HBC entries can be patched" }
                             checkPatchHeader(encoded)
-                            check(codec.patch(oldEntry, encoded, target, entry.digest.size) == 0) { "Cannot apply patch" }
+                            check(codec.patch(oldEntry, encoded, target, entry.size) == 0) { "Cannot apply patch" }
                             check(isHbc(entry.name, target)) { "Patch output is not HBC" }
                             oldEntry.delete()
                         }
                     }
-                    verify(target, entry.digest)
                     encoded.delete()
                 }
             }
+            check(target.isFile && target.length() == entry.size) { "Split entry length mismatch" }
             target
         }
         val packet = File(work, "target.packet")
         FileOutputStream(packet).use { out ->
             uint32(out, MAGIC)
-            uint32(out, targetPacket.size - 8)
+            uint32(out, packetSize - 8)
             entries.zip(staged).forEach { (entry, file) ->
                 val name = entry.name.toByteArray(Charsets.UTF_8)
                 fieldHeader(out, name.size.toLong())
                 out.write(name)
                 padding(out, name.size.toLong())
-                fieldHeader(out, entry.digest.size)
-                file.inputStream().use { transfer(it, out, entry.digest.size) }
-                padding(out, entry.digest.size)
+                fieldHeader(out, entry.size)
+                file.inputStream().use { transfer(it, out, entry.size) }
+                padding(out, entry.size)
             }
             out.fd.sync()
         }
-        verify(packet, targetPacket)
         val compressed = File(work, "target.zst")
         check(codec.encode(packet, compressed, targetSize) == 0) { "Cannot encode target archive" }
         verify(compressed, Digest(targetHash, targetSize))
@@ -247,7 +218,6 @@ internal class OtaSplit(
         private const val METADATA_LIMIT = 1024L * 1024
         private const val MAX_ENTRIES = 4096
         private const val MAGIC = 0x0100c633L
-        private val hashPattern = Regex("[0-9a-f]{64}")
         private val drivePattern = Regex("^[A-Za-z]:")
         private fun validVersion(value: String) = value.matches(Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,63}")) &&
             !value.equals("latest.json", true)
@@ -255,16 +225,10 @@ internal class OtaSplit(
             !drivePattern.containsMatchIn(name) &&
             name.split('/').none { it.isEmpty() || it == "." || it == ".." }
         private fun integer(value: JsonElement): Long = value.otaLong()
-        private fun sha(value: JsonElement): String {
-            val hash = value.otaString()
-            check(hashPattern.matches(hash)) { "Invalid split SHA256" }
-            return hash
-        }
-        private fun digest(json: JsonObject, limit: Long): Digest {
-            val hash = sha(json.getValue("sha256"))
+        private fun size(json: JsonObject, limit: Long): Long {
             val size = integer(json.getValue("size"))
             check(size in 0..limit) { "Invalid split size" }
-            return Digest(hash, size)
+            return size
         }
         private fun digestFile(file: File, limit: Long): Digest {
             check(file.isFile && file.length() <= limit) { "Split output exceeds limit" }

@@ -342,9 +342,10 @@ JS 封装均随原生安装包发布。Release 归档内是 Hermes 字节码，�
 绝不取 pending，也不随运行中持久化 current 的变化而改变。
 
 ECDSA P-256 签名的 schemaVersion=1 完整清单始终保留 full 文件；可选 split delta 按归档条目选择
-copy、full（raw / default-ZSTD）或仅限 HBC 的 HDIFFSF20/zlib patch。客户端核对 base 的精确压缩
-SHA256、条目及 packet 哈希，再按目标顺序重建并用 default ZSTD 压缩；最终压缩 SHA256/大小必须
-与签名 full 描述完全一致。缺失 codec/base、校验或重压缩失败都回退下载原始 full。
+copy、full（raw / default-ZSTD）或仅限 HBC 的 HDIFFSF20/zlib patch。客户端按运行版本选择 base，
+下载分片、按目标顺序合并并用 default ZSTD 压缩，只校验最终 `.valdimodule` 的 SHA256 和大小，
+必须与签名 full 描述完全一致；不再逐层校验 base、分片、条目和 packet 哈希。
+缺失 codec/base、合并或最终校验失败都回退下载原始 full。
 客户端文件读写分块进行；C 编码器会读取最多 64 MiB 的整个输入，不能把整条管线称为流式或以此推断总内存。
 
 签名验证后在独立临时目录准备并逐文件校验，整套准备好才标记 pending，下次冷启动统一选择。

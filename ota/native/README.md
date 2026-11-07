@@ -46,8 +46,9 @@ upstream assertions are disabled for the vendored decoder, including Debug
 builds; malformed input returns an error rather than aborting.
 
 The core does not parse split manifests, archive paths, Valdi packets or Hermes
-envelopes. Clients authenticate all downloaded inputs and verify every entry's
-exact size/hash, packet hash/size, and final compressed archive hash/size.
+envelopes. Clients authenticate the full-file manifest, merge the downloaded
+split inputs, and verify the completed compressed archive's exact size and hash.
+Intermediate base, payload, entry and packet hashes are not checked.
 Successful recompression does not imply byte equality on every platform or
 toolchain. A final hash mismatch is a delta failure: discard the work directory
 and download the original signed full artifact. No active snapshot is patched.

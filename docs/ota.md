@@ -183,41 +183,41 @@ The signed full manifest can add at most eight `deltas` descriptors:
 }
 ```
 
-`baseSha256` identifies the compressed archive, not merely equivalent packet
-contents. The path must be exactly `deltas/<baseVersion>/manifest.json`. Its
-SHA256 and length authenticate the delta manifest through the signed full
-manifest; no separate delta signature is needed.
+The publisher retains the intermediate SHA256 fields for compatibility with
+older clients and package inspection. Current clients choose a delta by the
+running `baseVersion`, download its metadata and payloads, and verify the
+completed archive against the signed full-file descriptor. They do not hash
+the base archive, delta metadata, individual entries, payloads or packets.
 
-The delta manifest uses `schemaVersion: 1`, `algorithm: "hdiffpatch"`,
-`format: "HDIFFSF20"` and `compression: "zlib"`. It binds platform, appVersion,
-baseVersion and target version; compressed `baseSha256`/`targetSha256`;
-decompressed `basePacketSha256`/`targetPacketSha256`; `targetPacketSize`; and
-ordered `entries`. Each entry supplies its name and target SHA256/length:
+The delta manifest describes `schemaVersion: 1`, `algorithm: "hdiffpatch"`,
+`format: "HDIFFSF20"` and `compression: "zlib"`, plus ordered `entries`.
+Entry names, lengths, operations and payload locations drive reconstruction;
+extra metadata keys and informational checksum fields do not determine success:
 
-- `copy`: reuse a same-name base entry only when its hash and length match.
+- `copy`: reuse a same-name base entry.
 - `full`: download target entry bytes as `raw` or `zstd`; the publisher compares
   actual sizes and selects default-ZSTD only when smaller than raw.
-- `patch`: a same-name base entry must match `baseSha256`; download an
-  `hdiffpatch-zlib` payload and apply it with exact output hash/length checks.
+- `patch`: apply an `hdiffpatch-zlib` payload to a same-name base entry.
   Only precompiled `.js` entries with the Valdi/HBC envelope are patch-eligible.
   The publisher uses `hdiffz -SD -s-64 -c-zlib-6 -p-1` and selects a patch only
   when smaller than that entry's selected full payload.
 
-Downloads carry their own path, SHA256, length and encoding. Paths must stay at
+Downloads describe their path, length and encoding. The publisher emits paths at
 `deltas/<baseVersion>/payload/<64 lowercase hex>.(hdiff|bin|zst)`.
 All target entries, including `res.assetcatalog` and `hash`, retain target order;
 deleted old entries are omitted. Entry names must be unique safe relative names.
-Malformed paths, framing, bounds or hashes invalidate the delta attempt.
+Malformed paths, framing or bounds invalidate the delta attempt.
 The publisher emits a delta only if its metadata plus unique payloads is strictly
 smaller than the complete target `app_pages.valdimodule`; noncanonical target
 packets use full-only delivery.
 
 Clients select a base only from this process's active module or the embedded
-module, with matching version and exact compressed SHA256. They decode the base,
-stage target entries in a fresh work directory, reconstruct the canonical
-packet, check its SHA256 and length, and encode with default ZSTD. The final
-compressed bytes must match the original signed full-file descriptor's exact
-SHA256 and length. Equivalent decompressed content is insufficient.
+module, with matching version. They decode it, stage target entries in a fresh
+work directory, reconstruct the canonical packet and encode with default ZSTD.
+The resulting compressed archive is checked once against the original signed
+full-file descriptor's exact SHA256 and length. Wrong input or patch bytes can
+therefore never become pending merely because the merge completed.
+Equivalent decompressed content is insufficient.
 
 Any unavailable codec, missing/corrupt base, metadata/payload error, patch error,
 limit violation or recompression mismatch discards delta work and downloads the
@@ -332,10 +332,13 @@ The host checks once in the background after `StartApp` and route validation.
 Business UI uses `getInfo()` / `checkForUpdate()` to decide when to show a reopen
 notice. There is no polling timer, forced exit, or in-process JS runtime reload.
 
-Downloads stream into private temporary files, with bounded metadata reads,
-exact payload lengths, SHA256 verification, finite timeouts and no redirects.
-An unchanged file is verified before copying; files are not hard-linked between
-versions. Partial downloads never replace current files.
+Downloads stream into private temporary files with byte bounds, finite timeouts
+and no redirects. Intermediate split files are merged without content hashes;
+only the completed module is checked against its signed SHA256 and size.
+Maps, resources and full fallback downloads are independently completed files
+and retain their own final checks. Reused files are copied independently and
+the resulting copy is verified; files are not hard-linked between versions.
+Partial downloads never replace current files.
 
 Kotlin/Swift packet copying, hashing and reconstruction use file chunks of at
 most 64 KiB. The C ZSTD encoder reads the whole input into a bounded allocation

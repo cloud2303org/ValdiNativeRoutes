@@ -269,6 +269,7 @@ private enum Tests {
     static var results: [String] = []
     static var networkEvidence: [[String: Any]] = []
     static var fallbackEvidence: [[String: Any]] = []
+    static var splitEvidence: [[String: Any]] = []
     static func test(_ name: String, http: URL, base: String, modules: [String] = ["app_foundation", "app_pages"], _ body: (Fixture) async throws -> Void) async throws {
         if let filter = ProcessInfo.processInfo.environment["OTA_TEST_FILTER"], !name.contains(filter) { return }
         let fixture = try Fixture(http: http, base: base, modules: modules)
@@ -293,6 +294,19 @@ private enum Tests {
         fallbackEvidence.append(["version": version, "requests": try f.requests()])
         // Each fault must exercise delta/fallback again, rather than exact reuse of the
         // preceding case's identical verified pending artifact.
+        var state = try f.state()
+        state.removeValue(forKey: "pending")
+        try f.saveState(state)
+        try fm.removeItem(at: f.package(version))
+    }
+    static func assertSplitStaged(_ f: Fixture, client: ValdiOtaClient, version: String, target: Data) async throws {
+        try await client.checkForUpdate()
+        try expect(try f.requests().contains { ($0["path"] as! String).contains("/deltas/") }, "split actually attempted: \(version)")
+        try expect(try f.requests().allSatisfy { !(($0["path"] as! String).hasSuffix(".valdimodule")) }, "no full module download: \(version)")
+        try expect(try Data(contentsOf: f.package(version).appendingPathComponent("modules/app_pages.valdimodule")) == target, "exact signed split artifact: \(version)")
+        try expect(try client.getInfo().pendingBundleVersion == version, "durable pending: \(version)")
+        try expect(try fm.contentsOfDirectory(atPath: f.root.appendingPathComponent("ota/staging").path).isEmpty, "split temporaries removed: \(version)")
+        splitEvidence.append(["version": version, "requests": try f.requests()])
         var state = try f.state()
         state.removeValue(forKey: "pending")
         try f.saveState(state)
@@ -641,6 +655,60 @@ private enum Tests {
                 try expect(try client.start() == nil, "full staging does not change bundled provider")
             }
             #endif
+            for mode in ["inaccurate", "absent", "extra-keys", "minimal-metadata", "inaccurate-hints"] {
+                try await test("split accepts \(mode) informational hashes with real patch/full/copy", http: http, base: base, modules: ["app_pages"]) { f in
+                    let old = hbcFixture(471)
+                    var changed = old; changed[24000] ^= 17
+                    let split = try SplitFixture(
+                        oldEntries: [("main.js", old), ("same.bin", Data("same".utf8))],
+                        newEntries: [("main.js", changed), ("same.bin", Data("same".utf8)),
+                                     ("new.txt", Data(repeating: 65, count: 4096)), ("hash", Data("new".utf8))])
+                    try write(split.old, f.bundled.appendingPathComponent("app_pages.valdimodule"))
+                    let client = try f.client(); _ = try client.start()
+                    func informational(_ object: inout [String: Any], hashes: [String]) {
+                        if mode == "extra-keys" {
+                            object["futureField"] = ["ignored": true]
+                        } else {
+                            for hash in hashes {
+                                if mode == "absent" || mode == "minimal-metadata" { object.removeValue(forKey: hash) }
+                                else { object[hash] = "inaccurate informational hash" }
+                            }
+                        }
+                    }
+                    try split.publish(f, mutate: { metadata in
+                        informational(&metadata, hashes: ["baseSha256", "targetSha256", "basePacketSha256", "targetPacketSha256"])
+                        var entries = metadata["entries"] as! [[String: Any]]
+                        for index in entries.indices {
+                            informational(&entries[index], hashes: ["sha256", "baseSha256"])
+                            if var download = entries[index]["download"] as? [String: Any] {
+                                informational(&download, hashes: ["sha256"])
+                                entries[index]["download"] = download
+                            }
+                        }
+                        metadata["entries"] = entries
+                        if mode == "minimal-metadata" { metadata = ["entries": entries] }
+                        if mode == "inaccurate-hints" {
+                            for key in ["schemaVersion", "algorithm", "format", "compression", "platform", "appVersion", "baseVersion", "version", "targetPacketSize"] {
+                                metadata[key] = ["ignored": true]
+                            }
+                        }
+                    }, fullMutate: { manifest in
+                        editDelta(&manifest) { informational(&$0, hashes: ["sha256", "baseSha256"]) }
+                    }, patch: true)
+                    try await client.checkForUpdate()
+                    let requests = try f.requests().map { $0["path"] as! String }
+                    // Save the regression's requests even when RED exits before the suite report.
+                    try write(json(try f.requests()), output.appendingPathComponent("informational-\(mode)-requests.json"))
+                    try expect(!requests.contains { $0.hasSuffix(".valdimodule") }, "\(mode) informational hashes must stage split without full download")
+                    try expect(requests.contains { $0.hasSuffix(".hdiff") } && requests.contains { $0.hasSuffix(".zst") } &&
+                               requests.contains { $0.hasSuffix(".bin") }, "real patch, compressed and raw entry downloads")
+                    try expect(try Data(contentsOf: f.package("split").appendingPathComponent("modules/app_pages.valdimodule")) == split.target,
+                               "exact final compressed bytes with \(mode) informational hashes")
+                    try expect(try client.getInfo().pendingBundleVersion == "split", "split durably staged")
+                    try expect(try client.start() == nil, "staging leaves running provider embedded")
+                    try expect(try f.client().start()?.version == "split", "startup still authenticates and verifies staged package")
+                }
+            }
             try await test("split built-in copy/full, new/deleted entries, exact final archive", http: http, base: base, modules: ["app_pages"]) { f in
                 let split = try SplitFixture()
                 try write(split.old, f.bundled.appendingPathComponent("app_pages.valdimodule"))
@@ -654,6 +722,33 @@ private enum Tests {
                 try expect(try Data(contentsOf: f.package("split").appendingPathComponent("modules/app_pages.valdimodule")) == split.target, "final exact default-ZSTD archive")
                 try expect(try client.start() == nil, "staging never changes process provider")
                 try expect(try f.client().start()?.version == "split", "complete signed package opens on cold start")
+            }
+            try await test("split selects baseVersion with changed unused base bytes; copied corruption uses full fallback", http: http, base: base, modules: ["app_pages"]) { f in
+                let split = try SplitFixture()
+                let client = try f.client(); _ = try client.start()
+                for (entry, version) in [("deleted.js", "unused-base-bytes"), ("same.js", "copied-base-corrupt")] {
+                    let changed = SplitFixture.basicOld.map {
+                        ($0.0, $0.0 == entry ? Data(repeating: 88, count: $0.1.count) : $0.1)
+                    }
+                    try write(zstdFixture(packetFixture(changed)), f.bundled.appendingPathComponent("app_pages.valdimodule"))
+                    try f.resetNetwork(); try split.publish(f, version: version)
+                    if entry == "deleted.js" {
+                        try await assertSplitStaged(f, client: client, version: version, target: split.target)
+                    } else {
+                        try await assertFullFallback(f, client: client, version: version, target: split.target)
+                    }
+                }
+            }
+            try await test("split source symlinks rejected before metadata IO", http: http, base: base, modules: ["app_pages"]) { f in
+                let split = try SplitFixture()
+                let outside = f.root.appendingPathComponent("outside.zst")
+                try write(split.old, outside)
+                try fm.createDirectory(at: f.bundled, withIntermediateDirectories: true)
+                try fm.createSymbolicLink(at: f.bundled.appendingPathComponent("app_pages.valdimodule"), withDestinationURL: outside)
+                let client = try f.client(); _ = try client.start()
+                try split.publish(f, version: "linked-base")
+                try await assertFullFallback(f, client: client, version: "linked-base", target: split.target)
+                try expect(try f.requests().allSatisfy { !(($0["path"] as! String).contains("/deltas/")) }, "symlink base never opened for split")
             }
             try await test("split active HBC patch plus zstd/full/copy, retains current across pending replacement", http: http, base: base, modules: ["app_pages"]) { f in
                 let bytecode = hbcFixture(471)
@@ -685,31 +780,26 @@ private enum Tests {
                 try expect(try f.client().start()?.version == "split-2", "promoted split persists across fresh starts")
                 try expect(try f.state()["current"] as? String == "split-2", "split promotion durable without confirmation")
             }
-            try await test("split malformed signed metadata always falls back to original full module", http: http, base: base, modules: ["app_pages"]) { f in
+            try await test("split malformed reconstruction entries fall back to original full module", http: http, base: base, modules: ["app_pages"]) { f in
                 let split = try SplitFixture()
                 try write(split.old, f.bundled.appendingPathComponent("app_pages.valdimodule"))
                 let client = try f.client(); _ = try client.start()
                 let bad = String(repeating: "f", count: 64)
                 let cases: [(String, (inout [String: Any]) -> Void)] = [
-                    ("schema", { $0["schemaVersion"] = 2 }), ("schema-bool", { $0["schemaVersion"] = true }),
-                    ("algorithm", { $0["algorithm"] = "other" }), ("format", { $0["format"] = "HDIFF13" }),
-                    ("compression", { $0["compression"] = "lzma" }), ("platform", { $0["platform"] = "android" }),
-                    ("app-version", { $0["appVersion"] = "other" }), ("target-version", { $0["version"] = "other" }),
-                    ("base-version", { $0["baseVersion"] = "other" }), ("base-sha", { $0["baseSha256"] = bad }),
-                    ("target-sha", { $0["targetSha256"] = bad }), ("base-packet", { $0["basePacketSha256"] = bad }),
-                    ("target-packet", { $0["targetPacketSha256"] = bad }),
-                    ("packet-size", { $0["targetPacketSize"] = (64 << 20) + 1 }), ("packet-fraction", { $0["targetPacketSize"] = 8.5 }),
-                    ("packet-bool", { $0["targetPacketSize"] = true }), ("packet-length", { $0["targetPacketSize"] = 9 }),
+                    ("entries-missing", { $0.removeValue(forKey: "entries") }),
+                    ("entries-type", { $0["entries"] = "not-array" }),
+                    ("packet-bound", { $0["entries"] = [
+                        ["name": "a", "size": 32 << 20, "operation": "copy"],
+                        ["name": "b", "size": 32 << 20, "operation": "copy"]] }),
                     ("entry-count", { $0["entries"] = Array(repeating: ($0["entries"] as! [[String: Any]])[0], count: 4097) }),
                     ("duplicate", { var e = $0["entries"] as! [[String: Any]]; e[1]["name"] = e[0]["name"]; $0["entries"] = e }),
                     ("entry-size", { editEntry(&$0, 0) { $0["size"] = (64 << 20) + 1 } }),
-                    ("entry-hash", { editEntry(&$0, 0) { $0["sha256"] = bad } }),
-                    ("copy-sha", { editEntry(&$0, 1) { $0["sha256"] = bad } }),
+                    ("entry-size-bool", { editEntry(&$0, 0) { $0["size"] = true } }),
+                    ("entry-size-fraction", { editEntry(&$0, 0) { $0["size"] = 1.5 } }),
                     ("copy-missing", { editEntry(&$0, 1) { $0["name"] = "absent" } }),
                     ("operation", { editEntry(&$0, 0) { $0["operation"] = "unknown" } }),
                     ("encoding", { editEntry(&$0, 0) { var d = $0["download"] as! [String: Any]; d["encoding"] = "gzip"; $0["download"] = d } }),
                     ("payload-path", { editEntry(&$0, 0) { var d = $0["download"] as! [String: Any]; d["path"] = "deltas/other/payload/" + bad + ".bin"; $0["download"] = d } }),
-                    ("payload-sha", { editEntry(&$0, 0) { var d = $0["download"] as! [String: Any]; d["sha256"] = bad; $0["download"] = d } }),
                     ("payload-size", { editEntry(&$0, 0) { var d = $0["download"] as! [String: Any]; d["size"] = 1; $0["download"] = d } }),
                     ("target-order", { $0["entries"] = Array(($0["entries"] as! [[String: Any]]).reversed()) })
                 ]
@@ -725,7 +815,45 @@ private enum Tests {
                     try await assertFullFallback(f, client: client, version: version, target: split.target)
                 }
             }
-            try await test("signed delta descriptor limits and exact shape, base mismatch and unavailable source", http: http, base: base, modules: ["app_pages"]) { f in
+            try await test("split legacy informational mutation cases reconstruct without full download", http: http, base: base, modules: ["app_pages"]) { f in
+                let split = try SplitFixture()
+                try write(split.old, f.bundled.appendingPathComponent("app_pages.valdimodule"))
+                let client = try f.client(); _ = try client.start()
+                let bad = String(repeating: "f", count: 64)
+                // These were negative mutation cases before intermediate checks were intentionally removed.
+                let metadataCases: [(String, (inout [String: Any]) -> Void)] = [
+                    ("schema", { $0["schemaVersion"] = 2 }), ("schema-bool", { $0["schemaVersion"] = true }),
+                    ("algorithm", { $0["algorithm"] = "other" }), ("format", { $0["format"] = "HDIFF13" }),
+                    ("compression", { $0["compression"] = "lzma" }), ("platform", { $0["platform"] = "android" }),
+                    ("app-version", { $0["appVersion"] = "other" }), ("target-version", { $0["version"] = "other" }),
+                    ("base-version", { $0["baseVersion"] = "other" }),
+                    ("packet-size", { $0["targetPacketSize"] = (64 << 20) + 1 }), ("packet-fraction", { $0["targetPacketSize"] = 8.5 }),
+                    ("packet-bool", { $0["targetPacketSize"] = true }), ("packet-length", { $0["targetPacketSize"] = 9 }),
+                    ("base-sha", { $0["baseSha256"] = bad }),
+                    ("target-sha", { $0["targetSha256"] = bad }),
+                    ("base-packet", { $0["basePacketSha256"] = bad }),
+                    ("target-packet", { $0["targetPacketSha256"] = bad }),
+                    ("entry-hash", { editEntry(&$0, 0) { $0["sha256"] = bad } }),
+                    ("copy-sha", { editEntry(&$0, 1) { $0["sha256"] = bad } }),
+                    ("payload-sha", { editEntry(&$0, 0) { var d = $0["download"] as! [String: Any]; d["sha256"] = bad; $0["download"] = d } })
+                ]
+                for (name, mutation) in metadataCases {
+                    let version = "informational-" + name
+                    try f.resetNetwork(); try split.publish(f, version: version, mutate: mutation)
+                    try await assertSplitStaged(f, client: client, version: version, target: split.target)
+                }
+                let descriptorCases: [(String, (inout [String: Any]) -> Void)] = [
+                    ("sha", { editDelta(&$0) { $0["sha256"] = String(repeating: "0", count: 64) } }),
+                    ("extra", { editDelta(&$0) { $0["unsigned"] = "extra" } }),
+                    ("base", { editDelta(&$0) { $0["baseSha256"] = String(repeating: "1", count: 64) } })
+                ]
+                for (name, mutation) in descriptorCases {
+                    let version = "informational-descriptor-" + name
+                    try f.resetNetwork(); try split.publish(f, version: version, fullMutate: mutation)
+                    try await assertSplitStaged(f, client: client, version: version, target: split.target)
+                }
+            }
+            try await test("signed delta descriptor limits, invalid base bytes and unavailable source", http: http, base: base, modules: ["app_pages"]) { f in
                 let split = try SplitFixture()
                 let bundled = f.bundled.appendingPathComponent("app_pages.valdimodule")
                 try write(split.old, bundled)
@@ -736,10 +864,7 @@ private enum Tests {
                     ("duplicate", { $0["deltas"] = Array(repeating: ($0["deltas"] as! [[String: Any]])[0], count: 2) }),
                     ("path", { editDelta(&$0) { $0["path"] = "../manifest.json" } }),
                     ("reserved", { editDelta(&$0) { $0["baseVersion"] = "LATEST.JSON" } }),
-                    ("sha", { editDelta(&$0) { $0["sha256"] = String(repeating: "0", count: 64) } }),
-                    ("size", { editDelta(&$0) { $0["size"] = (1 << 20) + 1 } }),
-                    ("extra", { editDelta(&$0) { $0["unsigned"] = "extra" } }),
-                    ("base", { editDelta(&$0) { $0["baseSha256"] = String(repeating: "1", count: 64) } })
+                    ("size", { editDelta(&$0) { $0["size"] = (1 << 20) + 1 } })
                 ]
                 for (name, mutation) in cases {
                     let version = "descriptor-" + name
@@ -782,11 +907,11 @@ private enum Tests {
                 try write(Data("invalid".utf8), f.http.appendingPathComponent("ios/0.1/unsigned/manifest.sig"))
                 try await rejects { try await client.checkForUpdate() }
                 try expect(try f.requests().count == 3, "unauthenticated delta never fetched")
-                let modes: [(String, [String: Any])] = [("interrupted", ["interrupt": true]), ("oversized", ["length": (1 << 20) + 1]), ("metadata-hash", [:]), ("metadata-length", ["omitLength": true])]
+                let modes: [(String, [String: Any])] = [("interrupted", ["interrupt": true]), ("oversized", ["length": (1 << 20) + 1]), ("malformed-metadata", [:]), ("metadata-length", ["omitLength": true])]
                 for (version, rule) in modes {
                     try f.resetNetwork(); try split.publish(f, version: version)
                     let path = "\(version)/deltas/pages-001/manifest.json"
-                    if version == "metadata-hash" {
+                    if version == "malformed-metadata" {
                         let url = f.http.appendingPathComponent("ios/0.1/" + path)
                         var data = try Data(contentsOf: url); data[0] ^= 1; try data.write(to: url)
                     } else if version == "metadata-length" {
@@ -802,7 +927,7 @@ private enum Tests {
                 try write(Data(repeating: 0, count: entry["size"] as! Int), f.http.appendingPathComponent("ios/0.1/payload-corrupt/" + (entry["path"] as! String)))
                 try await assertFullFallback(f, client: client, version: "payload-corrupt", target: split.target)
             }
-            try await test("split aggregate download budget includes authenticated metadata", http: http, base: base, modules: ["app_pages"]) { f in
+            try await test("split aggregate download budget includes bounded metadata", http: http, base: base, modules: ["app_pages"]) { f in
                 let split = try SplitFixture()
                 try write(split.old, f.bundled.appendingPathComponent("app_pages.valdimodule"))
                 let client = try f.client(); _ = try client.start()
@@ -846,18 +971,28 @@ private enum Tests {
                 let split = try SplitFixture(oldEntries: [("main.js", old)], newEntries: [("main.js", target)])
                 try write(split.old, f.bundled.appendingPathComponent("app_pages.valdimodule"))
                 let client = try f.client(); _ = try client.start()
-                let cases = ["base-sha", "target-sha", "patch-format", "patch-output", "patch-size"]
+                // Informational hash mutations now succeed; actual patch and base byte damage still fails.
+                for name in ["base-sha", "target-sha"] {
+                    let version = "informational-patch-" + name
+                    try f.resetNetwork()
+                    try split.publish(f, version: version, mutate: { metadata in
+                        editEntry(&metadata, 0) { $0[name == "base-sha" ? "baseSha256" : "sha256"] = String(repeating: "0", count: 64) }
+                    }, patch: true)
+                    try await assertSplitStaged(f, client: client, version: version, target: split.target)
+                }
+                let cases = ["wrong-base-bytes", "patch-format", "patch-output", "patch-size"]
                 for name in cases {
                     let version = "patch-" + name
                     try f.resetNetwork()
+                    var baseBytes = old
+                    if name == "wrong-base-bytes" { baseBytes[50000] ^= 32 }
+                    try write(zstdFixture(packetFixture([("main.js", baseBytes)])), f.bundled.appendingPathComponent("app_pages.valdimodule"))
                     var modificationError: Error?
                     try split.publish(f, version: version, mutate: { metadata in
                         if name == "patch-size" { metadata["targetPacketSize"] = (metadata["targetPacketSize"] as! Int) + 4 }
                         editEntry(&metadata, 0) { entry in
-                            if name == "base-sha" { entry["baseSha256"] = String(repeating: "0", count: 64) }
-                            else if name == "target-sha" { entry["sha256"] = String(repeating: "0", count: 64) }
-                            else if name == "patch-size" { entry["size"] = (entry["size"] as! Int) + 1 }
-                            else {
+                            if name == "patch-size" { entry["size"] = (entry["size"] as! Int) + 1 }
+                            else if name != "wrong-base-bytes" {
                                 do {
                                     var download = entry["download"] as! [String: Any]
                                     let oldPath = download["path"] as! String
@@ -934,7 +1069,7 @@ private enum Tests {
                 try f.publish("previous", files: ["modules/app_pages.valdimodule": split.old])
                 try await client.checkForUpdate()
                 let saved = try Data(contentsOf: f.stateURL)
-                try split.publish(f, version: "both-failed", base: "current", mutate: { $0["targetPacketSha256"] = String(repeating: "0", count: 64) })
+                try split.publish(f, version: "both-failed", base: "current", mutate: { $0["entries"] = Array(($0["entries"] as! [[String: Any]]).reversed()) })
                 try f.resetNetwork()
                 try f.rule("both-failed/modules/app_pages.valdimodule", ["interrupt": true])
                 try await rejects { try await client.checkForUpdate() }
@@ -1296,6 +1431,7 @@ private enum Tests {
             try write(Data(report.utf8), output.appendingPathComponent("test-report.txt"))
             try write(json(networkEvidence), output.appendingPathComponent("loopback-requests.json"))
             try write(json(fallbackEvidence), output.appendingPathComponent("split-fallback-requests.json"))
+            try write(json(splitEvidence), output.appendingPathComponent("split-success-requests.json"))
             print("\(passed) tests passed")
         } catch {
             print("FAIL: \(error)")

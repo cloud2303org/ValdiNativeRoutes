@@ -808,6 +808,22 @@ class ValdiOtaClientTest {
         }
     }
 
+    @Test fun mapsAndResourcesRequireTheirOwnSignedSizeAndChecksumBeforeStaging() {
+        for (path in listOf("modules/app.map.json", "res/drawable/app_icon.png")) {
+            for (fault in listOf("sha", "size")) Fixture().use { f ->
+                val client = f.client(); client.start()
+                f.publish("bad", module("verified module") + mapOf(path to "good".toByteArray()))
+                f.body("bad/$path", if (fault == "sha") "evil".toByteArray() else "short".toByteArray())
+                expectFailure("$path $fault") { client.checkForUpdate() }
+                assertEquals(1, f.count("bad/modules/app.valdimodule"))
+                assertEquals(1, f.count("bad/$path"))
+                assertNull(client.getInfo().pendingBundleVersion)
+                assertFalse(f.pkg("bad").exists())
+                f.noPartials()
+            }
+        }
+    }
+
     @Test fun metadataIsBoundedAndAllRequestsBypassCachesAndRedirects() = Fixture().use { f ->
         val client = f.client(); client.start()
         f.offer(null)

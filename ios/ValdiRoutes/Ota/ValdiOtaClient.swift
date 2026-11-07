@@ -236,10 +236,11 @@ final class ValdiOtaClient: @unchecked Sendable {
             }
             var reused = false
             for (source, directory) in sources {
-                guard (try? verifyFile(source, descriptor, inside: directory)) != nil else { continue }
                 do {
+                    try checkRegular(source, inside: directory)
+                    guard try source.resourceValues(forKeys: [.fileSizeKey]).fileSize == descriptor.size else { continue }
                     try fm.copyItem(at: source, to: target)
-                    // Validate the independent copy too, including any source race during copying.
+                    // Authenticate the destination once, including any source race during copying.
                     try verifyFile(target, descriptor, inside: work)
                     reused = true
                     break
@@ -250,7 +251,7 @@ final class ValdiOtaClient: @unchecked Sendable {
                 // so the original authenticated full artifact remains the authoritative fallback.
                 do {
                     reused = try await ValdiOtaSplit.apply(
-                        manifest: manifest, remote: remote, appVersion: configuration.appVersion, version: version,
+                        manifest: manifest, remote: remote,
                         baseVersion: deltaBase.version, baseFile: source, baseDirectory: deltaBase.directory,
                         target: target, descriptor: descriptor, work: work, codec: codec, timeout: timeout)
                 } catch {
@@ -267,8 +268,8 @@ final class ValdiOtaClient: @unchecked Sendable {
         }
         try manifest.write(to: work.appendingPathComponent("manifest.json"))
         try signature.write(to: work.appendingPathComponent("manifest.sig"))
-        // Re-read and verify the complete directory before committing it.
-        _ = try openDirectory(work, version: version)
+        // The manifest and each final destination were authenticated above in this private work directory.
+        // Cached packages still go through openDirectory's complete validation on every cold start.
         try locked {
             var state = try readState()
             guard state.binary == binaryIdentity else { throw ValdiOtaError("Native installation changed during OTA check") }

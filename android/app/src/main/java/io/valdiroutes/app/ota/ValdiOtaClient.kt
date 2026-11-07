@@ -251,9 +251,9 @@ internal class ValdiOtaClient(
         val split = File(work, ".split-${UUID.randomUUID()}")
         return try {
             check(split.mkdir()) { "Cannot create split work directory" }
-            OtaSplit(codec) { path, hash, size, output ->
-                request("$base/$version/$path", size) { copyVerified(it, output, Descriptor(hash, size)) }
-            }.rebuild(json, config.appVersion, running, version, descriptor.sha256, descriptor.size, split, target) {
+            OtaSplit(codec) { path, size, output ->
+                request("$base/$version/$path", size) { copySplit(it, output, size) }
+            }.rebuild(json, running, descriptor.sha256, descriptor.size, split, target) {
                 val snapshot = synchronized(lock) { active }
                 if (snapshot != null) snapshot.module("app_pages.valdimodule")?.inputStream()
                 else bundled("app_pages.valdimodule")
@@ -349,6 +349,24 @@ internal class ValdiOtaClient(
             check(partial.renameTo(target)) { "Cannot complete package file" }
         } finally {
             partial.delete()
+        }
+    }
+
+    /** Intermediate split files need bounded IO; the completed archive is authenticated once. */
+    private fun copySplit(input: InputStream, target: File, size: Long) {
+        FileOutputStream(target).use { output ->
+            val buffer = ByteArray(64 * 1024)
+            var count = 0L
+            while (true) {
+                val read = input.read(buffer, 0, minOf(buffer.size.toLong(), size - count + 1).toInt())
+                if (read < 0) break
+                check(read > 0) { "Empty split stream read" }
+                count += read
+                check(count <= size) { "Split download exceeds declared size" }
+                output.write(buffer, 0, read)
+            }
+            check(count == size) { "Split download shorter than declared size" }
+            output.fd.sync()
         }
     }
 

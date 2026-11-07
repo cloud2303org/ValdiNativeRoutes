@@ -159,7 +159,78 @@ class ValdiOtaSplitTest {
         f.noWork()
     }
 
-    @Test fun malformedSplitMetadataAlwaysDownloadsTheSignedFullArtifact() {
+    @Test fun inaccurateOrAbsentIntermediateChecksumsStillStageTheExactRealCodecResult() {
+        for (mode in listOf("inaccurate", "absent")) Fixture().use { f ->
+            fun informational(json: JsonObject, keys: Set<String>): JsonObject =
+                if (mode == "absent") JsonObject(json - keys) else json.withFields {
+                    keys.forEach { put(it, "not-a-checksum") }
+                    put("futureMetadata", buildJsonObject { put("ignored", true) })
+                }
+            val delta = informational(f.delta(), setOf(
+                "baseSha256", "targetSha256", "basePacketSha256", "targetPacketSha256",
+            )).editArrayEntries { entry ->
+                informational(entry, setOf("sha256", "baseSha256")).let {
+                    if ("download" in it) it.editObject("download") { payload ->
+                        informational(payload, setOf("sha256"))
+                    } else it
+                }
+            }
+            val patchPath = delta.getValue("entries").jsonArray[5].jsonObject
+                .getValue("download").jsonObject.otaString("path")
+            val client = f.client(); client.start()
+            f.publish("target", f.target, delta) { manifest ->
+                manifest.editEntry("deltas", 0) { descriptor ->
+                    informational(descriptor, setOf("sha256", "baseSha256"))
+                }
+            }
+            assertTrue(mode, client.checkForUpdate())
+            assertEquals("$mode: ${f.logs}", 0, f.count("target/$MODULE"))
+            assertEquals("Real HDiff payload must be consumed", 1, f.count("target/$patchPath"))
+            assertArrayEquals(mode, f.target, f.output().readBytes())
+            assertEquals("target", client.getInfo().pendingBundleVersion)
+            assertEquals("pages-001", client.getInfo().bundleVersion)
+            f.noWork()
+        }
+    }
+
+    @Test fun splitMetadataNeedsOnlyFieldsUsedForReconstruction() = Fixture().use { f ->
+        val delta = buildJsonObject { put("entries", f.delta().getValue("entries")) }
+        val client = f.client(); client.start()
+        f.publish("target", f.target, f.delta()) { manifest ->
+            f.bodies["target/deltas/pages-001/manifest.json"] = delta.toString().toByteArray()
+            manifest.editEntry("deltas", 0) { it.withFields { put("size", delta.toString().toByteArray().size) } }
+        }
+        assertTrue(client.checkForUpdate())
+        assertEquals(f.logs.toString(), 0, f.count("target/$MODULE"))
+        assertArrayEquals(f.target, f.output().readBytes())
+        f.noWork()
+    }
+
+    @Test fun signedFullDescriptorAndSignatureRemainRequiredForSplitStaging() {
+        for (fault in listOf("signature", "final-sha", "final-size")) Fixture().use { f ->
+            val client = f.client(); client.start()
+            f.publish("target", f.target, f.delta()) { manifest ->
+                if (fault == "signature") manifest else manifest.editObject("files") { files ->
+                    files.editObject(MODULE) { descriptor ->
+                        descriptor.withFields {
+                            if (fault == "final-sha") put("sha256", "0".repeat(64))
+                            else put("size", f.target.size + 1)
+                        }
+                    }
+                }
+            }
+            if (fault == "signature") f.bodies["target/manifest.sig"] = "AAAA".toByteArray()
+            expectFailure { client.checkForUpdate() }
+            assertFalse(fault, f.output().exists())
+            assertNull(client.getInfo().pendingBundleVersion)
+            assertEquals(fault, if (fault == "signature") 0 else 1, f.count("target/deltas/pages-001/manifest.json"))
+            assertEquals(fault, if (fault == "signature") 0 else 1, f.count("target/$MODULE"))
+            if (fault != "signature") assertTrue(f.logs.toString(), f.logs.any { it.contains("hash/size mismatch") })
+            f.noWork()
+        }
+    }
+
+    @Test fun informationalSplitMetadataDoesNotForceFullDownload() {
         val edits = listOf<Pair<String, (JsonObject) -> JsonObject>>(
             "schema" to { it.withFields { put("schemaVersion", 2) } },
             "algorithm" to { it.withFields { put("algorithm", "other") } },
@@ -176,7 +247,34 @@ class ValdiOtaSplitTest {
             "packet size type" to { it.withFields { put("targetPacketSize", "100") } },
             "packet size short" to { it.withFields { put("targetPacketSize", 8) } },
             "entry hash" to { it.editEntry("entries", 0) { entry -> entry.withFields { put("sha256", "0".repeat(64)) } } },
+            "patch base hash" to { it.editEntry("entries", 5) { entry -> entry.withFields { put("baseSha256", "0".repeat(64)) } } },
+            "missing patch base hash" to { it.editEntry("entries", 5) { entry -> JsonObject(entry - "baseSha256") } },
+            "patch target hash" to { it.editEntry("entries", 5) { entry -> entry.withFields { put("sha256", "0".repeat(64)) } } },
+            "payload hash" to { it.editEntry("entries", 0) { entry ->
+                entry.editObject("download") { payload -> payload.withFields { put("sha256", "0".repeat(64)) } }
+            } },
+            "extra keys" to { json -> json.withFields {
+                put("future", buildJsonObject { put("any", JsonArray(listOf(JsonNull, JsonPrimitive(42)))) })
+            } },
+        )
+        for ((label, edit) in edits) Fixture().use { f ->
+            val client = f.client(); client.start()
+            f.publish("target", f.target, edit(f.delta()))
+            assertTrue(label, client.checkForUpdate())
+            assertEquals("$label: ${f.logs}", 0, f.count("target/$MODULE"))
+            assertArrayEquals(label, f.target, f.output().readBytes())
+            f.noWork()
+        }
+    }
+
+    @Test fun malformedSplitMetadataAlwaysDownloadsTheSignedFullArtifact() {
+        val edits = listOf<Pair<String, (JsonObject) -> JsonObject>>(
             "entry size" to { it.editEntry("entries", 0) { entry -> entry.withFields { put("size", -1) } } },
+            "entry size limit" to { it.editEntry("entries", 0) { entry -> entry.withFields { put("size", (64L shl 20) + 1) } } },
+            "computed packet limit" to { it.editEntry("entries", 0) { entry -> entry.withFields { put("size", 64L shl 20) } } },
+            "payload budget" to { it.editEntry("entries", 0) { entry ->
+                entry.editObject("download") { payload -> payload.withFields { put("size", 64L shl 20) } }
+            } },
             "operation" to { it.editEntry("entries", 0) { entry -> entry.withFields { put("operation", "unknown") } } },
             "duplicate" to { json -> json.withFields {
                 val entries = json.getValue("entries").jsonArray
@@ -207,9 +305,6 @@ class ValdiOtaSplitTest {
         val edits = listOf<(JsonObject) -> JsonObject>(
             { it.withFields { put("path", "deltas/pages-001/other.json") } },
             { it.withFields { put("baseVersion", "latest.json") } },
-            { it.withFields { put("baseSha256", "A".repeat(64)) } },
-            { it.withFields { put("baseSha256", "0".repeat(64)) } },
-            { it.withFields { put("sha256", "0".repeat(64)) } },
             { it.withFields { put("size", 1024 * 1024 + 1) } },
             { it.withFields { put("size", 1) } },
             { it.withFields { put("size", "1") } },
@@ -236,9 +331,33 @@ class ValdiOtaSplitTest {
         }
     }
 
+    @Test fun signedDeltaSelectionUsesRunningVersionAndIgnoresInformationalHashes() {
+        val edits = listOf<(JsonObject) -> JsonObject>(
+            { it.withFields { put("baseSha256", "A".repeat(64)) } },
+            { it.withFields { put("baseSha256", "0".repeat(64)) } },
+            { it.withFields { put("sha256", "0".repeat(64)) } },
+            { JsonObject(it - setOf("sha256", "baseSha256")) },
+        )
+        for ((index, edit) in edits.withIndex()) Fixture().use { f ->
+            val client = f.client(); client.start()
+            f.publish("target", f.target, f.delta()) { json -> json.editEntry("deltas", 0, edit) }
+            assertTrue("descriptor $index", client.checkForUpdate())
+            assertEquals(f.logs.toString(), 0, f.count("target/$MODULE"))
+            assertArrayEquals(f.target, f.output().readBytes())
+            f.noWork()
+        }
+        Fixture().use { f ->
+            val client = f.client(); client.start()
+            f.publish("target", f.target, f.delta("other"))
+            assertTrue(client.checkForUpdate())
+            assertEquals(0, f.count("target/deltas/other/manifest.json"))
+            assertEquals(1, f.count("target/$MODULE"))
+            f.noWork()
+        }
+    }
+
     @Test fun corruptOversizedAndForeignPayloadsNeverEscapeFullFallback() {
         val edits = listOf<Pair<String, (JsonObject) -> JsonObject>>(
-            "sha" to { it.withFields { put("sha256", "0".repeat(64)) } },
             "size" to { it.withFields { put("size", 64L * 1024 * 1024 + 1) } },
             "length" to { json -> json.withFields { put("size", json.getValue("size").jsonPrimitive.long + 1) } },
             "encoding" to { it.withFields { put("encoding", "gzip") } },
@@ -301,7 +420,7 @@ class ValdiOtaSplitTest {
         f.noWork()
     }
 
-    @Test fun authenticatedButMalformedBasePacketsAreRejectedBeforeRebuilding() {
+    @Test fun malformedBasePacketsAreRejectedBeforeRebuilding() {
         val examples = Json.parseToJsonElement(File(System.getenv("OTA_SPLIT_FIXTURES"), "bad-bases.json").readText()).jsonArray
         for (value in examples) Fixture().use { f ->
             val example = value.jsonObject
@@ -400,11 +519,8 @@ class ValdiOtaSplitTest {
             f.noWork()
         }
         val edits = listOf<Pair<String, (JsonObject) -> JsonObject>>(
-            "base hash" to { it.withFields { put("baseSha256", "0".repeat(64)) } },
-            "missing base hash" to { JsonObject(it - "baseSha256") },
             "non HBC" to { it.withFields { put("name", "entry.js") } },
             "non js" to { it.withFields { put("name", "keep") } },
-            "target hash" to { it.withFields { put("sha256", "0".repeat(64)) } },
             "target size" to { json -> json.withFields { put("size", json.getValue("size").jsonPrimitive.long + 4) } },
             "encoding" to { it.editObject("download") { download -> download.withFields { put("encoding", "raw") } } },
         )
@@ -444,6 +560,7 @@ class ValdiOtaSplitTest {
             assertTrue(fault, client.checkForUpdate())
             assertEquals(fault, 1, f.count("target/$MODULE"))
             assertArrayEquals(f.target, f.output().readBytes())
+            if (fault == "wrong-output") assertTrue(f.logs.toString(), f.logs.any { it.contains("hash/size mismatch") })
             f.noWork()
         }
     }
@@ -493,6 +610,9 @@ class ValdiOtaSplitTest {
         private fun descriptor(bytes: ByteArray) = buildJsonObject {
             put("sha256", hash(bytes))
             put("size", bytes.size)
+        }
+        private fun JsonObject.editArrayEntries(edit: (JsonObject) -> JsonObject) = withFields {
+            put("entries", JsonArray(getValue("entries").jsonArray.map { edit(it.jsonObject) }))
         }
         private fun expectFailure(block: () -> Unit) {
             try { block() } catch (_: Exception) { return }

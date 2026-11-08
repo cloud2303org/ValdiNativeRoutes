@@ -2,15 +2,21 @@ module(name = "node_valdi_modules", version = "0.1")
 
 bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "rules_apple", version = "4.0.0")
-bazel_dep(name = "apple_support", version = "1.22.1")
+bazel_dep(name = "apple_support", version = "1.24.1")
 bazel_dep(name = "rules_swift", version = "3.1.2", repo_name = "build_bazel_rules_swift")
 single_version_override(module_name = "rules_apple", version = "4.0.0")
+single_version_override(
+    module_name = "rules_rust",
+    version = "0.75.0",
+    patches = ["//bzl/patches/rules_rust/0.75.0:producer_lockfile_patches.patch"],
+    patch_strip = 1,
+)
 
 # -- Maintained Valdi fork (upstream main: 9b7a20d5) -----------------------
 # Framework customizations and Hermes build inputs live in the pinned Valdi fork source.
 # Pin immutable commits; scripts/upstream.mjs updates this and the matching registry together.
 VALDI_REPOSITORY = "cloud2303org/Valdi"
-VALDI_COMMIT = "87a139eac63f27373c1cffe349fd1e548d053097"
+VALDI_COMMIT = "662bb860f78bbafd4a56a4fefa1050c0ebf255c2"
 VALDI_URL = "https://github.com/" + VALDI_REPOSITORY + "/archive/" + VALDI_COMMIT + ".tar.gz"
 VALDI_PREFIX = "Valdi-" + VALDI_COMMIT
 

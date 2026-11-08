@@ -25,10 +25,15 @@ Run these scripts from the repository root. Their optional third argument
 selects the Bazel library; omitting it preserves the normal export. They also
 write the usual runtime export receipt and package Swift support libraries.
 
-The pinned fork configures Bazel-managed Rust 1.87.0 and mobile target
+The pinned fork configures Bazel-managed Rust 1.99.1, rules_rust 0.75.0, and mobile target
 libraries. Source exports download and cache that toolchain as needed; no
 separate global Rust installation is required. An application consuming
 precompiled runtime artifacts does not compile Rust.
+Both Bazel workspaces include the same small rules_rust patch under
+`bzl/patches/rules_rust/0.75.0/`. It resolves producer-root patch labels in the
+fork's committed crate locks against the fork, so the PNG build-script patch
+also works in a new template project. Keep these root-local patch copies and
+their `single_version_override` entries together when updating build rules.
 
 For local fork development, add `--override_module=valdi=$VALDI_WEB_FORK`.
 Local overrides bypass the archive patches in `valdi/MODULE.bazel`, so use an

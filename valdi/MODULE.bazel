@@ -8,7 +8,7 @@ bazel_dep(name = "platforms", version = "1.1.0")
 # Framework customizations and Hermes build inputs live in the pinned Valdi fork source.
 # Pin immutable commits; scripts/upstream.mjs updates this and the matching registry together.
 VALDI_REPOSITORY = "cloud2303org/Valdi"
-VALDI_COMMIT = "87a139eac63f27373c1cffe349fd1e548d053097"
+VALDI_COMMIT = "662bb860f78bbafd4a56a4fefa1050c0ebf255c2"
 VALDI_URL = "https://github.com/" + VALDI_REPOSITORY + "/archive/" + VALDI_COMMIT + ".tar.gz"
 VALDI_PREFIX = "Valdi-" + VALDI_COMMIT
 
@@ -204,16 +204,17 @@ python.single_version_platform_override(
 # -- Rust toolchain ------------------------------------------------------------
 # rules_rust only honors rust.toolchain() from the root module, so Valdi's own
 # toolchain config does not reach bootstrapped apps. Mirror it here.
-# -Cstrip=none for exec-config (host tool / proc-macro) builds: rustc's
-# debuginfo strip leaves a misaligned LINKEDIT string table that macOS 27 dyld
-# rejects when the dylib was linked against SDK 27 (rust-lang/rust#157750,
-# fixed in Rust 1.98.0).
-bazel_dep(name = "rules_rust", version = "0.64.0")
+bazel_dep(name = "rules_rust", version = "0.75.0")
+single_version_override(
+    module_name = "rules_rust",
+    version = "0.75.0",
+    patches = ["//bzl/patches/rules_rust/0.75.0:producer_lockfile_patches.patch"],
+    patch_strip = 1,
+)
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
 rust.toolchain(
     edition = "2024",
-    extra_exec_rustc_flags = ["-Cstrip=none"],
     extra_target_triples = [
         "aarch64-apple-ios",
         "aarch64-apple-ios-sim",
@@ -222,7 +223,7 @@ rust.toolchain(
         "x86_64-apple-ios",
         "x86_64-linux-android",
     ],
-    versions = ["1.87.0"],
+    versions = ["1.99.1"],
 )
 use_repo(rust, "rust_toolchains")
 

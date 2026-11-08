@@ -83,7 +83,7 @@ diff --git a/src/valdi_modules/src/valdi/client_sql/src/ClientSQLNative.d.ts b/s
 diff --git a/src/valdi_modules/src/valdi/client_sql/native/ClientSQLNativeModuleFactory.cpp b/src/valdi_modules/src/valdi/client_sql/native/ClientSQLNativeModuleFactory.cpp
 --- a/src/valdi_modules/src/valdi/client_sql/native/ClientSQLNativeModuleFactory.cpp
 +++ b/src/valdi_modules/src/valdi/client_sql/native/ClientSQLNativeModuleFactory.cpp
-@@ -379,6 +379,20 @@
+@@ -368,6 +368,20 @@
      }
  }
  
@@ -104,7 +104,7 @@ diff --git a/src/valdi_modules/src/valdi/client_sql/native/ClientSQLNativeModule
  Result<Value> sqliteRowToValue(sqlite3_stmt* statement) {
      auto row = makeShared<ValueMap>();
      const auto columnCount = sqlite3_column_count(statement);
-@@ -539,6 +553,13 @@
+@@ -527,6 +541,13 @@
  Result<Void> openReaderDatabases(const std::vector<Ref<ClientSQLQueueConnection>>& readerConnections,
                                   const ClientSQLOpenRequest& request);
  
@@ -118,12 +118,10 @@ diff --git a/src/valdi_modules/src/valdi/client_sql/native/ClientSQLNativeModule
  Result<Void> executeStatement(sqlite3* database, const ClientSQLRequest& request) {
      auto statement = prepareStatement(database, request.sql);
      if (!statement) {
-@@ -602,6 +623,64 @@
-         }
-         rows.emplace_back(row.moveValue());
+@@ -591,6 +612,64 @@
      }
-+}
-+
+ }
+ 
 +Result<ClientSQLPositionalRows> queryRowsStatement(sqlite3* database, const ClientSQLRequest& request) {
 +    auto statement = prepareStatement(database, request.sql);
 +    if (!statement) {
@@ -180,13 +178,17 @@ diff --git a/src/valdi_modules/src/valdi/client_sql/native/ClientSQLNativeModule
 +    return makeShared<ClientSQLRunResult>(
 +        static_cast<double>(changes),
 +        StringCache::getGlobal().makeString(std::to_string(lastInsertRowid)));
- }
++}
++
+ using ClientSQLValueCallback = snap::valdi_modules::client_sql::ClientSQLNativeConnectionProxy::ExecuteCallbackFn;
+ using ClientSQLArrayCallback = snap::valdi_modules::client_sql::ClientSQLNativeConnectionProxy::QueryCallbackFn;
  
- using ClientSQLValueCallback =
-@@ -639,6 +718,26 @@
+@@ -618,6 +697,26 @@
+ 
+ void notifyClientSQLCallbackError(const ClientSQLArrayCallback& callback, Error error) {
      callback(std::nullopt, error.getMessage());
- }
- 
++}
++
 +void notifyClientSQLCallbackSuccess(
 +    const ClientSQLRowsCallback& callback,
 +    ClientSQLPositionalRows rows) {
@@ -205,16 +207,13 @@ diff --git a/src/valdi_modules/src/valdi/client_sql/native/ClientSQLNativeModule
 +
 +void notifyClientSQLCallbackError(const ClientSQLRunCallback& callback, Error error) {
 +    callback(nullptr, error.getMessage());
-+}
-+
+ }
+ 
  Value makeClientSQLParameters(std::optional<std::vector<Value>> parameters) {
-     if (!parameters.has_value()) {
-         return Value::undefined();
-@@ -662,6 +761,14 @@
-     void queryOnWriter(
-         const Ref<ClientSQLConnection>& connection,
-         ClientSQLArrayCallback callback,
-+        ClientSQLRequest request);
+@@ -643,6 +742,14 @@
+     void queryOnWriter(const Ref<ClientSQLConnection>& connection,
+                        ClientSQLArrayCallback callback,
+                        ClientSQLRequest request);
 +    void queryRows(
 +        const Ref<ClientSQLConnection>& connection,
 +        ClientSQLRowsCallback callback,
@@ -222,10 +221,11 @@ diff --git a/src/valdi_modules/src/valdi/client_sql/native/ClientSQLNativeModule
 +    void run(
 +        const Ref<ClientSQLConnection>& connection,
 +        ClientSQLRunCallback callback,
-         ClientSQLRequest request);
-     void transaction(
-         const Ref<ClientSQLConnection>& connection,
-@@ -676,6 +783,14 @@
++        ClientSQLRequest request);
+     void transaction(const Ref<ClientSQLConnection>& connection,
+                      snap::valdi_modules::client_sql::ClientSQLNativeConnectionProxy::TransactionBodyFn body,
+                      ClientSQLValueCallback callback);
+@@ -655,6 +762,14 @@
                              uint64_t transactionId,
                              ClientSQLArrayCallback callback,
                              ClientSQLRequest request);
@@ -237,11 +237,11 @@ diff --git a/src/valdi_modules/src/valdi/client_sql/native/ClientSQLNativeModule
 +                          uint64_t transactionId,
 +                          ClientSQLRunCallback callback,
 +                          ClientSQLRequest request);
-     void finishTransaction(
-         uint64_t transactionId,
-         ClientSQLValueCallback callback,
-@@ -840,6 +955,62 @@
-                 .parameters = makeClientSQLParameters(std::move(parameters))});
+     void finishTransaction(uint64_t transactionId,
+                            ClientSQLValueCallback callback,
+                            Value value,
+@@ -801,6 +916,62 @@
+             ClientSQLRequest{.sql = std::move(sql), .parameters = makeClientSQLParameters(std::move(parameters))});
      }
  
 +    void queryRows(
@@ -303,16 +303,10 @@ diff --git a/src/valdi_modules/src/valdi/client_sql/native/ClientSQLNativeModule
      void transaction(TransactionBodyFn body, TransactionCallbackFn callback) final {
          if (isClosed()) {
              notifyClientSQLCallbackError(callback, Error("ClientSQLNative connection is closed"));
-@@ -948,6 +1119,32 @@
-         std::optional<std::vector<Value>> parameters,
-         QueryCallbackFn callback) final {
-         _coordinator->queryInTransaction(
-+            _connection,
-+            _transactionId,
-+            std::move(callback),
-+            ClientSQLRequest{
-+                .sql = std::move(sql),
-+                .parameters = makeClientSQLParameters(std::move(parameters))});
+@@ -901,6 +1072,32 @@
+             _transactionId,
+             std::move(callback),
+             ClientSQLRequest{.sql = std::move(sql), .parameters = makeClientSQLParameters(std::move(parameters))});
 +    }
 +
 +    void queryRows(
@@ -333,19 +327,19 @@ diff --git a/src/valdi_modules/src/valdi/client_sql/native/ClientSQLNativeModule
 +        std::optional<std::vector<Value>> parameters,
 +        RunCallbackFn callback) final {
 +        _coordinator->runInTransaction(
-             _connection,
-             _transactionId,
-             std::move(callback),
-@@ -1205,6 +1402,68 @@
-             }
++            _connection,
++            _transactionId,
++            std::move(callback),
++            ClientSQLRequest{
++                .sql = std::move(sql),
++                .parameters = makeClientSQLParameters(std::move(parameters))});
+     }
  
-             auto result = queryStatement(database.value(), request);
-+            if (!result) {
-+                notifyClientSQLCallbackError(callback, result.moveError());
-+                return;
-+            }
-+            notifyClientSQLCallbackSuccess(callback, result.moveValue());
-+        }, false);
+ private:
+@@ -1157,6 +1354,68 @@
+             notifyClientSQLCallbackSuccess(callback, result.moveValue());
+         },
+         false);
 +}
 +
 +void ClientSQLDatabaseCoordinator::queryRows(const Ref<ClientSQLConnection>& connection,
@@ -402,10 +396,16 @@ diff --git a/src/valdi_modules/src/valdi/client_sql/native/ClientSQLNativeModule
 +            }
 +
 +            auto result = runStatement(database.value(), request);
-             if (!result) {
-                 notifyClientSQLCallbackError(callback, result.moveError());
-                 return;
-@@ -1427,6 +1686,90 @@
++            if (!result) {
++                notifyClientSQLCallbackError(callback, result.moveError());
++                return;
++            }
++            notifyClientSQLCallbackSuccess(callback, result.moveValue());
++        }, false);
+ }
+ 
+ void ClientSQLDatabaseCoordinator::transaction(
+@@ -1364,6 +1623,90 @@
          true);
  }
  
@@ -500,14 +500,14 @@ diff --git a/src/valdi_modules/src/valdi/client_sql/native/ClientSQLNativeModule
 --- a/src/valdi_modules/src/valdi/client_sql/native/ClientSQLNativeModuleFactory_tests.cpp
 +++ b/src/valdi_modules/src/valdi/client_sql/native/ClientSQLNativeModuleFactory_tests.cpp
 @@ -25,6 +25,7 @@
- #include <stdexcept>
+ #include <stdlib.h>
  #include <string>
  #include <thread>
 +#include <utility>
  #include <vector>
  
  using namespace Valdi;
-@@ -266,6 +267,349 @@
+@@ -262,6 +263,349 @@
  
  void executeClientSQL(const Value& connection, StringBox sql, Value parameters) {
      callClientSQLAsync(connection, "execute", sql, std::move(parameters));

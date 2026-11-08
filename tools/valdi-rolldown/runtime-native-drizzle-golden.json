@@ -2,7 +2,7 @@
   "description": "Reviewed Node-generated additive Drizzle native ABI, over the historical runtime baseline.",
   "frameworkCommit": "f5b41aed4780dab6899d74ca755acb411879a315",
   "sourceSha256": "6ad2c3a06658d049be26ff2e6de95a9618f51415c376f103bc111d1986c13d3a",
-  "patchSha256": "624a79caddf7baeacba2ea77eef5d90bb20729e7c69620bf27ce7a2c176eecff",
+  "patchSha256": "67670458615ba6623ce2b16e971308e3743dc3dc9259ec0794cec02aa658c4d0",
   "files": {
     "client_sql/android/release/src/client_sql.kt": "d24eb54e48a970ccb8e61b6caeb586660c8052b4781eac3730f2a49b368d2967",
     "client_sql/cpp/release/src/valdi_modules/client_sql/client_sql.cpp": "10fa74bd7e8c87f4cb23c1b10bbf32f12ff9286b82cd44d137a77aea1a2cf9dd",

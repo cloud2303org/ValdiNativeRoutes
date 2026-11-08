@@ -8,10 +8,13 @@
 不恢复旧 SQL 生成器或业务迁移。SQLite 版本随固定框架依赖。应用自己的 rules_python
 依赖规则补丁和 npm CLI patch 仍在应用仓库，继续计入相应构建输入。
 
-当前上游基线为 `Snapchat/Valdi/main` 的 `9b7a20d5bc690492d9fc15e0977a3fa9d1834f5e`
-（2026-11-04）；对应 fork 合并提交为 `f5b41aed4780dab6899d74ca755acb411879a315`。
-本次完整合入上一基线 `4aa98f01a46e65ead03a8fc8cc1c21e04f2a465d` 之后的 21 项提交，
-包括官方 Web renderer、浏览器开发工具和 Web 测试更新。
+当前上游基线为 `Snapchat/Valdi/main` 的 `b527b091ea98b4952b1a525388d0c0b66ca04940`
+（2026-11-08）；应用使用的 fork 提交以两个 workspace 的 `VALDI_COMMIT` 为准。
+本次通过 `git pull --no-rebase` 完整合入上一基线 `9b7a20d5` 之后的 32 项提交，
+包括实验性 SDL3 Linux 宿主和计算器、Protobuf 单字段读取与解码配置、
+Android 手势和日期格式更新、iOS worker 枚举、Promise 回调归因，以及 ClientSQL
+关闭最后一个连接后重新打开时的 schema 缓存修复。
+此前合入的官方 Web renderer、浏览器开发工具和 Web 测试继续保留。
 框架继续使用 Hermes `260318099.0.4`，保留原生 Promise/字节码边界、OTA 资源钩子和 Windows 工具链修复。
 旧 Swift Valdi 编译器、回退实现及 C++ toolbox 继续删除；模块编译和导出头文件使用应用的 Node 后端。
 TGFX 实验单独保存在 fork 的 `experiment/tgfx-prototype-20261104` 分支，未合入维护分支。
@@ -23,14 +26,18 @@ TGFX 实验单独保存在 fork 的 `experiment/tgfx-prototype-20261104` 分支�
 
 ```sh
 git remote add upstream https://github.com/Snapchat/Valdi.git  # 首次配置
-git fetch upstream --tags
-git switch -c upgrade/valdi-TAG origin/valdiroutes
-git merge --no-ff TAG
+git switch valdiroutes
+git config pull.rebase false
+git pull --no-rebase --no-ff upstream main
 ```
+
+这样保留双方历史并产生 merge commit。需要先验证再提交时，给 `pull` 加上 `--no-commit`，
+检查完成后执行 `git commit`。浅克隆需要先补齐共同祖先所需的历史。
+分支继续跟踪 `origin/valdiroutes`，同步官方改动时显式指定 `upstream main`。
 
 解决源码冲突，逐项判断 Hermes、资源加载和导出规则的自定义修改是否仍然需要。
 上游已实现的修复可以移除对应自定义代码；需要保留的改动按新 API 适配。
-更新 fork 的 `VALDI_FORK.md` 上游基线记录，推送升级分支，取得完整的 40 位 commit SHA。
+更新 fork 的 `VALDI_FORK.md` 上游基线记录，推送 `valdiroutes`，取得完整的 40 位 commit SHA。
 维护分支保留提交历史；不要通过强制同步覆盖自定义提交。
 
 ## 在应用 CI 试跑 fork 提交
@@ -74,7 +81,7 @@ pnpm build
 
 按下表适配 Node 移植部分，再重新导出 Android/iOS 运行时、准备视觉依赖，运行
 `pnpm build:android`、`pnpm build:ios`。提交应用 pin、registry、lockfile 和适配代码；CI 与设备验证通过后，
-合入 fork 的维护分支及应用 `main`。框架提交变化会触发运行时重新导出，即使迁移前后源码行为一致。
+落地应用 `main`。框架提交变化会触发运行时重新导出，即使迁移前后源码行为一致。
 
 | 维护位置 | 升级时关注的内容 | 验证方式 |
 | --- | --- | --- |

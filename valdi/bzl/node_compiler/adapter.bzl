@@ -9,7 +9,7 @@ load("@node_compiler_tools//:environment.bzl", "NODE", "TOOLS")
 NODE_COMPILER_ATTRS = {"_node_tools": attr.label(default = Label("@node_compiler_tools//:sources"))}
 
 def invoke_node_compiler(ctx, name, base, outputs, module_directory, dependencies, dependency_inputs):
-    if name not in ["valdi_core", "valdi_tsx", "coreutils", "source_map", "jasmine", "drawing", "client_sql"]:
+    if name not in ["valdi_core", "valdi_tsx", "coreutils", "source_map", "jasmine", "drawing", "client_sql", "native_web"]:
         fail("The Node runtime backend has not been validated for %s; use standalone node_valdi_module() for custom modules" % name)
     for feature, present in [
         ("legacy Vue", ctx.files.legacy_vue_srcs),

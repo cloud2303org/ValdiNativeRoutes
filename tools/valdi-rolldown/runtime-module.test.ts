@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
 import { unpack } from './archive';
+import { formatJsModule, hermesCompiler } from './hermes';
 import { root, valdiSourceRoot } from './pipeline';
 import { compileRuntimeModule, type RuntimeModuleSpec } from './runtime-module';
 
@@ -79,4 +80,118 @@ test('runtime modules match the historical ABI plus reviewed Drizzle additions a
       assert.ok(JSON.parse(readFileSync(path.join(temporary, name, `.valdi_build/compile/typescript/dumped_symbols/${name}/compilation-metadata.json`), 'utf8')).compiler === 'node-valdi-rolldown');
     });
   }
+});
+
+test('declaration-only native_web preserves native reexports in runtime archives', async t => {
+  const temporary = mkdtempSync(path.join(tmpdir(), 'runtime-native-web-test-'));
+  const previousSourceRoot = process.env.VALDI_SOURCE_ROOT;
+  t.after(() => {
+    if (previousSourceRoot === undefined) delete process.env.VALDI_SOURCE_ROOT;
+    else process.env.VALDI_SOURCE_ROOT = previousSourceRoot;
+    rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  });
+  // The original pinned fork need not contain native_web. Only its existing
+  // Hermes protocol/version files are needed to validate release compilation.
+  const upstream = previousSourceRoot ?? valdiSourceRoot() ?? path.join(root, 'valdi/bazel-valdi/external/valdi+');
+  const fixture = path.join(temporary, 'fork');
+  for (const relative of ['third-party/hermes_v1/hermes.BUILD', 'valdi/src/valdi/runtime/JavaScript/JavaScriptUtils.cpp']) {
+    const destination = path.join(fixture, relative);
+    mkdirSync(path.dirname(destination), { recursive: true });
+    cpSync(path.join(upstream, relative), destination);
+  }
+  const write = (relative: string, content: string) => {
+    const destination = path.join(fixture, relative);
+    mkdirSync(path.dirname(destination), { recursive: true });
+    writeFileSync(destination, content);
+    return destination;
+  };
+  write('modules/_configs/base.tsconfig.json', JSON.stringify({
+    compilerOptions: { target: 'ES2020', lib: ['ES2021'], strict: true },
+  }));
+  write('modules/types/Long.d.ts', 'export {};\n');
+  write('modules/types/globals.d.ts', 'export {};\n');
+  const moduleDirectory = path.join(fixture, 'src/valdi_modules/src/valdi/native_web');
+  const sources = [
+    write('src/valdi_modules/src/valdi/native_web/src/NativeWeb.d.ts', `
+export interface NativeResponse {
+  readonly status: number;
+  text(): Promise<string>;
+}
+export declare function fetch(url: string): Promise<NativeResponse>;
+export declare class Headers {
+  constructor(init?: Record<string, string>);
+  get(name: string): string | null;
+}
+`),
+    write('src/valdi_modules/src/valdi/native_web/src/index.ts', "export * from './NativeWeb';\n"),
+  ];
+  const relative = ['android', 'ios'].flatMap(platform => ['debug', 'release'].flatMap(mode => [
+    `${platform}/${mode}/assets/native_web.valdimodule`,
+    `${platform}/${mode}/assets/native_web.map.json`,
+  ]));
+  const declaration = '.valdi_build/compile/typescript/output/native_web/src/index.d.ts';
+  relative.push(declaration);
+  await compileRuntimeModule({
+    name: 'native_web', moduleDirectory, sources, dependencies: [],
+    outputs: relative.map(relative => ({ relative, path: path.join(temporary, 'output', relative), directory: false })),
+    iosModuleName: 'SCCNativeWeb', iosClassPrefix: '__valdi_unset_ios_class_prefix__',
+    androidClassPath: 'com.snap.modules.native_web', disableAnnotations: false,
+    asyncStrictMode: false, compilationMode: 'js_bytecode',
+  });
+  const output = (relative: string) => readFileSync(path.join(temporary, 'output', relative));
+  const debug = unpack(output('android/debug/assets/native_web.valdimodule'));
+  const release = unpack(output('android/release/assets/native_web.valdimodule'));
+  for (const archive of [debug, release]) {
+    // A declaration is supplied by native require, never a synthesized JS entry
+    // or a bundled duplicate of the native implementation.
+    assert.deepEqual([...archive.keys()].sort(), ['hash', 'src/index.js']);
+    assert.equal(archive.get('hash')!.toString(), createHash('sha256')
+      .update('src/index.js').update(archive.get('src/index.js')!).digest('hex'));
+  }
+  for (const mode of ['debug', 'release']) {
+    assert.deepEqual(output(`ios/${mode}/assets/native_web.valdimodule`),
+      output(`android/${mode}/assets/native_web.valdimodule`));
+    assert.deepEqual(Object.keys(JSON.parse(output(`android/${mode}/assets/native_web.map.json`).toString())),
+      ['native_web/src/index.js']);
+  }
+  assert.equal(output(declaration).toString(), 'export * from \'./NativeWeb\';\n');
+  const response = { status: 200, text: async () => 'native response' };
+  const pending = Promise.resolve(response);
+  const native = {
+    fetch: (url: string) => { assert.equal(url, 'https://fixture.invalid/'); return pending; },
+    Headers: class Headers {},
+  };
+  const exports = {} as typeof native;
+  const requires: string[] = [];
+  const source = debug.get('src/index.js')!.toString();
+  vm.runInNewContext(`(function(require, module, exports) {${source}\n})`)(
+    (id: string) => { requires.push(id); assert.equal(id, './NativeWeb'); return native; }, { exports }, exports);
+  assert.deepEqual(requires, ['./NativeWeb']);
+  assert.deepEqual(Object.keys(exports).sort(), ['Headers', 'fetch']);
+  for (const name of ['Headers', 'fetch'] as const) {
+    assert.equal(typeof Object.getOwnPropertyDescriptor(exports, name)?.get, 'function');
+    assert.equal(exports[name], native[name]);
+  }
+  const returned = exports.fetch('https://fixture.invalid/');
+  assert.equal(returned, pending);
+  assert.equal(await returned, response);
+  const replacement = () => Promise.resolve(response);
+  native.fetch = replacement;
+  assert.equal(exports.fetch, replacement, 'CommonJS reexports must remain live native getters');
+
+  const bytecode = release.get('src/index.js')!;
+  assert.equal(bytecode.readUInt32LE(0), 0x0100c634);
+  assert.equal(bytecode.readBigUInt64LE(4), 0x1f1903c103bc1fc6n);
+  assert.equal(bytecode.readUInt32LE(12), hermesCompiler().bytecodeVersion);
+  const emitted = source.replace(/\n\/\/# sourceMappingURL=data:application\/json;base64,[^\n]+\n$/, '');
+  assert.deepEqual(bytecode.subarray(16, 36), createHash('sha1').update(formatJsModule(emitted)).digest(),
+    'release bytecode must contain exactly the emitted index factory');
+
+  // Keep the adapter bounded to explicitly validated builtins.
+  const adapter = readFileSync(path.join(root, 'valdi/bzl/node_compiler/adapter.bzl'), 'utf8');
+  const guard = /if name not in (\[[^\]]+\]):\s+fail\("The Node runtime backend has not been validated/.exec(adapter);
+  assert.ok(guard, 'the explicit builtin allowlist guard must remain');
+  const allowed: string[] = JSON.parse(guard[1]);
+  assert.ok(allowed.includes('native_web'), 'validated native_web must pass the Node runtime adapter allowlist');
+  assert.ok(!allowed.includes('arbitrary_custom_module'));
 });

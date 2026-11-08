@@ -168,6 +168,8 @@ test('missing sources still produce parseable, strict TSX configs with local ali
 test('prepared configs inherit authoritative options/types and recover to bootstrap after fixture source removal', async t => {
   const f = await fixture(t);
   const sources = prepare(f);
+  assert.ok(!existsSync(path.join(sources, 'src/valdi_modules/src/valdi/native_web')),
+    'older prepared forks may omit unused optional builtin declarations');
   // Production compilation only needs the upstream base, which is already a
   // declared compiler prerequisite; bootstrap JSON need not be a sandbox input.
   rmSync(f.bootstrapBase);
@@ -189,6 +191,61 @@ test('prepared configs inherit authoritative options/types and recover to bootst
   assert.deepEqual(fallback.config.options.types, []);
   assert.equal(path.resolve(f.own.dir, fallback.json.extends), f.bootstrapBase);
   assert.ok(!fallback.json.compilerOptions.paths['valdi_core/*']);
+});
+
+test('prepared native_web declarations typecheck a consumer and preserve the exact external native require', async t => {
+  const f = await fixture(t);
+  const sources = prepare(f);
+  const declaration = path.join(sources, 'src/valdi_modules/src/valdi/native_web/src/NativeWeb.d.ts');
+  // A compiler contract only: the runtime implementation must remain external.
+  put(declaration, `
+export interface Response { readonly status: number; }
+export declare function fetch(input: string): Promise<Response>;
+`);
+  rmSync(path.join(f.own.dir, 'src/index.tsx'));
+  put(path.join(f.own.dir, 'src/index.ts'), `
+import { fetch as nativeFetch } from 'native_web/src/NativeWeb';
+export function responseStatus(input: string): Promise<number> {
+  return nativeFetch(input).then(response => response.status);
+}
+`);
+  f.pipeline.writeTsconfig(f.own, f.modules);
+  const alias = path.join(f.directory, 'module-build/modules');
+  mkdirSync(path.dirname(alias), { recursive: true });
+  symlinkSync(path.join(f.directory, 'valdi/modules'), alias, 'dir');
+  for (const dir of [f.own.dir, path.join(alias, 'own')]) {
+    const { config } = parsed({ ...f.own, dir });
+    const program = ts.createProgram(config.fileNames, config.options);
+    assert.deepEqual(ts.getPreEmitDiagnostics(program).map(d => ({
+      code: d.code, text: ts.flattenDiagnosticMessageText(d.messageText, '\n'),
+    })), [], dir);
+    assertResolution({ ...f.own, dir }, config.options, 'native_web/src/NativeWeb', declaration);
+    assert.ok(program.getSourceFile(declaration), 'the consumer uses the prepared declaration');
+    assert.ok(!config.fileNames.includes(declaration), 'optional declarations are dependencies, not added roots');
+  }
+  const plugin = valdiTs(f.own);
+  t.after(() => plugin.dispose());
+  assert.equal(plugin.diagnostics(), '');
+  const built = await f.pipeline.buildModule(f.own, plugin, false);
+  const javascript = built.entries.get('src/index.js')?.toString();
+  assert.ok(javascript);
+  assert.match(javascript, /require\(["']native_web\/src\/NativeWeb["']\)/);
+  const requires = [...javascript.matchAll(/\brequire\(["']([^"']+)["']\)/g)].map(match => match[1]);
+  assert.deepEqual(requires, ['native_web/src/NativeWeb']);
+  assert.ok(![...built.entries.keys()].some(name => /native_web|NativeWeb/.test(name)),
+    'the app archive must not synthesize a Web implementation');
+  assert.ok(![...built.maps.values()].some(map => map.includes('NativeWeb.d.ts')),
+    'declarations must not become bundled implementation sources');
+
+  put(path.join(f.own.dir, 'src/invalid.ts'), `
+import { fetch as nativeFetch } from 'native_web/src/NativeWeb';
+export const invalid = nativeFetch(42);
+`);
+  const { config } = parsed(f.own);
+  assert.deepEqual(ts.getPreEmitDiagnostics(ts.createProgram(config.fileNames, config.options)).map(d => ({
+    code: d.code, text: ts.flattenDiagnosticMessageText(d.messageText, '\n'),
+  })), [{ code: 2345, text: "Argument of type 'number' is not assignable to parameter of type 'string'." }],
+  'the native declaration retains argument checking');
 });
 
 test('editor command reports bootstrap limits and the explicit preparation command', async t => {

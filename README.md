@@ -238,6 +238,18 @@ Valdi 把页面传给原生的 JS 函数登记在当时的页面名下（根 Con
 - **模块不被卸载**：内存警告时 Valdi 会卸载既不被活着的页面、也不被原生 import 的 JS 模块。`api` 里放着这些状态，所以由原生持有的 `startApp` 模块引用；创建 JS 门面本身不触发原生 host 初始化。
 - toast、modal、选择器这类 UI 调用通过原生 Promise 返回；展示归属仍由原生页面生命周期管理。
 
+## Native Fetch、SSE 与 WebSocket
+
+可选的 `native_web` 框架模块提供 Rust 网络与 Web API 实现、C++/Hermes 绑定，以及 JS 全局安装入口。先按 [Native Web 接入说明](docs/native-web.md) 导出包含它的原生 runtime，再在应用入口调用：
+
+```ts
+import { installNativeWeb } from 'native_web/src/NativeWeb';
+
+installNativeWeb();
+```
+
+之后同一 JS runtime 的页面可直接使用全局 `fetch`、`WebSocket`、流和 `AbortController`。也可以按需具名导入 API，不安装全局。安装函数只有注册胶水代码；fetch、流和 WebSocket 的实现仍在原生侧。
+
 ## 路由动画
 
 照 ExpoNativeRoutes 的 `NativeRouteAnimations`：全局 `NAVIGATION`、路由的 `options`、每次调用的 `options` 三层合并，后面的覆盖前面的，每层可以有 `android` / `ios` 分支。`routes.ts` 的 `resolveNavigation` 在 TS 里校验并合并成本平台的 `{animation, durationMs, presentation}`，写错直接抛错，不会推页面。

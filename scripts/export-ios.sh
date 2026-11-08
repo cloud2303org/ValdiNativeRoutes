@@ -5,11 +5,12 @@
 # ios/Generated/valdi, so this is only needed when the pinned Valdi fork/toolchain or module C++ changes.
 # Builtin modules use the local Node backend by default; compiler changes also require a new export.
 # The old Swift Valdi compiler and its fallback have been removed.
-# Usage: scripts/export-ios.sh [debug|release] [output dir, default ios/Frameworks]
+# Usage: scripts/export-ios.sh [debug|release] [output dir, default ios/Frameworks] [Bazel library]
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 config=${1:-debug}
 out=${2:-$root/ios/Frameworks}
+library=${3:-//:valdi_runtime_ios}
 mkdir -p "$out"
 out=$(cd "$out" && pwd)
 export JAVA_HOME=${JAVA_HOME:-$(/usr/libexec/java_home -v 17)}
@@ -20,7 +21,7 @@ node "$root/scripts/prepare-valdi.mjs"
 cd "$root/valdi"
 # The project's Valdi CLI (valdi/package.json, patched in valdi/patches); `pnpm install` in valdi/ installs it.
 pnpm exec valdi export ios \
-  --library //:valdi_runtime_ios \
+  --library "$library" \
   --build_config "$config" \
   --bazel_args="${VALDI_BAZEL_ARGS:-}" \
   --output_path "$out/ValdiRuntime.xcframework"

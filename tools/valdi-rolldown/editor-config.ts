@@ -1,8 +1,8 @@
 import path from 'node:path';
 import type { ValdiModule } from './valdiTs';
 
-/** The modules linked into the exported Valdi runtime. */
-const RUNTIME_MODULES = ['client_sql', 'coreutils', 'jasmine', 'source_map', 'valdi_core', 'valdi_tsx'];
+/** Builtin declaration aliases, including optional modules not linked into every runtime. */
+const RUNTIME_MODULES = ['client_sql', 'coreutils', 'jasmine', 'native_web', 'source_map', 'valdi_core', 'valdi_tsx'];
 
 export interface EditorConfigSources {
   frameworkSources?: string;

@@ -5,11 +5,12 @@
 # (tools/valdi-rolldown), so this is only needed when the pinned Valdi fork/toolchain or module C++ changes.
 # Builtin modules use the local Node backend by default; compiler changes also require a new export.
 # The old Swift Valdi compiler and its fallback have been removed.
-# Usage: scripts/export-android.sh [debug|release] [output dir, default android/app/libs]
+# Usage: scripts/export-android.sh [debug|release] [output dir, default android/app/libs] [Bazel library]
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 config=${1:-debug}
 out=${2:-$root/android/app/libs}
+library=${3:-//:valdi_runtime_android}
 mkdir -p "$out"
 out=$(cd "$out" && pwd)
 case "$(uname -s)" in
@@ -48,7 +49,7 @@ case "$(uname -s)" in
     fi
     # shellcheck disable=SC2086
     # --max_idle_secs keeps the server from outliving this script with an inherited stdout.
-    "$bazel_bin" ${VALDI_BAZEL_STARTUP_ARGS:-} --max_idle_secs=60 build //:valdi_runtime_android \
+    "$bazel_bin" ${VALDI_BAZEL_STARTUP_ARGS:-} --max_idle_secs=60 build "$library" \
       $config_flags \
       --config=stable_exec \
       --copt=-DANDROID_WITH_JNI \
@@ -60,11 +61,14 @@ case "$(uname -s)" in
       ${VALDI_BAZEL_ARGS:-}
     # Bazel outputs are read-only; replace an existing export instead of
     # inheriting that attribute on Windows.
-    cp -f "$root/valdi/bazel-bin/valdi_runtime_android.aar" "$out/valdi_runtime.aar"
+    artifact=${library#//}
+    artifact=$(printf '%s' "$artifact" | tr ':' '/')
+    artifact=${artifact#/}
+    cp -f "$root/valdi/bazel-bin/$artifact.aar" "$out/valdi_runtime.aar"
     ;;
   *)
     pnpm exec valdi export android \
-      --library //:valdi_runtime_android \
+      --library "$library" \
       --build_config "$config" \
       --bazel_args="${VALDI_BAZEL_ARGS:-}" \
       --output_path "$out/valdi_runtime.aar"

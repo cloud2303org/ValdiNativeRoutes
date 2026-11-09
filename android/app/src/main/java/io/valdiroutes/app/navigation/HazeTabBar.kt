@@ -72,7 +72,7 @@ internal fun HazeTabBar(
             .selectableGroup(),
     ) {
         Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color(0x1F000000)))
-        Row(Modifier.fillMaxWidth().height(56.dp)) {
+        Row(Modifier.fillMaxWidth().height(48.dp)) {
             bar.tabs.forEach { tab ->
                 val active = tab.route == selected
                 Column(
@@ -87,7 +87,8 @@ internal fun HazeTabBar(
                             onClick = { select(tab.route) },
                         ),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
+                    // The system inset below the row provides the bottom spacing.
+                    verticalArrangement = Arrangement.Bottom,
                 ) {
                     Image(
                         painter = image(

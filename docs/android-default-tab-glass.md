@@ -13,7 +13,8 @@ full-viewport hit-testing and inset contract. There is no `"haze"` mode.
   padding to the source. The page remains full viewport and draws behind the bar.
 - The bar applies horizontal/bottom system-bar and cutout padding once, inside
   the glass effect. That padding is included in the measured footprint. The
-  56 dp row is the original control size, not an estimate sent to the page.
+  48 dp row keeps icons and labels bottom-aligned, without extra spacing below
+  the labels. The system bottom inset supplies the remaining safe spacing.
 - Selection still calls `navigator.selectTab(shell, route)`. Page creation,
   retention, context lifetime, and custom-tab ownership are unchanged.
 - Selected/unselected icons retain the existing `resImage` resolver, including

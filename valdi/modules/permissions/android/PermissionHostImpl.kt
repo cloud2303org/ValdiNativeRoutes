@@ -89,10 +89,10 @@ class PermissionHostImpl(private val context: Context) : PermissionHost {
         val activity = activity
         request.promise.fulfillSuccess(request.permissions.map { permission ->
             PermissionGrant(permission, when {
-                grants[permission] ?: granted(permission) -> "granted"
+                grants[permission] ?: granted(permission) -> PermissionGrantResult.Granted
                 // No activity, no prompt was answered: still askable.
-                activity == null || ActivityCompat.shouldShowRequestPermissionRationale(activity, permission) -> "denied"
-                else -> "never_ask_again"
+                activity == null || ActivityCompat.shouldShowRequestPermissionRationale(activity, permission) -> PermissionGrantResult.Denied
+                else -> PermissionGrantResult.NeverAskAgain
             })
         })
         main.post(::next)

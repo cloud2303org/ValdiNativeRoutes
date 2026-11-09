@@ -1,12 +1,15 @@
 import * as v from 'valibot';
 import {
   appUIHost,
+  AttachmentSource,
   BottomSheetRequest,
+  DatePickerMode,
   ModalReply,
   ModalRequest,
   PickerOption,
   PresentationReply,
   ScanCodeReply,
+  ToastRequestIcon,
 } from './AppUIHost';
 import * as schema from 'native_common/src/pickerSchemas';
 
@@ -60,6 +63,21 @@ export type ChooseFileResult = {
 } & ApiSuccess;
 export type ChooseFileOptions = { count?: number; mimeTypes?: readonly string[] };
 
+const toastIcons: Record<ToastIcon, ToastRequestIcon> = {
+  success: ToastRequestIcon.Success,
+  error: ToastRequestIcon.Error,
+  loading: ToastRequestIcon.Loading,
+  none: ToastRequestIcon.None,
+};
+
+const datePickerModes: Record<DatePickMode, DatePickerMode> = {
+  year: DatePickerMode.Year,
+  'year-month': DatePickerMode.YearMonth,
+  date: DatePickerMode.Date,
+  time: DatePickerMode.Time,
+  datetime: DatePickerMode.DateTime,
+};
+
 export function appUIApi(
   fail: (method: string, cause: unknown) => Error = (method, cause) =>
     new Error(`${method}:fail ${cause instanceof Error ? cause.message : String(cause)}`),
@@ -72,7 +90,7 @@ export function appUIApi(
     }
   }
 
-  async function pick(source: 'photos' | 'camera' | 'files', limit: number, mimeTypes: string[]) {
+  async function pick(source: AttachmentSource, limit: number, mimeTypes: string[]) {
     const reply = await appUIHost().pickAttachments(source, limit, mimeTypes);
     if (reply.canceled || !reply.assets.length) throw new Error('cancel');
     return reply.assets;
@@ -110,9 +128,11 @@ export function appUIApi(
           if (reply.cancel) throw new Error('cancel');
           source = sourceType[reply.index];
         }
-        const assets = await pick(source === 'album' ? 'photos' : 'camera', source === 'camera' ? 1 : count, [
-          'image/*',
-        ]);
+        const assets = await pick(
+          source === 'album' ? AttachmentSource.Photos : AttachmentSource.Camera,
+          source === 'camera' ? 1 : count,
+          ['image/*'],
+        );
         return {
           tempFilePaths: assets.map(asset => asset.uri),
           tempFiles: assets.map(asset => ({ path: asset.uri, size: asset.size })),
@@ -123,7 +143,7 @@ export function appUIApi(
     chooseFile(options: ChooseFileOptions = {}): Promise<ChooseFileResult> {
       return invoke('chooseFile', async () => {
         const { count, mimeTypes } = v.parse(schema.chooseFileRequest, options);
-        const assets = await pick('files', count, mimeTypes);
+        const assets = await pick(AttachmentSource.Files, count, mimeTypes);
         return {
           tempFilePaths: assets.map(asset => asset.uri),
           tempFiles: assets.map(asset => ({
@@ -167,7 +187,10 @@ export function appUIApi(
     showDatePicker(options: ShowDatePickerOptions = {}): Promise<DatePickerResult> {
       return invoke('showDatePicker', async () => {
         const request = v.parse(schema.datePickerRequest, options);
-        const { confirm, cancel, value } = await appUIHost().showDatePicker(request);
+        const { confirm, cancel, value } = await appUIHost().showDatePicker({
+          ...request,
+          mode: datePickerModes[request.mode],
+        });
         return { confirm, cancel, value: cancel ? '' : value };
       });
     },
@@ -193,7 +216,7 @@ export function appUIApi(
     showToast(options: ShowToastOptions): Promise<ApiSuccess> {
       return invoke('showToast', async () => {
         const request = v.parse(schema.toastRequest, options);
-        await appUIHost().showToast(request);
+        await appUIHost().showToast({ ...request, icon: toastIcons[request.icon] });
         return {};
       });
     },

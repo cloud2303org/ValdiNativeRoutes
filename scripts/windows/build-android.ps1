@@ -1,7 +1,5 @@
 [CmdletBinding()]
 param(
-    [switch]$SkipRuntimeExport,
-    [switch]$SkipVisionPrepare,
     [string]$ValdiCheckout,
     [string]$Distdir,
     [string]$OutputBase,
@@ -105,47 +103,47 @@ if ($resolvedValdi) {
     Write-Output "Valdi checkout: $resolvedValdi @ $(Get-PinnedValdiCommit $root) (clean)"
 }
 
-if (-not $SkipRuntimeExport) {
-    $exportArguments = @{
-        Config = 'debug'
-        BazelPath = $BazelPath
-        ValdiCheckout = $resolvedValdi
-        Distdir = $Distdir
-        OutputBase = $OutputBase
-        RepositoryCache = $RepositoryCache
-        DiskCache = $DiskCache
-        GoModCache = $GoModCache
-        GoProxy = $GoProxy
-        Offline = $Offline
-        JavaHome = $env:JAVA_HOME
-        AndroidHome = $AndroidHome
-        GitBash = $gitBashPath
-        BazelArg = $BazelArg
-        BazelArgs = $BazelArgs
-    }
-    & (Join-Path $PSScriptRoot 'export-android.ps1') @exportArguments
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$resolvedOutputBase = Resolve-BazelOutputBase $OutputBase
+$resolvedDistdir = $null
+if ($Distdir) {
+    if (-not (Test-Path -LiteralPath $Distdir -PathType Container)) { throw "Bazel distdir not found: $Distdir" }
+    $resolvedDistdir = (Resolve-Path -LiteralPath $Distdir).Path
 }
-
-$visionLibraries = @(
-    'opencv_core',
-    'opencv_imgproc',
-    'opencv_highgui',
-    'ncnn'
-) | ForEach-Object { Join-Path $root "vision/vendor/install/android-arm64/lib/lib$_.a" }
-$visionStale = -not (Test-VisionInstallCurrent -AppRoot $root -Target 'android-arm64')
-if (-not $SkipVisionPrepare -and (($visionLibraries | Where-Object { -not (Test-Path -LiteralPath $_) }) -or $visionStale)) {
-    $visionStamp = Join-Path $root 'vision/vendor/install/android-arm64/native-routes-vision.json'
-    if ($visionStale -and (Test-Path -LiteralPath $visionStamp -PathType Leaf)) {
-        Write-Output 'Vision dependencies were built from another vendor lock; preparing them again.'
-    } elseif ($visionStale) {
-        Write-Output 'Vision dependencies are not prepared in this checkout; building them from vision/vendor-lock.json.'
-    }
-    & $script:Node (Join-Path $root 'vision/scripts/prepare-native.cjs') '--target' 'android-arm64'
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if (-not $RepositoryCache) {
+    $defaultRepositoryCache = Join-Path $env:USERPROFILE ("_bazel_$env:USERNAME/cache/repos/v1")
+    if (Test-Path -LiteralPath $defaultRepositoryCache) { $RepositoryCache = $defaultRepositoryCache }
 }
+$resolvedRepositoryCache = $null
+if ($RepositoryCache) {
+    if (-not (Test-Path -LiteralPath $RepositoryCache -PathType Container)) {
+        throw "Bazel repository cache not found: $RepositoryCache"
+    }
+    $resolvedRepositoryCache = (Resolve-Path -LiteralPath $RepositoryCache).Path
+}
+$resolvedDiskCache = $null
+if ($DiskCache) {
+    New-Item -ItemType Directory -Path $DiskCache -Force | Out-Null
+    $resolvedDiskCache = (Resolve-Path -LiteralPath $DiskCache).Path
+}
+if ($GoModCache) {
+    New-Item -ItemType Directory -Path $GoModCache -Force | Out-Null
+    $env:GOMODCACHE = (Resolve-Path -LiteralPath $GoModCache).Path
+}
+if ($GoProxy) { $env:GOPROXY = $GoProxy }
+if ($Offline) { $env:GOPROXY = 'off' }
 
-if ($BazelPath) { $env:BAZEL_BIN = (Resolve-Path -LiteralPath $BazelPath).Path }
+# Configure the same host options as manual export without invoking the exporter.
+$localBazelRc = New-BazelRcOptions -OutputBase $resolvedOutputBase -ValdiCheckout $resolvedValdi `
+    -Distdir $resolvedDistdir -RepositoryCache $resolvedRepositoryCache -JavaHome $env:JAVA_HOME `
+    -BazelArg $BazelArg -BazelArgs $BazelArgs
+$cacheBazelRc = New-BazelCacheRcOptions -DiskCache $resolvedDiskCache
+Write-BazelRcFiles -AppRoot $root -Lines $localBazelRc -CacheLines $cacheBazelRc
+$env:VALDI_BAZEL_STARTUP_ARGS = if ($OutputBase) {
+    $outputRoot = $resolvedOutputBase -replace '\\', '/'
+    $env:VALDI_BAZEL_OUTPUT_BASE_ROOT = "$outputRoot/base"
+    "--output_user_root=$outputRoot"
+} else { '' }
+$env:VALDI_BAZEL_ARGS = if ($RepositoryCache) { '--repository_cache=' + ($resolvedRepositoryCache -replace '\\', '/') } else { '' }
 
 # module-build/modules is a symlink in git. A Windows checkout without symlink
 # support (a limited runner account) writes it as a text file, so the module
@@ -158,6 +156,8 @@ if ($resolvedValdi) { $env:VALDI_SOURCE_ROOT = $resolvedValdi }
 # build and restores the tracked symlink text, so daily and standalone runs work too.
 # CI pipes this step through Tee-Object; a Gradle daemon started here inherits stdout
 # and keeps that pipe open after the build, so the step never finishes.
+# The runtime must already have been exported manually. Gradle prepares module-owned
+# dependencies and builds their native libraries as needed.
 $projectArgs = @((Join-Path $root 'scripts/project.mjs'), 'android')
 if ($env:CI) { $projectArgs += '--no-daemon' }
 & $script:Node @projectArgs

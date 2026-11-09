@@ -1,6 +1,6 @@
-// From ExpoNativeRoutes ios/native/ui/Sources/NativeRoutesUI/UiDesign.swift.
-// Generated from packages/ui/design/tokens.json. Run pnpm tokens:generate; do not edit.
+// Shared design fields read the native ThemeTokensStore; component-only constants remain here.
 import UIKit
+import ThemeBridge
 
 public enum UiDesign {
   public enum palette {
@@ -22,32 +22,32 @@ public enum UiDesign {
   public enum light {
     public enum color {
       public static let page: UIColor = UIColor(red: 234.0 / 255, green: 241.0 / 255, blue: 251.0 / 255, alpha: 1)
-      public static let canvas: UIColor = UIColor(red: 245.0 / 255, green: 247.0 / 255, blue: 251.0 / 255, alpha: 1)
-      public static let surface: UIColor = UIColor(red: 255.0 / 255, green: 255.0 / 255, blue: 255.0 / 255, alpha: 1)
-      public static let ink: UIColor = UIColor(red: 16.0 / 255, green: 24.0 / 255, blue: 40.0 / 255, alpha: 1)
+      public static let canvas: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.canvas)
+      public static let surface: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.surface)
+      public static let ink: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.ink)
       public static let heading: UIColor = UIColor(red: 32.0 / 255, green: 61.0 / 255, blue: 101.0 / 255, alpha: 1)
-      public static let title: UIColor = UIColor(red: 35.0 / 255, green: 61.0 / 255, blue: 99.0 / 255, alpha: 1)
+      public static let title: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.title)
       public static let subtitle: UIColor = UIColor(red: 114.0 / 255, green: 139.0 / 255, blue: 172.0 / 255, alpha: 1)
-      public static let section: UIColor = UIColor(red: 97.0 / 255, green: 126.0 / 255, blue: 159.0 / 255, alpha: 1)
-      public static let description: UIColor = UIColor(red: 124.0 / 255, green: 143.0 / 255, blue: 169.0 / 255, alpha: 1)
-      public static let icon: UIColor = UIColor(red: 55.0 / 255, green: 125.0 / 255, blue: 255.0 / 255, alpha: 1)
-      public static let chevron: UIColor = UIColor(red: 132.0 / 255, green: 153.0 / 255, blue: 182.0 / 255, alpha: 1)
-      public static let hairline: UIColor = UIColor(red: 236.0 / 255, green: 236.0 / 255, blue: 236.0 / 255, alpha: 1)
+      public static let section: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.section)
+      public static let description: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.description)
+      public static let icon: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.icon)
+      public static let chevron: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.chevron)
+      public static let hairline: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.hairline)
       public static let onInverse: UIColor = UIColor(red: 255.0 / 255, green: 255.0 / 255, blue: 255.0 / 255, alpha: 1)
-      public static let iconWell: UIColor = UIColor(red: 55.0 / 255, green: 125.0 / 255, blue: 255.0 / 255, alpha: 0.1)
-      public static let pressed: UIColor = UIColor(red: 55.0 / 255, green: 125.0 / 255, blue: 255.0 / 255, alpha: 0.1)
-      public static let separator: UIColor = UIColor(red: 77.0 / 255, green: 112.0 / 255, blue: 163.0 / 255, alpha: 0.14)
+      public static let iconWell: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.iconWell)
+      public static let pressed: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.pressed)
+      public static let separator: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.separator)
       public static let cardBorder: UIColor = UIColor(red: 255.0 / 255, green: 255.0 / 255, blue: 255.0 / 255, alpha: 0.78)
-      public static let backPressed: UIColor = UIColor(red: 16.0 / 255, green: 24.0 / 255, blue: 40.0 / 255, alpha: 0.06)
-      public static let primary: UIColor = UIColor(red: 30.0 / 255, green: 98.0 / 255, blue: 208.0 / 255, alpha: 1)
+      public static let backPressed: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.backPressed)
+      public static let primary: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.primary)
       public static let accent: UIColor = UIColor(red: 55.0 / 255, green: 125.0 / 255, blue: 255.0 / 255, alpha: 1)
-      public static let success: UIColor = UIColor(red: 14.0 / 255, green: 205.0 / 255, blue: 157.0 / 255, alpha: 1)
-      public static let text: UIColor = UIColor(red: 23.0 / 255, green: 32.0 / 255, blue: 51.0 / 255, alpha: 1)
-      public static let muted: UIColor = UIColor(red: 102.0 / 255, green: 112.0 / 255, blue: 133.0 / 255, alpha: 1)
+      public static let success: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.success)
+      public static let text: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.text)
+      public static let muted: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.muted)
       public static let subtle: UIColor = UIColor(red: 244.0 / 255, green: 246.0 / 255, blue: 248.0 / 255, alpha: 1)
-      public static let border: UIColor = UIColor(red: 232.0 / 255, green: 236.0 / 255, blue: 241.0 / 255, alpha: 1)
-      public static let scrim: UIColor = UIColor(red: 16.0 / 255, green: 24.0 / 255, blue: 40.0 / 255, alpha: 0.32)
-      public static let danger: UIColor = UIColor(red: 213.0 / 255, green: 73.0 / 255, blue: 65.0 / 255, alpha: 1)
+      public static let border: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.border)
+      public static let scrim: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.scrim)
+      public static let danger: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.danger)
       public static let error: UIColor = UIColor(red: 213.0 / 255, green: 73.0 / 255, blue: 65.0 / 255, alpha: 1)
       public static let cancelFill: UIColor = UIColor(red: 242.0 / 255, green: 244.0 / 255, blue: 247.0 / 255, alpha: 1)
       public static let cancelText: UIColor = UIColor(red: 67.0 / 255, green: 85.0 / 255, blue: 111.0 / 255, alpha: 1)
@@ -60,22 +60,22 @@ public enum UiDesign {
       public static let dangerText: UIColor = UIColor(red: 172.0 / 255, green: 41.0 / 255, blue: 60.0 / 255, alpha: 1)
       public static let dangerBorder: UIColor = UIColor(red: 243.0 / 255, green: 205.0 / 255, blue: 210.0 / 255, alpha: 1)
       public static let disabledFill: UIColor = UIColor(red: 237.0 / 255, green: 241.0 / 255, blue: 247.0 / 255, alpha: 1)
-      public static let segmentTrack: UIColor = UIColor(red: 233.0 / 255, green: 237.0 / 255, blue: 243.0 / 255, alpha: 1)
-      public static let segmentIndicator: UIColor = UIColor(red: 255.0 / 255, green: 255.0 / 255, blue: 255.0 / 255, alpha: 1)
-      public static let segmentText: UIColor = UIColor(red: 96.0 / 255, green: 107.0 / 255, blue: 122.0 / 255, alpha: 1)
-      public static let segmentTextActive: UIColor = UIColor(red: 24.0 / 255, green: 38.0 / 255, blue: 59.0 / 255, alpha: 1)
-      public static let handle: UIColor = UIColor(red: 214.0 / 255, green: 220.0 / 255, blue: 229.0 / 255, alpha: 1)
+      public static let segmentTrack: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.segmentTrack)
+      public static let segmentIndicator: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.segmentIndicator)
+      public static let segmentText: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.segmentText)
+      public static let segmentTextActive: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.segmentTextActive)
+      public static let handle: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.handle)
       public static let dialogShadow: UIColor = UIColor(red: 16.0 / 255, green: 43.0 / 255, blue: 82.0 / 255, alpha: 0.18)
       public static let segmentShadow: UIColor = UIColor(red: 24.0 / 255, green: 39.0 / 255, blue: 63.0 / 255, alpha: 0.12)
       public static let floatingCloseFill: UIColor = UIColor(red: 0.0 / 255, green: 0.0 / 255, blue: 0.0 / 255, alpha: 0.38)
       public static let floatingCloseBorder: UIColor = UIColor(red: 255.0 / 255, green: 255.0 / 255, blue: 255.0 / 255, alpha: 0.24)
       public static let toastFill: UIColor = UIColor(red: 24.0 / 255, green: 28.0 / 255, blue: 35.0 / 255, alpha: 0.94)
-      public static let buttonPrimary: UIColor = UIColor(red: 30.0 / 255, green: 98.0 / 255, blue: 208.0 / 255, alpha: 1)
-      public static let buttonOnPrimary: UIColor = UIColor(red: 255.0 / 255, green: 255.0 / 255, blue: 255.0 / 255, alpha: 1)
-      public static let buttonSecondary: UIColor = UIColor(red: 238.0 / 255, green: 242.0 / 255, blue: 247.0 / 255, alpha: 1)
-      public static let buttonOnSecondary: UIColor = UIColor(red: 29.0 / 255, green: 41.0 / 255, blue: 57.0 / 255, alpha: 1)
-      public static let buttonDanger: UIColor = UIColor(red: 253.0 / 255, green: 236.0 / 255, blue: 236.0 / 255, alpha: 1)
-      public static let buttonOnDanger: UIColor = UIColor(red: 217.0 / 255, green: 45.0 / 255, blue: 32.0 / 255, alpha: 1)
+      public static let buttonPrimary: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.buttonPrimary)
+      public static let buttonOnPrimary: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.buttonOnPrimary)
+      public static let buttonSecondary: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.buttonSecondary)
+      public static let buttonOnSecondary: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.buttonOnSecondary)
+      public static let buttonDanger: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.buttonDanger)
+      public static let buttonOnDanger: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.light.buttonOnDanger)
     }
     public enum shadow {
       public static let card: String = "0px 6px 24px rgba(31,69,125,0.045)"
@@ -86,32 +86,32 @@ public enum UiDesign {
   public enum dark {
     public enum color {
       public static let page: UIColor = UIColor(red: 18.0 / 255, green: 19.0 / 255, blue: 22.0 / 255, alpha: 1)
-      public static let canvas: UIColor = UIColor(red: 18.0 / 255, green: 19.0 / 255, blue: 22.0 / 255, alpha: 1)
-      public static let surface: UIColor = UIColor(red: 30.0 / 255, green: 31.0 / 255, blue: 35.0 / 255, alpha: 1)
-      public static let ink: UIColor = UIColor(red: 255.0 / 255, green: 255.0 / 255, blue: 255.0 / 255, alpha: 1)
+      public static let canvas: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.canvas)
+      public static let surface: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.surface)
+      public static let ink: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.ink)
       public static let heading: UIColor = UIColor(red: 255.0 / 255, green: 255.0 / 255, blue: 255.0 / 255, alpha: 1)
-      public static let title: UIColor = UIColor(red: 255.0 / 255, green: 255.0 / 255, blue: 255.0 / 255, alpha: 1)
+      public static let title: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.title)
       public static let subtitle: UIColor = UIColor(red: 213.0 / 255, green: 213.0 / 255, blue: 214.0 / 255, alpha: 1)
-      public static let section: UIColor = UIColor(red: 150.0 / 255, green: 150.0 / 255, blue: 150.0 / 255, alpha: 1)
-      public static let description: UIColor = UIColor(red: 213.0 / 255, green: 213.0 / 255, blue: 214.0 / 255, alpha: 1)
-      public static let icon: UIColor = UIColor(red: 55.0 / 255, green: 125.0 / 255, blue: 255.0 / 255, alpha: 1)
-      public static let chevron: UIColor = UIColor(red: 150.0 / 255, green: 150.0 / 255, blue: 150.0 / 255, alpha: 1)
-      public static let hairline: UIColor = UIColor(red: 42.0 / 255, green: 43.0 / 255, blue: 50.0 / 255, alpha: 1)
+      public static let section: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.section)
+      public static let description: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.description)
+      public static let icon: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.icon)
+      public static let chevron: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.chevron)
+      public static let hairline: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.hairline)
       public static let onInverse: UIColor = UIColor(red: 255.0 / 255, green: 255.0 / 255, blue: 255.0 / 255, alpha: 1)
-      public static let iconWell: UIColor = UIColor(red: 55.0 / 255, green: 125.0 / 255, blue: 255.0 / 255, alpha: 0.16)
-      public static let pressed: UIColor = UIColor(red: 46.0 / 255, green: 47.0 / 255, blue: 54.0 / 255, alpha: 1)
-      public static let separator: UIColor = UIColor(red: 42.0 / 255, green: 43.0 / 255, blue: 50.0 / 255, alpha: 1)
+      public static let iconWell: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.iconWell)
+      public static let pressed: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.pressed)
+      public static let separator: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.separator)
       public static let cardBorder: UIColor = UIColor(red: 42.0 / 255, green: 43.0 / 255, blue: 50.0 / 255, alpha: 1)
-      public static let backPressed: UIColor = UIColor(red: 46.0 / 255, green: 47.0 / 255, blue: 54.0 / 255, alpha: 1)
-      public static let primary: UIColor = UIColor(red: 55.0 / 255, green: 125.0 / 255, blue: 255.0 / 255, alpha: 1)
+      public static let backPressed: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.backPressed)
+      public static let primary: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.primary)
       public static let accent: UIColor = UIColor(red: 55.0 / 255, green: 125.0 / 255, blue: 255.0 / 255, alpha: 1)
-      public static let success: UIColor = UIColor(red: 86.0 / 255, green: 220.0 / 255, blue: 186.0 / 255, alpha: 1)
-      public static let text: UIColor = UIColor(red: 255.0 / 255, green: 255.0 / 255, blue: 255.0 / 255, alpha: 1)
-      public static let muted: UIColor = UIColor(red: 150.0 / 255, green: 150.0 / 255, blue: 150.0 / 255, alpha: 1)
+      public static let success: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.success)
+      public static let text: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.text)
+      public static let muted: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.muted)
       public static let subtle: UIColor = UIColor(red: 46.0 / 255, green: 47.0 / 255, blue: 54.0 / 255, alpha: 1)
-      public static let border: UIColor = UIColor(red: 42.0 / 255, green: 43.0 / 255, blue: 50.0 / 255, alpha: 1)
-      public static let scrim: UIColor = UIColor(red: 0.0 / 255, green: 0.0 / 255, blue: 0.0 / 255, alpha: 0.75)
-      public static let danger: UIColor = UIColor(red: 245.0 / 255, green: 108.0 / 255, blue: 108.0 / 255, alpha: 1)
+      public static let border: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.border)
+      public static let scrim: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.scrim)
+      public static let danger: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.danger)
       public static let error: UIColor = UIColor(red: 245.0 / 255, green: 108.0 / 255, blue: 108.0 / 255, alpha: 1)
       public static let cancelFill: UIColor = UIColor(red: 46.0 / 255, green: 47.0 / 255, blue: 54.0 / 255, alpha: 1)
       public static let cancelText: UIColor = UIColor(red: 213.0 / 255, green: 213.0 / 255, blue: 214.0 / 255, alpha: 1)
@@ -124,22 +124,22 @@ public enum UiDesign {
       public static let dangerText: UIColor = UIColor(red: 255.0 / 255, green: 138.0 / 255, blue: 138.0 / 255, alpha: 1)
       public static let dangerBorder: UIColor = UIColor(red: 245.0 / 255, green: 108.0 / 255, blue: 108.0 / 255, alpha: 0.4)
       public static let disabledFill: UIColor = UIColor(red: 42.0 / 255, green: 43.0 / 255, blue: 50.0 / 255, alpha: 1)
-      public static let segmentTrack: UIColor = UIColor(red: 30.0 / 255, green: 31.0 / 255, blue: 35.0 / 255, alpha: 1)
-      public static let segmentIndicator: UIColor = UIColor(red: 69.0 / 255, green: 71.0 / 255, blue: 80.0 / 255, alpha: 1)
-      public static let segmentText: UIColor = UIColor(red: 213.0 / 255, green: 213.0 / 255, blue: 214.0 / 255, alpha: 1)
-      public static let segmentTextActive: UIColor = UIColor(red: 255.0 / 255, green: 255.0 / 255, blue: 255.0 / 255, alpha: 1)
-      public static let handle: UIColor = UIColor(red: 150.0 / 255, green: 150.0 / 255, blue: 150.0 / 255, alpha: 1)
+      public static let segmentTrack: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.segmentTrack)
+      public static let segmentIndicator: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.segmentIndicator)
+      public static let segmentText: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.segmentText)
+      public static let segmentTextActive: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.segmentTextActive)
+      public static let handle: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.handle)
       public static let dialogShadow: UIColor = UIColor(red: 0.0 / 255, green: 0.0 / 255, blue: 0.0 / 255, alpha: 0.5)
       public static let segmentShadow: UIColor = UIColor(red: 0.0 / 255, green: 0.0 / 255, blue: 0.0 / 255, alpha: 0.35)
       public static let floatingCloseFill: UIColor = UIColor(red: 0.0 / 255, green: 0.0 / 255, blue: 0.0 / 255, alpha: 0.38)
       public static let floatingCloseBorder: UIColor = UIColor(red: 255.0 / 255, green: 255.0 / 255, blue: 255.0 / 255, alpha: 0.24)
       public static let toastFill: UIColor = UIColor(red: 30.0 / 255, green: 31.0 / 255, blue: 35.0 / 255, alpha: 1)
-      public static let buttonPrimary: UIColor = UIColor(red: 55.0 / 255, green: 125.0 / 255, blue: 255.0 / 255, alpha: 1)
-      public static let buttonOnPrimary: UIColor = UIColor(red: 255.0 / 255, green: 255.0 / 255, blue: 255.0 / 255, alpha: 1)
-      public static let buttonSecondary: UIColor = UIColor(red: 44.0 / 255, green: 46.0 / 255, blue: 53.0 / 255, alpha: 1)
-      public static let buttonOnSecondary: UIColor = UIColor(red: 242.0 / 255, green: 244.0 / 255, blue: 247.0 / 255, alpha: 1)
-      public static let buttonDanger: UIColor = UIColor(red: 245.0 / 255, green: 108.0 / 255, blue: 108.0 / 255, alpha: 0.18)
-      public static let buttonOnDanger: UIColor = UIColor(red: 255.0 / 255, green: 138.0 / 255, blue: 138.0 / 255, alpha: 1)
+      public static let buttonPrimary: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.buttonPrimary)
+      public static let buttonOnPrimary: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.buttonOnPrimary)
+      public static let buttonSecondary: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.buttonSecondary)
+      public static let buttonOnSecondary: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.buttonOnSecondary)
+      public static let buttonDanger: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.buttonDanger)
+      public static let buttonOnDanger: UIColor = themeTokenColor(ThemeTokensStore.shared.tokens.dark.buttonOnDanger)
     }
     public enum shadow {
       public static let card: String = "0px 6px 24px rgba(0,0,0,0.35)"
@@ -148,25 +148,25 @@ public enum UiDesign {
     }
   }
   public enum radius {
-    public static let card: CGFloat = 22
-    public static let sheet: CGFloat = 22
-    public static let icon: CGFloat = 12
-    public static let control: CGFloat = 12
-    public static let surface: CGFloat = 20
-    public static let tiny: CGFloat = 2
-    public static let small: CGFloat = 6
-    public static let medium: CGFloat = 8
-    public static let compact: CGFloat = 10
-    public static let pill: CGFloat = 999
-    public static let button: CGFloat = 14
+    public static let card: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.radius.card)
+    public static let sheet: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.radius.sheet)
+    public static let icon: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.radius.icon)
+    public static let control: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.radius.control)
+    public static let surface: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.radius.surface)
+    public static let tiny: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.radius.tiny)
+    public static let small: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.radius.small)
+    public static let medium: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.radius.medium)
+    public static let compact: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.radius.compact)
+    public static let pill: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.radius.pill)
+    public static let button: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.radius.button)
   }
   public enum size {
-    public static let nav: CGFloat = 44
+    public static let nav: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.size.nav)
     public static let navNative: CGFloat = 52
-    public static let back: CGFloat = 40
-    public static let icon: CGFloat = 36
-    public static let row: CGFloat = 72
-    public static let button: CGFloat = 48
+    public static let back: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.size.back)
+    public static let icon: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.size.icon)
+    public static let row: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.size.row)
+    public static let button: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.size.button)
     public static let dialogWidth: CGFloat = 360
     public static let dialogMaxHeight: CGFloat = 600
   }
@@ -197,40 +197,40 @@ public enum UiDesign {
     }
   }
   public enum space {
-    public static let xs: CGFloat = 4
-    public static let sm: CGFloat = 8
-    public static let md: CGFloat = 12
-    public static let lg: CGFloat = 16
-    public static let xl: CGFloat = 20
-    public static let content: CGFloat = 24
-    public static let section: CGFloat = 10
+    public static let xs: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.space.xs)
+    public static let sm: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.space.sm)
+    public static let md: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.space.md)
+    public static let lg: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.space.lg)
+    public static let xl: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.space.xl)
+    public static let content: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.space.content)
+    public static let section: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.space.section)
     public static let sheetTop: CGFloat = 22
     public static let hairline: CGFloat = 1
-    public static let xxs: CGFloat = 2
+    public static let xxs: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.space.xxs)
     public static let inset: CGFloat = 3
-    public static let tight: CGFloat = 6
-    public static let xxl: CGFloat = 32
-    public static let wide: CGFloat = 40
-    public static let bottom: CGFloat = 48
+    public static let tight: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.space.tight)
+    public static let xxl: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.space.xxl)
+    public static let wide: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.space.wide)
+    public static let bottom: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.space.bottom)
     public static let buttonCompact: CGFloat = 9
-    public static let roomy: CGFloat = 28
+    public static let roomy: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.space.roomy)
   }
   public enum font {
-    public static let nav: CGFloat = 17
-    public static let heading: CGFloat = 30
+    public static let nav: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.font.nav)
+    public static let heading: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.font.heading)
     public static let headingLine: CGFloat = 39
-    public static let section: CGFloat = 13
+    public static let section: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.font.section)
     public static let sectionLine: CGFloat = 19
-    public static let title: CGFloat = 15
+    public static let title: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.font.title)
     public static let titleLine: CGFloat = 21
-    public static let body: CGFloat = 12
+    public static let body: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.font.body)
     public static let bodyLine: CGFloat = 17
-    public static let button: CGFloat = 16
+    public static let button: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.font.button)
     public static let buttonLine: CGFloat = 22
-    public static let sheetTitle: CGFloat = 20
-    public static let segment: CGFloat = 14
+    public static let sheetTitle: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.font.sheetTitle)
+    public static let segment: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.font.segment)
     public static let segmentLine: CGFloat = 20
-    public static let tiny: CGFloat = 11
+    public static let tiny: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.font.tiny)
     public static let content: CGFloat = 14
     public static let control: CGFloat = 16
     public static let subtitle: CGFloat = 17
@@ -249,15 +249,15 @@ public enum UiDesign {
     public static let iconDisplay: CGFloat = 29
   }
   public enum icon {
-    public static let row: CGFloat = 21
-    public static let chevron: CGFloat = 19
-    public static let back: CGFloat = 28
+    public static let row: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.icon.row)
+    public static let chevron: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.icon.chevron)
+    public static let back: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.icon.back)
   }
   public enum motion {
-    public static let pressedOpacity: CGFloat = 0.82
+    public static let pressedOpacity: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.motion.pressedOpacity)
     public static let confirmOpacity: CGFloat = 0.9
-    public static let pressedScale: CGFloat = 0.97
-    public static let disabledOpacity: CGFloat = 0.4
+    public static let pressedScale: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.motion.pressedScale)
+    public static let disabledOpacity: CGFloat = CGFloat(ThemeTokensStore.shared.tokens.shared.motion.disabledOpacity)
   }
   public enum component {
     public enum card {
@@ -401,4 +401,19 @@ public enum UiDesign {
     public static let scannerCanvas: UIColor = UIColor(red: 17.0 / 255, green: 19.0 / 255, blue: 24.0 / 255, alpha: 1)
     public static let torchOff: UIColor = UIColor(red: 44.0 / 255, green: 47.0 / 255, blue: 54.0 / 255, alpha: 1)
   }
+}
+
+private func themeTokenColor(_ value: String) -> UIColor {
+    if value.hasPrefix("#") {
+        precondition(value.count == 7)
+        let rgb = UInt32(value.dropFirst(), radix: 16)!
+        return UIColor(red: CGFloat((rgb >> 16) & 255) / 255,
+                       green: CGFloat((rgb >> 8) & 255) / 255,
+                       blue: CGFloat(rgb & 255) / 255, alpha: 1)
+    }
+    precondition(value.hasPrefix("rgba(") && value.hasSuffix(")"))
+    let parts = value.dropFirst(5).dropLast().split(separator: ",").map { Double($0.trimmingCharacters(in: .whitespaces))! }
+    precondition(parts.count == 4)
+    return UIColor(red: CGFloat(parts[0]) / 255, green: CGFloat(parts[1]) / 255,
+                   blue: CGFloat(parts[2]) / 255, alpha: CGFloat(parts[3]))
 }

@@ -92,6 +92,15 @@ function New-FakeValdiTree {
 }
 
 try {
+    Test-Case 'Windows entry points parse without syntax errors' {
+        foreach ($file in @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.ps1')) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors)
+            Assert-Equal '0' "$(@($parseErrors).Count)" "$($file.Name): $($parseErrors -join '; ')"
+        }
+    }
+
     $repo = Join-Path $tempRoot 'Valdi at pinned commit'
     $head = New-TestRepository $repo
     $appRoot = New-FakeAppRoot (Join-Path $tempRoot 'app') $head
@@ -304,6 +313,46 @@ try {
             Assert-Equal '7' "$(Invoke-GitBash -BashPath $bash -ScriptPath $scriptPath)" 'bash exit code'
         } finally {
             Remove-Item Env:\TEST_EXIT_CODE -ErrorAction SilentlyContinue
+        }
+    }
+
+    Test-Case 'manual export keeps the app root with an isolated output root and forwards arguments' {
+        $fixture = Join-Path $tempRoot 'manual export app'
+        $fixtureScripts = Join-Path $fixture 'scripts/windows'
+        New-Item -ItemType Directory -Path $fixtureScripts, (Join-Path $fixture 'valdi'), (Join-Path $fixture 'module-build') -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'export-android.ps1') -Destination $fixtureScripts
+        $realLib = (Join-Path $PSScriptRoot 'lib.ps1').Replace("'", "''")
+        $fixtureLib = @(
+            ". '$realLib'",
+            'function Invoke-GitBash {',
+            '  param([string]$BashPath, [string]$ScriptPath, [string[]]$Arguments)',
+            '  @{ script = $ScriptPath; arguments = @($Arguments); startup = $env:VALDI_BAZEL_STARTUP_ARGS; baseRoot = $env:VALDI_BAZEL_OUTPUT_BASE_ROOT } | ConvertTo-Json | Set-Content -LiteralPath $env:VALDI_TEST_EXPORT_CAPTURE',
+            '  return [int]$env:VALDI_TEST_EXPORT_EXIT',
+            '}'
+        )
+        Write-Utf8NoBomLines -Path (Join-Path $fixtureScripts 'lib.ps1') -Lines $fixtureLib
+        $outputRoot = Join-Path $tempRoot 'manual export bazel'
+        $outputDir = Join-Path $tempRoot 'manual export artifacts'
+        $capture = Join-Path $tempRoot 'manual-export.json'
+        $env:VALDI_TEST_EXPORT_CAPTURE = $capture
+        $env:VALDI_TEST_EXPORT_EXIT = '0'
+        try {
+            $shell = (Get-Process -Id $PID).Path
+            $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $fixtureScripts 'export-android.ps1'),
+                '-Config', 'release', '-OutputBase', $outputRoot, '-OutputDir', $outputDir)
+            & $shell @arguments | Out-Null
+            Assert-Equal '0' "$LASTEXITCODE" 'manual export exit'
+            $result = Get-Content -LiteralPath $capture -Raw | ConvertFrom-Json
+            Assert-Equal (Join-Path $fixture 'scripts/export-android.sh') $result.script 'shared exporter app path'
+            Assert-Equal 'release' $result.arguments[0] 'export configuration'
+            Assert-Equal $outputDir $result.arguments[1] 'output directory'
+            Assert-Equal (($outputRoot -replace '\\', '/') + '/base') $result.baseRoot 'isolated base root'
+            Assert-True ($result.startup.Contains('--output_base=')) 'export must override a host output_base'
+            $env:VALDI_TEST_EXPORT_EXIT = '7'
+            & $shell @arguments | Out-Null
+            Assert-Equal '7' "$LASTEXITCODE" 'export failure must propagate'
+        } finally {
+            Remove-Item Env:\VALDI_TEST_EXPORT_CAPTURE, Env:\VALDI_TEST_EXPORT_EXIT -ErrorAction SilentlyContinue
         }
     }
 

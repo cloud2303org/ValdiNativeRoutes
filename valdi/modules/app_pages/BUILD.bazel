@@ -18,6 +18,7 @@ valdi_module(
         "//modules/app_ui:app_ui_compiled",
         "//modules/app_vision:app_vision_compiled",
         "@valdi//src/valdi_modules/src/valdi/client_sql",
+        "@valdi//src/valdi_modules/src/valdi/native_web",
         "@valdi//src/valdi_modules/src/valdi/valdi_core",
         "@valdi//src/valdi_modules/src/valdi/valdi_tsx",
     ],

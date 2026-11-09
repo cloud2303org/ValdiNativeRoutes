@@ -16,23 +16,29 @@ The module annotation must attach to the first exported symbol in the file.
 `AppContext.d.ts` therefore declares its module function before the exported
 `AppContextHost` proxy interface.
 
-The Node compiler generates the native module protocol, factory and proxy
-descriptors. Android and iOS register factory implementations with Valdi before
-the corresponding JS module is used. Factory registration remains native host
-setup; it does not require JS to call an installation function.
+The Node compiler generates strongly typed native bindings, including C++ module,
+model and proxy descriptors. Host-backed modules register their Android/iOS
+factory implementations with Valdi before the corresponding JS module is used.
+For `nativeBuild: "cpp"`, the generated bindings and handwritten C++ factory
+implementation are linked into the runtime. Neither path requires a JS
+installation function.
 
 ## App capabilities
 
-`AppNativeModules.kt` and `AppNativeModules.swift` register the shared app entries:
+Host registration and runtime-linked C++ factories expose these native entries:
 
 - `app_foundation/src/host/AppContext` exposes only the minimal navigation host. The application factory
   retains its owner. Authentication and Zustand state belong to the app.
-- `app_vision/src/Vision` exposes the existing Vision implementation.
-  The host is created on first access. The Android JNI implementation and its
-  shared OpenCV/ncnn dependencies remain unchanged; iOS retains static vendors.
+- `app_vision/src/Vision` exposes Vision through the existing strongly typed
+  Polyglot C++ bindings and handwritten C++ adapter. `nativeBuild: "cpp"` selects
+  the implementation; VisionCore and static OpenCV/ncnn libraries link into the
+  same ValdiRuntime. The adapter uses the runtime worker queue and disk cache.
+  Calls do not need per-method Kotlin/Swift or JNI/Objective-C++ bridges.
 - `app_ota/src/Ota` exposes the existing native OTA client through `OtaHost`.
   Its Promise methods read native version state or check/download an update.
   The `app_ota/src` facade retains the proxy in a global-reference scope.
+  OTA remains the host Kotlin/Swift client with host C codec linkage and is not
+  migrated into ValdiRuntime.
   See [OTA access](ota.md#javascript-and-native-access).
 
 Both hosts additionally register `app_foundation/src/splash/SplashScreenNative`
@@ -42,6 +48,40 @@ for the synchronous startup splash policy. See [SplashScreen](splash-screen.md).
 the app database, retains the service facades, and selects the authenticated
 initial route. Database migration and application initialization are separate
 from native module installation. Route declarations remain TypeScript.
+
+## Native consumers and application composition
+
+ThemeBridge and AppUI are enabled by default as the template's foundation
+components. AppUI is one complete selection, including scanner and attachment
+dependencies. Their source ownership stays inside their modules; application
+startup and presentation wiring stay in the host.
+
+Native code can consume module implementations directly:
+
+- **ThemeBridge:** AppUI's Kotlin/Swift `UiDesign` reads `ThemeTokensStore`.
+  This is a declared `app_ui -> theme_bridge` native dependency. Both native UI
+  and the generated JS accessor read the native token tree.
+- **AppUI:** native pages call Android `NativeApp.ui` or iOS `app.ui`.
+  Activity attachment, foreground-page notifications and application image-loader
+  injection provide presentation context. Wheel adapters and their tests are
+  module-owned; the Android host explicitly registers their binders.
+- **Permissions:** Android's Activity borrows the retained permission host's
+  launcher, forwards result maps, and detaches at teardown. The JS permission
+  service adds its shared scheduling and state policy on top.
+- **Video:** native runtime setup shares one service between the generated
+  module factory and the official video loader. Android additionally forwards
+  Activity/fullscreen/PiP lifecycle calls. Per-player objects remain native.
+- **OTA:** native startup selects the module provider before runtime creation,
+  then the host starts a background check and supplies native tab-image lookup.
+- **Foundation:** the application implements its NavigationHost/AppContext and
+  synchronous Splash contracts. These depend on the application's actual
+  navigator and startup policy, so their assembly remains host-owned.
+
+See [AppUI integration/removal](../valdi/modules/app_ui/README.md),
+[native theme access](../valdi/modules/theme_bridge/README.md),
+[video integration](video-demo.md), and [OTA integration](../valdi/modules/app_ota/README.md).
+Changing an installation application ID does not rename these native APIs,
+generated Objective-C identities or Kotlin packages.
 
 ## Service access and lifetime
 
@@ -76,9 +116,19 @@ sources with native entries supplied at the runtime boundary. Codegen tests
 check the real generated factories and the startup signature accepting only `debug`.
 These checks do not replace Android/iOS compilation or device tests.
 
-Changes to the generated C++ descriptors also require a runtime rebuild and an
-updated runtime export receipt. A JS-only bundle update is insufficient for
-this migration. No startup speedup follows solely from these source changes;
+Linked C++, runtime-linked native contracts, vendor settings and enabled cpp-module
+selection changes require an explicit manual runtime export and an App rebuild.
+CPP-mode `nativeDependencies` hooks run only in those exports; host-mode hooks
+remain in normal App builds. Normal builds do not compute source fingerprints
+or automatically export a runtime. TS page edits continue to use normal hot reload.
+
+Static Vision code resides inside the dynamic runtime binary, rather than a
+standalone Vision/vendor DSO. Android requires runtime-compatible NDK r28 arm64
+static caches; iOS requires arm64 device and simulator static caches.
+See [Vision build and packaging](vision-build.md). No static Vision export,
+App build or device result is established by this documentation change.
+A JS-only bundle update is insufficient for native changes.
+No startup speedup follows solely from these source changes;
 that requires a new measurement using the same endpoint and build conditions.
 
 ## Editor and package boundaries

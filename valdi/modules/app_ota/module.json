@@ -1,5 +1,15 @@
 {
   "nativeBuild": "host",
   "iosLanguage": "objc",
-  "androidClassPath": "io.valdiroutes.ota"
+  "androidClassPath": "io.valdiroutes.ota",
+  "androidModuleFactory": "io.valdiroutes.app.OtaModuleFactory",
+  "androidCmake": "android/cpp",
+  "iosModuleFactoryClass": "VROtaModuleFactory",
+  "iosProjectSpec": "ios/project.yml",
+  "nativeInputs": [
+    "native"
+  ],
+  "androidDependencies": [
+    "org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0"
+  ]
 }

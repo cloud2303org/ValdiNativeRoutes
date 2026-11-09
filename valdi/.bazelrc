@@ -112,6 +112,8 @@ build --experimental_reuse_sandbox_directories
 # Default JS engine
 build --flag_alias=valdi_js_engine=@valdi//bzl/valdi:js_engine
 build --valdi_js_engine=hermes
+# The template's standard runtime includes the fork's Rust Web APIs.
+build --define=valdi_native_web=true
 # Precompile modules to Hermes bytecode (Valdi's default is QuickJS), so release builds run Hermes V1 too.
 build --@valdi//bzl/valdi:js_bytecode_format=hermes
 

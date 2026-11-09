@@ -1,12 +1,17 @@
 import ThemeBridge
 
-// Compiled as a separate module, with the same exported library used by the App.
+// An independent consumer of the actual generated models and native store.
 @main
 enum ThemeTokensAccessTests {
     static func main() throws {
         let store = ThemeTokensStore.shared
-        let tokens: VRThemeTokens = try store.tokens
+        let tokens: VRThemeTokens = store.tokens
+        let light: VRThemeColorTokens = tokens.light
+        let radius: VRThemeRadiusTokens = tokens.shared.radius
         precondition(store === ThemeTokensStore.shared)
-        print(tokens.light.count, tokens.dark.count, tokens.shared.count)
+        precondition(store.tokens === tokens)
+        precondition(light.surface == "#ffffff")
+        precondition(radius.pill == 999)
+        print(light.surface, radius.pill)
     }
 }

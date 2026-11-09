@@ -16,7 +16,7 @@ valdi/                  Valdi 工作区（Bazel），只用来编 Valdi 运行�
     src/features/       按功能归类的页面
     src/services/       业务 API、认证和数据库服务
     src/routes.ts       具体路由声明，由 StartApp(debug) 返回给原生
-  modules/app_vision/   独立 Vision 能力契约和调用封装
+  modules/app_vision/   Vision 强类型契约、C++ 适配及 runtime 静态链接规则
   modules/              AppUI、视频、蓝牙、存储等能力及其平台实现
 tools/valdi-rolldown/   我们自己的 Valdi 模块构建（代替 Valdi 的编译器）：编译、打包、热重载、原生绑定生成
 android/                普通 Gradle 工程，Compose + Nav3
@@ -32,11 +32,15 @@ scripts/
 ```
 
 模块和两端宿主的职责、共享实现与生成代码边界见[代码组织](docs/code-organization.md)。
+ThemeBridge 和 AppUI 是默认启用的基础组件，原生代码也能直接使用。
+AppUI 保持整包，包含扫码、附件等能力。原生消费者与宿主接线见
+[原生模块入口](docs/native-module-access.md#native-consumers-and-application-composition)，
+源码、测试和启停说明见 [AppUI](valdi/modules/app_ui/README.md)。
 
 ## 发行模板
 
 模板版本由根 `package.json` 的 `version` 标识。可从 GitHub Releases 下载固定版本源码包，
-修改应用配置后执行 `pnpm install --frozen-lockfile`，再执行 `pnpm android` 或 `pnpm ios`。
+修改应用配置后执行 `pnpm install --frozen-lockfile`，手动导出目标平台运行时，再执行 `pnpm android` 或 `pnpm ios`。
 首次仍需本机原生工具链和构建；不是免编译的 APK / IPA。
 下载、版本含义、后续同步及发布步骤见[模板发行说明](docs/template-releases.md)。
 
@@ -48,8 +52,7 @@ scripts/
 日常构建和测试从仓库根目录运行：
 
 ```sh
-pnpm prebuild --platform android   # 准备 Valdi 源码/绑定/运行时/原生模块/Vision（未变化时走快速路径）
-pnpm android                       # prebuild + 构建 + 安装 + 启动（唯一模拟器，或 --device 指定）
+pnpm android                       # 构建 + 安装 + 启动（先按下文手动导出运行时）
 pnpm ios                           # 同上，iOS 模拟器（仅 macOS）
 pnpm dev                           # Node 热重载；按 a / i 选择设备并构建、安装、启动 App
 pnpm build:android                 # 只构建 Android Debug APK，不安装/启动
@@ -68,17 +71,16 @@ iOS 列出可用 iPhone 模拟器，选中后由 `pnpm ios --device` 自动启�
 原生构建在子进程执行，Node 热重载继续运行；构建期间不会重复启动第二个构建，失败后可以再次按 a/i 重试。
 输出重定向或非交互终端不启用快捷键，仍可另开终端执行 `pnpm android` / `pnpm ios`。
 
-统一入口都是 Node 分发，Windows / macOS / Linux 用法一致；`android`/`ios` 先按指纹准备（源码、绑定、运行时、
-原生模块、Vision），指纹未变化时不会重新导出运行时，只改 TS 不会触发导出。设备选择是显式的：唯一运行中的
+统一入口都是 Node 分发，Windows / macOS / Linux 用法一致；`android`/`ios` 执行正常原生构建、安装和启动。
+已启用 host 模块的原生依赖在正常原生构建中检查并按需准备；宿主模块库、CMake、iOS 源码和 framework
+由 Gradle / Xcode 构建并链接。`nativeBuild: "cpp"` 模块的依赖只在显式手动导出 runtime 时准备，
+并随 C++ 实现静态链接进 runtime；Vision 使用这一模式。根入口不提前重复编译宿主模块库。设备选择是显式的：唯一运行中的
 模拟器会被使用，多个模拟器或只有物理设备时必须 `--device <adb serial | simulator udid|name>`，永远不会自动挑
-物理设备（物理设备只在使用 `--device` 时安装）。常用选项：`--no-install`（只构建）、`--no-launch`（安装不启动）、
-`--no-prebuild`（跳过准备，交给构建自己的指纹检查）；`--` 之后的参数原样传给 Gradle / `xcodebuild`，例如
+物理设备（物理设备只在使用 `--device` 时安装）。常用选项：`--no-install`（只构建）、`--no-launch`（安装不启动）。
+`--` 之后的参数原样传给 Gradle / `xcodebuild`，例如
 `pnpm android -- --stacktrace`。`pnpm android`/`pnpm ios` 目前只做 Debug，Release OTA 构建仍需手动导出与签名，
-见 [构建与 CI 边界](docs/build-and-ci.md)。iOS 的 prebuild/构建/安装只在 macOS + Xcode 下可用；Linux 支持
-`prebuild --platform android` 与 `android`（需要 adb/模拟器）。
-
-仓库根目录的 `.npmrc` 关闭了 pnpm 的 pre/post 脚本自动执行（`enable-pre-post-scripts=false`），否则
-`pnpm build` 会先自动跑同名的 `prebuild` 脚本；`pnpm prebuild --platform android` 是显式命令，不受影响。
+见 [构建与 CI 边界](docs/build-and-ci.md)。iOS 的导出、构建、安装只在 macOS + Xcode 下可用；
+Linux 支持手动导出 Android 运行时与 `pnpm android`（需要 adb/模拟器）。
 
 直接构建时 Android 的 Gradle 参数、iOS 的 `xcodebuild` 参数可跟在命令后面，例如 `pnpm build:android --stacktrace`。
 UI 测试沿用现有设备配置（可用
@@ -91,22 +93,28 @@ CI 的范围和缓存规则见 [构建与 CI 边界](docs/build-and-ci.md)，
 框架 fork 同步、版本试跑及 vendored 代码的维护步骤见 [同步 Valdi 上游](docs/upgrading-valdi.md)。
 Windows 原生 Android 构建入口见 [Native Windows Android builds](docs/windows-native-build.md)。
 
-准备依赖和原生运行时可以显式执行（`pnpm android`/`pnpm prebuild` 会自动完成同样的步骤）：
+首次 checkout 先安装依赖，再手动导出所需平台的原生运行时：
 
 ```sh
-pnpm install                               # 一次安装根目录、页面和构建工具的锁定依赖，生成 tsconfig
-pnpm prebuild --platform android           # 首次/Valdi 或模块 C++ 变化时导出运行时并准备其余产物
+pnpm install                       # 安装根目录、页面和构建工具的锁定依赖，生成 tsconfig
+scripts/export-android.sh debug     # 获取固定框架源码、生成绑定并导出 Android 运行时
+# macOS 下需要 iOS 时：
+scripts/export-ios.sh debug
+# 随后按目标平台执行 pnpm android / pnpm ios，或只构建的 pnpm build:android / pnpm build:ios
 ```
 
-需要 JDK 17、Android SDK、Node、pnpm。Valdi 命令行工具不用全局安装：它是 `valdi/package.json` 里的开发依赖（`@snap/valdi` 1.2.1），导出脚本用 `pnpm exec valdi` 调它。导出只编 Valdi 运行时（`libvaldi_runtime.so`、Valdi 的 Kotlin 和它自带的模块）以及构建要用的 Valdi 工具，第一次从头编译约 17 分钟。aar 里有三种 CPU 架构，APK 只打包 arm64（`abiFilters`）。
+需要 JDK 17、Android SDK、Node、pnpm。Valdi 命令行工具不用全局安装：它是 `valdi/package.json` 里的开发依赖（`@snap/valdi` 1.2.1），导出脚本用 `pnpm exec valdi` 调它。导出编译 Valdi 运行时、Valdi 的 Kotlin 和自带模块，以及启用的 C++ 模块及其静态依赖。Vision 的 Android vendor 使用与 runtime 兼容的 NDK r28，当前 Vision 缓存目标为 arm64；APK 只打包 arm64（`abiFilters`）。Vision 的计算实现仅支持 arm64；其他 runtime ABI 保留明确的不支持错误，不链接视觉库。
 
 根目录安装通过 `postinstall` 依次安装 `valdi/` 和 `tools/valdi-rolldown/`，各自使用已有的 frozen lockfile，
-然后生成页面的 tsconfig；安装阶段不编译原生代码。首次导出会先获取 Valdi 的类型源码，再检查 C++ 绑定，
-避免干净目录里类型声明尚未准备好就检查绑定。构建入口会检查依赖、运行时指纹及视觉库，
-缺失或过期时给出具体准备命令；只改 TS 或宿主代码不会因此要求重新导出 Valdi 运行时。
+然后生成页面的 tsconfig；安装阶段不编译原生代码。首次导出会先获取固定 Valdi 源码，再生成绑定。
+构建只检查运行时产物存在及平台/配置元数据，不计算源码指纹，也不自动重新导出运行时。
+更新 Valdi、运行时工具链、链接进 runtime 的 C++、vendor 或启用的 C++ 模块名单后，开发者需手动重新导出；
+绑定生成结果检查继续保留。仅修改 TS 页面继续使用正常热重载。
+Windows 使用 `scripts/windows/export-android.ps1 -Config debug`，详见 Windows 构建说明。
 
-视觉库尚未准备时，Android 运行 `node vision/scripts/prepare-native.cjs --target android-arm64`，
-iOS 运行 `node vision/scripts/prepare-native.cjs --target ios`。iOS 构建需要 macOS、Xcode 和 XcodeGen。
+`app_vision/module.json` 使用 `nativeBuild: "cpp"` 声明视觉库依赖；启用时由手动 runtime 导出检查缓存，
+缺失或不兼容时准备静态 OpenCV/ncnn，再编译链接。正常 App 构建不执行 Vision 的依赖 hook，也不自动导出 runtime。
+停用 Vision 后也需手动重新导出，才能从 runtime 移除已链接代码。iOS 构建需要 macOS、Xcode 和 XcodeGen。
 
 只构建 TS 模块时，不必导出 Android/iOS 运行时：首次运行 `node scripts/prepare-valdi.mjs` 获取类型声明，
 之后使用根目录 `pnpm build`。图片处理使用预编译 `sharp`，Release 字节码使用固定版本的官方 `hermes-compiler`；
@@ -197,11 +205,20 @@ _ = try await app.ui.showToast(ToastOptions(title: "已同步", icon: "none"))
 
 ## OpenCV 与 ncnn
 
-`vision/` 是 ExpoNativeRoutes `@native-routes/vision` 的 C++ 核心（`VisionCore`）：原生生成一张 256 × 192 的彩色图，用 OpenCV 转灰度、做 Canny 边缘检测、缩放到 64 × 64，再用 ncnn 跑一个没有训练权重的真实网络（全局平均池化加 Softmax），输出 RGB 三通道响应。TS 通过 `vision/VisionHost.ts` 的 `runDemo()` 调用，两张图以缓存目录里的 PNG 文件返回。示例页是首页“更多示例”里的“OpenCV 与 ncnn”（`VisionPage.tsx`）。
+模块声明的依赖准备、Android／iOS 链接打包及启停方式见 [Vision 构建与打包](docs/vision-build.md)。
 
-OpenCV Mobile 4.13.0 和 ncnn 20260526 按 `vision/vendor-lock.json`（固定 URL 和 SHA256）从源码编译。Android 用 NDK r27.1 和 CMake 生成独立的 `libopencv_core.so`、`libopencv_imgproc.so`、`libopencv_highgui.so` 和 `libncnn.so`，由 `libvaldi_routes_vision.so` JNI 桥接库动态链接；共用 `c++_shared`，开启 RTTI 和异常。`JNI_OnLoad` 仍选择 `OPENCV_PARALLEL_BACKEND=builtin`，避免查找未提供的并行插件。Android 产物位于 `vision/vendor/install/android-arm64/shared/`，具体构建、依赖验证及无摄像头后端的边界见 [Android Vision 动态库](docs/vision-android-shared.md)。
+`vision/` 是 ExpoNativeRoutes `@native-routes/vision` 的 C++ 核心（`VisionCore`）：原生生成一张 256 × 192 的彩色图，用 OpenCV 转灰度、做 Canny 边缘检测、缩放到 64 × 64，再用 ncnn 跑一个没有训练权重的真实网络（全局平均池化加 Softmax），输出 RGB 三通道响应。TS 通过 `app_vision/src/VisionHost.ts` 的 `runDemo()` 调用，两张图以缓存目录里的 PNG 文件返回。示例页是首页“更多示例”里的“OpenCV 与 ncnn”（`VisionPage.tsx`）。
 
-iOS 保持静态链接：`VisionCore.cpp` 和 Objective-C++ 包装编进 app target，依赖静态 `VisionDependencies.xcframework`（模拟器只有 arm64），不拆动态库。产物在 git 忽略的 `vision/vendor/install/`；用 `node vision/scripts/prepare-native.cjs --target android-arm64` 或 `--target ios` 生成，需要 CMake、Ninja 和对应 SDK。
+Vision 使用现有 Polyglot 强类型 C++ 生成绑定和手写 C++ 适配器，调用路径为 TS → 生成绑定 → C++ 适配器 → `VisionCore`；
+耗时任务使用 runtime worker queue，PNG 写入 runtime disk cache。无需逐方法 Kotlin/Swift 或 JNI/Objective-C++ 桥接。
+`VisionCore`、OpenCV Mobile 4.13.0 和 ncnn 20260526 静态链接进同一个 ValdiRuntime；
+Android 的 `libvaldi_runtime.so` 和 iOS 的动态 ValdiRuntime framework 仍是最终运行时载体，
+静态业务代码不另打包为独立 Vision/vendor DSO。
+
+vendor 源码按 `vision/vendor-lock.json`（固定 URL 和 SHA256）准备，Android 使用兼容 runtime 的 NDK r28 arm64 静态缓存，
+iOS 使用 arm64 真机及 arm64 模拟器静态缓存。它们由显式 runtime 导出消费，不能复用旧 Android r27/shared receipt。
+旧共享库方案及其既有证据保留在 [Android Vision shared 历史比较](docs/vision-android-shared.md)，不代表当前静态方案已构建或通过设备验证。
+OTA 继续使用宿主 Kotlin/Swift 客户端和 C codec 链接，不迁入 ValdiRuntime。
 
 ## 蓝牙 API
 
@@ -240,15 +257,15 @@ Valdi 把页面传给原生的 JS 函数登记在当时的页面名下（根 Con
 
 ## Native Fetch、SSE 与 WebSocket
 
-可选的 `native_web` 框架模块提供 Rust 网络与 Web API 实现、C++/Hermes 绑定，以及 JS 全局安装入口。先按 [Native Web 接入说明](docs/native-web.md) 导出包含它的原生 runtime，再在应用入口调用：
+模板的默认 runtime 已包含 `native_web`：Rust 网络与 Web API 实现、C++/Hermes 绑定，以及 JS 全局安装入口。常规 `scripts/export-android.sh` / `scripts/export-ios.sh` 就会导出它。应用入口已在业务服务加载前安装全局 API，页面直接使用：
 
 ```ts
-import { installNativeWeb } from 'native_web/src/NativeWeb';
-
-installNativeWeb();
+const response = await fetch('https://example.com/data');
+const data = await response.json();
+const socket = new WebSocket('wss://example.com/socket');
 ```
 
-之后同一 JS runtime 的页面可直接使用全局 `fetch`、`WebSocket`、流和 `AbortController`。也可以按需具名导入 API，不安装全局。安装函数只有注册胶水代码；fetch、流和 WebSocket 的实现仍在原生侧。
+同一 JS runtime 的页面和服务可使用全局 `fetch`、`WebSocket`、流和 `AbortController`，也可以从 `native_web/src/NativeWeb` 具名导入。安装函数只有注册胶水代码；fetch、流和 WebSocket 的实现仍在原生侧。已有旧 runtime 需要重新导出并构建 App，不能通过 OTA 补入原生实现。详见 [Native Web 接入说明](docs/native-web.md)。
 
 ## 路由动画
 
@@ -375,6 +392,8 @@ copy、full（raw / default-ZSTD）或仅限 HBC 的 HDIFFSF20/zlib patch。客�
 
 默认启动后静默检查。JS 通过 `app_ota/src` 的 `getInfo()` 和 `checkForUpdate()`
 调用原生 `OtaHost` proxy；两者返回 Promise，状态由原生客户端持有。
+客户端、工厂、平台依赖和 C codec 构建统一归入 `valdi/modules/app_ota/`。
+启停时可手动调整宿主启动和图片读取接线，见 [模块启用与停用说明](valdi/modules/app_ota/README.md)。
 手动检查等待同一次后台下载完成，返回当前运行版本和待生效版本，下次冷启动生效。
 有待生效版本时，业务可提示“更新已准备好，关闭并重新打开 App 后生效”，不自动退出或重建 Runtime。
 下次启动实际切换到不同版本时，`isNewVersion` 为 `true`，`previousBundleVersion` 给出旧版本号；
@@ -383,7 +402,8 @@ copy、full（raw / default-ZSTD）或仅限 HBC 的 HDIFFSF20/zlib patch。客�
 
 ```sh
 # 已有的签名密钥继续使用；只有首次没有密钥时运行 node scripts/ota.mjs keygen。
-# 先准备匹配的 Release runtime；原生导出过期检查仍然有效。
+# 先手动导出 Release runtime；OTA 打包检查导出产物和平台/配置元数据。
+scripts/export-android.sh release
 (cd android && ./gradlew :app:assembleRelease -PvaldiOtaUrl=https://ota.example.com)
 # 在仓库根目录手动指定接收更新的 App 版本和不可重复使用的更新版本。
 node scripts/ota.mjs pack android 0.1 pages-002
@@ -427,20 +447,22 @@ Debug 和空更新地址均只使用安装包。签名、协议、目录、版�
 
 - **接入**：Android 是 Gradle 的 `<variant>ValdiModules`（产物进 assets 和 res）和 `valdiCodegenCheck`（挂在 preBuild）；iOS 是 `project.yml` 的 “Valdi bindings check” 和 “Valdi modules” 两个构建脚本（产物进 app 的资源目录，Valdi 先在这里找模块）。改了 `project.yml` 要重新运行 `node scripts/ios-project.mjs`。
 - **命令行**：`pnpm build [--release] [--minify] [--out <dir>] [--res <dir>] [--ios-res <dir>]`；`pnpm dev` 是热重载（`scripts/hotreload.sh`），监听 `src/`、`res/`、`sql/`，把改动推给 Android 模拟器和启动着的 iOS 模拟器（端口 13592，Valdi daemon 的协议），代替 `valdi hotreload`。真机只在 `ANDROID_SERIAL` 指定时才推，因为装着别的构建的 app 收到推送会出问题。
-- **模块**：`valdi/modules/` 下每个有 `src/` 的目录都是一个模块，不用登记，各自打成 `<模块>.valdimodule`（自己的图片、npm 代码），绑定也按模块生成到同一组目录。模块之间按路径导入（`import { X } from 'other/src/X'`），运行时 Valdi 加载对方的模块。新建：`pnpm new-module <名字>`，交互选择官方 `ui_component`、`polyglot_bridge_module`、`polyglot_view_module`，或仓库的 `cpp_bridge_module` 模板，也可用 `--template` 指定。名字规范为 snake_case；原生模板自动接入库链接、工厂和 View Binder 注册；C++ 模板自动生成模块自己的实现与 Bazel 规则，启用后由公共流程生成绑定和 runtime 链接清单，无需手改宿主 BUILD，再运行 `pnpm android` / `pnpm ios`。详见 [自定义模块](docs/custom-modules.md)。没有 `@Export…` 的模块不生成 C++ 文件，所以不需要重新导出运行时。删掉一个模块后，删它在 `android/app/generated/valdi`、`ios/Generated/valdi` 里的绑定，再跑 `pnpm tsconfig`。
+- **模块**：`valdi/modules/` 下的模块由根 `package.json` 的 `valdi.modules` 选择，各自打成 `<模块>.valdimodule`（自己的图片、npm 代码），绑定也按模块生成到同一组目录。模块之间按路径导入（`import { X } from 'other/src/X'`），运行时 Valdi 加载对方的模块。新建：`pnpm new-module <名字>`，交互选择官方 `ui_component`、`polyglot_bridge_module`、`polyglot_view_module`，或仓库的 `cpp_bridge_module` 模板，也可用 `--template` 指定。名字规范为 snake_case；原生模板自动接入库链接、工厂和 View Binder 注册；C++ 模板自动生成模块自己的实现与 Bazel 规则，启用后生成绑定和 runtime 链接清单，无需手改宿主 BUILD。链接进 runtime 的 C++、vendor 或启用的 C++ 模块名单变更需手动导出运行时，再运行 `pnpm android` / `pnpm ios`；宿主模块的原生源码和依赖则随正常原生构建处理。详见 [自定义模块](docs/custom-modules.md)。删掉一个模块后，删它在 `android/app/generated/valdi`、`ios/Generated/valdi` 里的绑定，再跑 `pnpm tsconfig`。
 - **IDE**：各模块的 `tsconfig.json` 由 `pnpm tsconfig` 生成（`new-module` 会跑），代替 `valdi projectsync`：Valdi 的基础配置、运行时带的 Valdi 模块（只有这些能导入）、所有 app 模块，生成的资源声明（`res.ts`）在 `tools/valdi-rolldown/.gen/`。`valdi/modules/app_pages/BUILD.bazel` 已经用不到了。
 
-导出脚本只在 Valdi fork 提交、工具链配置或 模块的 `cpp/`（C++，见下一节）变了时才需要跑：它提供运行时 aar / xcframework 和指纹的 Valdi 一半；导出内置模块时仍可能构建上游 toolbox，应用 Node 管线不再调用它。
+首次使用以及 Valdi fork、运行时工具链/编译器、链接进 runtime 的模块 `cpp/`、vendor 或启用的 cpp 模块名单变化后，手动运行导出脚本。
+导出提供运行时 AAR / XCFramework，`valdi_ota.json` 仅记录 `platform` / `config`，供 OTA 的 Release runtime 检查使用。
+源码变化不会触发自动校验或重导出；旧 Swift 编译器和 C++ toolbox 不参与当前管线。
 
 ## C++ 绑定
 
-TS 声明一个 `@ExportModule` 的 `.d.ts`，C++ 实现它，JS 像普通模块一样 `import` 并直接同步调用（在 JS 线程上执行，返回值直接回到 JS）。宿主的 Kotlin / Swift 不参与。示例是 `src/cpp/Cpp.d.ts`（常量 `BUILD_INFO`、`sha256(text)`、`stats(values)` 返回一个模型），实现在 `valdi/modules/app_pages/cpp/src/Cpp.cpp`，页面是“OpenCV 与 ncnn”最下面的“C++ 绑定”。
+TS 声明一个 `@ExportModule` 的 `.d.ts`，C++ 实现它，JS 像普通模块一样 `import`。宿主的 Kotlin / Swift 不参与。同步调用示例是 `src/cpp/Cpp.d.ts`（常量 `BUILD_INFO`、`sha256(text)`、`stats(values)` 返回一个模型），在 JS 线程执行，实现在 `valdi/modules/app_pages/cpp/src/Cpp.cpp`，页面是“OpenCV 与 ncnn”最下面的“C++ 绑定”。Vision 则通过同一套强类型生成绑定使用异步回调。
 
 - **生成**：`codegen.ts --cpp-modules-out ../../valdi/modules` 写出模块自己的 `cpp/generated/valdi_modules/<模块>/<模块>.{hpp,cpp}`；默认只生成有手写 C++ 的模块及其生成类型依赖，命名空间 `snap::valdi_modules::app_pages`，和 Valdi 编译器的输出一样。`Cpp.d.ts` 生成接口 `CppModule`（每个函数一个纯虚方法，常量是无参方法）和工厂 `CppModuleFactory`；同时也生成 Kotlin / Objective-C 的同名接口，没人实现，不影响。模块和模型要像其他注解一样写上 `ios` / `android` 名字，否则 Kotlin 默认落在 `com.snap.modules.app_pages`，和模块的包冲突，生成会失败（Valdi 的编译器也一样）。
 - **实现**：继承 `CppModuleFactory`，重写 `onLoadModule()` 返回 `CppModule` 的实现，再用 `Valdi::RegisterModuleFactory::registerTyped<…>()` 静态注册。运行时创建时收集这些注册，JS 第一次读 `app_pages/src/cpp/Cpp` 时调用工厂。
-- **编进运行时**：`//modules/app_pages/cpp:native`（手写实现，`alwayslink`），以及它显式依赖的 `:bindings` 和 `//modules/app_foundation/cpp:bindings`通过 `valdi_exported_library` 的 `native_deps`（fork 中的原生导出规则扩展）链接进 `libvaldi_runtime.so` 和 `ValdiRuntime.xcframework`。不在 CMake / Xcode 里单独编：`libvaldi_runtime.so` 静态链接 libc++、只导出 JNI 符号，单独编的 so 会带另一份 libc++，跨 so 传 `shared_ptr`、抛异常都不安全。代价是改了 C++ 要重新导出（增量编译）。
-- **检查**：导出脚本先检查 C++ 绑定没过期；导出时 `valdi_ota.json` 记下 启用模块 C++ 目录及链接规则的哈希，Gradle 的 `valdiCodegenCheck` 和 Xcode 的 “Valdi bindings check” 比对它（`scripts/ota.mjs check-export`），改了 C++ 没重新导出就构建失败并给出命令。C++ 在安装包里，不能热更新；OTA 接收版本由发布者手动指定。
-- **耗时的计算**：同步调用期间 JS 线程被占住。要在后台算，用回调参数，C++ 在自己的线程（`Valdi::DispatchQueue::create`）算完再调回调，Valdi 会把调用转回 JS 线程。
+- **编进运行时**：启用的 C++ 模块由生成的 `CPP_IMPLEMENTATIONS` 选择，手写实现及其生成绑定通过 `valdi_exported_library` 的 `native_deps` 链接进 `libvaldi_runtime.so` 和 `ValdiRuntime.xcframework`。例如 `app_pages/cpp:native` 依赖自身与 `app_foundation` 的绑定；`app_vision/cpp:native` 还纳入 VisionCore 和静态 OpenCV/ncnn。业务代码静态链接进动态 runtime，不在宿主 CMake / Xcode 中另编一个 Vision DSO。包含静态工厂注册的实现 target 使用 `alwayslink`。
+- **检查与更新**：导出脚本生成绑定；Gradle 的 `valdiCodegenCheck` 和 Xcode 的 “Valdi bindings check” 继续检查生成结果。构建不比较 runtime 源码哈希；链接进 runtime 的 C++、vendor 或 cpp 模块启用名单变化后需手动重新导出并构建宿主。cpp 模块的依赖 hook 只随显式导出执行；其他 host 模块通过 `androidCmake`、`iosNativeSources` / `iosNativeFrameworks` 声明的宿主 C++ 和依赖仍由 Gradle / Xcode 正常构建处理。详见 [Vision 构建与打包](docs/vision-build.md)。C++ 在安装包里，不能热更新；OTA 接收版本由发布者手动指定。
+- **耗时的计算**：同步调用期间 JS 线程被占住。Vision 使用类型化回调，把任务交给 runtime worker queue，并将 PNG 写入 runtime disk cache；回调通过 Valdi 返回 JS。
 
 ## npm 依赖
 

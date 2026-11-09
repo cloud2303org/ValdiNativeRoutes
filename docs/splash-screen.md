@@ -44,7 +44,7 @@ reuse pattern. This host uses Valdi readiness instead of React's
 content-appeared notification.
 
 Edit the shared `assets/app-icon.png` to replace the mark. Its path is declared
-once as `valdi.app.icon` in `package.json`. Normal prebuild/build generates
+once as `valdi.app.icon` in `package.json`. The normal native build generates
 the iOS `AppIcon.appiconset` and `SplashLogo.imageset` under
 `ios/Generated/AppAssets.xcassets/` from that PNG. No PDF is used.
 The storyboard's image view remains 288 points square; edit the storyboard

@@ -1,5 +1,4 @@
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, realpathSync, symlinkSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
@@ -110,46 +109,5 @@ export function checkRuntime(root, platform) {
   catch { throw new Error(`${directory}/valdi_ota.json is invalid. Run:\n  ${exportCommand(platform)}`); }
   if (info.platform !== platform || !['debug', 'release'].includes(info.config)) {
     throw new Error(`${directory}/valdi_ota.json does not describe a valid ${platform} export. Run:\n  ${exportCommand(platform)}`);
-  }
-  const result = spawnSync(process.execPath, [path.join(root, 'scripts/ota.mjs'), 'valdi-hash', platform, info.config], {
-    cwd: root, encoding: 'utf8',
-  });
-  if (result.error || result.status !== 0) throw new Error(`Cannot check the ${platform} runtime fingerprint: ${result.error?.message ?? result.stderr.trim()}`);
-  const current = JSON.parse(result.stdout);
-  if (info.valdi !== current.valdi || info.native !== current.native) {
-    throw new Error(`${platform} Valdi runtime is out of date (Valdi fork/toolchain configuration or module C++ changed). Run:\n  ${exportCommand(platform)}${info.config === 'release' ? ' release' : ''}`);
-  }
-}
-
-export function checkVision(root, platform) {
-  const targets = platform === 'android'
-    ? ['opencv_core', 'opencv_imgproc', 'opencv_highgui', 'ncnn'].map(name => `vision/vendor/install/android-arm64/shared/lib/lib${name}.so`)
-    : ['vision/vendor/install/ios/VisionDependencies.xcframework/Info.plist'];
-  if (targets.some(file => !existsSync(path.join(root, file)))) {
-    throw new Error(`${platform} OpenCV/ncnn dependencies are missing. Run:\n  node vision/scripts/prepare-native.cjs --target ${platform === 'android' ? 'android-arm64' : 'ios'}`);
-  }
-  // The app fingerprint names vision/vendor-lock.json: libraries built from another lock
-  // would silently mix inputs, so compare the stamps the preparation writes.
-  const lock = JSON.parse(readFileSync(path.join(root, 'vision/vendor-lock.json'), 'utf8'));
-  const prepared = platform === 'android' ? ['android-arm64'] : ['ios-arm64', 'ios-simulator-arm64'];
-  for (const target of prepared) {
-    const stamp = path.join(root, 'vision/vendor/install', target, platform === 'android' ? 'shared' : '', 'native-routes-vision.json');
-    let info;
-    try { info = JSON.parse(readFileSync(stamp, 'utf8')); } catch { info = undefined; }
-    if (!info || info.opencv !== lock.opencv.version || info.ncnn !== lock.ncnn.version
-      || info.sourcePins?.opencv !== lock.opencv.sha256 || info.sourcePins?.ncnn !== lock.ncnn.sha256) {
-      throw new Error(`${platform} OpenCV/ncnn dependencies were built from another vision/vendor-lock.json. Run:\n  node vision/scripts/prepare-native.cjs --target ${platform === 'android' ? 'android-arm64' : 'ios'}`);
-    }
-    const androidPatch = path.join(root, 'vision/patches/opencv-mobile-android/INIT_MODULE_SOURCES_opencv_highgui.cmake');
-    const androidPatchHash = platform === 'android' && existsSync(androidPatch)
-      ? createHash('sha256').update(readFileSync(androidPatch)).digest('hex') : undefined;
-    if (platform === 'android' && (info.target !== target || info.linkage !== 'shared' || info.cpuOnly !== true
-      || info.android?.abi !== 'arm64-v8a' || info.android?.api !== 28 || info.android?.stl !== 'c++_shared'
-      || info.android?.cxxStandard !== 20 || info.android?.rtti !== true || info.android?.exceptions !== true
-      || info.android?.videoCaptureBackend !== 'none' || !androidPatchHash
-      || info.patches?.opencvAndroidHighgui !== androidPatchHash
-      || typeof info.android?.ndkRevision !== 'string' || !/^\d+\.\d+\.\d+$/.test(info.android.ndkRevision))) {
-      throw new Error(`android OpenCV/ncnn shared libraries have an incompatible configuration. Run:\n  node vision/scripts/prepare-native.cjs --target android-arm64`);
-    }
   }
 }

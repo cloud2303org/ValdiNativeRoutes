@@ -2,6 +2,7 @@ import Foundation
 
 /// Native callers may supply mutable Foundation collections. Store only recursively copied Swift containers and
 /// immutable scalar values, so later input mutations and edits to a returned value cannot change a page's payload.
+/// Invalid direct native input is a programmer error (precondition), matching the existing keys/cycles policy.
 struct RoutePayload {
     private let storage: [String: Any]
 
@@ -15,7 +16,10 @@ struct RoutePayload {
     private static func snapshot(_ value: Any, ancestors: inout Set<ObjectIdentifier>) -> Any {
         if value is NSNull { return NSNull() }
         // Keep NSNumber as NSNumber: converting through Bool or Double changes boolean identity or numeric values.
-        if let number = value as? NSNumber { return number.copy() as! NSNumber }
+        if let number = value as? NSNumber {
+            precondition(number.doubleValue.isFinite, "Route numbers must be finite")
+            return number.copy() as! NSNumber
+        }
         if let string = value as? NSString { return string as String }
         if let dictionary = value as? NSDictionary {
             let identity = ObjectIdentifier(dictionary)

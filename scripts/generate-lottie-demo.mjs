@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 // Resource generation only: no compiler, native build, download, or packager changes.
 const root = new URL('../', import.meta.url);
 const assetDir = new URL('valdi/modules/app_pages/assets/lottie/', root);
-const output = new URL('valdi/modules/app_pages/src/lottieDemoData.ts', root);
+const output = new URL('valdi/modules/app_pages/src/features/lottie/demoData.ts', root);
 const derivedOutput = new URL('gatin.skottie.json', assetDir);
 const receiptOutput = new URL('gatin.skottie.receipt.json', assetDir);
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');

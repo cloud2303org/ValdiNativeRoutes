@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { availableModuleNames, enabledModuleNames, pruneDisabledModuleOutputs } from '../../tools/valdi-rolldown/modules.mjs';
-import { nativeModuleInputs, nativeModules, syncNativeModuleRegistration } from '../native-modules.mjs';
+import { moduleAssetDirectories, nativeModuleInputs, nativeModules, syncNativeModuleRegistration } from '../native-modules.mjs';
 import { sampleApp } from './fixtures/app-config.mjs';
 
 function fixture(t) {
@@ -103,6 +103,25 @@ test('host media assets participate in native compatibility and selected iOS res
   assert.ok(!nativeModuleInputs('ios', root).some(file => file.includes('/calculator/')));
 });
 
+test('TS-only business assets are packaged without a native module declaration and leave with selection', t => {
+  const { root, select, write } = fixture(t);
+  write('valdi/modules/app_pages/assets/flower.mp4', 'business media');
+  write('valdi/modules/calculator/assets/disabled.mp4', 'disabled media');
+  select(['app_pages']);
+  assert.deepEqual(nativeModules(root), []);
+  assert.deepEqual(moduleAssetDirectories(root), ['valdi/modules/app_pages/assets']);
+  syncNativeModuleRegistration(root);
+  const sources = () => JSON.parse(readFileSync(path.join(root, 'ios/Generated/Modules.yml'), 'utf8')).targets.SampleApp.sources;
+  assert.deepEqual(sources(), [{
+    path: '../../valdi/modules/app_pages/assets', group: 'Modules/app_pages', buildPhase: 'resources',
+  }]);
+  assert.ok(nativeModuleInputs('android', root).includes('valdi/modules/app_pages/assets'));
+  select([]);
+  syncNativeModuleRegistration(root);
+  assert.deepEqual(moduleAssetDirectories(root), []);
+  assert.deepEqual(sources(), []);
+});
+
 test('disabling a module removes previously staged archives, maps, native libraries and resource bundles only for that module', t => {
   const { root, write } = fixture(t);
   for (const file of ['bluetooth.valdimodule', 'bluetooth.map.json', 'bluetooth.bundle/icon.png', 'bluetooth/libbluetooth_ios.a', 'calculator.valdimodule', 'valdi_core.valdimodule']) {
@@ -169,11 +188,15 @@ test('module-owned iOS dependency metadata rejects unsafe, conflicting and ambig
 test('the five real services select their own native sources and platform dependencies without app_pages', t => {
   const { root, select, write } = fixture(t);
   const repository = path.resolve(import.meta.dirname, '../..');
-  const names = ['mmkv', 'permissions', 'wifi', 'nfc', 'app_ui', 'native_common'];
+  const services = ['mmkv', 'permissions', 'wifi', 'nfc', 'app_ui'];
+  const names = [...services, 'native_common', 'theme_bridge'];
   for (const name of names) cpSync(path.join(repository, 'valdi/modules', name),
     path.join(root, 'valdi/modules', name), { recursive: true });
-  for (const service of names.filter(name => name !== 'native_common')) {
-    const dependencies = ['native_common', ...(['wifi', 'nfc'].includes(service) ? ['permissions'] : [])];
+  select(['app_ui', 'native_common']);
+  assert.throws(() => enabledModuleNames(root), /app_ui.*disabled module "theme_bridge"/);
+  for (const service of services) {
+    const dependencies = ['native_common', ...(['wifi', 'nfc'].includes(service) ? ['permissions'] : []),
+      ...(service === 'app_ui' ? ['theme_bridge'] : [])];
     select([service, ...dependencies]);
     const selected = syncNativeModuleRegistration(root);
     assert.deepEqual(selected.map(module => module.name), [service, ...dependencies.filter(name => name !== 'native_common')].sort());

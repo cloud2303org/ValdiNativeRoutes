@@ -5,8 +5,6 @@ import ValdiRuntime
 enum AppNativeModules {
     static func register(_ runtime: SCValdiRuntime, navigationHost: VRNavigationHost) {
         runtime.registerNativeModuleFactory(AppContextModuleFactory(navigationHost: navigationHost))
-        runtime.registerNativeModuleFactory(OtaModuleFactory())
-        runtime.registerNativeModuleFactory(VisionModuleFactory())
         runtime.registerNativeModuleFactory(SplashScreenModuleFactory())
     }
 }
@@ -42,16 +40,4 @@ private final class AppContextModuleFactory: VRAppContextNativeModuleFactory {
     }
 
     override func onLoadModule() -> any VRAppContextNativeModule { module }
-}
-
-private final class VisionModule: NSObject, VRVisionNativeModule {
-    private lazy var host = VisionHostImpl()
-
-    func getHost() -> any VRVisionHost { host }
-}
-
-private final class VisionModuleFactory: VRVisionNativeModuleFactory {
-    private let module = VisionModule()
-
-    override func onLoadModule() -> any VRVisionNativeModule { module }
 }

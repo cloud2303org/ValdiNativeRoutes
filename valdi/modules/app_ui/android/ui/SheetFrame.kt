@@ -28,7 +28,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.window.Dialog as WindowDialog
-import androidx.core.view.WindowCompat
 import io.valdiroutes.app_ui.ui.SheetHostView
 
 /** Internal body policies; callers choose a dedicated sheet component. */
@@ -58,10 +57,7 @@ internal fun SheetFrame(open: Boolean, onOpenChange: (Boolean, SheetDismissReaso
                 window?.let {
                     it.setDimAmount(0f)
                     it.setWindowAnimations(0)
-                    WindowCompat.getInsetsController(it, view).apply {
-                        isAppearanceLightStatusBars = colors.surface.luminance() > 0.5f
-                        isAppearanceLightNavigationBars = colors.surface.luminance() > 0.5f
-                    }
+                    // The scrim darkens the whole screen, status bar included; keep the theme's default icons.
                 }
             }
             BoxWithConstraints(Modifier.fillMaxSize()) {

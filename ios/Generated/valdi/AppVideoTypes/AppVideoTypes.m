@@ -1,4 +1,26 @@
 //
+// VRVideoMode.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectRegistry.h>
+
+#import "AppVideoTypes.h"
+
+VRVideoMode VRVideoModeInline = @"inline";
+VRVideoMode VRVideoModeFullscreen = @"fullscreen";
+VRVideoMode VRVideoModePictureInPicture = @"pictureInPicture";
+VALDI_STRING_ENUM(VRVideoMode, VRVideoModeInline, VRVideoModeFullscreen, VRVideoModePictureInPicture)
+NSArray<NSString *> * _Nonnull VRVideoModeGetAllCases() {
+    static dispatch_once_t onceToken;
+    static NSArray<NSString *> *kAllCases;
+    dispatch_once(&onceToken, ^{
+        kAllCases = @[VRVideoModeInline, VRVideoModeFullscreen, VRVideoModePictureInPicture];
+    });
+    return kAllCases;
+}
+
+//
 // VRVideoNativeModule.m
 //
 
@@ -57,7 +79,7 @@
 @dynamic playbackRate;
 @dynamic sequence;
 
-- (instancetype _Nonnull)initWithCurrentTimeMs:(double)currentTimeMs durationMs:(double)durationMs playing:(BOOL)playing requestedPlayback:(BOOL)requestedPlayback mode:(NSString * _Nonnull)mode supportsPictureInPicture:(BOOL)supportsPictureInPicture error:(NSString * _Nonnull)error loaded:(BOOL)loaded ended:(BOOL)ended volume:(double)volume playbackRate:(double)playbackRate sequence:(double)sequence
+- (instancetype _Nonnull)initWithCurrentTimeMs:(double)currentTimeMs durationMs:(double)durationMs playing:(BOOL)playing requestedPlayback:(BOOL)requestedPlayback mode:(VRVideoMode _Nonnull)mode supportsPictureInPicture:(BOOL)supportsPictureInPicture error:(NSString * _Nonnull)error loaded:(BOOL)loaded ended:(BOOL)ended volume:(double)volume playbackRate:(double)playbackRate sequence:(double)sequence
 {
     return [super initWithFieldValues:nil, currentTimeMs, durationMs, playing, requestedPlayback, mode, supportsPictureInPicture, error, loaded, ended, volume, playbackRate, sequence];
 }
@@ -69,7 +91,7 @@
         {.name = "durationMs", .selName = nil, .type = "d"},
         {.name = "playing", .selName = nil, .type = "b"},
         {.name = "requestedPlayback", .selName = nil, .type = "b"},
-        {.name = "mode", .selName = nil, .type = "s"},
+        {.name = "mode", .selName = nil, .type = "r:'[0]'"},
         {.name = "supportsPictureInPicture", .selName = nil, .type = "b"},
         {.name = "error", .selName = nil, .type = "s"},
         {.name = "loaded", .selName = nil, .type = "b"},
@@ -79,7 +101,11 @@
         {.name = "sequence", .selName = nil, .type = "d"},
         {.name = nil},
     };
-    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+    static const char *const kIdentifiers[] = {
+        "VRVideoMode",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
 }
 
 @end

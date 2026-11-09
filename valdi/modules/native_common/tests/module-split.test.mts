@@ -139,19 +139,16 @@ test('disabled source dependencies fail selection checks without auto-enabling',
 
 test('factory-backed storage preserves snapshots, null/missing distinction and facade ApiError identity', () => {
   const r = runtime();
-  // Stand in for native persistence, which encodes on write and decodes on read.
-  // The JS facade forwards structured values; it does not clone them.
+  // Native persistence stores JSON text unchanged; the real JS facade owns
+  // serialization, parsing and error conversion.
   const records = new Map<string, string>();
   r.hosts.mmkv = {
     get: (key: string) => ({
       found: records.has(key),
-      payload: records.has(key) ? JSON.parse(records.get(key)!) : {},
-      error: '',
+      value: records.get(key) ?? '',
     }),
-    set: ({ key, payload }: any) => {
-      const encoded = JSON.stringify(payload);
-      if (!Object.prototype.hasOwnProperty.call(JSON.parse(encoded), 'value')) return false;
-      records.set(key, encoded);
+    set: ({ key, value }: { key: string; value: string }) => {
+      records.set(key, value);
       return true;
     },
     remove: (key: string) => records.delete(key),
@@ -159,6 +156,7 @@ test('factory-backed storage preserves snapshots, null/missing distinction and f
   };
   Object.assign(r.context, { facade: r.load('app_pages/src/services/api') });
   assert.equal(r.evaluate(`facade.api.setStorageSync('x', null); facade.api.getStorageSync('x')`), null);
+  assert.equal(records.get('x'), 'null');
   assert.equal(r.evaluate(`facade.api.getStorageSync('missing')`), undefined);
   assert.equal(
     r.evaluate(
@@ -169,6 +167,20 @@ test('factory-backed storage preserves snapshots, null/missing distinction and f
   assert.equal(
     r.evaluate(
       `try { facade.api.setStorageSync('x', undefined); false } catch (error) { error instanceof facade.ApiError && error.errMsg.startsWith('setStorageSync:fail ') }`,
+    ),
+    true,
+  );
+  records.set('x', '{broken');
+  assert.equal(
+    r.evaluate(
+      `try { facade.api.getStorageSync('x'); false } catch (error) { error instanceof facade.ApiError && error.errMsg.startsWith('getStorageSync:fail ') }`,
+    ),
+    true,
+  );
+  r.hosts.mmkv.set = () => false;
+  assert.equal(
+    r.evaluate(
+      `try { facade.api.setStorageSync('x', null); false } catch (error) { error instanceof facade.ApiError && error.errMsg.startsWith('setStorageSync:fail ') }`,
     ),
     true,
   );

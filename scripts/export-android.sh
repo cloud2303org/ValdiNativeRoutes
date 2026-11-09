@@ -1,16 +1,15 @@
 #!/bin/sh
 # Rebuild the Valdi runtime into android/app/libs/valdi_runtime.aar: libvaldi_runtime.so, Valdi's Kotlin and its own
-# modules (valdi_core, valdi_tsx), and the app's module-owned C++ (@ExportModule implementations and their
+# modules (native_web, valdi_core, valdi_tsx), and the app's module-owned C++ (@ExportModule implementations and their
 # bindings), linked into the runtime. app_pages and the npm packages are built by the app's Gradle build
 # (tools/valdi-rolldown), so this is only needed when the pinned Valdi fork/toolchain or module C++ changes.
 # Builtin modules use the local Node backend by default; compiler changes also require a new export.
 # The old Swift Valdi compiler and its fallback have been removed.
-# Usage: scripts/export-android.sh [debug|release] [output dir, default android/app/libs] [Bazel library]
+# Usage: scripts/export-android.sh [debug|release] [output dir, default android/app/libs]
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 config=${1:-debug}
 out=${2:-$root/android/app/libs}
-library=${3:-//:valdi_runtime_android}
 mkdir -p "$out"
 out=$(cd "$out" && pwd)
 case "$(uname -s)" in
@@ -29,10 +28,11 @@ case "$(uname -s)" in
     export ANDROID_HOME=${ANDROID_HOME:-$LOCALAPPDATA/Android/Sdk}
     ;;
 esac
-# First checkout: fetch the pinned Valdi declarations before checking the app's C++ bindings.
+# Runtime-linked C++ dependencies are prepared only by this explicit export, before any Bazel work.
+# Fetch pinned declarations and generate the native bindings used by this explicit export.
 node "$root/scripts/prepare-valdi.mjs"
-# The C++ bindings must be current: they're compiled into the runtime here.
-(cd "$root/tools/valdi-rolldown" && pnpm exec tsx codegen.ts --cpp-modules-out ../../valdi/modules --check)
+node "$root/scripts/native-dependencies.mjs" prepare-runtime android
+(cd "$root/tools/valdi-rolldown" && pnpm exec tsx codegen.ts --kotlin-out ../../android/app/generated/valdi --cpp-modules-out ../../valdi/modules)
 cd "$root/valdi"
 # valdi export always builds arm32/arm64/x86_64 (an extra --android_platforms adds to the list instead of
 # replacing it); the app's abiFilters keeps only arm64 in the APK.
@@ -49,7 +49,7 @@ case "$(uname -s)" in
     fi
     # shellcheck disable=SC2086
     # --max_idle_secs keeps the server from outliving this script with an inherited stdout.
-    "$bazel_bin" ${VALDI_BAZEL_STARTUP_ARGS:-} --max_idle_secs=60 build "$library" \
+    "$bazel_bin" ${VALDI_BAZEL_STARTUP_ARGS:-} --max_idle_secs=60 build //:valdi_runtime_android \
       $config_flags \
       --config=stable_exec \
       --copt=-DANDROID_WITH_JNI \
@@ -61,14 +61,11 @@ case "$(uname -s)" in
       ${VALDI_BAZEL_ARGS:-}
     # Bazel outputs are read-only; replace an existing export instead of
     # inheriting that attribute on Windows.
-    artifact=${library#//}
-    artifact=$(printf '%s' "$artifact" | tr ':' '/')
-    artifact=${artifact#/}
-    cp -f "$root/valdi/bazel-bin/$artifact.aar" "$out/valdi_runtime.aar"
+    cp -f "$root/valdi/bazel-bin/valdi_runtime_android.aar" "$out/valdi_runtime.aar"
     ;;
   *)
     pnpm exec valdi export android \
-      --library "$library" \
+      --library //:valdi_runtime_android \
       --build_config "$config" \
       --bazel_args="${VALDI_BAZEL_ARGS:-}" \
       --output_path "$out/valdi_runtime.aar"
@@ -78,7 +75,5 @@ esac
 # What earlier versions of this script left here: the aar with app_pages in it, and the modules' resources.
 rm -rf "$out/valdi_pages.aar" "$out/valdi_res" "$out/valdi_exported"
 
-# The Valdi half of the over-the-air fingerprint (toolchain, module C++, generated bindings) and the module C++ inputs' own
-# hash, which the app's build checks this export against; the app's Gradle build adds the native half
-# (ota/fingerprint.json).
-node "$root/scripts/ota.mjs" valdi-hash android "$config" >"$out/valdi_ota.json"
+# Platform/build configuration is needed for OTA release metadata, without source fingerprints.
+node "$root/scripts/runtime-info.mjs" android "$config" >"$out/valdi_ota.json"

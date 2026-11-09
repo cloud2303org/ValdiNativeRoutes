@@ -63,7 +63,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
-import androidx.core.view.WindowCompat
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
@@ -139,10 +138,8 @@ private fun AppModalDialog(modal: ModalPresentation) {
             window?.let {
                 it.setDimAmount(0f)
                 it.setWindowAnimations(0)
-                WindowCompat.getInsetsController(it, view).apply {
-                    isAppearanceLightStatusBars = true
-                    isAppearanceLightNavigationBars = true
-                }
+                // The scrim darkens the whole screen, status bar included, so the dialog window keeps its theme's
+                // default (light icons) and no appearance override is needed here.
             }
         }
         DialogLayout(scrim.value, onBackdrop = { close(false) }) {

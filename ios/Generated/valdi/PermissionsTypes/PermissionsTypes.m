@@ -1,4 +1,26 @@
 //
+// VRPermissionGrantResult.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectRegistry.h>
+
+#import "PermissionsTypes.h"
+
+VRPermissionGrantResult VRPermissionGrantResultGranted = @"granted";
+VRPermissionGrantResult VRPermissionGrantResultDenied = @"denied";
+VRPermissionGrantResult VRPermissionGrantResultNeverAskAgain = @"never_ask_again";
+VALDI_STRING_ENUM(VRPermissionGrantResult, VRPermissionGrantResultGranted, VRPermissionGrantResultDenied, VRPermissionGrantResultNeverAskAgain)
+NSArray<NSString *> * _Nonnull VRPermissionGrantResultGetAllCases() {
+    static dispatch_once_t onceToken;
+    static NSArray<NSString *> *kAllCases;
+    dispatch_once(&onceToken, ^{
+        kAllCases = @[VRPermissionGrantResultGranted, VRPermissionGrantResultDenied, VRPermissionGrantResultNeverAskAgain];
+    });
+    return kAllCases;
+}
+
+//
 // VRPermissionGrant.m
 //
 
@@ -12,7 +34,7 @@
 @dynamic permission;
 @dynamic result;
 
-- (instancetype _Nonnull)initWithPermission:(NSString * _Nonnull)permission result:(NSString * _Nonnull)result
+- (instancetype _Nonnull)initWithPermission:(NSString * _Nonnull)permission result:(VRPermissionGrantResult _Nonnull)result
 {
     return [super initWithFieldValues:nil, permission, result];
 }
@@ -21,10 +43,14 @@
 {
     static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
         {.name = "permission", .selName = nil, .type = "s"},
-        {.name = "result", .selName = nil, .type = "s"},
+        {.name = "result", .selName = nil, .type = "r:'[0]'"},
         {.name = nil},
     };
-    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+    static const char *const kIdentifiers[] = {
+        "VRPermissionGrantResult",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
 }
 
 @end

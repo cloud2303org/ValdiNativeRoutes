@@ -33,8 +33,8 @@ pnpm new-module bluetooth --template polyglot_bridge_module --ios-language swift
 这里的 TSX 模块提供 Valdi 运行时的模块名、组件、资源和原生契约，产物为 `.valdimodule`。
 pnpm 安装的是构建工具和 npm 依赖；这些依赖仍会由 Node 管线处理，两者用途不同。
 
-生成的原生模板使用 `node_valdi_module()`，由 `module.json` 驱动宿主自动链接和注册。
-创建后运行 `pnpm android` 或 `pnpm ios` 即可准备模块库并构建 App。
+生成的宿主原生模板使用 `node_valdi_module()`，由 `module.json` 驱动宿主自动链接和注册。
+启用模块并生成所需绑定后，运行 `pnpm android` 或 `pnpm ios`，Gradle / Xcode 会构建模块库和 App。
 修改 Kotlin / Objective-C / Swift 实现需要重新构建 App；只修改 TSX 页面可用开发服务器热更新。
 官方模板默认使用 Objective-C；仓库同时提供 Swift 实现选项。
 保留 Web / macOS 模板源码不代表当前仓库提供对应宿主的构建入口。
@@ -66,8 +66,8 @@ import { multiply } from 'math_core/src';
 const result = multiply(6, 7);
 ```
 
-执行 `pnpm prebuild --platform android` 或 `pnpm prebuild --platform ios`，
-公共流程会生成 `cpp/generated/` 绑定，并更新 `valdi/modules/runtime-cpp.bzl`：
+首次使用或修改链接进 runtime 的 C++ 后，手动执行 `scripts/export-android.sh debug` 或
+`scripts/export-ios.sh debug`。导出生成 `cpp/generated/` 绑定，并更新 `valdi/modules/runtime-cpp.bzl`：
 
 - `CPP_IMPLEMENTATIONS` 选择所有启用模块中拥有 `cpp/src` 实现的 `:native` target。
 - `CPP_BINDING_DEPS` 根据生成代码的跨模块 include 声明 `:bindings` 依赖。
@@ -78,9 +78,21 @@ const result = multiply(6, 7);
 额外第三方 C++ 库仍应通过模块自己的 `cpp/BUILD.bazel` 的 `deps` 明确声明。
 
 模块实现和绑定最终静态链接进同一个 Valdi runtime。这里统一的是模块编译和接入流程，
-没有新增模块动态库或另一份 Hermes。C++ 实现或接口变化需要重新导出 runtime、构建原生 App；
-普通构建会拒绝不匹配的旧导出，不能仅通过 TS OTA 更新这些代码。
+没有新增模块动态库或另一份 Hermes。`nativeBuild: "cpp"` 将业务静态代码放入动态 ValdiRuntime，
+Android 载体为 `libvaldi_runtime.so`，iOS 载体为 ValdiRuntime framework。
+C++ 实现、接口、vendor 或启用的 cpp 模块名单变化需要手动重新导出 runtime、构建原生 App；
+普通构建不通过源码指纹识别旧导出，开发者需主动保持一致。这些代码不能通过 TS OTA 更新。
+这里的 runtime 内静态链接与 `androidCmake` / `iosNativeSources` 声明的宿主 C++ 不同；
+后者及模块声明的 framework 由 Gradle / Xcode 随原生构建自动编译链接。
 模板方法同步运行在 JS 线程，耗时计算应另行设计异步执行接口。
+
+Vision 使用现有 Polyglot 强类型 C++ 生成绑定、手写适配器和 `nativeBuild: "cpp"`，
+将 VisionCore/OpenCV/ncnn 静态链接进同一个 runtime。适配器使用 runtime worker queue 和 disk cache，
+保留类型化回调；不再逐方法实现 Kotlin/Swift、JNI/Objective-C++ 桥接。
+Android vendor 缓存需兼容 runtime 的 NDK r28，iOS 使用 arm64 真机/模拟器静态缓存。
+依赖准备与链接边界见 [Vision 构建与打包](vision-build.md)，旧 shared 方案的验证不证明静态方案已通过。
+OTA 的 Kotlin/Swift 客户端、工厂和 C codec 构建集中在 `app_ota` 内，
+仍随宿主编译，不迁入 runtime。手动启停接线见 [app_ota 使用说明](../valdi/modules/app_ota/README.md)。
 
 ## Swift 与 SwiftUI
 
@@ -157,7 +169,9 @@ ID 是 `valdi/modules/` 下的目录名。模块的 `module.json` 描述原生�
 App 的名单只引用这些 ID。未列出的模块可以留在仓库，但不会被本 App 的 TS 构建、
 原生构建、工厂注册、模块 JAR/静态库汇总或 OTA 打包选中。Bazel 内的模块目标仍可单独构建。
 新增脚手架模块不会自动启用；把它加入名单后运行 `pnpm android` / `pnpm ios`，
-有新导出声明时由 prebuild 更新绑定。
+有新导出声明时先生成绑定（见主 README 的 codegen 命令）；构建中的绑定检查继续保留。
+如果名单变化涉及 `nativeBuild: "cpp"`，先手动重新导出 runtime，再构建 App；
+仅重建宿主不会增加或移除旧 runtime 内的静态代码。
 
 启用模块中的 TS、声明文件或 BUILD 依赖若仍引用未启用模块，构建会明确报错，
 不会隐式启用依赖。目前 `app_pages` 的蓝牙演示与启动代码依赖 `bluetooth`；
@@ -169,7 +183,7 @@ WebView 演示同样依赖 `valdi_webview`；停用时需一起移除页面和�
 避免上一次构建留下的文件混入包内。修改名单后重建 App，并重启已经运行的 `pnpm dev`。
 外部 npm 依赖和 Valdi runtime 内置模块不使用这份名单。
 
-Android 权限/feature、模块自己的 Manifest application 节点、资源和依赖，iOS 隐私说明、系统 framework、SwiftPM 包及 entitlements，均按启用名单合入。共享定位权限由 Wi-Fi 和蓝牙分别贡献，相同声明合并，冲突明确失败；签名团队仍属于宿主。
+Android 权限/feature、模块自己的 Manifest application 节点、资源和依赖，iOS 隐私说明、系统 framework、SwiftPM 包及 entitlements，均按启用名单合入。源码编译的本地依赖可使用 `nativeDependencies` 声明准备脚本；cpp 模式在手动 runtime 导出中执行，host 模式随正常原生构建执行。宿主 Android CMake 和 iOS 源码/静态 framework 同样由模块贡献，见 [Vision 构建与打包](vision-build.md)。共享定位权限由 Wi-Fi 和蓝牙分别贡献，相同声明合并，冲突明确失败；签名团队仍属于宿主。
 
 ### 五个服务模块
 
@@ -179,7 +193,7 @@ Android 权限/feature、模块自己的 Manifest application 节点、资源和
 | `permissions` | 共享权限队列及原生系统设置入口，Android Activity 权限结果 | `native_common` |
 | `wifi` | 原有 Android/iOS Wi-Fi 核心、权限、iOS HotspotConfiguration / wifi-info | `permissions`, `native_common` |
 | `nfc` | 原有 Android reader mode 核心；iOS 保持不支持 | `permissions`, `native_common` |
-| `app_ui` | 弹窗、菜单、选择器、扫码、附件、Toast/Loading 和原生展示控件 | `native_common` |
+| `app_ui` | 弹窗、菜单、选择器、扫码、附件、Toast/Loading 和原生展示控件 | `native_common`, `theme_bridge` |
 
 `native_common` 只提供共享的 TS 数据校验和辅助函数，没有原生工厂。业务可从 `app_pages/src/services/api` 使用应用组合的 API；类型、权限和辅助函数直接从对应模块导入，旧服务路径的兼容转发文件已删除。正常运行通过模块工厂获取原生 Host，无需再由 `ValdiHost` 逐个注入。生产接口不再暴露安装覆盖函数；测试在原生入口边界提供替身。
 
@@ -190,6 +204,17 @@ Android 权限/feature、模块自己的 Manifest application 节点、资源和
 Android 的模块工厂在注册时创建并保留，权限、Wi-Fi、NFC 能观察第一个 Activity 生命周期。宿主通过 permissions 工厂的 `requireHost()` 借出权限 launcher。AppUI 的页面归属、关闭及展示时机仍由导航宿主通知，导航本身不属于服务模块。iOS 的图片加载器由宿主通过 `AppUI.imageLoader` 提供，沿用原来的缓存与传输策略。
 
 停用前需移除业务和原生宿主的对应引用；保留引用会明确报错，不会偷偷启用模块。生成的 `ios/Generated/Modules.yml` 管理所选源目录、SwiftPM 和系统框架，`AppEntitlements.entitlements` 与 `AppInfo.plist` 管理平台声明。Android 主 Manifest 和 iOS 基础 plist 不再固定声明这五项服务的专属配置。选中的 AppUI 文件 Provider 及相应 XML 随模块生成。
+
+ThemeBridge 和 AppUI 是模板默认启用的基础组件。AppUI 保持整包能力，
+包含扫码、附件及其平台依赖。原生页面可直接调用模块的原生 API；
+AppUI 的原生 UiDesign 直接读取 ThemeTokensStore，不经 JS 转发。
+源码、测试和手动启停接线见 [AppUI 使用说明](../valdi/modules/app_ui/README.md)。
+
+Bluetooth 的 `module.json` 声明宿主 Gradle 依赖，`BUILD.bazel` 通过
+`@bluetooth_mvn` 链接独立原生库；该仓库的固定坐标位于
+`module-build/MODULE.bazel`，JitPack 仓库同时在该 workspace 和宿主
+`android/settings.gradle.kts` 声明。升级 Blessed/Core 时一起检查这些位置；
+仓库地址本身不代表停用后仍会打包 Bluetooth 实现。
 
 `valdi/modules/bluetooth` 实际通过上面的 `polyglot_bridge_module` 命令创建，
 再用已有 BLE 业务替换模板里的 Calculator 示例。它使用相同的 Node 编译、绑定生成、
@@ -260,14 +285,14 @@ bazel build //modules/calculator:calculator_ios --platforms=//:ios_sim_arm64
 bazel build //modules/calculator:calculator_android --android_platforms=@snap_platforms//os:android_arm64
 ```
 
-在仓库根目录执行下面的入口，会同时构建模块并整理宿主需要的产物：
+日常在仓库根目录执行原生构建，Gradle / Xcode 自动构建模块并整理宿主需要的产物：
 
 ```sh
-node scripts/node-modules.mjs ios
-node scripts/node-modules.mjs android
 pnpm build:ios
 pnpm build:android
 ```
+
+正常原生构建不需要先单独运行模块库构建，根 runner 也不提前重复编译模块库。
 
 `module-build/out/ios/calculator/` 包含静态库和生成头文件；
 `module-build/out/android/calculator/` 包含模块 jar。
@@ -277,7 +302,8 @@ pnpm build:android
 
 ## 接入边界
 
-- `module.json` 用 `nativeBuild: "bazel"` 选择独立原生库，或用 `nativeBuild: "host"` 选择宿主编译原生源目录；`iosModuleName` 必须与 BUILD 声明一致。
+- `module.json` 用 `nativeBuild: "bazel"` 选择独立原生库，`nativeBuild: "host"` 选择宿主编译原生源目录，
+  `nativeBuild: "cpp"` 选择静态链接进 runtime 的 C++ 实现。宿主原生库的 `iosModuleName` 必须与 BUILD 声明一致。
 - Node 的 `module-build.ts` 在临时目录生成 tsconfig、资源声明和绑定，不向源模块或宿主绑定目录写文件。
 - TS 模块依赖通过 `deps` 指定其他模块的 `_compiled` target，规则传递源码输入和资源类型声明。
   原生库依赖分别由 `android_deps` / `ios_deps` 声明。calculator 本身不依赖 app_pages。
@@ -285,22 +311,36 @@ pnpm build:android
   宿主 Gradle 会读取这些坐标；它不会自动解析 Bazel 依赖图。BOM 放在 `androidPlatforms`。
   `iosFrameworks`、`iosPackages` 和 `iosEntitlements` 分别贡献系统框架、SwiftPM 包和布尔 entitlements。
   SwiftPM 版本使用固定 `revision` 或 `from`，有冲突时生成失败。
+- 本地原生依赖使用 `nativeDependencies: { "script": "scripts/native-dependencies.mjs", "inputs": ["vendor-lock.json"] }`。
+  脚本接收 `check|prepare android|ios`，检查成功返回 0，缺失/过期或构建失败返回非零。
+  只处理启用模块；cpp 模式仅在显式手动 runtime 导出时执行，host 模式仍在正常 App 构建时执行。
+  缓存有效时跳过准备，缺失/过期时执行准备并复查，失败即停止相应构建或导出。
+  停用模块不参与新的检查、准备、编译或链接；移除已链接 cpp 模块仍需手动重新导出 runtime。
+  普通构建不自动导出，也没有公开 prebuild 或运行时源码指纹检查。
+  宿主模块的 `androidCmake` 指定 CMake 源目录；`iosNativeSources` / `iosNativeFrameworks` 声明额外源码和静态 framework。
+  `iosProjectSpec` 可指定模块内的 XcodeGen spec，例如 `app_ota` 的 `ios/project.yml`；
+  仅启用该模块时引入其目标、应用依赖和脚本。spec 路径相对模块目录，内部源码路径相对 spec；
+  构建脚本和设置中的 `SRCROOT` 仍是宿主 `ios/` 目录。
+  cpp 模块的 vendor 静态库由模块自己的 C++ Bazel 规则纳入 runtime 链接。
+  路径均相对模块目录，可引用仓库内本地依赖包；`nativeInputs` 声明额外手写原生输入，避免纳入 vendor 编译缓存。
+  `iosBuildSettings` 贡献 Xcode 设置，`${MODULE_DIR}` 展开为模块路径，数组合并去重，冲突的标量设置报错。
 - Android 由 `scripts/native-modules.mjs` 生成工厂和 AttributesBinder 注册入口，不依赖上游注解处理器。
 - iOS 保留模板的 factory / protocol 结构。已有 XCFramework 隐藏了
   `VALDI_REGISTER_MODULE()` 调用的 C 注册函数，因此由模块导出工厂创建函数，宿主通过公开的
   `registerNativeModuleFactory` 注册。calculator 接入本身不要求修改 runtime 实现。
 - calculator 的根视图类同样由 Node 生成并编入模块静态库；Swift 宿主只创建这个类。
-- OTA 把独立模块当前生成的原生声明纳入绑定指纹，单纯修改页面 JS 不改变这部分 ABI 指纹。
-  手写原生实现、声明和原生构建配置仍影响二进制兼容性。
+- 手写原生实现、声明和原生构建配置仍影响二进制兼容性；OTA 不计算原生源码或绑定指纹，
+  发布者负责平台和 App 版本对应的 API 兼容性。
 
-新增原生模块由生成器创建 BUILD 和 module.json，并自动接入宿主的链接及工厂注册。
+新增宿主原生模块由生成器创建 BUILD 和 module.json，并自动接入宿主的链接及工厂注册；
+cpp 模板则接入前述 runtime 静态链接流程。
 `androidModuleFactory`、`androidViewBinder`、`iosModuleFactory` 指定相应注册类或函数；
 Android 工厂默认使用无参构造；`--android-context` 创建的工厂接收 `applicationContext`。
 Binder 使用接收 `Context` 的构造；iOS 工厂函数返回
 `id<SCNValdiCoreModuleFactory>`。手写模块也可以使用这些字段。
 iOS 模块库合并到 `module-build/out/ios/libvaldi_modules_ios.a`，
 生成头文件集中在 `module-build/out/ios/include`；Android 按模块链接各自的 JAR。
-OTA 动态纳入这些模块的原生实现、BUILD、配置和生成契约，避免原生实现改变后误发兼容更新。
+这些原生实现、BUILD、配置和生成契约随原生 App 发布；不兼容变化应提升 App 版本并发布新安装包。
 主 `valdi/.bazelignore` 排除 App 的 `modules/`，因为这些 BUILD 属于独立 workspace。
 
 ## 验证与限制
@@ -329,9 +369,11 @@ Release Hermes 文件头、显式模块依赖及资源类型传递，以及类�
 当前规则使用本机已安装的 Node / pnpm 依赖和已导出的 runtime，Node action 明确设置为
 local、no-cache，不支持远程执行，也不声称是完全密封的工具链。
 两套 workspace 的 Valdi commit 必须一致，宿主入口会检查；升级 fork 时同步模块 workspace 的 pin 和 registry。
-目前 iOS 宿主准备入口针对 arm64 模拟器，未提供真机 XCFramework 打包。
-C++ 绑定通过 `cpp` output group 暴露；本实验没有 C++ 手写实现，尚不证明独立 C++ 库的链接、加载或 ABI。
+这里的独立宿主模块库构建说明针对 arm64 模拟器，不是 Vision vendor 的真机/模拟器静态缓存说明。
+C++ 绑定通过 `cpp` output group 暴露；编译器支持生成 C++。这里的 calculator 独立模块实验
+没有 C++ 手写实现，其结果不证明独立 C++ 库或本次 Vision 静态 runtime 接入的链接、加载及 ABI。
 
+以下为既有历史验证，不代表本次 Vision 静态接入已构建或通过设备验证。
 2026-10-29 本地验证：`pnpm test`（含 5 个自定义模块测试、7 个内置模块测试和绑定 golden）、
 iOS / Android 完整 Debug App 构建均通过。后续 runtime Node 编译后端迁移已重新导出两端 runtime，
 此前 Android 的旧 AAR 工具链指纹阻塞已解决。

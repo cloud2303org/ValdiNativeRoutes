@@ -134,7 +134,7 @@ The parent executed the eight iOS native Promise/Objective-C bridge XCTest cases
 also reproduced that result against the fresh exported runtime:
 
 ```sh
-python3 ios/Tests/run-appui-promise-tests.py --udid <already-booted-simulator-udid>
+python3 valdi/modules/app_ui/tests/ios/run-appui-promise-tests.py --run --udid <already-booted-simulator-udid>
 ```
 
 The runner generates an isolated test project and does not boot or select a device. Evidence is retained in

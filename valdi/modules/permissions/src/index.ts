@@ -1,6 +1,7 @@
 import { Device } from 'valdi_core/src/Device';
 import { nativeCall } from 'native_common/src/nativeCall';
 import { getHost, getAndroidSdk } from './Permissions';
+import { PermissionGrantResult } from './PermissionHost';
 
 // Runtime permissions for `api` (Bluetooth, Wi-Fi, NFC), on the host's PermissionHost. The prompt queue and the
 // granted/denied/blocked bookkeeping are after ExpoNativeRoutes' device-permissions.
@@ -37,15 +38,17 @@ const check = async (permission: string): Promise<boolean> => {
   return result;
 };
 
-type PermissionGrantResult = 'granted' | 'denied' | 'never_ask_again';
-
 /** Hosts normalize OS-specific results at their boundary; unknown values are host errors. */
 async function requestMultiple(permissions: string[]): Promise<Record<string, PermissionGrantResult>> {
   const results = await nativeCall(() => getHost().requestMultiple(permissions));
   const map: Record<string, PermissionGrantResult> = {};
   results.forEach(grant => {
     const result = grant.result;
-    if (result !== 'granted' && result !== 'denied' && result !== 'never_ask_again')
+    if (
+      result !== PermissionGrantResult.Granted &&
+      result !== PermissionGrantResult.Denied &&
+      result !== PermissionGrantResult.NeverAskAgain
+    )
       throw new Error('native permissions returned an invalid grant result');
     map[grant.permission] = result;
   });
@@ -112,7 +115,11 @@ export function requestAndroidPermissions(
       const result = results[permission];
       lastResults.set(
         permission,
-        result === 'granted' ? 'granted' : result === 'never_ask_again' ? 'blocked' : 'denied',
+        result === PermissionGrantResult.Granted
+          ? 'granted'
+          : result === PermissionGrantResult.NeverAskAgain
+            ? 'blocked'
+            : 'denied',
       );
     }
     return getAndroidPermissionState(required);

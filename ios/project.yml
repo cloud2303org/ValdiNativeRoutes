@@ -27,22 +27,13 @@ targets:
       # checked in; the "Valdi bindings check" phase fails the build when they're stale.
       - path: Generated/valdi
         group: ValdiBindings
-      # The C++ vision demo shared with Android (OpenCV mobile + ncnn), wrapped by ValdiRoutes/Capabilities/Vision.
-      - path: ../vision/cpp
-        group: Vision
     dependencies:
       # The Valdi runtime and Valdi's own modules, produced by scripts/export-ios.sh; app_pages comes from the "Valdi
       # modules" phase below, its Objective-C bindings from Generated/valdi.
       - framework: Frameworks/ValdiRuntime.xcframework
         embed: true
-      # Static OpenCV mobile + ncnn, prepared by vision/scripts/prepare-native.cjs (git-ignored).
-      - framework: ../vision/vendor/install/ios/VisionDependencies.xcframework
-        embed: false
-        link: true
       - sdk: libc++.tbd
       - sdk: libz.tbd
-      - target: ValdiOtaCodec
-        embed: false
       # Built by our module-only workspace, against the unchanged ValdiRuntime.
       - framework: ../module-build/out/ios/libvaldi_modules_ios.a
         embed: false
@@ -58,10 +49,7 @@ targets:
           mode=debug
           if [ "$CONFIGURATION" = "Release" ]; then mode=release; fi
           node "$SRCROOT/../scripts/node-modules.mjs" ios "$mode"
-      # Fails when Generated/valdi (Objective-C) or module-owned C++ bindings differ from codegen.ts output.
-      # A changed native interface requires regenerated bindings. This phase only checks.
-      # Regenerating is done by hand. The C++ is linked into the exported runtime, so it also fails when module C++
-      # changed since Frameworks/ValdiRuntime.xcframework was exported (scripts/ota.mjs check-export).
+      # Check generated contracts; the runtime is exported manually after runtime/C++ changes.
       - name: Valdi bindings check
         basedOnDependencyAnalysis: false
         script: |
@@ -71,7 +59,6 @@ targets:
           cd "$SRCROOT/../tools/valdi-rolldown"
           ./node_modules/.bin/tsx codegen.ts --objc-out ../../ios/Generated/valdi --objc-framework ValdiRuntime \
             --cpp-modules-out ../../valdi/modules --check
-          node ../../scripts/ota.mjs check-export ios "$SRCROOT/Frameworks/valdi_ota.json"
     postCompileScripts:
       # The Valdi modules tools/valdi-rolldown builds (app_pages and the npm packages it bundles) into the app's
       # resources, where the runtime looks before the framework's: JavaScript in Debug, Hermes bytecode and source maps
@@ -88,19 +75,7 @@ targets:
           # Only ours are here (Valdi's own are in its framework): modules an earlier build wrote and this one doesn't.
           rm -f "$resources"/*.valdimodule "$resources"/*.map.json
           cd "$SRCROOT/../tools/valdi-rolldown"
-          ./node_modules/.bin/tsx build.ts --out "$resources" --ios-res "$resources" $release
-      # Manual OTA target version, application-module inventory, static base URL and public signing key.
-      # Debug always uses bundled modules; native compatibility is managed by the publisher.
-      - name: Valdi over-the-air info
-        basedOnDependencyAnalysis: false
-        script: |
-          set -e
-          export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
-          command -v node >/dev/null || . "$HOME/.nvm/nvm.sh"
-          update_url=""
-          if [ "$CONFIGURATION" = "Release" ]; then update_url="$VALDI_OTA_URL"; fi
-          node "$SRCROOT/../scripts/ota.mjs" app-info ios "$SRCROOT/Frameworks/valdi_ota.json" "$MARKETING_VERSION" \
-            "$update_url" > "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/valdi_ota.json"
+          ./node_modules/.bin/tsx build.ts --native-platform ios --out "$resources" --ios-res "$resources" $release
     settings:
       base:
         MARKETING_VERSION: "1.0"
@@ -111,10 +86,9 @@ targets:
         # Build scripts read source files and selected-module configuration.
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         SWIFT_OBJC_BRIDGING_HEADER: ValdiRoutes/ValdiRoutes-Bridging-Header.h
-        # VisionDependencies' simulator slice is arm64 only.
-        "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
-        # VisionCore, as in ExpoNativeRoutes' NativeRoutesVision.podspec.
         CLANG_CXX_LANGUAGE_STANDARD: c++20
+        # The module workspace currently builds simulator Swift libraries for arm64.
+        "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
         # Native module/View classes are discovered by runtime name. Keep Swift
         # objects too; -ObjC alone is not a Swift registration contract.
         OTHER_LDFLAGS: ["$(inherited)", "-ObjC", "-force_load", "$(SRCROOT)/../module-build/out/ios/libvaldi_modules_ios.a"]
@@ -132,48 +106,6 @@ targets:
           # <app_pages/app_pages.h>, <app_pagesTypes/app_pagesTypes.h>
           - $(SRCROOT)/Generated/valdi
           - $(SRCROOT)/../module-build/out/ios/include
-          - $(SRCROOT)/../vision/cpp
-          - $(SRCROOT)/../vision/vendor/install/ios/VisionDependencies.xcframework/ios-arm64/Headers/opencv4
-          - $(SRCROOT)/../vision/vendor/install/ios/VisionDependencies.xcframework/ios-arm64/Headers/ncnn
-        "HEADER_SEARCH_PATHS[sdk=iphonesimulator*]":
-          - $(inherited)
-          - $(SRCROOT)/Generated/valdi
-          - $(SRCROOT)/../module-build/out/ios/include
-          - $(SRCROOT)/../vision/cpp
-          - $(SRCROOT)/../vision/vendor/install/ios/VisionDependencies.xcframework/ios-arm64-simulator/Headers/opencv4
-          - $(SRCROOT)/../vision/vendor/install/ios/VisionDependencies.xcframework/ios-arm64-simulator/Headers/ncnn
-  ValdiOtaCodec:
-    type: library.static
-    platform: iOS
-    sources:
-      - path: ../ota/native/CodecIO.c
-      - path: ../ota/native/ValdiOtaZstd.c
-      - path: ../ota/native/ValdiOtaHdiff.c
-      - path: ../ota/native/vendor/zstd/lib/common
-        includes: ["*.c"]
-      - path: ../ota/native/vendor/zstd/lib/compress
-        includes: ["*.c"]
-      - path: ../ota/native/vendor/zstd/lib/decompress
-        includes: ["*.c"]
-      - path: ../ota/native/vendor/hdiffpatch/libHDiffPatch/HPatch/patch.c
-    settings:
-      base:
-        SKIP_INSTALL: YES
-        GCC_SYMBOLS_PRIVATE_EXTERN: YES
-        GCC_PREPROCESSOR_DEFINITIONS:
-          - $(inherited)
-          - NDEBUG=1
-          - DEBUGLEVEL=0
-          - ZSTD_DISABLE_ASM=1
-          - ZSTD_LEGACY_SUPPORT=0
-          - _POSIX_C_SOURCE=200809L
-          - _DARWIN_C_SOURCE=1
-          - _IS_USED_MULTITHREAD=0
-          - _HPATCH_IS_USED_MULTITHREAD=0
-          - _IS_NEED_DIR_DIFF_PATCH=0
-        HEADER_SEARCH_PATHS:
-          - $(inherited)
-          - $(SRCROOT)/../ota/native
 schemes:
   ${VALDI_APP_NAME}:
     build:

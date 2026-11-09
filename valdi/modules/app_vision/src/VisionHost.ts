@@ -2,8 +2,8 @@ import { withGlobalNativeRefs } from 'valdi_core/src/NativeReferences';
 import { getHost } from './Vision';
 
 /**
- * The Valdi bridge to VisionCore (C++, OpenCV mobile + ncnn; Android shared vendors, iOS static).
- * Images come back as file:// PNGs in the host's cache instead of the original data URLs.
+ * Typed Polyglot C++ bridge to VisionCore, OpenCV and ncnn, statically linked into ValdiRuntime.
+ * Work runs on the runtime worker queue; images return as file:// PNGs in the native disk cache.
  */
 
 /** @ExportModel({ios: 'VRVisionPrediction', android: 'io.valdiroutes.pages.VisionPrediction'}) */

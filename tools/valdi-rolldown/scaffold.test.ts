@@ -11,6 +11,39 @@ import { root, valdiSourceRoot } from './pipeline';
 import { createModule, MODULE_TEMPLATES } from './scaffold';
 import { sampleApp } from '../../scripts/tests/fixtures/app-config.mjs';
 
+test('runtime module names and normalized variants are rejected before writes for every template', async t => {
+  const sources = valdiSourceRoot();
+  assert.ok(sources, 'Prepare the pinned Valdi sources before testing templates');
+  for (const template of MODULE_TEMPLATES) {
+    await t.test(template, () => {
+      const fixture = mkdtempSync(path.join(tmpdir(), 'valdi-scaffold-runtime-names-'));
+      t.after(() => rmSync(fixture, { recursive: true, force: true }));
+      for (const name of [
+        'native_web', 'native-web', 'native.web', 'NativeWeb', 'NATIVE_WEB', 'native_Web',
+        'client_sql', 'coreutils', 'drawing', 'jasmine', 'source_map', 'valdi_core', 'valdi_tsx',
+      ]) {
+        assert.throws(() => createModule({ root: fixture, sources, name, template }), /runtime module/, name);
+        assert.equal(existsSync(path.join(fixture, 'valdi')), false, `${template}: ${name} must write nothing`);
+      }
+      const created = createModule({ root: fixture, sources, name: 'sample-runtime-client', template });
+      assert.equal(created.name, 'sample_runtime_client');
+      assert.ok(existsSync(path.join(created.directory, 'module.json')));
+      assert.ok(existsSync(path.join(created.directory, 'src')));
+    });
+  }
+});
+
+test('C++ namespace guards reject normalized keywords and reserved identifiers before writes', t => {
+  const fixture = mkdtempSync(path.join(tmpdir(), 'valdi-scaffold-cpp-names-'));
+  t.after(() => rmSync(fixture, { recursive: true, force: true }));
+  for (const name of ['double', 'Namespace', 'CoAwait', 'co-await', 'reserved..cpp']) {
+    assert.throws(() => createModule({
+      root: fixture, sources: fixture, name, template: 'cpp_bridge_module',
+    }), /C\+\+ namespace/, name);
+    assert.equal(existsSync(path.join(fixture, 'valdi')), false, name);
+  }
+});
+
 test('every official module template compiles with the Node backend and preserves platform sources', async t => {
   const fixture = mkdtempSync(path.join(tmpdir(), 'valdi-scaffold-'));
   t.after(() => rmSync(fixture, { recursive: true, force: true }));
@@ -77,7 +110,7 @@ test('C++ bridge templates generate module-owned implementations and real bindin
     });
     const config = JSON.parse(readFileSync(path.join(created.directory, 'module.json'), 'utf8'));
     assert.equal(config.template, 'cpp_bridge_module');
-    assert.equal(config.nativeBuild, undefined, 'C++ factories belong to the runtime, not Kotlin/ObjC registration');
+    assert.equal(config.nativeBuild, 'cpp', 'C++ factories and dependencies belong to the runtime export');
     assert.equal(existsSync(path.join(created.directory, 'BUILD.bazel')), false);
     assert.equal(existsSync(path.join(created.directory, 'android')), false);
     assert.equal(existsSync(path.join(created.directory, 'ios')), false);
@@ -106,7 +139,10 @@ test('C++ bridge templates generate module-owned implementations and real bindin
   writeFileSync(path.join(fixture, 'package.json'), JSON.stringify({
     valdi: { app: sampleApp(), modules: ['first_cpp', 'second_cpp'] },
   }));
-  assert.deepEqual(nativeModules(fixture), []);
+  assert.deepEqual(nativeModules(fixture).map(({ name, nativeBuild }) => ({ name, nativeBuild })), [
+    { name: 'first_cpp', nativeBuild: 'cpp' },
+    { name: 'second_cpp', nativeBuild: 'cpp' },
+  ]);
   syncNativeModuleRegistration(fixture);
   assert.doesNotMatch(readFileSync(path.join(fixture, 'android/app/generated/valdi/ValdiNativeModules.kt'), 'utf8'),
     /CppModuleFactory/);
@@ -137,7 +173,7 @@ test('new-module CLI prepares C++ bindings and selection without modifying the h
     cpSync(path.join(import.meta.dirname, name), path.join(tool, name), { recursive: true });
   }
   for (const name of ['package.json', 'node_modules', 'modules.mjs', 'valdiTs.ts', 'module-selection.ts',
-    'editor-config.ts', 'scaffold.ts', 'scaffold-cpp.ts', 'vendor']) {
+    'editor-config.ts', 'scaffold.ts', 'scaffold-cpp.ts', 'runtime-module-ids.ts', 'vendor']) {
     symlinkSync(path.join(import.meta.dirname, name), path.join(tool, name));
   }
   symlinkSync(path.join(root, 'scripts'), path.join(fixture, 'scripts'));
@@ -156,7 +192,8 @@ test('new-module CLI prepares C++ bindings and selection without modifying the h
   assert.equal(created.status, 0, `${created.stdout}\n${created.stderr}`);
   assert.equal(readFileSync(path.join(fixture, 'valdi/BUILD.bazel'), 'utf8'), hostBuild);
   assert.ok(existsSync(path.join(fixture, 'valdi/modules/fresh_cpp/cpp/generated/valdi_modules/fresh_cpp/fresh_cpp.hpp')));
-  assert.ok(existsSync(path.join(fixture, 'android/app/generated/valdi/fresh_cpp.kt')));
+  assert.equal(existsSync(path.join(fixture, 'android/app/generated/valdi/fresh_cpp.kt')), false);
+  assert.equal(existsSync(path.join(fixture, 'ios/Generated/valdi/FreshCpp')), false);
   assert.match(readFileSync(path.join(fixture, 'valdi/modules/runtime-cpp.bzl'), 'utf8'),
     /\/\/modules\/fresh_cpp\/cpp:native/);
   const checked = run(['codegen.ts', '--cpp-modules-out', path.join(fixture, 'valdi/modules'), '--check']);

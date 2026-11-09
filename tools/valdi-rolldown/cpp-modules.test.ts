@@ -512,7 +512,9 @@ test('empty binding placeholders are omitted and old owned files are removed', t
 
 test('real app_pages codegen requires only app_foundation when pages owns a C++ implementation', t => {
   const directory = temporary(t);
-  const modules = codegenModules();
+  // Bound this check to pages; other enabled runtime owners have independent dependency closures.
+  const modules = Object.fromEntries(Object.entries(codegenModules())
+    .filter(([name]) => ['app_pages', 'app_foundation'].includes(name)));
   const calls: string[] = [];
   const cache = new Map<string, NativeCode>();
   const generate = (target: CodegenModule) => {
@@ -571,6 +573,7 @@ test('positional CLI creates pure TS dependency packages while preserving both i
   ].join('\n'));
   put(path.join(output, 'first/cpp/BUILD.bazel'), cppModuleFiles('first', 'First').get('cpp/BUILD.bazel')!);
   put(path.join(output, 'first/cpp/src/main.cpp'), 'int first() { return 1; }\n');
+  put(path.join(output, 'first/module.json'), JSON.stringify({ nativeBuild: 'cpp' }));
   put(path.join(output, 'second/cpp/src/deep/main.cc'), 'int second() { return 2; }\n');
   put(path.join(output, 'second/module.json'), JSON.stringify({ nativeBuild: 'bazel' }));
   const run = (args: string[]) => spawnSync(process.execPath, [

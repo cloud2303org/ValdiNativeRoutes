@@ -82,7 +82,7 @@ export function startDevControls({
       }
       const platform = menu.platform;
       menu = undefined;
-      print(`\nPreparing, building and launching ${device.label}…`);
+      print(`\nBuilding and launching ${device.label}…`);
       try {
         if (platform === 'android') selectAndroid(device.id);
         const running = launch(platform, device.id);

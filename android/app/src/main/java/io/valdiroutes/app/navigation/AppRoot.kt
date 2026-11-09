@@ -20,10 +20,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCompositionContext
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
@@ -38,6 +42,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.navigation3.runtime.NavEntry
@@ -196,11 +201,22 @@ private fun TabsScreen(shell: PageEntry, navigator: Navigator) {
 
 @Composable
 private fun TabPage(shell: PageEntry, selected: String, insets: Insets, navigator: Navigator) {
+    val bar = requireNotNull(navigator.tabBar) { "No tab bar" }
+    // Mount tabs lazily: only the selected tab initializes at startup, and a tab stays mounted after
+    // its first visit so switching back never re-creates it. Startup renders just the visible page.
+    val mounted = remember(shell.id) { mutableStateListOf<String>() }
+    LaunchedEffect(selected) { if (selected !in mounted) mounted.add(selected) }
     Box(Modifier.fillMaxSize().background(PageBackground)) {
-        key(selected) {
-            val page = navigator.tabPage(shell, selected)
-            if (page.definition.kind == "valdi") ValdiPage(page, insets, navigator, Modifier.fillMaxSize())
-            else NativeScreens.Content(NativePage(page, navigator, insets))
+        bar.tabs.forEach { item ->
+            val active = item.route == selected
+            if (!active && item.route !in mounted) return@forEach
+            key(item.route) {
+                Box(Modifier.fillMaxSize().zIndex(if (active) 1f else 0f).alpha(if (active) 1f else 0f)) {
+                    val page = navigator.tabPage(shell, item.route)
+                    if (page.definition.kind == "valdi") ValdiPage(page, insets, navigator, Modifier.fillMaxSize())
+                    else NativeScreens.Content(NativePage(page, navigator, insets))
+                }
+            }
         }
     }
 }

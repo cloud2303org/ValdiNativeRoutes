@@ -1,3 +1,4 @@
+import './services/nativeWeb';
 import { setCatchAllUncaughtErrorHandler, UncaughtErrorHandlerResult } from 'valdi_core/src/UncaughtErrorHandler';
 import { getModuleLoader } from 'valdi_core/src/ModuleLoaderGlobal';
 import { api } from './services/api';

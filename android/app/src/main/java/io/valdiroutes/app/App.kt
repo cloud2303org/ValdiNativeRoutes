@@ -12,7 +12,7 @@ class App : Application() {
                     StartupTrace.section("application.images.create_loader") { AppImages.createLoader(this) },
                 )
             }
-            StartupTrace.section("application.native_screens.register") { NativeScreens.registerDefaults() }
+            StartupTrace.section("application.native_screens.register") { NativeExamples.registerScreens() }
             StartupTrace.section("application.valdi_host.init") { ValdiHost.init(this) }
         }
     }

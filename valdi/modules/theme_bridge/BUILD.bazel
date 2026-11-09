@@ -8,9 +8,6 @@ node_valdi_module(
     ios_language = "swift",
     res = glob(["res/**"]),
     android_srcs = glob(["android/**/*.kt"]),
-    android_deps = [
-        "@serialization_mvn//:org_jetbrains_kotlinx_kotlinx_serialization_json_jvm",
-    ],
     ios_srcs = glob(["ios/**/*.m"]),
     ios_hdrs = glob(["ios/**/*.h"]),
     swift_srcs = glob(["ios/**/*.swift"]),

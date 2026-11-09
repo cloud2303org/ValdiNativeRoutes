@@ -1,24 +1,23 @@
-# libvaldi_routes_vision.so: the shared VisionCore (vision/cpp) and its JNI adapter, after ExpoNativeRoutes'
-# packages/vision/android/CMakeLists.txt without Nitro. Android OpenCV Mobile components and ncnn are
-# separate imported shared libraries from vision/vendor/install/android-arm64/shared.
 cmake_minimum_required(VERSION 3.22)
-project(ValdiRoutesVision C CXX)
+project(ValdiRoutesNative C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-if(NOT ANDROID_ABI STREQUAL "arm64-v8a")
-  message(FATAL_ERROR "Vision prepares Android arm64-v8a only; prepare and add another ABI before enabling it")
+get_filename_component(VALDI_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../../.." ABSOLUTE)
+find_program(VALDI_NODE node REQUIRED)
+# Reconfigure the native graph when module selection or declarations change.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${VALDI_REPO_ROOT}/package.json"
+  "${VALDI_REPO_ROOT}/scripts/native-modules.mjs" "${VALDI_REPO_ROOT}/scripts/module-native-config.mjs")
+file(GLOB VALDI_MODULE_CONFIGS CONFIGURE_DEPENDS "${VALDI_REPO_ROOT}/valdi/modules/*/module.json")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${VALDI_MODULE_CONFIGS})
+execute_process(COMMAND "${VALDI_NODE}" "${VALDI_REPO_ROOT}/scripts/native-dependencies.mjs" prepare android
+  RESULT_VARIABLE VALDI_CHECK_RESULT ERROR_VARIABLE VALDI_CHECK_ERROR)
+if(NOT VALDI_CHECK_RESULT EQUAL 0)
+  message(FATAL_ERROR "${VALDI_CHECK_ERROR}")
 endif()
-get_filename_component(VISION_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../vision" ABSOLUTE)
-set(VISION_VENDOR_TARGET android-arm64)
-include("${VISION_ROOT}/cmake/VisionVendors.cmake")
-add_library(valdi_routes_vision SHARED vision-jni.cpp ${VISION_ROOT}/cpp/VisionCore.cpp)
-target_include_directories(valdi_routes_vision PRIVATE ${VISION_ROOT}/cpp)
-target_compile_options(valdi_routes_vision PRIVATE -fexceptions -frtti)
-# ncnn's Android asset readers reference AAsset* from the NDK system library.
-target_link_libraries(valdi_routes_vision native_routes_vision_vendors android)
-
-# The OTA decoder has no Valdi/Hermes or C++ dependency and can run before the runtime starts.
-get_filename_component(OTA_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../ota/native" ABSOLUTE)
-add_subdirectory("${OTA_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/ota")
-add_library(valdi_ota_patch SHARED ota-jni.c)
-target_link_libraries(valdi_ota_patch PRIVATE valdi_ota_core)
+execute_process(COMMAND "${VALDI_NODE}" "${VALDI_REPO_ROOT}/scripts/native-modules.mjs" --cmake
+  OUTPUT_VARIABLE VALDI_MODULE_CMAKE RESULT_VARIABLE VALDI_MODULE_RESULT ERROR_VARIABLE VALDI_MODULE_ERROR)
+if(NOT VALDI_MODULE_RESULT EQUAL 0)
+  message(FATAL_ERROR "${VALDI_MODULE_ERROR}")
+endif()
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/ValdiModules.cmake" "${VALDI_MODULE_CMAKE}")
+include("${CMAKE_CURRENT_BINARY_DIR}/ValdiModules.cmake")

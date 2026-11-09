@@ -3,10 +3,6 @@
   "iosModuleName": "ThemeBridge",
   "nativeBuild": "bazel",
   "androidModuleFactory": "io.valdiroutes.app.modules.theme_bridge.ThemeBridgeModuleFactoryImpl",
-  "androidModuleFactoryContext": true,
-  "androidDependencies": [
-    "org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0"
-  ],
   "iosLanguage": "swift",
   "iosModuleFactoryClass": "VRThemeBridgeModuleFactory",
   "androidClassPath": "io.valdiroutes.app.modules.theme_bridge"

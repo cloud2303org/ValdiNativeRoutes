@@ -1,6 +1,7 @@
 load("//bzl/node_module:module.bzl", "node_valdi_module")
 
-# The app supplies the platform implementation and registers the generated factory.
+# The C++ implementation and factory live in cpp/ and link into the exported runtime.
+# This target supplies the TypeScript bundle independently of that native implementation.
 node_valdi_module(
     name = "app_vision",
     srcs = glob(["src/**/*.ts", "src/**/*.tsx"]),

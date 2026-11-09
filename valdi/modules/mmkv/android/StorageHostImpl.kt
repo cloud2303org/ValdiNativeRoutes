@@ -6,8 +6,8 @@ import io.valdiroutes.mmkv.StorageHost
 import io.valdiroutes.mmkv.StorageReadReply
 
 /**
- * `api.*StorageSync` (storage.ts): a dedicated structured store in MMKV's default directory (files/mmkv).
- * Called on the JS thread; MMKV is thread safe. Only the persistence layer handles JSON text.
+ * `api.*StorageSync` (storage.ts): a dedicated string store in MMKV's default directory (files/mmkv). Values are
+ * JSON text serialized by JS; the bridge carries strings only. Called on the JS thread; MMKV is thread safe.
  */
 class StorageHostImpl(context: Context) {
     private val mmkv: MMKV by lazy {
@@ -16,8 +16,11 @@ class StorageHostImpl(context: Context) {
     }
 
     val host = StorageHost(
-        { key -> StorageCodec.decode(mmkv.decodeString(key)).let { StorageReadReply(it.found, it.payload, it.error) } },
-        { request -> mmkv.encode(request.key, StorageCodec.encode(request.payload)) },
+        { key ->
+            val stored = mmkv.decodeString(key)
+            StorageReadReply(stored != null, stored ?: "")
+        },
+        { request -> mmkv.encode(request.key, request.value) },
         { key -> mmkv.removeValueForKey(key) },
         { mmkv.clearAll() },
     )

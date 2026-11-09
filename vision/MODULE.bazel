@@ -1,0 +1,5 @@
+module(name = "vision", version = "0.1")
+
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "rules_cc", version = "0.2.20")
+bazel_dep(name = "rules_apple", version = "4.0.0")

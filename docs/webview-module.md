@@ -245,6 +245,11 @@ The exclusive native build slot was released immediately.
 
 ### Full application and iOS simulator verification
 
+This is the historical 2026-11-04 validation sequence. Its preparation command
+and runtime fingerprint check have since been removed; retain the commands and
+logs below as evidence of that run. For current builds, install dependencies,
+manually export the runtime, then run `pnpm ios` or `pnpm build:ios`.
+
 The local application was subsequently prepared against the pinned fork and
 built for the arm64 iOS simulator:
 

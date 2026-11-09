@@ -1,2 +1,2 @@
 export { getHost } from './ThemeBridge';
-export type { ThemeHost, ThemeHost_Tokens } from './host';
+export type * from './host';

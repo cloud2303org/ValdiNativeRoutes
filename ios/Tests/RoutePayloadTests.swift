@@ -59,6 +59,7 @@ final class RoutePayloadTests {
         nested["value"] = "changed after finish"
         list.removeAllObjects()
         completion.accept(["other": "second finish"], canceled: false)
+        completion.accept(["ignored": NSNumber(value: Double.nan)], canceled: false)
         completion.accept(nil, canceled: true)
 
         let reply = completion.result
@@ -73,7 +74,7 @@ final class RoutePayloadTests {
 
     func testCancellationAndSuccessfulEmptyResultStayDistinct() {
         var canceled = RouteResultState()
-        canceled.accept(["ignored": "value"], canceled: true)
+        canceled.accept(["ignored": NSNumber(value: Double.infinity)], canceled: true)
         canceled.accept(["late": "finish"], canceled: false)
         expect(canceled.result.canceled)
         expect(canceled.result.value.isEmpty)
@@ -102,6 +103,100 @@ final class RoutePayloadTests {
         expectEqual(values[1]["unicode"] as? String, "中文 👋")
         expect(((values[1]["nested"] as! [String: Any])["empty"] as! [Any]).isEmpty)
     }
+
+    func testFiniteNumberEdgesKeepTheirValuesAndTypes() {
+        let numbers: [NSNumber] = [
+            NSNumber(value: 0.0), NSNumber(value: -0.0),
+            NSNumber(value: Double.leastNonzeroMagnitude), NSNumber(value: Double.greatestFiniteMagnitude),
+            NSNumber(value: 1.25), NSNumber(value: -4),
+            NSNumber(value: Float.leastNonzeroMagnitude), NSNumber(value: Float.greatestFiniteMagnitude),
+            NSNumber(value: Int64.max), NSNumber(value: UInt64.max),
+            NSNumber(value: true), NSNumber(value: false),
+        ]
+        let payload = RoutePayload(["nested": [["numbers": numbers]]])
+        let nested = (payload.value["nested"] as! [[String: Any]])[0]
+        let copied = nested["numbers"] as! [NSNumber]
+        expectEqual(copied, numbers)
+        for (original, snapshot) in zip(numbers, copied) {
+            expectEqual(String(cString: snapshot.objCType), String(cString: original.objCType))
+            expectEqual(CFGetTypeID(snapshot), CFGetTypeID(original))
+        }
+        expectEqual(copied[1].doubleValue.sign, .minus)
+    }
+
+    func testSharedFoundationChildrenAreNotCycles() {
+        let child = NSMutableDictionary(dictionary: ["enabled": NSNumber(value: true), "null": NSNull()])
+        let list = NSMutableArray(array: [child, child])
+        let payload = RoutePayload(["first": list, "second": list, "child": child])
+        child["enabled"] = false
+        list.removeAllObjects()
+        for key in ["first", "second"] {
+            let copied = payload.value[key] as! [[String: Any]]
+            expectEqual(copied.count, 2)
+            expectEqual((copied[0]["enabled"] as! NSNumber).boolValue, true)
+            expect(copied[1]["null"] is NSNull)
+        }
+        expectEqual(((payload.value["child"] as! [String: Any])["enabled"] as! NSNumber).boolValue, true)
+    }
+
+    func testInvalidNativePayloadsFailWithExistingPreconditionPolicy() {
+        for (name, message) in [
+            ("nan", "Route numbers must be finite"),
+            ("infinity", "Route numbers must be finite"),
+            ("negative-infinity", "Route numbers must be finite"),
+            ("float-nan", "Route numbers must be finite"),
+            ("float-infinity", "Route numbers must be finite"),
+            ("float-negative-infinity", "Route numbers must be finite"),
+            ("decimal-nan", "Route numbers must be finite"),
+            ("date", "Unsupported route payload value"),
+            ("set", "Unsupported route payload value"),
+            ("data", "Unsupported route payload value"),
+            ("keys", "Route payload keys must be strings"),
+            ("map-cycle", "Cyclic route payload"),
+            ("list-cycle", "Cyclic route payload"),
+        ] {
+            let child = Process()
+            child.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
+            child.arguments = ["--invalid-payload", name]
+            child.standardOutput = FileHandle.nullDevice
+            let errors = Pipe()
+            child.standardError = errors
+            do {
+                try child.run()
+            } catch {
+                preconditionFailure("Cannot run invalid-payload regression: \(error)")
+            }
+            let output = errors.fileHandleForReading.readDataToEndOfFile()
+            child.waitUntilExit()
+            expect(child.terminationStatus != 0)
+            expect(String(decoding: output, as: UTF8.self).contains(message))
+        }
+    }
+}
+
+private func invalidNativePayload(_ name: String) -> Any {
+    switch name {
+    case "nan": return NSNumber(value: Double.nan)
+    case "infinity": return NSNumber(value: Double.infinity)
+    case "negative-infinity": return NSNumber(value: -Double.infinity)
+    case "float-nan": return NSNumber(value: Float.nan)
+    case "float-infinity": return NSNumber(value: Float.infinity)
+    case "float-negative-infinity": return NSNumber(value: -Float.infinity)
+    case "decimal-nan": return NSDecimalNumber.notANumber
+    case "date": return Date()
+    case "set": return NSSet(array: [1])
+    case "data": return Data([1])
+    case "keys": return NSDictionary(object: true, forKey: NSNumber(value: 1))
+    case "map-cycle":
+        let dictionary = NSMutableDictionary()
+        dictionary["self"] = dictionary
+        return dictionary
+    case "list-cycle":
+        let array = NSMutableArray()
+        array.add(array)
+        return array
+    default: preconditionFailure("Unknown invalid-payload case")
+    }
 }
 
 private func expect(_ value: Bool, file: StaticString = #file, line: UInt = #line) {
@@ -127,6 +222,10 @@ private func expectNotEqual<T: Equatable>(_ value: T, _ other: T, file: StaticSt
 @main
 enum RoutePayloadTestRunner {
     static func main() {
+        if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--invalid-payload" {
+            _ = RoutePayload(["nested": [["value": invalidNativePayload(CommandLine.arguments[2])]]])
+            return
+        }
         let suite = RoutePayloadTests()
         let tests: [(String, () -> Void)] = [
             ("snapshots nested Foundation params", suite.testSnapshotsNestedFoundationParams),
@@ -134,6 +233,9 @@ enum RoutePayloadTestRunner {
             ("finish snapshots before delivery and first result wins", suite.testFinishSnapshotsBeforeDeferredDeliveryAndFirstResultWins),
             ("cancellation and successful empty result stay distinct", suite.testCancellationAndSuccessfulEmptyResultStayDistinct),
             ("Swift containers and Foundation scalars keep values", suite.testSwiftContainersAndFoundationScalarsKeepTheirValues),
+            ("finite number edges keep values and types", suite.testFiniteNumberEdgesKeepTheirValuesAndTypes),
+            ("shared Foundation children are not cycles", suite.testSharedFoundationChildrenAreNotCycles),
+            ("invalid native payloads fail with existing preconditions", suite.testInvalidNativePayloadsFailWithExistingPreconditionPolicy),
         ]
         for (name, test) in tests {
             test()

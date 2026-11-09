@@ -12,7 +12,6 @@ param(
     [string]$GitBash,
     [string]$Cmake,
     [int]$MinFreeGB = 25,
-    [switch]$SkipInvalidation,
     [switch]$SkipNewModule,
     [switch]$SkipNetworkCheck,
     [switch]$RemoveOnSuccess
@@ -207,8 +206,8 @@ $env:CI = 'true'
 Remove-Item Env:\GOPROXY -ErrorAction SilentlyContinue
 
 $buildLog = Join-Path $logDir 'cold-build.log'
-# The unified entry point: prebuild (sources/bindings/runtime/vision/module libraries) then the
-# Gradle build, with the isolated caches and the explicit tool paths.
+# Manual runtime export prepares runtime C++ dependencies before the ordinary
+# app build. Gradle prepares host dependencies, with all caches isolated below.
 $env:JAVA_HOME = $JavaHome
 $env:ANDROID_HOME = $AndroidHome
 $arguments = @(
@@ -216,9 +215,7 @@ $arguments = @(
     '--bazel-path', $bazel.Path,
     '--output-base', $outputBase,
     '--repository-cache', $cachePaths.bazelRepos,
-    '--disk-cache', $cachePaths.bazelDisk,
     '--go-mod-cache', $cachePaths.goMod,
-    '--pnpm-store', $cachePaths.pnpmStore,
     '--gradle-user-home', $cachePaths.gradle
 )
 if ($ProxyUrl) { $arguments += @('--proxy-url', $ProxyUrl) }
@@ -226,7 +223,7 @@ if ($NoProxy) { $arguments += @('--no-proxy', ($NoProxy -join ',')) }
 if ($GitBash) { $env:BAZEL_SH = $GitBash }
 if ($Cmake) { $env:VISION_CMAKE = $Cmake }
 
-Write-Output "Running pnpm android (unified prebuild + build) with isolated caches (log: $buildLog)"
+Write-Output "Installing dependencies, exporting the runtime, then running pnpm android with isolated caches (log: $buildLog)"
 $started = Get-Date
 
 # An empty Gradle home has to fetch the pinned wrapper distribution, and the wrapper does not retry a
@@ -251,8 +248,37 @@ if ($wrapperCode -ne 0) {
     exit $wrapperCode
 }
 
+$installLog = Join-Path $logDir 'cold-install.log'
+$exportLog = Join-Path $logDir 'cold-export.log'
+$bindingsLog = Join-Path $logDir 'cold-bindings.log'
 Push-Location $app
 try {
+    $installCode = Invoke-LoggedCommand -FilePath 'node' -LogPath $installLog `
+        -Arguments @('scripts/pnpm.mjs', 'install', '--frozen-lockfile')
+    if ($installCode -ne 0) { throw "Cold dependency installation failed (exit $installCode): $installLog" }
+    $exportArguments = @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $app 'scripts/windows/export-android.ps1'),
+        '-Config', 'debug', '-BazelPath', $bazel.Path, '-JavaHome', $JavaHome, '-AndroidHome', $AndroidHome,
+        '-OutputBase', $outputBase, '-RepositoryCache', $cachePaths.bazelRepos, '-DiskCache', $cachePaths.bazelDisk,
+        '-GoModCache', $cachePaths.goMod
+    )
+    if ($GitBash) { $exportArguments += @('-GitBash', $GitBash) }
+    $exportCode = Invoke-LoggedCommand -FilePath 'powershell' -Arguments $exportArguments -LogPath $exportLog
+    if ($exportCode -ne 0) { throw "Manual runtime export failed (exit $exportCode): $exportLog" }
+    $runtimeMetadata = Get-Content -LiteralPath (Join-Path $app 'android/app/libs/valdi_ota.json') -Raw | ConvertFrom-Json
+    if ($runtimeMetadata.platform -ne 'android' -or $runtimeMetadata.config -ne 'debug' -or
+            (@($runtimeMetadata.PSObject.Properties.Name | Sort-Object) -join ',') -ne 'config,platform') {
+        throw 'Manual export must write valdi_ota.json with only platform=android and config=debug.'
+    }
+    # The explicit exporter must generate usable bindings, not just check old files.
+    Push-Location (Join-Path $app 'tools/valdi-rolldown')
+    try {
+        $bindingsCode = Invoke-LoggedCommand -FilePath 'node' -LogPath $bindingsLog `
+            -Arguments @('node_modules/tsx/dist/cli.mjs', 'codegen.ts', '--kotlin-out', '../../android/app/generated/valdi',
+                '--cpp-modules-out', '../../valdi/modules', '--check')
+    } finally { Pop-Location }
+    if ($bindingsCode -ne 0) { throw "Exported bindings check failed (exit $bindingsCode): $bindingsLog" }
+    $runtimeBeforeBuild = (Get-FileHash -LiteralPath (Join-Path $app 'android/app/libs/valdi_runtime.aar') -Algorithm SHA256).Hash
     $buildCode = Invoke-LoggedCommand -FilePath 'node' -Arguments $arguments -LogPath $buildLog
 } finally { Pop-Location }
 $elapsed = [math]::Round(((Get-Date) - $started).TotalMinutes, 1)
@@ -270,6 +296,7 @@ $runtimeAar = 'android/app/libs/valdi_runtime.aar'
 $moduleJar = 'module-build/out/android/calculator/calculator_android.jar'
 $apk = 'android/app/build/outputs/apk/debug/app-debug.apk'
 $hashes = [ordered]@{ runtimeAar = Get-HashOf $runtimeAar; moduleJar = Get-HashOf $moduleJar; apk = Get-HashOf $apk }
+if ($hashes.runtimeAar -ne $runtimeBeforeBuild) { throw 'The ordinary app build changed the manually exported runtime AAR.' }
 
 # The pipeline tests run against the fetched Valdi sources the export left in .valdi-sources.
 $testLog = Join-Path $logDir 'cold-test.log'
@@ -283,19 +310,6 @@ try {
 if ($testCode -ne 0) {
     Write-Output "Pipeline tests FAILED (exit $testCode): $testLog"
     exit $testCode
-}
-
-$invalidation = $null
-if (-not $SkipInvalidation) {
-    $invalidationOutput = @(& (Join-Path $PSScriptRoot 'test-native-invalidation.ps1') -AppRoot $app -BazelPath $bazel.Path `
-        -JavaHome $JavaHome -AndroidHome $AndroidHome -OutputBase $outputBase `
-        -RepositoryCache $cachePaths.bazelRepos -DiskCache $cachePaths.bazelDisk `
-        -GoModCache $cachePaths.goMod -PnpmStore $cachePaths.pnpmStore -GradleUserHome $cachePaths.gradle `
-        -InitialRuntimeHar $hashes.runtimeAar -InitialModuleHar $hashes.moduleJar -InitialApkHash $hashes.apk `
-        -RestoreCleanArtifacts)
-    $invalidationCode = $LASTEXITCODE
-    if ($invalidationCode -ne 0) { exit $invalidationCode }
-    $invalidation = ($invalidationOutput | Where-Object { $_ -and "$_".Trim().StartsWith('{') } | Select-Object -Last 1) | ConvertFrom-Json
 }
 
 # A module added through the documented scaffold must reach the module bundles without touching
@@ -319,17 +333,6 @@ if (-not $SkipNewModule) {
     if ($bundleExit -ne 0) { Write-Output "Module bundle build FAILED after adding a module (exit $bundleExit): $moduleLog"; exit $bundleExit }
     if (-not (Test-Path -LiteralPath $bundle -PathType Leaf)) { throw "The new module has no bundle: $bundle" }
     if ((Get-HashOf $runtimeAar) -ne $hashes.runtimeAar) { throw 'Adding a module re-exported or changed the runtime AAR.' }
-    # Record what the fingerprints say about a later preparation of this tree (no export here).
-    Push-Location $app
-    try {
-        $previous = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        try {
-            $planText = (& node (Join-Path $app 'scripts/cli.mjs') prebuild --platform android --dry-run --json 2>&1) -join "`n"
-            $planExit = $LASTEXITCODE
-        } finally { $ErrorActionPreference = $previous }
-    } finally { Pop-Location }
-    $plan = if ($planExit -eq 0) { $planText | ConvertFrom-Json } else { $null }
     Remove-Item -LiteralPath (Join-Path $app "valdi/modules/$moduleName") -Recurse -Force
     $newModule = [ordered]@{
         name             = $moduleName
@@ -337,8 +340,6 @@ if (-not $SkipNewModule) {
         bundleExit       = $bundleExit
         bundleBytes      = (Get-Item -LiteralPath $bundle).Length
         runtimeUnchanged = $true
-        planExit         = $planExit
-        plan             = @($plan.steps | ForEach-Object { "$($_.step): $($_.action)" })
     }
     Write-Output "New module: $moduleName scaffolded and bundled into $([System.IO.Path]::GetFileName($bundle))."
 }
@@ -401,9 +402,9 @@ $report = [ordered]@{
     bazelModuleOutputBase = $bazelModuleOutputBase
     hashes        = $hashes
     tests         = @{ exitCode = $testCode; log = $testLog }
-    invalidation  = $invalidation
+    manualExport  = @{ exitCode = $exportCode; bindingsExit = $bindingsCode; metadata = $runtimeMetadata; runtimeUnchangedByBuild = $true }
     newModule     = $newModule
-    logs          = @{ clone = $cloneLog; build = $buildLog }
+    logs          = @{ clone = $cloneLog; install = $installLog; export = $exportLog; bindings = $bindingsLog; build = $buildLog }
 }
 $reportPath = Join-Path $logDir 'cold-build-report.json'
 $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportPath -Encoding UTF8

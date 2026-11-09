@@ -109,7 +109,7 @@ function Resolve-ValdiCheckout {
     $head = (Invoke-GitCommand -Directory $checkout -Arguments @('rev-parse', 'HEAD')).Lines | Select-Object -First 1
     if ($head -ne $pin) {
         $message = "Valdi checkout {0} is at {1}, but valdi/MODULE.bazel pins {2}.`n" -f $checkout, $head, $pin
-        throw ($message + 'The OTA fingerprint names the pinned commit, so the runtime export must be built from it: ' +
+        throw ($message + 'The selected checkout must match the configured framework pin: ' +
             'check out the pin, or omit -ValdiCheckout to let Bazel fetch the pinned archive.')
     }
 
@@ -117,8 +117,7 @@ function Resolve-ValdiCheckout {
     if ($status.Lines.Count -gt 0) {
         $sample = ($status.Lines | Select-Object -First 8) -join '; '
         $message = "Valdi checkout {0} is not clean at {1}: {2}.`n" -f $checkout, $pin, $sample
-        throw ($message + 'Commit, stash or remove those changes: the export must come from a clean checkout at the pinned ' +
-            'commit, because uncommitted Valdi sources are not represented by the OTA fingerprint.')
+        throw ($message + 'Use a clean checkout at the pinned commit so Bazel overrides use the selected framework sources.')
     }
 
     return $checkout
@@ -689,8 +688,7 @@ function Test-VisionInstallCurrent {
         [string]$Target = 'android-arm64'
     )
 
-    # A warm tree can hold vision libraries built from an older vendor-lock; the app
-    # fingerprint names the lock, so reusing them would silently mix inputs.
+    # A warm tree can hold dependency libraries built from an older vendor lock.
     $lockPath = Join-Path $AppRoot 'vision/vendor-lock.json'
     $stampPath = Join-Path $AppRoot "vision/vendor/install/$Target/native-routes-vision.json"
     if (-not (Test-Path -LiteralPath $stampPath -PathType Leaf)) { return $false }

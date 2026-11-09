@@ -4,6 +4,11 @@ module(name = "valdi_native_routes", version = "0.1")
 # version as Valdi.
 bazel_dep(name = "platforms", version = "1.1.0")
 
+# VisionCore and its prepared static OpenCV/ncnn closure are module dependencies
+# of the existing runtime, not separately packaged host libraries.
+bazel_dep(name = "vision", version = "0.1")
+local_path_override(module_name = "vision", path = "../vision")
+
 # -- Maintained Valdi fork (upstream main: 9b7a20d5) -----------------------
 # Framework customizations and Hermes build inputs live in the pinned Valdi fork source.
 # Pin immutable commits; scripts/upstream.mjs updates this and the matching registry together.

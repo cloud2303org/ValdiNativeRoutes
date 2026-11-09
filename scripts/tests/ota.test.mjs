@@ -18,7 +18,7 @@ function fixture(t) {
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, content);
   };
-  for (const name of ['ota.mjs', 'ota-delta.mjs', 'hdiff-tool.mjs', 'hdiff-tool.json', 'native-cpp.mjs', 'prerequisites.mjs', 'native-modules.mjs', 'module-platform-config.mjs', 'app-config.mjs']) {
+  for (const name of ['ota.mjs', 'ota-delta.mjs', 'hdiff-tool.mjs', 'hdiff-tool.json', 'prerequisites.mjs', 'native-modules.mjs', 'module-native-config.mjs', 'module-platform-config.mjs', 'app-config.mjs']) {
     const file = path.join(root, 'scripts', name);
     mkdirSync(path.dirname(file), { recursive: true });
     cpSync(path.join(repository, 'scripts', name), file);
@@ -28,7 +28,6 @@ function fixture(t) {
   delete app.icon;
   write('package.json', JSON.stringify({ valdi: { app, modules: ['app_pages', 'app_foundation'] } }));
   for (const name of ['app_pages', 'app_foundation']) write(`valdi/modules/${name}/src/index.ts`, 'export {};');
-  write('ota/fingerprint.json', JSON.stringify({ valdi: [], android: ['android/app/src'], ios: [] }));
   write('android/app/generated/valdi/models.kt', 'class ExistingBinding');
   // The old implementation invokes this to fingerprint bindings. The new
   // configuration must not need to run binding codegen at all.
@@ -230,21 +229,16 @@ test('keygen uses a fresh temporary publisher directory and refuses implicit rot
   assert.deepEqual(readFileSync(path.join(root, 'ota/public.pem')), publicBytes);
 });
 
-test('valdi-hash and check-export retain native input integrity checks independently of OTA ownership', t => {
+test('OTA uses manual runtime metadata after native source changes and exposes no fingerprint commands', t => {
   const { run, write } = fixture(t);
-  const current = run('valdi-hash', 'android', 'release');
-  assert.equal(current.status, 0, current.stderr);
-  const info = JSON.parse(current.stdout);
-  write('export.json', JSON.stringify(info));
-  assert.equal(run('check-export', 'android', 'export.json').status, 0);
+  write('export.json', JSON.stringify({ platform: 'android', config: 'release' }));
   write('valdi/modules/app_foundation/cpp/Owned.cpp', 'native change');
-  const updated = JSON.parse(run('valdi-hash', 'android', 'release').stdout);
-  assert.notEqual(updated.valdi, info.valdi);
-  assert.notEqual(updated.native, info.native);
-  const stale = run('check-export', 'android', 'export.json');
-  assert.notEqual(stale.status, 0);
-  assert.match(stale.stderr, /export-android.sh release/);
   assert.equal(run('app-info', 'android', 'export.json', '1.2.0', 'https://updates.example.test').status, 0);
+  for (const command of ['valdi-hash', 'check-export']) {
+    const result = run(command, 'android', 'export.json');
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Usage/);
+  }
 });
 
 test('pack CLI with temporary keys forwards both base forms and filters compiler outputs to app_pages', async t => {

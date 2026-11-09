@@ -1,65 +1,76 @@
-# Shared design tokens
+# Native design tokens
 
-`assets/tokens.json` is the shared source for native UI and Valdi pages:
-`light` and `dark` contain color palettes; `shared` contains numeric token groups.
+`ThemeTokensStore` constructs the native token tree once. The bridge returns that
+same instance, and native UI reads it directly. Token values are not loaded from
+JSON and JavaScript does not supply defaults or write values back.
 
-JavaScript reads the native store through the generated module:
+The contract is `src/host.d.ts`: `ThemeTokens` contains two `ThemeColorTokens`
+palettes and a `ThemeSharedTokens` tree with typed radius, size, space, font,
+icon and motion groups. Every field has a fixed name and a string or number type.
+The regular code generator produces the corresponding Kotlin and Swift models.
 
-```ts
-import { getHost } from 'theme_bridge/src';
+Set the values in the platform's native store:
 
-const { light, dark, shared } = getHost().getTokens();
-```
+- Android: `android/ThemeTokensStore.kt`.
+- iOS: `ios/ThemeTokensStore.swift`.
 
-The app's `app_pages/src/components/theme.ts` already installs these palettes
-at startup and follows the system appearance. Native UI selects the appropriate
-palette for its current appearance.
-
-Android host code can access the same store without calling JavaScript:
+Both stores initialize once on first access and expose their token instance for
+reads. Treat the generated native model instances as read-only after construction;
+the generated transport classes still have mutable native properties. TypeScript
+fields are declared `readonly`.
 
 ```kotlin
-import io.valdiroutes.app.modules.theme_bridge.ThemeTokensStore
-
-ThemeTokensStore.initialize(context.applicationContext)
 val tokens = ThemeTokensStore.tokens
-val light = tokens.light
+val surface: String = tokens.light.surface
+val radius: Double = tokens.shared.radius.card
 ```
-
-Swift host code imports the independently compiled module:
 
 ```swift
 import ThemeBridge
 
-let tokens = try ThemeTokensStore.shared.tokens
-let light = tokens.light
+let tokens: VRThemeTokens = ThemeTokensStore.shared.tokens
+let surface: String = tokens.light.surface
+let radius: Double = tokens.shared.radius.card
 ```
 
-The public Swift singleton has a private initializer and a throwing `tokens`
-getter. It decodes the JSON once with `JSONDecoder` and caches the result.
-Missing files, malformed JSON and wrong field types throw the original read or
-decode error; there is no empty-palette fallback or second validation pass.
-The generated token model retains its existing mutable properties;
-consumers should treat its contents as shared read-only data. The native module's
-`getTokens` and the host accessor return the same store's token model.
+Valdi reads the same native tree through the module factory:
 
-Normal iOS module preparation exports `ThemeBridge.swiftmodule` into
-`module-build/out/ios/swift`; the App already searches that directory and links
-the module's archive. No source copies or separate JS initialization are needed
-for native reads.
+```ts
+import { getHost } from 'theme_bridge/src';
 
-Edit the JSON, then rebuild the native App to update these values. The current
-OTA scope is `app_pages`; it does not replace this module's bundled token assets.
+const tokens = getHost().getTokens();
+const surface: string = tokens.light.surface;
+const radius: number = tokens.shared.radius.card;
+```
 
-To check the public Swift boundary after preparing the iOS modules:
+`app_pages/src/components/theme.ts` exposes exact color identifiers and typed
+shared tokens. It converts the palettes to dictionaries only when calling
+Valdi's color-palette API, then switches the active palette with system
+appearance changes. It never maintains another set of token values.
+
+`app_ui`'s native `UiDesign` reads its overlapping color and numeric fields from
+this store. Its additional native-only component constants remain in `UiDesign`.
+Keep `theme_bridge` enabled when using those native UI components.
+
+Adding a shared token means adding a field to the contract and supplying it in
+both native constructors. Missing or incorrectly typed constructor arguments fail
+the native build. The shared colors currently use `#RRGGBB` or `rgba(r,g,b,a)`
+values, which the native UI adapter converts to platform colors. Changing native values requires rebuilding the native module
+and App; an application JavaScript update cannot replace native token values.
+
+Validation:
 
 ```sh
+node scripts/node-modules.mjs android
+python3 valdi/modules/theme_bridge/tests/run_theme_tokens_tests.py --evidence /tmp/valdi-theme-tests
 node scripts/node-modules.mjs ios
 ios/Tests/run-theme-tokens-access-tests.sh
+pnpm test
 ```
 
-The check compiles and links an independent iOS Simulator consumer against the
-actual module and runtime libraries. It does not launch the simulator executable.
-
-`ios/Tests/run-theme-tokens-store-tests.sh` exercises the actual store's
-Foundation decoding, errors and cache on macOS, with a field-only transport
-substitute. The independent iOS consumer checks the real generated model boundary.
+The Android runner executes the real store and generated models on the JVM,
+checks shared instance identity through the factory, and checks that the Kotlin
+compiler rejects a mismatched field type. The Swift consumer compiles and links
+against the actual iOS module and runtime, and checks compiler rejection of a
+mismatched field type; it does not execute an iOS app. TypeScript regression tests
+check valid fields, misspellings, readonly access and the actual generated ABI.

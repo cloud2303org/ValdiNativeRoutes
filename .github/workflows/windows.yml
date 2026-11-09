@@ -110,7 +110,7 @@ jobs:
           java-version: '17'
       - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
         with:
-          packages: 'platforms;android-37.0 build-tools;37.0.0 ndk;27.1.12297006 cmake;3.22.1'
+          packages: 'platforms;android-37.0 build-tools;37.0.0 ndk;27.1.12297006 ndk;28.0.13004108 cmake;3.22.1'
           log-accepted-android-sdk-licenses: false
       - name: Install dependencies and fetch the exact fork checkout
         env:
@@ -185,8 +185,16 @@ jobs:
         with:
           # Only the prepared libraries: the archives are checksum-pinned and cheap to fetch.
           path: vision/vendor/install
-          key: vision-v2-${{ runner.os }}-${{ runner.arch }}-ndk27.1.12297006-${{ hashFiles('vision/vendor-lock.json', 'vision/scripts/prepare-native.cjs') }}
-      - name: Export runtime, build native modules and package APK
+          key: vision-static-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vision/vendor-lock.json', 'vision/*-runtime.json', 'vision/scripts/**', 'vision/patches/**') }}
+      - name: Export runtime
+        env:
+          HTTPS_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
+          HTTP_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
+          NO_PROXY: localhost,127.0.0.1,repo1.maven.org,dl.google.com,maven.google.com
+        run: |
+          & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/export-android.ps1 -Config debug -ValdiCheckout $env:VALDI_CHECKOUT -BazelPath $env:BAZEL_BIN -JavaHome $env:JAVA_HOME -AndroidHome $env:ANDROID_HOME -BazelArgs 'build --experimental_disk_cache_gc_max_size=3G' 2>&1 | Tee-Object .ci/windows-export.log
+          exit $LASTEXITCODE
+      - name: Build native modules and package APK
         env:
           # See the helper step: repository downloads such as rules_license otherwise time
           # out with "Connect timed out" while Git fetches already succeed through the proxy.
@@ -199,20 +207,20 @@ jobs:
           & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/build-android.ps1 -ValdiCheckout $env:VALDI_CHECKOUT -BazelPath $env:BAZEL_BIN -JavaHome $env:JAVA_HOME -AndroidHome $env:ANDROID_HOME -BazelArgs 'build --experimental_disk_cache_gc_max_size=3G' 2>&1 | Tee-Object .ci/windows-build.log
           exit $LASTEXITCODE
       - name: Save prepared vision dependencies
-        # The Vision preparation runs inside the build step; keep its output even if the APK step then fails.
+        # Gradle prepares module-owned dependencies; retain them even if packaging then fails.
         if: always() && steps.vision.outputs.cache-hit != 'true' && hashFiles('vision/vendor/install/**') != ''
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: vision/vendor/install
-          key: vision-v2-${{ runner.os }}-${{ runner.arch }}-ndk27.1.12297006-${{ hashFiles('vision/vendor-lock.json', 'vision/scripts/prepare-native.cjs') }}
-      - name: Test pipeline and validate runtime fingerprint
+          key: vision-static-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vision/vendor-lock.json', 'vision/*-runtime.json', 'vision/scripts/**', 'vision/patches/**') }}
+      - name: Test pipeline and validate runtime metadata
         run: |
           # The fork checkout is the Valdi source root here: the workspace's
           # bazel-valdi link points at the execroot of an overridden module.
           $env:VALDI_SOURCE_ROOT = $env:VALDI_CHECKOUT
           node scripts/project.mjs test --valdi $env:VALDI_CHECKOUT 2>&1 | Tee-Object .ci/test.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node scripts/ota.mjs check-export android android/app/libs/valdi_ota.json
+          node --input-type=module -e 'import { checkRuntime } from "./scripts/prerequisites.mjs"; checkRuntime(process.cwd(), "android");'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-FileHash android/app/libs/valdi_runtime.aar, module-build/out/android/calculator/calculator_android.jar, android/app/build/outputs/apk/debug/app-debug.apk | Format-List | Out-File .ci/windows-artifacts.txt
       - name: Audit runtime compilation actions
@@ -280,7 +288,7 @@ jobs:
           java-version: '17'
       - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
         with:
-          packages: 'platforms;android-37.0 build-tools;37.0.0 ndk;27.1.12297006 cmake;3.22.1'
+          packages: 'platforms;android-37.0 build-tools;37.0.0 ndk;27.1.12297006 ndk;28.0.13004108 cmake;3.22.1'
           log-accepted-android-sdk-licenses: false
       - name: Run the isolated cold bootstrap
         env:

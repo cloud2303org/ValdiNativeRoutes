@@ -36,9 +36,9 @@ function runtime() {
     globalThis.writes = [];
     globalThis.records = new Map();
     globalThis.nativeStorageHost = {
-      get: key => records.has(key) ? { found: true, payload: records.get(key), error: '' }
-                                 : { found: false, payload: {}, error: '' },
-      set: request => { writes.push(request); records.set(request.key, request.payload); return true; },
+      get: key => records.has(key) ? { found: true, value: records.get(key) }
+                                   : { found: false, value: '' },
+      set: request => { writes.push(request); records.set(request.key, request.value); return true; },
       remove: key => records.delete(key), clear: () => records.clear(),
     };
     globalThis.api = storage.storageApi((method, cause) => new Error(method + ': ' + cause.message));
@@ -46,12 +46,12 @@ function runtime() {
   return { evaluate };
 }
 
-test('storage sends generated structured requests and reads typed replies for all root value shapes', () => {
+test('storage sends JSON text over the bridge and parses replies for all root value shapes', () => {
   const { evaluate } = runtime();
-  for (const source of ['null', 'true', 'false', '1.25', "'中文 👋'", "''", "[null, false, { nested: 'x' }]", "({ __proto__: null, own: 'value' })"]) {
+  for (const source of ['null', 'true', 'false', '1.25', "'中文 👋'", "''", "[null, false, { nested: 'x' }]", "({ own: 'value' })"]) {
     evaluate(`api.setStorageSync('key', ${source})`);
     assert.equal(evaluate('typeof writes.at(-1)'), 'object');
-    assert.equal(evaluate('typeof writes.at(-1).payload'), 'object');
+    assert.equal(evaluate('typeof writes.at(-1).value'), 'string');
     assert.equal(evaluate("JSON.stringify(api.getStorageSync('key'))"), evaluate(`JSON.stringify(${source})`));
   }
   assert.equal(evaluate("api.getStorageSync('missing')"), undefined);
@@ -63,53 +63,51 @@ test('storage sends generated structured requests and reads typed replies for al
   assert.equal(evaluate('records.size'), 0);
 });
 
-test('writes pass structured values through without JSON conversion', () => {
+test('set serializes once at the API boundary and the bridge receives the exact JSON text', () => {
   const { evaluate } = runtime();
   evaluate(`
     globalThis.input = { missing: undefined, list: [null, false], nested: { n: 1 } };
-    globalThis.special = JSON.parse('{"__proto__":{"safe":true}}');
-    JSON.parse = JSON.stringify = () => { throw Error('JSON transport is forbidden'); };
     api.setStorageSync('key', input);
     input.nested.n = 9;
-    api.setStorageSync('proto', special);
   `);
-  assert.equal(evaluate("api.getStorageSync('key').nested.n"), 9);
-  assert.equal(evaluate("Object.hasOwn(api.getStorageSync('key'), 'missing')"), true);
-  assert.equal(evaluate("Object.hasOwn(writes.at(-1).payload.value, '__proto__')"), true);
-  assert.equal(evaluate("api.getStorageSync('proto').__proto__.safe"), true);
+  // The write serializes immediately: later mutations never reach the stored text.
+  assert.equal(evaluate("api.getStorageSync('key').nested.n"), 1);
+  assert.equal(evaluate("Object.hasOwn(api.getStorageSync('key'), 'missing')"), false);
+  // JSON.stringify drops `undefined`, functions and infinite numbers to `null` per spec; bigint and circular
+  // structures throw. Only the throwing roots are rejected as API errors, and nothing extra gets written.
+  evaluate('api.setStorageSync("num", NaN)');
+  assert.equal(evaluate("api.getStorageSync('num')"), null);
+  evaluate('api.setStorageSync("date", new Date())');
+  assert.equal(evaluate("typeof api.getStorageSync('date')"), 'string');
+  for (const value of ['BigInt(1)', '(() => { const x = {}; x.x = x; return x; })()']) {
+    assert.throws(() => evaluate(`api.setStorageSync('key', ${value})`), /setStorageSync/);
+  }
+  assert.throws(() => evaluate("api.setStorageSync(' ', 1)"), /key must not be empty/);
 });
 
-test('typed reads do not parse bridge data and corrupt records/write failures remain API errors', () => {
+test('reads parse stored text once at the API boundary and corrupt records stay API errors', () => {
   const { evaluate } = runtime();
-  evaluate("api.setStorageSync('key', { ok: true }); JSON.parse = () => { throw Error('no JSON read bridge'); }");
+  evaluate('records.set("key", JSON.stringify({ ok: true }))');
   assert.equal(evaluate("api.getStorageSync('key').ok"), true);
-  evaluate("nativeStorageHost.get = () => ({ found: false, payload: {}, error: 'corrupt record' })");
-  assert.throws(() => evaluate("api.getStorageSync('key')"), /getStorageSync: corrupt record/);
+  evaluate("nativeStorageHost.get = () => ({ found: true, value: '{broken' })");
+  assert.throws(() => evaluate("api.getStorageSync('key')"), /getStorageSync: the stored value is not valid JSON/);
   const fresh = runtime();
   fresh.evaluate('nativeStorageHost.set = () => false');
   assert.throws(() => fresh.evaluate("api.setStorageSync('key', 'value')"), /setStorageSync: the store could not write it/);
 });
 
-test('unrepresentable values reach the host and empty keys are still rejected', () => {
-  const { evaluate } = runtime();
-  for (const value of ['undefined', '() => {}', 'BigInt(1)', 'NaN', 'Infinity', 'new Date()', '[,]', '[undefined]', '({ toJSON: () => 1 })', '({ get value() { throw Error("getter called"); } })', '(() => { const x = {}; x.x = x; return x; })()']) {
-    evaluate(`api.setStorageSync('key', ${value})`);
-  }
-  assert.equal(evaluate('writes.length'), 11);
-  assert.throws(() => evaluate("api.setStorageSync(' ', 1)"), /key must not be empty/);
-});
-
-test('real generator exports structured storage request/reply signatures on all native targets', () => {
+test('real generator exports string-only storage request/reply signatures on all native targets', () => {
   const target = codegenModules().mmkv;
   const code = generateNativeCode(target);
   const platform = (name: 'android' | 'ios' | 'cpp') => [...nativeSourceFiles(target, code, name)].map(([, source]) => source).join('\n');
   const android = platform('android');
   assert.match(android, /get: \(key: String\) -> StorageReadReply/);
   assert.match(android, /set: \(request: StorageWriteRequest\) -> Boolean/);
-  assert.match(android, /payload: Map<String, Any\?>/);
+  assert.match(android, /value: String/);
   const ios = platform('ios');
   assert.match(ios, /VRStorageReadReply \* _Nonnull\(\^VRStorageHostGetBlock\)/);
   assert.match(ios, /VRStorageHostSetBlock\)\(VRStorageWriteRequest \* _Nonnull request\)/);
+  assert.match(ios, /NSString \* _Nonnull value/);
   const cpp = platform('cpp');
   assert.match(cpp, /using GetFn = Valdi::Function<StorageReadReply\(Valdi::StringBox\)>/);
   assert.match(cpp, /using SetFn = Valdi::Function<bool\(StorageWriteRequest\)>/);

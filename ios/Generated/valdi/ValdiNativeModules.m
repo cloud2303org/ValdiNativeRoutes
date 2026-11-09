@@ -8,6 +8,12 @@ void VRRegisterNativeModules(SCValdiRuntime *runtime) {
     [runtime registerNativeModuleFactory:CalculatorCreateModuleFactory()];
     [runtime registerNativeModuleFactory:ValdiWebViewCreateModuleFactory()];
     {
+        Class factoryClass = NSClassFromString(@"VROtaModuleFactory");
+        if (!factoryClass || ![factoryClass conformsToProtocol:@protocol(SCNValdiCoreModuleFactory)])
+            [NSException raise:NSInternalInconsistencyException format:@"Missing Swift module factory: VROtaModuleFactory"];
+        [runtime registerNativeModuleFactory:[factoryClass new]];
+    }
+    {
         Class factoryClass = NSClassFromString(@"VRAppUIModuleFactory");
         if (!factoryClass || ![factoryClass conformsToProtocol:@protocol(SCNValdiCoreModuleFactory)])
             [NSException raise:NSInternalInconsistencyException format:@"Missing Swift module factory: VRAppUIModuleFactory"];

@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 ios_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ota_dir="$ios_dir/../valdi/modules/app_ota"
 test_dir=$(mktemp -d "${TMPDIR:-/tmp}/valdi-ota-client.XXXXXX")
 evidence=${OTA_TEST_OUTPUT:-"$test_dir/evidence"}
 mkdir -p "$evidence"
@@ -35,16 +36,16 @@ if [ "${OTA_TEST_WITHOUT_CODEC:-0}" = 1 ]; then
     set -- -D VALDI_OTA_NO_CODEC
 else
     core_build=${OTA_TEST_CORE_BUILD:-"$test_dir/core"}
-    cmake -S "$ios_dir/../ota/native" -B "$core_build" \
+    cmake -S "$ota_dir/native" -B "$core_build" \
         -DCMAKE_BUILD_TYPE=Release -DVALDI_OTA_BUILD_HOST_TESTS=OFF >"$evidence/core-build.log" 2>&1
     cmake --build "$core_build" --parallel 4 >>"$evidence/core-build.log" 2>&1
-    shasum -a 256 "$ios_dir/../ota/native/ValdiOtaCodec.h" "$core_build/libvaldi_ota_core.a" >"$evidence/codec-inputs.sha256"
-    set -- -import-objc-header "$ios_dir/../ota/native/ValdiOtaCodec.h" "$core_build/libvaldi_ota_core.a" -lz
+    shasum -a 256 "$ota_dir/native/ValdiOtaCodec.h" "$core_build/libvaldi_ota_core.a" >"$evidence/codec-inputs.sha256"
+    set -- -import-objc-header "$ota_dir/ios/ValdiOtaCodecBridge.h" "$core_build/libvaldi_ota_core.a" -lz
 fi
 xcrun swiftc -warnings-as-errors -parse-as-library "$@" \
-    "$ios_dir/ValdiRoutes/Ota/ValdiOtaDownloader.swift" \
-    "$ios_dir/ValdiRoutes/Ota/ValdiOtaSplit.swift" \
-    "$ios_dir/ValdiRoutes/Ota/ValdiOtaClient.swift" \
+    "$ota_dir/ios/ValdiOtaDownloader.swift" \
+    "$ota_dir/ios/ValdiOtaSplit.swift" \
+    "$ota_dir/ios/ValdiOtaClient.swift" \
     "$ios_dir/Tests/ValdiOtaClientTests.swift" \
     -o "$test_dir/ValdiOtaClientTests"
 if [ "${OTA_TEST_WITHOUT_CODEC:-0}" = 1 ]; then

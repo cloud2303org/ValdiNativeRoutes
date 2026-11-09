@@ -79,9 +79,10 @@ pnpm build
 `valdi/` 和 `module-build/` 中的源码 pin 与 registry。
 内部 Bazel 子模块共用相同 archive URL / prefix。源码准备会获取 fork，并由 Bazel 更新 lockfile。
 
-按下表适配 Node 移植部分，再重新导出 Android/iOS 运行时、准备视觉依赖，运行
+按下表适配 Node 移植部分，再手动重新导出 Android/iOS 运行时，运行
 `pnpm build:android`、`pnpm build:ios`。提交应用 pin、registry、lockfile 和适配代码；CI 与设备验证通过后，
-落地应用 `main`。框架提交变化会触发运行时重新导出，即使迁移前后源码行为一致。
+落地应用 `main`。已启用模块的视觉等原生依赖由原生构建自动检查并按需准备。
+框架提交变化后应主动重新导出运行时，即使迁移前后源码行为一致；构建不计算源码指纹或自动重新导出。
 
 | 维护位置 | 升级时关注的内容 | 验证方式 |
 | --- | --- | --- |

@@ -25,6 +25,15 @@ CLI and new native modules:
 The module list above is illustrative; retain the enabled modules required by
 your application's imports and host implementations.
 
+`app_vision` uses `nativeBuild: "cpp"`: its generated Polyglot C++ bindings,
+adapter, VisionCore and static OpenCV/ncnn dependencies are linked into
+ValdiRuntime. Adding or removing an enabled cpp module requires a manual runtime
+export and an App rebuild. The same applies to linked C++ or vendor changes;
+TS page edits continue to use normal hot reload. A normal App build does not
+refresh the runtime or run cpp-mode `nativeDependencies` hooks. Those hooks run
+only during explicit runtime exports; host-mode hooks remain in normal builds.
+See [Vision build and packaging](vision-build.md) for platform cache requirements.
+
 ## Editable application identity
 
 - `name` is a plain identifier used for the Android project name and iOS project,
@@ -34,7 +43,7 @@ your application's imports and host implementations.
   are rejected.
 - `icon` is the optional repository-relative path to a square 1024-by-1024 PNG.
   This app uses `assets/app-icon.png` as the single source for both launcher
-  icons and SplashScreen. Replace that PNG and run the normal prebuild/build;
+  icons and SplashScreen. Replace that PNG and run the normal native build;
   platform sizes and asset catalogs are generated automatically.
 - `android.applicationId` is the installed Android package ID.
 - `ios.bundleIdentifier` is the installed Apple bundle ID.
@@ -67,7 +76,7 @@ project-template initialization step, or an explicit native source refactor.
 
 ```sh
 node scripts/app-config.mjs read --json
-pnpm prebuild --platform android
+# First install dependencies and manually export the required runtime (see README).
 pnpm build:android
 pnpm build:ios
 ```
@@ -111,15 +120,14 @@ not relabeled as the configured app.
 
 ## OTA compatibility
 
-Application identity is included in the native application fingerprint.
-The configured icon's contents and its generation script also count as native
-inputs. Icon changes require a new native build; they are not delivered by a
-JS-only OTA.
-Changing identity requires rebuilding the host and producing matching OTA
-compatibility records. This does not itself require recompiling the Valdi runtime
-when its native inputs are unchanged.
+Application identity and icons belong to the native installation. Icon or identity
+changes require a new native build; they are not delivered by a JS-only OTA.
+OTA targets the publisher-selected platform and application version without
+source fingerprint checks or compatibility records. The publisher is responsible
+for native API compatibility. Identity or icon changes alone do not require
+recompiling the Valdi runtime.
 
 Application session state and its persistence policy are app-owned. The demo
 uses an in-memory Zustand store and has no native token-storage service.
-OTA client modularization remains a separate task; this change keeps the existing
-client startup, verification, activation and rollback behavior.
+OTA remains the existing host Kotlin/Swift client plus host C codec linkage;
+the Vision selection does not migrate OTA into ValdiRuntime.

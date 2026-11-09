@@ -10,7 +10,7 @@ final class PermissionHostImpl: NSObject, VRPermissionHost {
     }
 
     func requestMultiple(withPermissions permissions: [String]) -> SCValdiPromise<NSArray> {
-        Self.resolved(permissions.map { VRPermissionGrant(permission: $0, result: "denied") } as NSArray)
+        Self.resolved(permissions.map { VRPermissionGrant(permission: $0, result: .denied) } as NSArray)
     }
 
     /// A promise already settled with `value`. Written when the Valdi framework didn't export SCValdiPromise's class

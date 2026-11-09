@@ -41,6 +41,10 @@ await asyncWithProtectedRefsForContextId(this.renderer.contextId, async () => {
 });
 ```
 
+`setVolume(volume)` 两端要求有限数且位于闭区间 `[0, 1]`，含 0 和 1；
+`NaN`、正负无穷、负数和大于 1 的值均 reject，保持原音量，不以 clamp 后成功代替。
+命令仍先检查播放器是否已释放，再在主线程应用有效值。
+
 同一个对象支持多个独立订阅。订阅先发送当前快照，随后推送原生状态事件；
 `unsubscribe()` 只移除对应监听，`release()` 清除所有监听并执行资源释放。
 每个播放器的 `sequence` 递增，页面会忽略旧事件；换源和销毁另有 generation 保护。
@@ -84,15 +88,26 @@ Activity 回调确认，停止/销毁路径负责清理。点击按钮或能力�
 
 ## 片源与边界
 
-初始加载随 App 打包的 [flower.mp4](../valdi/modules/app_video/assets/flower.mp4)。
+初始加载随业务模块 `app_pages` 打包的
+[flower.mp4](../valdi/modules/app_pages/assets/flower.mp4)。
 Android 通过 [Gradle assets 配置](../android/app/build.gradle.kts) 使用
 `asset:///flower.mp4`；iOS 的 [资源配置](../ios/Generated/Modules.yml) 将资源复制进
-bundle，`getDemoSource()` 返回本地文件 URL，无远程兜底。
-[source.json](../valdi/modules/app_video/assets/source.json) 记录 MDN
+bundle，业务页面传入 `bundle:///flower.mp4`，由通用
+[资源解析器](../valdi/modules/app_video/ios/VRVideoSource.m) 使用
+`NSBundle.mainBundle URLForResource:withExtension:` 查找完整文件名，无远程兜底。
+Xcode 复制资源时可能将目录展平；这里按 bundle 根资源查找，不拼接源码模块路径。
+`VideoHost` 只提供 `create(source)`，不包含演示片源方法，`app_video` 不携带示例资源。
+[flower.source.json](../valdi/modules/app_pages/assets/flower.source.json) 记录 MDN
 `interactive-examples` 的固定 commit、`live-examples/media/cc0-videos/flower.mp4`
 路径及哈希；许可记录为 CC0-1.0，全文保存在
-[MDN-LICENSE.txt](../valdi/modules/app_video/assets/MDN-LICENSE.txt)。下载时核对了原始
-Git blob 和文件 SHA-256，构建后再次检查了本地文件与来源记录。
+[MDN-LICENSE.txt](../valdi/modules/app_pages/assets/MDN-LICENSE.txt)。本次移动保持原始字节，
+回归测试核对 Git blob SHA-1 和文件 SHA-256；本次没有重新构建资源包。
+
+iOS `bundle:///filename` 仅接受一个非隐藏的根资源名：ASCII 字母、数字、`_`、`-`、
+`.`，首字符不能为 `.`。目录、相对路径、百分号转义、authority、query、fragment
+均拒绝，缺失资源或目录也 reject。此入口用于已打包资源，不增加任意路径解析能力；
+原来的 HTTPS/已有 file URL 入口保持原策略。Valdi 核心 Asset API 提供资源加载，
+本次未发现可以直接返回此类打包文件 URL 给 `create(source)` 的现有接口。
 
 「载入 HLS 示例」使用 [VideoPage 的 `HLS_EXAMPLE`](../valdi/modules/app_pages/src/features/video/VideoPage.tsx)
 所指向的 Apple 示例，也可输入视频 URL。离线 MP4 无需网络；远程 MP4/HLS 需要网络。
@@ -104,6 +119,112 @@ HLS 可定位范围和倍速行为受原生播放器及流本身限制。
 
 PiP 受系统能力、设置、窗口/播放就绪状态及设备支持约束；能力检测通过不保证启动成功。
 模拟器结果不能代替物理设备验证，本文不宣称所有设备或系统均支持 PiP。
+
+## 手动宿主接线、原生访问与停用
+
+模块依赖/选配与宿主视频展示接线是两件事。Theme/AppUI 继续作为默认基础模块，
+AppUI 保持完整聚合；视频能力的停用不要求拆分 AppUI，也不修改 `AppContext`。
+以下路径由宿主维护，复制或移除视频模块时需要一起核对。
+
+Android：
+
+1. 保留 [模块配置](../valdi/modules/app_video/module.json) 与生成的
+   `VideoNativeModuleFactory` / `VideoModuleFactoryImpl` 注册。
+   [ValdiHost.init](../android/app/src/main/java/io/valdiroutes/app/runtime/ValdiHost.kt)
+   在访问 `VideoModuleFactoryImpl.requireHost()` 前先调用生成的
+   `ValdiNativeModules.registerFactories(app)`。宿主 `videoHost` getter 返回这个共享实例，
+   不能另外创建一个 host 给 loader。
+2. 同一个 `videoHost.loader` 通过 `runtimeManager.registerAssetLoader(...)` 注册；
+   它只解析 `valdi-video://` 的会话 URL。Media3 普通源加载与这个 surface URL 不混用。
+   Gradle 还需包含模块 Kotlin、`android/res`、Media3 ExoPlayer/HLS/session/UI 依赖和
+   生成的代理接口；`VideoSession` / `VideoPresentation` 当前引用宿主 `io.valdiroutes.app.R`，
+   迁移原生 namespace 时需相应调整资源引用。
+3. [MainActivity](../android/app/src/main/java/io/valdiroutes/app/MainActivity.kt)
+   在创建时调用 `videoHost.attach(this) { videoFullscreen = it }`，
+   `onResume` / `onPause` / `onStop` 传入相同 Activity；
+   `onDestroy` 调用 `detach(this)`。这负责前后台、失效 Activity 与 PiP 结束后的释放，
+   不能只留 loader 或只转发页面可见性。
+4. Activity 的 `onPictureInPictureModeChanged(Boolean, Configuration)` 必须转发给
+   `videoHost.onPictureInPictureModeChanged(this, ...)`，由实际系统回调确认 PiP 模式。
+   Compose 的 `videoFullscreen` 状态驱动 `BackHandler`，
+   注册在导航返回处理之后，调用 `exitFullscreenFromBack()`，先退出全屏再处理页面返回。
+5. [宿主 manifest](../android/app/src/main/AndroidManifest.xml) 的 Activity 保留
+   `supportsPictureInPicture="true"`、`resizeableActivity="true"` 和屏幕/方向变化对应的
+   `configChanges`。现有完整值还包含 keyboard、navigation、uiMode、density 等宿主用途，
+   停用视频时不能整项删除。远程源需要 INTERNET 权限；其他模块也可能使用它。
+   PiP 控制接收器由 `VideoPresentation` 动态注册并在 dispose 时注销，
+   保留 `valdi-video-control` scheme、包名/session 校验与不可变 PendingIntent；
+   无需另加 manifest receiver 或后台播放 service。
+
+iOS：
+
+1. [ValdiHost](../ios/ValdiRoutes/Runtime/ValdiHost.swift) 在主线程为 runtime 生命周期持有
+   一个 `VRVideoService`，将同一个实例放入 `SCValdiConfiguration.videoLoaders`。
+   生成工厂注册必须包在
+   `videoService.registerModules { VRRegisterNativeModules(runtime) }` 内；
+   `VideoModuleFactory` 的同步初始化从此注册作用域取得相同 service。
+   不要分别给模块和 loader 创建 service，否则会话 URL 无法找到对应播放器。
+2. 保留 `app_video/ios` 全部源码（包含通用 `VRVideoSource.h/.m`）、
+   生成的 AppVideo/AppVideoTypes 接口、`VRVideoModuleFactory`、
+   `ValdiModuleImports.h` 对 `VRVideoService.h` 的导入，以及宿主 bridging header 对生成导入的引用。
+   宿主资源配置包含业务模块 assets，AVFoundation/AVKit/UIKit 来自模块元数据；
+   [Modules.yml](../ios/Generated/Modules.yml) 和工程文件由父任务重新生成。
+3. 模块元数据声明 `UIBackgroundModes` 的 `audio`，配合 AVAudioSession playback category
+   支持 PiP。`VRVideoService` 自身观察后台/前台和音频中断；
+   AVPlayerViewController、AVPictureInPictureController 的 delegate 负责关闭全屏、
+   PiP 转场与恢复。当前无需另加 SceneDelegate/AppDelegate 或导航 Back 的视频回调，
+   也不能绕过这些 delegate 强行重建播放器。普通 native modal 返回仍由模块处理。
+
+保留能力但不需要演示时，删除业务视频路由/入口、`VideoPage` 和这三个 sample 资源即可，
+原生模块、loader/factory 和宿主生命周期接线继续保留。Android 原生代码可直接通过
+`VideoModuleFactoryImpl.requireHost()` 取得共享 `VideoHostImpl`，调用 `create(source)`
+返回 `Promise<VideoPlayer>`；iOS 原生调用方使用宿主持有的同一个 `VRVideoService`，
+以 `[service createWithSource:source]` 取得 `SCValdiPromise<id<VRVideoPlayer>>`。
+原生调用也可使用同一组播放、订阅、状态和释放接口；ObjC 的释放 selector 是
+`releaseObject`，不调用 NSObject 的 `release`。原生 inline 展示仍通过已注册的官方
+video loader 绑定 `player.getSource()` 对应的表面，保留全屏/PiP 的同一播放器所有权。
+创建命令后仍需遵守主线程接线与 promise 完成语义，不通过 JS 页面或 `AppContext` 访问播放器。
+
+完全停用 `app_video` 时，手动移除业务导入/路由/入口和 sample 资源，调整根模块选择及业务
+依赖，再重新生成原生注册、接口和工程资源配置。Android 同时移除 `ValdiHost` 的 video
+imports/getter/loader 注册，以及 Activity 的 video 状态、attach/detach、三个生命周期转发、
+PiP 回调转发和全屏 BackHandler；只删除专属视频的 Activity 属性，保留其他宿主功能需要的
+configChanges/权限。iOS 同时移除 service 属性、videoLoaders 配置和注册作用域包装，
+继续直接调用生成的模块注册函数；删除专属导入/源码接线。AV 框架、后台 audio mode、
+INTERNET 仅在没有其他消费者时移除。生成注册文件和工程文件不手工修改，
+不能仅关模块选择却留下这些静态宿主引用。
+
+本次修改不改上述宿主文件。父任务需重新生成两端 `VideoHost` 接口以删除旧演示方法，
+刷新 `ios/Generated/Modules.yml` / Xcode 工程以使用 `app_pages/assets` 并移除旧 assets 路径；
+Gradle 和 iOS 工程从全部启用模块收集 assets，包括没有原生实现的业务模块；资源根仍是 `flower.mp4`。
+视频来源清单命名为 `flower.source.json`，避免 iOS 扁平资源目录与 Lottie 的 `source.json` 冲突。
+这些原生 bundle/assets 文件随 App 构建，单独的 JS OTA 不会替换它们。
+宿主 build.gradle 的旧示例注释仍提到 app_video，父任务可同步修正文案。
+此处保持默认启用配置，所以不需要删除当前 Activity/ValdiHost 接线。
+
+## 本次聚焦源码回归，2026-11-09
+
+执行：
+
+```sh
+python3 valdi/modules/app_video/tests/run_native_tests.py
+cd tools/valdi-rolldown
+node --import tsx --test video.test.ts
+```
+
+原生 runner 离线使用本机 clang/Foundation 和缓存 Kotlin compiler；
+iOS 逐字提取生产 `setVolume` 与真实主队列 `perform:` 包装编译，
+只替代 AVPlayer/session 与 Valdi promise 边界。Android 编译完整的生产
+`VideoPlayerImpl.kt`，替代 host/session/promise 边界。测试有效边界、近边界、
+非有限数、拒绝后无音量修改，以及已释放播放器的拒绝；iOS 另检查拒绝不发状态事件。
+原先 iOS 在 `-0.01` 上成功的 RED 已复现，修复后通过。
+资源测试编译完整生产 Foundation 解析器，在临时 bundle 中验证根资源、另一种文件名、
+HTTPS/file 原策略及 35 个无效/缺失资源输入。TS 测试执行真实页面的初次加载、离线重载与
+销毁，覆盖两端 URL 选择和 unsubscribe/release 提交顺序，并核对移动资源的两个哈希。
+
+以上原生三组、TS 四项（含页面/契约类型检查）均通过；未执行完整 App 构建、导出、根 bindings 生成、设备操作或
+打包后资源验证。测试没有验证 Media3/AVPlayer 解码、Valdi/JNI marshalling 或 PiP 运行行为。
+下文保留历史验证范围，不将历史设备结果当成本次资源迁移后的运行证据。
 
 ## 此前 session 接口的验证，2026-11-05
 

@@ -9,6 +9,7 @@ import {
   serializePermissionRequest,
 } from 'permissions/src/index';
 import { nativeWifi } from './native';
+import type { WifiPermissionStateModel } from './WifiHost';
 
 export type WifiPermissionOperation = 'connect' | 'scan' | 'info';
 export interface WifiPermissionOptions {
@@ -31,7 +32,19 @@ export function androidWifiPermissions(operation: WifiPermissionOperation, parti
   return location;
 }
 
-/** `options` were checked by wechat.ts (schemas.ts); the core answers one of DevicePermissionResult's statuses. */
+function mapPermissionState({ status, canAskAgain }: WifiPermissionStateModel): WifiPermissionResult {
+  if (
+    status !== 'granted' &&
+    status !== 'undetermined' &&
+    status !== 'denied' &&
+    status !== 'blocked' &&
+    status !== 'unavailable'
+  )
+    throw new Error('native Wi-Fi returned an invalid permission status');
+  return { status, canAskAgain };
+}
+
+/** `options` were checked by wechat.ts (schemas.ts); native statuses are checked before exposing them. */
 export async function readWifiPermission({
   operation,
   partialInfo,
@@ -42,7 +55,7 @@ export async function readWifiPermission({
   if (operation === 'scan') return { status: 'unavailable', canAskAgain: false };
   // Joining an explicitly supplied device AP uses NEHotspotConfiguration's own OS approval.
   if (operation === 'connect') return { status: 'granted', canAskAgain: true };
-  return (await nativeWifi.getLocationPermissionState()) as WifiPermissionResult;
+  return mapPermissionState(await nativeWifi.getLocationPermissionState());
 }
 
 export async function askWifiPermission(
@@ -61,6 +74,6 @@ export async function askWifiPermission(
     checkActive?.();
     if (current.status === 'granted' || current.status === 'blocked' || current.status === 'unavailable')
       return current;
-    return (await nativeWifi.requestLocationPermission()) as WifiPermissionResult;
+    return mapPermissionState(await nativeWifi.requestLocationPermission());
   }, checkActive);
 }

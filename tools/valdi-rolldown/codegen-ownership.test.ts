@@ -4,6 +4,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, 
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test, { type TestContext } from 'node:test';
+import { pathToFileURL } from 'node:url';
 
 function put(file: string, content: string): void {
   mkdirSync(path.dirname(file), { recursive: true });
@@ -50,7 +51,7 @@ function fixture(t: TestContext) {
     cpSync(path.join(calculator, name), path.join(modules, 'calculator', name));
   }
   assert.equal(JSON.parse(readFileSync(path.join(calculator, 'module.json'), 'utf8')).nativeBuild, 'bazel');
-  put(path.join(directory, 'package.json'), JSON.stringify({ valdi: { modules: ['calculator', 'host', 'shared'] } }));
+  put(path.join(directory, 'package.json'), JSON.stringify({ valdi: { modules: ['calculator', 'host', 'shared', 'runtime_cpp'] } }));
   put(path.join(modules, 'host/module.json'), JSON.stringify({ nativeBuild: 'host', iosModuleName: 'Host' }));
   put(path.join(modules, 'host/src/index.ts'), [
     "import { Shared } from 'shared/src';",
@@ -59,11 +60,22 @@ function fixture(t: TestContext) {
   ].join('\n'));
   put(path.join(modules, 'host/cpp/src/main.cpp'), '// C++ implementation owner; no native build is run.\n');
   put(path.join(modules, 'calculator/cpp/src/main.cpp'), '// Bazel-owned C++ root must stay in the runtime plan.\n');
+  put(path.join(modules, 'runtime_cpp/module.json'), JSON.stringify({
+    nativeBuild: 'cpp', iosModuleName: 'RuntimeCpp', androidClassPath: 'com.example.runtime',
+    nativeDependencies: { script: 'prepare.mjs', inputs: [] }, nativeInputs: ['cpp'],
+  }));
+  put(path.join(modules, 'runtime_cpp/src/index.ts'), [
+    "import { Shared } from 'shared/src';",
+    '/** @ExportModule */',
+    'export declare function readValue(): Shared;',
+  ].join('\n'));
+  put(path.join(modules, 'runtime_cpp/cpp/src/main.cpp'), '// Runtime-owned C++ root.\n');
+  put(path.join(modules, 'runtime_cpp/prepare.mjs'), 'throw new Error("codegen must not prepare runtime dependencies");\n');
   put(path.join(modules, 'shared/src/index.ts'),
     '/** @ExportModel */\nexport interface Shared { readonly value: number; }\n');
   put(path.join(modules, 'disabled/src/index.ts'), 'export {};\n');
   put(path.join(modules, 'disabled/module.json'), JSON.stringify({ iosModuleName: 'Disabled' }));
-  for (const name of ['calculator', 'host', 'shared']) {
+  for (const name of ['calculator', 'host', 'shared', 'runtime_cpp']) {
     put(path.join(modules, name, 'tsconfig.json'), JSON.stringify({
       include: ['src/**/*.ts'],
       compilerOptions: { paths: { 'shared/*': ['../shared/*'] } },
@@ -85,8 +97,62 @@ function fixture(t: TestContext) {
     assert.ifError(result.error);
     return result;
   };
-  return { output, run };
+  return { output, run, tool, modules };
 }
+
+test('cpp mode emits C++ runtime roots without Kotlin/ObjC and prunes stale host bindings even when named explicitly', t => {
+  const { output, run } = fixture(t);
+  const initial = run();
+  assert.equal(initial.status, 0, initial.stderr);
+  const owned = [
+    'kotlin/runtime_cpp.kt',
+    ...['RuntimeCpp', 'RuntimeCppTypes'].flatMap(name =>
+      ['h', 'm', 'swift'].map(extension => `objc/${name}/${name}.${extension}`)),
+  ];
+  for (const file of owned) assert.equal(existsSync(path.join(output, file)), false, file);
+  const header = 'modules/runtime_cpp/cpp/generated/valdi_modules/runtime_cpp/runtime_cpp.hpp';
+  assert.match(readFileSync(path.join(output, header), 'utf8'), /readValue/);
+  assert.match(readFileSync(path.join(output, 'flat/valdi_modules/runtime_cpp/runtime_cpp.hpp'), 'utf8'), /readValue/);
+  const registry = readFileSync(path.join(output, 'modules/runtime-cpp.bzl'), 'utf8');
+  assert.match(registry, /"\/\/modules\/runtime_cpp\/cpp:native"/);
+  assert.match(registry, /"runtime_cpp": \[\n        "\/\/modules\/shared\/cpp:bindings"/);
+  const preserved = ['objc/RuntimeCpp/notes.h', 'objc/RuntimeCppTypes/notes.swift', 'kotlin/runtime_cpp_notes.kt'];
+  for (const file of preserved) put(path.join(output, file), '// handwritten neighbor\n');
+  const expected = snapshot(output);
+  for (const args of [[], ['runtime_cpp']]) {
+    for (const file of owned) put(path.join(output, file), '// stale host copy\n');
+    const before = snapshot(output);
+    const check = run([...args, '--check']);
+    assert.equal(check.status, 1, check.stderr);
+    assert.deepEqual(snapshot(output), before);
+    const removals = check.stderr.split('\n').filter(line => line.includes('(CPP-owned module; remove)'));
+    assert.deepEqual(removals.sort(), owned.map(file =>
+      `  ${path.join(output, file)} (CPP-owned module; remove)`).sort());
+    const cleanup = run(args);
+    assert.equal(cleanup.status, 0, cleanup.stderr);
+    assert.deepEqual(snapshot(output), expected);
+    const clean = run([...args, '--check']);
+    assert.equal(clean.status, 0, clean.stderr);
+    assert.deepEqual(snapshot(output), expected);
+  }
+});
+
+test('pipeline accepts cpp metadata and rejects its app platform registrations and contributions', async t => {
+  const { tool, modules } = fixture(t);
+  const { moduleConfig } = await import(pathToFileURL(path.join(tool, 'pipeline.ts')).href) as typeof import('./pipeline');
+  const configFile = path.join(modules, 'runtime_cpp/module.json');
+  const config = JSON.parse(readFileSync(configFile, 'utf8'));
+  assert.equal(moduleConfig('runtime_cpp').nativeBuild, 'cpp');
+  for (const field of [
+    'androidModuleFactory', 'androidModuleFactoryContext', 'androidViewBinder', 'androidDependencies',
+    'androidPlatforms', 'androidPermissions', 'androidFeatures', 'androidCmake',
+    'iosModuleFactory', 'iosModuleFactoryClass', 'iosFrameworks', 'iosPackages',
+    'iosInfoPlist', 'iosEntitlements', 'iosBackgroundModes', 'iosNativeSources', 'iosNativeFrameworks', 'iosBuildSettings',
+  ]) {
+    put(configFile, JSON.stringify({ ...config, [field]: [] }));
+    assert.throws(() => moduleConfig('runtime_cpp'), new RegExp(`nativeBuild cpp.*${field}`));
+  }
+});
 
 test('default host sync removes enabled Bazel Kotlin/ObjC copies read-only in check mode and preserves positional/C++ outputs', t => {
   const { output, run } = fixture(t);

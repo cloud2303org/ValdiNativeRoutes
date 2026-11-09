@@ -1,5 +1,6 @@
 import { getHost } from 'app_video/src/Video';
 import type { VideoPlayer, VideoState, VideoSubscription } from 'app_video/src/VideoHost';
+import { Device } from 'valdi_core/src/Device';
 import { asyncWithProtectedRefsForContextId } from 'valdi_core/src/NativeReferences';
 import { Style } from 'valdi_core/src/Style';
 import { systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
@@ -11,6 +12,8 @@ import { Page } from 'app_foundation/src/page/PageComponent';
 import { color, tokens } from '../../components/theme';
 
 const HLS_EXAMPLE = 'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8';
+// The business sample owns the resource and chooses its platform's packaged-resource URL.
+const offlineSource = (): string => Device.isAndroid() ? 'asset:///flower.mp4' : 'bundle:///flower.mp4';
 
 interface State {
   source: string;
@@ -57,7 +60,7 @@ export class VideoPage extends Page<PageViewModel, State, PageContext> {
 
   onCreate(): void {
     this.alive = true;
-    void this.load(this.host.getDemoSource(), '离线 MP4');
+    void this.load(offlineSource(), '离线 MP4');
   }
 
   onShow(): void {
@@ -338,7 +341,7 @@ export class VideoPage extends Page<PageViewModel, State, PageContext> {
     this.changeIntent('muted', muted, player => player.setVolume(muted ? 0 : 1));
   };
   private handleInput = (event: { text: string }): void => this.setState({ input: event.text });
-  private handleOffline = (): void => { void this.load(this.host.getDemoSource(), '离线 MP4'); };
+  private handleOffline = (): void => { void this.load(offlineSource(), '离线 MP4'); };
   private handleHls = (): void => { this.setState({ input: HLS_EXAMPLE }); void this.load(HLS_EXAMPLE, 'HLS'); };
   private handleUrl = (): void => {
     const url = this.state.input.trim();

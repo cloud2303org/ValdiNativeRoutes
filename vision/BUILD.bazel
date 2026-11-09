@@ -1,0 +1,85 @@
+load("@rules_apple//apple:apple.bzl", "apple_static_xcframework_import")
+load("@rules_cc//cc:defs.bzl", "cc_import", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+config_setting(
+    name = "android_arm64",
+    constraint_values = ["@platforms//os:android", "@platforms//cpu:aarch64"],
+)
+
+config_setting(
+    name = "ios_arm64",
+    constraint_values = ["@platforms//os:ios", "@platforms//cpu:aarch64"],
+)
+
+# The prebuilt archives contain only vendor objects. The runtime toolchain owns
+# libc++/libc++abi; never add a second STL through this dependency.
+[
+    cc_import(
+        name = "android_" + library,
+        static_library = "vendor/install/android-arm64/static/lib/lib" + library + ".a",
+    )
+    for library in ["opencv_core", "opencv_imgproc", "opencv_highgui", "ncnn"]
+]
+
+cc_library(
+    name = "android_vendors",
+    hdrs = glob(["vendor/install/android-arm64/static/include/**/*.h", "vendor/install/android-arm64/static/include/**/*.hpp"]),
+    includes = [
+        "vendor/install/android-arm64/static/include/opencv4",
+        "vendor/install/android-arm64/static/include/ncnn",
+    ],
+    linkopts = ["-lm", "-ldl", "-llog"],
+    deps = [
+        ":android_opencv_highgui",
+        ":android_opencv_imgproc",
+        ":android_opencv_core",
+        ":android_ncnn",
+    ],
+)
+
+# rules_apple selects the arm64 device or simulator archive from the current SDK.
+# This target is only analyzed for supported arm64 consumers.
+apple_static_xcframework_import(
+    name = "ios_archive",
+    xcframework_imports = glob(["vendor/install/ios/VisionDependencies.xcframework/**"]),
+)
+
+cc_library(
+    name = "ios_vendors",
+    # Both slices expose identical platform-neutral C++ headers. Keeping a
+    # single include root also supports ncnn's unqualified <net.h> includes.
+    hdrs = glob(["vendor/install/ios/VisionDependencies.xcframework/ios-arm64/Headers/**/*.h", "vendor/install/ios/VisionDependencies.xcframework/ios-arm64/Headers/**/*.hpp"]),
+    includes = [
+        "vendor/install/ios/VisionDependencies.xcframework/ios-arm64/Headers/opencv4",
+        "vendor/install/ios/VisionDependencies.xcframework/ios-arm64/Headers/ncnn",
+    ],
+    deps = [":ios_archive"],
+)
+
+cc_library(
+    name = "vision_core",
+    srcs = select({
+        ":android_arm64": ["cpp/VisionCore.cpp"],
+        ":ios_arm64": ["cpp/VisionCore.cpp"],
+        "//conditions:default": [],
+    }),
+    hdrs = ["cpp/VisionCore.hpp"],
+    includes = ["cpp"],
+    defines = select({
+        ":android_arm64": ["VALDI_VISION_ENABLED=1"],
+        ":ios_arm64": ["VALDI_VISION_ENABLED=1"],
+        "//conditions:default": [],
+    }),
+    copts = select({
+        ":android_arm64": ["-fexceptions", "-frtti", "-fPIC"],
+        ":ios_arm64": ["-fexceptions", "-frtti"],
+        "//conditions:default": [],
+    }),
+    deps = select({
+        ":android_arm64": [":android_vendors"],
+        ":ios_arm64": [":ios_vendors"],
+        "//conditions:default": [],
+    }),
+)

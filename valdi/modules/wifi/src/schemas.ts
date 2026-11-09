@@ -1,30 +1,38 @@
 import * as v from 'valibot';
-import type { WifiCredentialModel } from './WifiHost';
 
 /**
  * The arguments of wechat.ts' public methods, checked here once, with their defaults filled in. Nothing after this
- * checks them again, and the core's replies and events aren't checked at all. A message is the `E_WIFI_…:reason` that
- * wifiFailure makes, so errors.ts turns a failure into the same errCode and errMsg as a native one.
+ * checks them again. Native permission statuses are checked separately in permission.ts; other replies and events
+ * aren't checked here. A message is the `E_WIFI_…:reason` that wifiFailure makes, so errors.ts turns a failure into
+ * the same errCode and errMsg as a native one.
  */
 
 const failure = (nativeCode: string, reason: string) => `${nativeCode}:${reason}`;
-/** A field the rules don't look at: passed on as given. */
-const unchecked = <T>() => v.custom<T>(() => true);
 
 const ssidMessage = failure('E_WIFI_INVALID_SSID', 'SSID must be a nonempty string');
 const bssidMessage = failure('E_WIFI_SYSTEM_CONFIG', 'Invalid BSSID');
+const ssid = v.pipe(
+  v.string(ssidMessage),
+  v.nonEmpty(ssidMessage),
+  v.check(SSID => !SSID.includes('\0'), ssidMessage),
+);
+const bssid = v.pipe(v.string(bssidMessage), v.regex(/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i, bssidMessage));
+const password = v.string(failure('E_WIFI_INVALID_PASSWORD', 'Invalid password'));
+const partialInfo = v.nullish(
+  v.boolean(failure('E_WIFI_SYSTEM_CONFIG', 'partialInfo must be a boolean')),
+  false,
+);
 export const connectWifiOptions = v.pipe(
   v.object(
     {
-      SSID: v.pipe(
-        v.string(ssidMessage),
-        v.nonEmpty(ssidMessage),
-        v.check(SSID => !SSID.includes('\0'), ssidMessage),
+      SSID: ssid,
+      password: v.optional(password, ''),
+      BSSID: v.optional(bssid),
+      maunal: v.nullish(
+        v.boolean(failure('E_WIFI_SYSTEM_CONFIG', 'maunal must be a boolean')),
+        false,
       ),
-      password: v.optional(v.string(failure('E_WIFI_INVALID_PASSWORD', 'Invalid password')), ''),
-      BSSID: v.optional(v.pipe(v.string(bssidMessage), v.regex(/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i, bssidMessage))),
-      maunal: v.nullish(unchecked<boolean>(), false),
-      partialInfo: v.nullish(unchecked<boolean>(), false),
+      partialInfo,
     },
     ssidMessage,
   ),
@@ -34,15 +42,19 @@ export const connectWifiOptions = v.pipe(
 
 export const getConnectedWifiOptions = v.nullish(
   v.object(
-    { partialInfo: v.nullish(unchecked<boolean>(), false) },
+    { partialInfo },
     failure('E_WIFI_SYSTEM_CONFIG', 'options must be an object'),
   ),
   {},
 );
 
 const wifiListMessage = failure('E_WIFI_SYSTEM_CONFIG', 'wifiList must be an array');
+const wifiCredential = v.object(
+  { SSID: ssid, BSSID: v.optional(bssid), password },
+  failure('E_WIFI_SYSTEM_CONFIG', 'wifiList entries must be credential objects'),
+);
 export const setWifiListOptions = v.object(
-  { wifiList: v.array(unchecked<WifiCredentialModel>(), wifiListMessage) },
+  { wifiList: v.array(wifiCredential, wifiListMessage) },
   wifiListMessage,
 );
 
@@ -50,7 +62,7 @@ const operationMessage = failure('E_WIFI_SYSTEM_INTERNAL', 'Permission operation
 export const wifiPermissionOptions = v.object(
   {
     operation: v.picklist(['connect', 'scan', 'info'], operationMessage),
-    partialInfo: v.nullish(unchecked<boolean>(), false),
+    partialInfo,
   },
   operationMessage,
 );

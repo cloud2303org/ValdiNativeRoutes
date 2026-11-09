@@ -5,25 +5,33 @@ import type { BleHostEvents } from './BleHost';
 
 type Event<K extends keyof BleHostEvents> = Parameters<BleHostEvents[K]>[0];
 
-const channels = new Map<keyof BleHostEvents, Map<number, (event: any) => void>>();
+const channels: { [K in keyof BleHostEvents]: Map<number, (event: Event<K>) => void> } = {
+  deviceFound: new Map(),
+  adapterStateChange: new Map(),
+  connectStateChange: new Map(),
+  characteristicUpdate: new Map(),
+  mtuChange: new Map(),
+  peripheralReadRequest: new Map(),
+  peripheralWriteRequest: new Map(),
+  peripheralSubscribed: new Map(),
+  peripheralUnsubscribed: new Map(),
+  peripheralConnectionStateChange: new Map(),
+};
 let nextId = 1;
 
 export function listen<K extends keyof BleHostEvents>(kind: K, callback: (event: Event<K>) => void): number {
   const id = nextId++;
-  let channel = channels.get(kind);
-  if (!channel) channels.set(kind, (channel = new Map()));
-  channel.set(id, callback);
+  channels[kind].set(id, callback);
   return id;
 }
 
 export function unlisten(kind: keyof BleHostEvents, id: number): void {
-  channels.get(kind)?.delete(id);
+  channels[kind].delete(id);
 }
 
-function emit(kind: keyof BleHostEvents) {
-  return (event: unknown) => {
-    const channel = channels.get(kind);
-    if (!channel) return;
+function emit<K extends keyof BleHostEvents>(kind: K) {
+  return (event: Event<K>) => {
+    const channel = channels[kind];
     // A copy: a listener may remove itself or another one while this runs.
     for (const callback of [...channel.values()]) {
       try {

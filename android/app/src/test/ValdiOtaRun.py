@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 
 repo = Path(__file__).resolve().parents[4]
+ota_module = repo / "valdi/modules/app_ota"
 cache = Path(os.environ.get("GRADLE_USER_HOME", Path.home() / ".gradle")) / "caches/modules-2/files-2.1"
 evidence = Path(os.environ.get("OTA_TEST_OUTPUT", Path(tempfile.gettempdir()) / "valdi-ota-client-tests/android"))
 evidence.mkdir(parents=True, exist_ok=True)
@@ -26,15 +27,15 @@ def run_logged(name, command, **kwargs):
 
 native_library_dir = None
 if not full_only:
-    core = repo / "ota/native"
+    core = ota_module / "native"
     if not (core / "ValdiOtaCodec.h").is_file():
         raise RuntimeError("Native core not ready. OTA_FULL_ONLY=1 runs full-file tests without JNI.")
     configured = os.environ.get("OTA_JNI_SOURCE")
-    candidates = [Path(configured)] if configured else sorted((repo / "android/app/src/main/cpp").glob("*"))
+    candidates = [Path(configured)] if configured else sorted((ota_module / "android/cpp").glob("*"))
     jni_source = next((p for p in candidates if p.suffix in (".c", ".cpp") and
                        "Java_io_valdiroutes_app_OtaNative_decode" in p.read_text()), None)
     if not jni_source:
-        raise RuntimeError("Parent-owned OtaNative JNI source not ready; set OTA_JNI_SOURCE or use OTA_FULL_ONLY=1.")
+        raise RuntimeError("Module-owned OtaNative JNI source not ready; set OTA_JNI_SOURCE or use OTA_FULL_ONLY=1.")
     native_build = evidence / "native-host"
     run_logged("native-configure.log", ["cmake", "-S", str(core), "-B", str(native_build),
                "-DCMAKE_BUILD_TYPE=Release", "-DVALDI_OTA_BUILD_HOST_TESTS=OFF"])
@@ -85,11 +86,10 @@ classpath = [
     jar("junit", "junit", "4.13.2"),
     jar("org.hamcrest", "hamcrest-core", "1.3"),
 ]
-source = repo / "android/app/src"
 sources = [
-    *sorted(p for p in (source / "main/java/io/valdiroutes/app/ota").glob("*.kt") if p.name != "ValdiOta.kt"),
-    source / "test/java/io/valdiroutes/app/ValdiOtaClientTest.kt",
-    source / "test/java/io/valdiroutes/app/ValdiOtaSplitTest.kt",
+    *sorted(p for p in (ota_module / "android").glob("*.kt") if p.name not in ("ValdiOta.kt", "OtaModuleFactory.kt")),
+    ota_module / "tests/android/ValdiOtaClientTest.kt",
+    ota_module / "tests/android/ValdiOtaSplitTest.kt",
 ]
 fixtures = out / "fixtures"
 fixtures.mkdir()
@@ -199,7 +199,7 @@ writeFileSync(largeDir+'/fixture.json',JSON.stringify({schemaVersion:1,algorithm
 classes = out / "classes"
 print("Evidence:", out, flush=True)
 owned = [
-    source / "main/java/io/valdiroutes/app/ota/ValdiOta.kt", *sources, Path(__file__).resolve(),
+    ota_module / "android/ValdiOta.kt", *sources, Path(__file__).resolve(),
 ]
 source_hashes = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in owned}
 (out / "compile-inputs.sha256").write_text("".join(

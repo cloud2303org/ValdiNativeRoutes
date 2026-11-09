@@ -1,4 +1,73 @@
 //
+// VRAttachmentSource.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectRegistry.h>
+
+#import "AppUITypes.h"
+
+VRAttachmentSource VRAttachmentSourcePhotos = @"photos";
+VRAttachmentSource VRAttachmentSourceCamera = @"camera";
+VRAttachmentSource VRAttachmentSourceFiles = @"files";
+VALDI_STRING_ENUM(VRAttachmentSource, VRAttachmentSourcePhotos, VRAttachmentSourceCamera, VRAttachmentSourceFiles)
+NSArray<NSString *> * _Nonnull VRAttachmentSourceGetAllCases() {
+    static dispatch_once_t onceToken;
+    static NSArray<NSString *> *kAllCases;
+    dispatch_once(&onceToken, ^{
+        kAllCases = @[VRAttachmentSourcePhotos, VRAttachmentSourceCamera, VRAttachmentSourceFiles];
+    });
+    return kAllCases;
+}
+
+//
+// VRDatePickerMode.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectRegistry.h>
+
+#import "AppUITypes.h"
+
+VRDatePickerMode VRDatePickerModeYear = @"year";
+VRDatePickerMode VRDatePickerModeYearMonth = @"year-month";
+VRDatePickerMode VRDatePickerModeDate = @"date";
+VRDatePickerMode VRDatePickerModeTime = @"time";
+VRDatePickerMode VRDatePickerModeDateTime = @"datetime";
+VALDI_STRING_ENUM(VRDatePickerMode, VRDatePickerModeYear, VRDatePickerModeYearMonth, VRDatePickerModeDate, VRDatePickerModeTime, VRDatePickerModeDateTime)
+NSArray<NSString *> * _Nonnull VRDatePickerModeGetAllCases() {
+    static dispatch_once_t onceToken;
+    static NSArray<NSString *> *kAllCases;
+    dispatch_once(&onceToken, ^{
+        kAllCases = @[VRDatePickerModeYear, VRDatePickerModeYearMonth, VRDatePickerModeDate, VRDatePickerModeTime, VRDatePickerModeDateTime];
+    });
+    return kAllCases;
+}
+
+//
+// VRToastRequestIcon.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectRegistry.h>
+
+#import "AppUITypes.h"
+
+VRToastRequestIcon VRToastRequestIconSuccess = @"success";
+VRToastRequestIcon VRToastRequestIconError = @"error";
+VRToastRequestIcon VRToastRequestIconLoading = @"loading";
+VRToastRequestIcon VRToastRequestIconNone = @"none";
+VALDI_STRING_ENUM(VRToastRequestIcon, VRToastRequestIconSuccess, VRToastRequestIconError, VRToastRequestIconLoading, VRToastRequestIconNone)
+NSArray<NSString *> * _Nonnull VRToastRequestIconGetAllCases() {
+    static dispatch_once_t onceToken;
+    static NSArray<NSString *> *kAllCases;
+    dispatch_once(&onceToken, ^{
+        kAllCases = @[VRToastRequestIconSuccess, VRToastRequestIconError, VRToastRequestIconLoading, VRToastRequestIconNone];
+    });
+    return kAllCases;
+}
+
+//
 // VRActionSheetRequest.m
 //
 
@@ -234,7 +303,7 @@
 @dynamic minYear;
 @dynamic maxYear;
 
-- (instancetype _Nonnull)initWithTitle:(NSString * _Nonnull)title mode:(NSString * _Nonnull)mode value:(NSString * _Nonnull)value confirmText:(NSString * _Nonnull)confirmText cancelText:(NSString * _Nonnull)cancelText minYear:(double)minYear maxYear:(double)maxYear
+- (instancetype _Nonnull)initWithTitle:(NSString * _Nonnull)title mode:(VRDatePickerMode _Nonnull)mode value:(NSString * _Nonnull)value confirmText:(NSString * _Nonnull)confirmText cancelText:(NSString * _Nonnull)cancelText minYear:(double)minYear maxYear:(double)maxYear
 {
     return [super initWithFieldValues:nil, title, mode, value, confirmText, cancelText, minYear, maxYear];
 }
@@ -243,7 +312,7 @@
 {
     static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
         {.name = "title", .selName = nil, .type = "s"},
-        {.name = "mode", .selName = nil, .type = "s"},
+        {.name = "mode", .selName = nil, .type = "r:'[0]'"},
         {.name = "value", .selName = nil, .type = "s"},
         {.name = "confirmText", .selName = nil, .type = "s"},
         {.name = "cancelText", .selName = nil, .type = "s"},
@@ -251,7 +320,11 @@
         {.name = "maxYear", .selName = nil, .type = "d"},
         {.name = nil},
     };
-    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+    static const char *const kIdentifiers[] = {
+        "VRDatePickerMode",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
 }
 
 @end
@@ -593,7 +666,7 @@
 @dynamic duration;
 @dynamic mask;
 
-- (instancetype _Nonnull)initWithTitle:(NSString * _Nonnull)title icon:(NSString * _Nonnull)icon duration:(double)duration mask:(BOOL)mask
+- (instancetype _Nonnull)initWithTitle:(NSString * _Nonnull)title icon:(VRToastRequestIcon _Nonnull)icon duration:(double)duration mask:(BOOL)mask
 {
     return [super initWithFieldValues:nil, title, icon, duration, mask];
 }
@@ -602,12 +675,16 @@
 {
     static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
         {.name = "title", .selName = nil, .type = "s"},
-        {.name = "icon", .selName = nil, .type = "s"},
+        {.name = "icon", .selName = nil, .type = "r:'[0]'"},
         {.name = "duration", .selName = nil, .type = "d"},
         {.name = "mask", .selName = nil, .type = "b"},
         {.name = nil},
     };
-    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+    static const char *const kIdentifiers[] = {
+        "VRToastRequestIcon",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
 }
 
 @end

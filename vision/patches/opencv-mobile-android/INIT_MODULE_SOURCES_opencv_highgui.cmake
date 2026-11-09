@@ -3,8 +3,8 @@
 # __linux__. Match the Android exclusion already used by videowriter/highgui.
 # Use the supported module-source hook to compile a private copy, never edit
 # the vendor source shared with the iOS static builds.
-if(NOT ANDROID OR NOT BUILD_SHARED_LIBS OR NOT the_module STREQUAL "opencv_highgui")
-  message(FATAL_ERROR "The Vision highgui source patch is for Android shared builds only")
+if(NOT ANDROID OR NOT the_module STREQUAL "opencv_highgui")
+  message(FATAL_ERROR "The Vision highgui source patch is for Android builds only")
 endif()
 if(WITH_CVI OR WITH_AW OR WITH_RK)
   message(FATAL_ERROR "Android Vision declares no capture backend; board-specific CVI/AW/RK backends must stay OFF")

@@ -41,7 +41,6 @@
   },
   "scripts": {
     "postinstall": "node scripts/install.mjs",
-    "prebuild": "node scripts/cli.mjs prebuild",
     "android": "node scripts/cli.mjs android",
     "ios": "node scripts/cli.mjs ios",
     "dev": "node scripts/cli.mjs dev",

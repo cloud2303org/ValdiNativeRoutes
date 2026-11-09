@@ -72,12 +72,13 @@ jobs:
       - uses: ./.github/actions/prepare
         id: prepare
       - name: Golden and build prerequisite tests
-        run: pnpm test 2>&1 | tee .ci/test.log
+        run: |
+          pnpm test 2>&1 | tee .ci/test.log
       - name: Set up Android SDK
         if: matrix.target == 'android'
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
         with:
-          packages: 'platforms;android-37.0 build-tools;37.0.0 ndk;27.1.12297006 cmake;3.22.1'
+          packages: 'platforms;android-37.0 build-tools;37.0.0 ndk;27.1.12297006 ndk;28.0.13004108 cmake;3.22.1'
           log-accepted-android-sdk-licenses: false
       - name: Install XcodeGen
         if: matrix.target == 'ios'
@@ -90,49 +91,25 @@ jobs:
           key: bazel-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-${{ hashFiles('valdi/.bazelversion') }}-${{ github.sha }}-${{ inputs.valdi_commit || 'pinned' }}
           restore-keys: |
             bazel-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-${{ hashFiles('valdi/.bazelversion') }}-
-      - name: Runtime fingerprint
-        if: matrix.target != 'npm'
-        id: runtime-input
-        run: node scripts/ci.mjs runtime-key "${{ matrix.target }}"
-      - name: Restore exported runtime
-        if: matrix.target != 'npm'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: |
-            android/app/libs/valdi_runtime.aar
-            android/app/libs/valdi_ota.json
-            ios/Frameworks/ValdiRuntime.xcframework
-            ios/Frameworks/valdi_ota.json
-          key: runtime-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-debug-${{ steps.runtime-input.outputs.key }}-${{ hashFiles('scripts/export-*.sh', 'valdi/pnpm-lock.yaml', 'valdi/patches/**') }}
-      - name: Validate cached runtime
-        if: matrix.target != 'npm'
-        id: runtime
-        run: node scripts/ci.mjs runtime-valid "${{ matrix.target }}"
       - name: Report Linux storage after cache restoration
         if: runner.os == 'Linux'
         run: bash scripts/ci-linux-disk.sh report 2>&1 | tee .ci/disk-before-export.log
-      - name: Export runtime on cache miss or fingerprint mismatch
-        if: matrix.target != 'npm' && steps.runtime.outputs.valid != 'true'
-        run: sh "scripts/export-${{ matrix.target }}.sh" debug 2>&1 | tee .ci/export.log
-      - name: Final runtime fingerprint
+      - name: Restore vision dependencies
         if: matrix.target != 'npm'
-        id: runtime-output
-        run: node scripts/ci.mjs runtime-key "${{ matrix.target }}"
+        id: vision
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: vision/vendor/install
+          key: vision-static-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-${{ hashFiles('vision/vendor-lock.json', 'vision/*-runtime.json', 'vision/scripts/**', 'vision/patches/**') }}
+      # Runtime export is an explicit CI operation. Bazel retains its action cache;
+      # app builds never decide whether to re-export from runtime source hashes.
+      - name: Export runtime
+        run: sh "scripts/export-${{ matrix.target }}.sh" debug 2>&1 | tee .ci/export.log
       - name: Verify wheels against the exported runtime
         working-directory: tools/valdi-rolldown
         env:
           WHEEL_RUNTIME: ${{ matrix.target }}
         run: node node_modules/tsx/dist/cli.mjs --test wheel-platform-compat.test.ts 2>&1 | tee ../../.ci/wheel-runtime.log
-      - name: Save matching runtime
-        if: matrix.target != 'npm' && steps.runtime.outputs.valid != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: |
-            android/app/libs/valdi_runtime.aar
-            android/app/libs/valdi_ota.json
-            ios/Frameworks/ValdiRuntime.xcframework
-            ios/Frameworks/valdi_ota.json
-          key: runtime-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-debug-${{ steps.runtime-output.outputs.key }}-${{ hashFiles('scripts/export-*.sh', 'valdi/pnpm-lock.yaml', 'valdi/patches/**') }}
       - name: Save Bazel action cache
         if: always() && !cancelled() && steps.bazel-cache.outcome == 'success' && steps.bazel-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -145,26 +122,6 @@ jobs:
         env:
           VALDI_SWIFT_TYPECHECK: '1'
         run: node node_modules/tsx/dist/cli.mjs --test swift.test.ts 2>&1 | tee ../../.ci/swift-typecheck.log
-      - name: Build application modules
-        run: pnpm build 2>&1 | tee .ci/build.log
-      - name: Restore vision dependencies
-        if: matrix.target != 'npm'
-        id: vision
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: vision/vendor/install
-          key: vision-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-ndk27.1.12297006-${{ hashFiles('vision/vendor-lock.json', 'vision/scripts/prepare-native.cjs') }}
-      - name: Build vision dependencies
-        if: matrix.target != 'npm' && steps.vision.outputs.cache-hit != 'true'
-        env:
-          VISION_TARGET: ${{ matrix.target == 'android' && 'android-arm64' || 'ios' }}
-        run: node vision/scripts/prepare-native.cjs --target "$VISION_TARGET" 2>&1 | tee .ci/vision.log
-      - name: Save prepared vision dependencies
-        if: matrix.target != 'npm' && steps.vision.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: vision/vendor/install
-          key: ${{ steps.vision.outputs.cache-primary-key }}
       - name: Build Android debug APK
         if: matrix.target == 'android'
         run: pnpm build:android --no-daemon --stacktrace 2>&1 | tee .ci/build.log
@@ -174,6 +131,13 @@ jobs:
           pnpm build:ios 2>&1 | tee .ci/build.log
           app_name=$(node --input-type=module -e 'import { readAppConfig } from "./scripts/app-config.mjs"; console.log(readAppConfig().name)')
           tar -czf .ci/ios-simulator.tar.gz -C ios/build/Build/Products/Debug-iphonesimulator "$app_name.app"
+      - name: Save prepared vision dependencies
+        # Explicit runtime export prepares cpp dependencies; app builds prepare host dependencies.
+        if: always() && steps.vision.outputs.cache-hit != 'true' && hashFiles('vision/vendor/install/**') != ''
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: vision/vendor/install
+          key: ${{ steps.vision.outputs.cache-primary-key }}
       - name: Capture upgrade inputs and source review
         if: always()
         run: |

@@ -1,8 +1,15 @@
+/** @ExportEnum({ios: 'VRPermissionGrantResult', android: 'io.valdiroutes.permissions.PermissionGrantResult'}) */
+export enum PermissionGrantResult {
+  Granted = 'granted',
+  Denied = 'denied',
+  NeverAskAgain = 'never_ask_again',
+}
+
 /** @ExportModel({ios: 'VRPermissionGrant', android: 'io.valdiroutes.permissions.PermissionGrant'}) */
 export interface PermissionGrant {
   permission: string;
-  /** Exactly 'granted', 'denied' or 'never_ask_again'; hosts normalize OS results to these strings. */
-  result: string;
+  /** Hosts normalize OS results at the native boundary. */
+  result: PermissionGrantResult;
 }
 
 /**

@@ -1,29 +1,23 @@
-Run the offline source regressions from the repository root:
+# Typed native theme tests
+
+Prepare the real generated Android models and run the JVM integration check:
 
 ```sh
-python3 valdi/modules/theme_bridge/tests/run_theme_tokens_tests.py \
-  --evidence /tmp/valdi-json-all-20261107/theme/green
+node scripts/node-modules.mjs android
+python3 valdi/modules/theme_bridge/tests/run_theme_tokens_tests.py --evidence /tmp/valdi-theme-tests
 ```
 
-The runner compiles the actual `ThemeBridgeModuleFactory.kt` and tests against
-`module-build/out/android/theme_bridge/theme_bridge_android.jar` plus the real
-`classes.jar` extracted from `android/app/libs/valdi_runtime.aar`. The generated
-model is never replaced. Compiled source precedes the generated JAR on the JVM
-classpath because that JAR also contains the store implementation.
+The runner compiles the production store and factory, executes them against the
+real generated model JAR and runtime classes, and checks that native reads and
+the bridge share the same token tree. It also verifies that an invalid Kotlin
+consumer fails compilation. Only Android Log is substituted; no token model or
+store is replaced. There is no JSON parser or asset fixture.
 
-Each scenario runs in a fresh JVM. Only Android `Context`, `AssetManager` and
-`Log` are substituted to supply asset bytes and inspect access order. These are
-JVM source/model integration tests; they do not exercise Android asset packaging,
-JNI marshalling, Bazel, an Android build or a device. The tests exercise the fixed
-token structure: string-valued light/dark palettes
-and numeric shared-token groups. Missing assets, malformed JSON and wrong types
-fail directly; only a missing namespaced asset uses the root asset path.
+The runner uses cached Kotlin compiler dependencies without downloading them.
+It records input hashes, compiler output, runtime output and a summary under the
+evidence directory. JVM execution does not prove Android packaging or JNI behavior.
 
-The runner uses cached Kotlin 2.2.10 and kotlinx.serialization 1.9.0 without
-downloads or dependency resolution. Compilation requires no serialization
-compiler plugin because the production parser uses the JsonElement API.
-`inputs-sha256.json`, `compile.log`, per-scenario logs and `summary.json` are
-written to the requested evidence directory.
-
-The production code uses the library's typed map decoders; there is no custom
-recursive token converter or additional source wiring.
+For Swift, prepare `node scripts/node-modules.mjs ios`, then run
+`ios/Tests/run-theme-tokens-access-tests.sh`. This compiles and links an independent
+consumer against the actual generated module and checks a type error. It does
+not launch an iOS executable.

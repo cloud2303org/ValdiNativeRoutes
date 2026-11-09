@@ -1,0 +1,59 @@
+import javax.inject.Inject
+import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.*
+import org.gradle.process.ExecOperations
+
+// Applied to the host app. Keep the task here with its OTA inputs and output.
+abstract class ValdiOtaInfo extends DefaultTask {
+    @InputFile abstract RegularFileProperty getExportInfo()
+    @InputFiles @PathSensitive(PathSensitivity.RELATIVE)
+    abstract ConfigurableFileCollection getConfigurationFiles()
+    @Internal abstract DirectoryProperty getRepoRoot()
+    @InputFile abstract RegularFileProperty getPublicKey()
+    @Input abstract Property<String> getAppVersion()
+    @Input abstract Property<String> getUpdateUrl()
+    @OutputDirectory abstract DirectoryProperty getOutputDir()
+    @Inject abstract ExecOperations getExecOperations()
+
+    @TaskAction
+    void write() {
+        def out = new ByteArrayOutputStream()
+        execOperations.exec { spec ->
+            spec.commandLine("node", new File(repoRoot.get().asFile, "scripts/ota.mjs").path,
+                "app-info", "android", exportInfo.get().asFile.path, appVersion.get(), updateUrl.get())
+            spec.standardOutput = out
+        }
+        new File(outputDir.get().asFile, "valdi_ota.json").text = out.toString().trim()
+    }
+}
+
+def repo = rootProject.projectDir.parentFile
+extensions.getByName("android").sourceSets.getByName("test").kotlin.directories
+    .add(new File(repo, "valdi/modules/app_ota/tests/android").path)
+def components = extensions.getByName("androidComponents")
+components.onVariants(components.selector().all(), { variant ->
+    def info = tasks.register("${variant.name}ValdiOtaInfo", ValdiOtaInfo) { task ->
+        task.dependsOn("${variant.name}ValdiModules")
+        task.exportInfo.set(file("libs/valdi_ota.json"))
+        task.configurationFiles.from(
+            new File(repo, "scripts/ota.mjs"),
+            new File(repo, "scripts/ota-delta.mjs"),
+            new File(repo, "scripts/prerequisites.mjs"),
+            new File(repo, "package.json"),
+            new File(repo, "tools/valdi-rolldown/modules.mjs"),
+            fileTree(new File(repo, "valdi/modules")) { include("*/BUILD.bazel") })
+        task.repoRoot.set(repo)
+        task.publicKey.set(new File(repo, "ota/public.pem"))
+        if (variant.outputs.size() != 1) throw new GradleException("OTA expects one variant output")
+        def version = variant.outputs[0].versionName.orNull
+        if (version == null) throw new GradleException("The app has no versionName")
+        task.appVersion.set(version)
+        // Debug always uses the bundled modules and the existing development reload.
+        task.updateUrl.set(variant.buildType == "release"
+            ? providers.gradleProperty("valdiOtaUrl").getOrElse("") : "")
+    }
+    variant.sources.assets?.addGeneratedSourceDirectory(info, { task -> task.outputDir })
+})

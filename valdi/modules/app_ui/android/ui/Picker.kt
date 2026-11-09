@@ -20,7 +20,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.window.Dialog as WindowDialog
-import androidx.core.view.WindowCompat
 import io.valdiroutes.app_ui.ui.NativeWheelPalette
 import io.valdiroutes.app_ui.ui.WheelItem
 
@@ -249,10 +248,7 @@ private fun PickerPage(
                 window?.let {
                     it.setDimAmount(0f)
                     it.setWindowAnimations(0)
-                    WindowCompat.getInsetsController(it, view).apply {
-                        isAppearanceLightStatusBars = colors.surface.luminance() > 0.5f
-                        isAppearanceLightNavigationBars = colors.surface.luminance() > 0.5f
-                    }
+                    // The full-screen picker keeps its theme's default bar-icon appearance; no override here.
                 }
             }
             Column(Modifier.fillMaxSize().background(colors.surface).windowInsetsPadding(WindowInsets.safeDrawing)) {

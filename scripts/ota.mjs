@@ -1,13 +1,10 @@
 // Static full-file OTA updates. Compatibility is selected manually by platform and app version.
 //   node scripts/ota.mjs keygen                                  ota/private.pem (keep out of git) and ota/public.pem
-//   node scripts/ota.mjs valdi-hash <android|ios> <debug|release>  JSON the export scripts write next to their output
-//   node scripts/ota.mjs check-export <android|ios> <valdi_ota.json>  fails when module C++ changed since that export
 //   node scripts/ota.mjs app-info <android|ios> <valdi_ota.json> <app version> <update url>
 //                                                                the app's valdi_ota.json (Gradle, ios/project.yml)
 //   node scripts/ota.mjs pack <android|ios> <app version> <version> [--base <package dir|archive> [--base-version <version>]]
 //
 // The publisher owns native compatibility: incompatible native changes require a new app version.
-// Runtime export hashes below remain build-integrity checks; they do not decide OTA eligibility.
 //
 // ota/dist is what the update server serves, as static files:
 //   <platform>/<app version>/latest.json                {"version": "<version>"}
@@ -20,60 +17,15 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { nativeCppInputs } from './native-cpp.mjs';
 import { pnpmInvocation } from './prerequisites.mjs';
 import { enabledModuleNames } from '../tools/valdi-rolldown/modules.mjs';
 import { MAX_BYTES, MAX_ENTRIES, MAX_METADATA, checkDeltaDescriptor, checkVersion, createDelta, ensureHdiffz, parseArchive, validateDelta } from './ota-delta.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const inputs = JSON.parse(readFileSync(path.join(root, 'ota/fingerprint.json'), 'utf8'));
 const platforms = ['android', 'ios'];
 const versionPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
-
-/** Files under a repository-relative path, skipping names that start with a dot; missing paths count as empty. */
-function walk(rel, out = []) {
-  const stat = statSync(path.join(root, rel), { throwIfNoEntry: false });
-  if (stat?.isDirectory()) {
-    for (const name of readdirSync(path.join(root, rel))) if (!name.startsWith('.')) walk(`${rel}/${name}`, out);
-  } else if (stat) {
-    out.push(rel);
-  }
-  return out;
-}
-
-/** sha256 over "name\0sha256(content)\n" lines sorted by name. */
-function digest(entries) {
-  const hash = createHash('sha256');
-  for (const [name, bytes] of [...entries].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
-    hash.update(`${name}\0${sha256(bytes)}\n`);
-  }
-  return hash.digest('hex');
-}
-
-const fileEntries = (paths) => paths.flatMap((rel) => walk(rel)).map((rel) => [rel, readFileSync(path.join(root, rel))]);
-
-/** The exported runtime's toolchain and module-owned C++ sources, bindings, and build rules. */
-const valdiHash = () => digest([
-  ...fileEntries([...new Set([...inputs.valdi, ...nativeCppInputs(root)])]),
-  ['compiler-backend', 'node'],
-]);
-
-/**
- * Module-owned C++ implementations, bindings and build rules. This conservative
- * input set includes every enabled module's cpp directory, even if a target is not linked.
- * It counts in valdiHash too; this separate hash checks whether an export is current.
- */
-const nativeHash = () => digest(fileEntries(nativeCppInputs(root)));
-
-/** An export must match the module-owned C++ sources and build rules. */
-function checkExport(platform, info) {
-  if (info.native === nativeHash()) return;
-  throw new Error(
-    `Module C++ sources or build rules changed since the runtime was exported: run scripts/export-${platform}.sh${info.config === 'release' ? ' release' : ''}`,
-  );
-}
 
 /**
  * Arguments for the parent-owned compiler: only the business module is OTA-owned.
@@ -330,13 +282,8 @@ async function main() {
   const [command, platform, ...rest] = process.argv.slice(2);
   if (command === 'keygen') keygen();
   else if (!platforms.includes(platform)) throw new Error(`Usage: see the top of ${path.relative(root, fileURLToPath(import.meta.url))}`);
-  else if (command === 'valdi-hash' && rest.length === 1) {
-    if (!['debug', 'release'].includes(rest[0])) throw new Error('Expected debug or release runtime configuration');
-    console.log(JSON.stringify({ platform, config: rest[0], valdi: valdiHash(), native: nativeHash() }));
-  } else if (command === 'pack' && rest.length >= 2) await pack(platform, rest[0], rest[1], rest.slice(2));
-  else if (command === 'check-export' && rest.length === 1) {
-    checkExport(platform, JSON.parse(readFileSync(rest[0], 'utf8')));
-  } else if (command === 'app-info' && rest.length === 3) {
+  else if (command === 'pack' && rest.length >= 2) await pack(platform, rest[0], rest[1], rest.slice(2));
+  else if (command === 'app-info' && rest.length === 3) {
     console.log(appInfo(platform, JSON.parse(readFileSync(rest[0], 'utf8')), rest[1], rest[2]));
   } else throw new Error(`Usage: see the top of ${path.relative(root, fileURLToPath(import.meta.url))}`);
 }

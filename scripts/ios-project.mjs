@@ -3,10 +3,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { iosProjectEnvironment, readAppConfig } from './app-config.mjs';
 import { syncNativeModuleRegistration } from './native-modules.mjs';
+import { prepareNativeDependencies } from './native-dependencies.mjs';
 
 export function generateIosProject(root = path.resolve(import.meta.dirname, '..')) {
   readAppConfig(root);
   syncNativeModuleRegistration(root);
+  // XcodeGen validates local framework paths before Xcode's build phases can run.
+  prepareNativeDependencies(root, 'ios');
   const result = spawnSync('xcodegen', ['generate', '--spec', 'project.yml'], {
     cwd: path.join(root, 'ios'), env: iosProjectEnvironment(root), stdio: 'inherit',
   });

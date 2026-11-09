@@ -17,7 +17,7 @@
 // to these default roots, preserving complete runtime output when synchronizing a canonical modules directory.
 // Also writes runtime-packages.bazelrc excluding exact parent packages for all available modules, including disabled ones.
 // Canonical C++ command (from this directory): npx tsx codegen.ts --cpp-modules-out ../../valdi/modules
-// Other outputs retain all-host generation without a module; host Kotlin/ObjC sync removes Bazel-owned root copies.
+// Host Kotlin/ObjC sync removes Bazel/CPP-owned root copies; cpp modules emit only C++ even when named explicitly.
 // --cpp-out retains the generic flat layout and --cpp-modules-out keeps its independent runtime closure.
 // At least one output is needed. Files are written only when their content changes.
 // --check writes nothing and fails, listing them, when files would change: the build runs it, developers run the
@@ -66,7 +66,11 @@ if (
   process.exit(2);
 }
 const configuredModules = Object.fromEntries(Object.entries(modules).map(([id, configured]) => [id,
-  cppClassPrefix ? { ...configured, bundleInfo: { ...configured.bundleInfo, cppClassPrefix } } : configured,
+  { ...configured, bundleInfo: {
+    ...configured.bundleInfo,
+    ...(cppClassPrefix ? { cppClassPrefix } : {}),
+    ...(moduleConfig(id).nativeBuild === 'cpp' ? { androidCodegenEnabled: false, iosCodegenEnabled: false } : {}),
+  } },
 ]));
 // Bazel modules compile their generated Kotlin/ObjC (and generic flat bindings) in their own native libraries.
 const targets = name ? [configuredModules[name]] : Object.values(configuredModules)
@@ -96,16 +100,17 @@ const shown = (file: string) => {
 
 const changed: string[] = [];
 if (cppPlan) changed.push(...syncCppModules(cppPlan, cppModulesOut!, check).map(shown));
-if (!name) {
+if (!name || moduleConfig(name).nativeBuild === 'cpp') {
   const enabled = new Set(enabledModuleNames(root));
   for (const module of availableModuleNames(root)) {
+    if (name && module !== name) continue;
     const disabled = !enabled.has(module);
     const config = moduleConfig(module);
-    if (!disabled && config.nativeBuild !== 'bazel') continue;
+    if (!disabled && !['bazel', 'cpp'].includes(config.nativeBuild ?? '')) continue;
     const iosName = config.iosModuleName ?? module;
     const obsolete = {
       android: [`${module}.kt`],
-      // Enabled Bazel modules own these canonical files, but neighboring files in their directories may be handwritten.
+      // Remove canonical host copies; neighboring files in their directories may be handwritten.
       ios: disabled ? [iosName, `${iosName}Types`] : [iosName, `${iosName}Types`]
         .flatMap(name => ['h', 'm', 'swift'].map(extension => `${name}/${name}.${extension}`)),
       cpp: disabled ? [`valdi_modules/${module}`] : [],
@@ -115,7 +120,7 @@ if (!name) {
       for (const file of obsolete[platform]) {
         const output = path.resolve(outputs[platform]!, file);
         if (!existsSync(output)) continue;
-        changed.push(`${shown(output)} (${disabled ? 'disabled module' : 'Bazel-owned module'}; remove)`);
+        changed.push(`${shown(output)} (${disabled ? 'disabled module' : config.nativeBuild === 'cpp' ? 'CPP-owned module' : 'Bazel-owned module'}; remove)`);
         if (!check) rmSync(output, { recursive: true, force: true });
       }
     }
@@ -124,6 +129,7 @@ if (!name) {
 for (const target of outputs.android || outputs.ios || outputs.cpp ? targets : []) {
   const code = generate(target);
   for (const platform of ['android', 'ios', 'cpp'] as const) {
+    if (moduleConfig(target.module.name).nativeBuild === 'cpp' && platform !== 'cpp') continue;
     const outDir = outputs[platform];
     if (!outDir) continue;
     for (const [file, generated] of nativeSourceFiles(target, code, platform)) {
@@ -133,7 +139,7 @@ for (const target of outputs.android || outputs.ios || outputs.cpp ? targets : [
           .replaceAll('import ValdiCoreSwift', `import ${objcFramework}`) : generated;
       const output = path.join(path.resolve(outDir), file);
       // A module without C++ declarations gets empty C++ files, as from Valdi; they aren't written: the C++ is linked
-      // into the exported runtime, and a new file would ask for an export (scripts/ota.mjs check-export).
+      // into the exported runtime; changing these files requires an explicit runtime export.
       if (platform === 'cpp' && !content && !existsSync(output)) continue;
       if (existsSync(output) && readFileSync(output, 'utf8') === content) continue;
       changed.push(shown(output));

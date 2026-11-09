@@ -1,9 +1,21 @@
-# Android Vision shared vendors
+# Android Vision shared vendors — historical comparison
 
-Android packages OpenCV Mobile and ncnn as four separate shared libraries,
-linked by the existing JNI wrapper. The shared vendors, Debug APK, installed
+The selected architecture is now [Vision build and packaging](vision-build.md):
+strongly typed Polyglot C++ bindings, a C++ adapter and VisionCore/OpenCV/ncnn
+statically linked into ValdiRuntime. Android uses runtime-compatible NDK r28
+static vendors; iOS uses arm64 device/simulator static caches. CPP dependency
+hooks run during explicit manual runtime exports, while host hooks remain in
+normal App builds. OTA stays in the Kotlin/Swift host with its C codec linkage.
+
+Everything below records the earlier shared-library/host-adapter design.
+Its paths, commands, toolchain settings and hook descriptions are historical
+comparison material, not current build instructions. No build or device result
+below validates the new static runtime integration.
+
+In that earlier design, Android packaged OpenCV Mobile and ncnn as four separate
+shared libraries linked by a JNI wrapper. The shared vendors, Debug APK, installed
 APK binding, ELF dependency closure, and emulator execution were checked on
-2026-11-05. iOS continues to use its existing static XCFramework.
+2026-11-05. iOS used static vendors linked into the App rather than ValdiRuntime.
 
 ## Scope and preserved outputs
 
@@ -40,9 +52,10 @@ Relevant source files:
 - `vision/scripts/prepare-native.cjs`
 - `vision/cmake/VisionVendors.cmake`
 - `android/app/src/main/cpp/CMakeLists.txt`
+- `valdi/modules/app_vision/android/cpp/CMakeLists.txt`
 - `docs/vision-android-shared.md`
 - `vision/patches/opencv-mobile-android/INIT_MODULE_SOURCES_opencv_highgui.cmake`
-- `scripts/prerequisites.mjs`
+- `valdi/modules/app_vision/scripts/check-dependencies.mjs`
 - `scripts/tests/prerequisites.test.mjs`
 
 ## Inspected cached sources and toolchain
@@ -167,10 +180,12 @@ There is no duplicate `jniLibs` copy step.
 
 ## Prerequisite checks
 
-Previously, `scripts/prerequisites.mjs:checkVision()` checked
-`vision/vendor/install/android-arm64/lib/*.a` and the legacy receipt. Those old
-files can make prebuild incorrectly report Vision as current and skip shared
-preparation. It now requires the shared files and receipt instead.
+The earlier `scripts/prerequisites.mjs:checkVision()` checked
+`vision/vendor/install/android-arm64/lib/*.a` and the legacy receipt, which could
+incorrectly accept a static-only install. The module-local
+`app_vision/scripts/check-dependencies.mjs` now requires the shared files and
+receipt. Native builds invoke the enabled module's dependency hook, check caches,
+and prepare missing/stale dependencies automatically; disabled modules are skipped.
 
 The Android branch requires:
 
@@ -185,9 +200,9 @@ The Android branch requires:
 - Rejection of a legacy static-only install, missing shared file/receipt, wrong
   linkage, stale pins, or incompatible Android toolchain fields.
 
-The iOS prerequisites and receipt rules stay unchanged. The existing CLI already
-calls the same preparation script with `--target android-arm64`; no new selector
-is needed. CMake additionally matches the receipt to the selected app NDK.
+The iOS prerequisites and receipt rules stay unchanged. The module hook calls
+the same preparation script with `--target android-arm64`; no new selector is
+needed. CMake additionally matches the receipt to the selected app NDK.
 With the NDK legacy toolchain, `CMAKE_SYSTEM_VERSION` is `1`; the check uses
 the resolved `ANDROID_NATIVE_API_LEVEL` and still requires API 28. The actual
 compiler target is `aarch64-none-linux-android28`.

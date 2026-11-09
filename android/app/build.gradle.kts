@@ -1,5 +1,4 @@
 import groovy.json.JsonSlurper
-import java.io.ByteArrayOutputStream
 import javax.inject.Inject
 import org.gradle.api.provider.ListProperty
 import org.gradle.process.ExecOperations
@@ -20,6 +19,10 @@ val selectedNativeModules = providers.exec {
     workingDir(valdiRepoRoot)
     commandLine("node", "scripts/native-modules.mjs", "--json")
 }.standardOutput.asText.get().let { JsonSlurper().parseText(it) as List<*> }
+val selectedModuleAssets = providers.exec {
+    workingDir(valdiRepoRoot)
+    commandLine("node", "scripts/native-modules.mjs", "--assets")
+}.standardOutput.asText.get().let { JsonSlurper().parseText(it) as List<*> }
 
 android {
     sourceSets.getByName("main").manifest.srcFile("build/generated/valdi-module-manifest/AndroidManifest.xml")
@@ -27,11 +30,9 @@ android {
     // tools/valdi-rolldown/codegen.ts and checked in; valdiCodegenCheck below fails the build when they're stale.
     sourceSets["main"].kotlin.directories.add("generated/valdi")
     sourceSets["main"].res.srcDir("build/generated/valdi-app/res")
-    // Raw module assets (app_video's Media3 demo, theme_bridge's tokens.json): any enabled module's assets/ dir.
-    selectedNativeModules.forEach { value ->
-        val config = value as Map<*, *>
-        val assetsDirectory = valdiRepoRoot.resolve("valdi/modules/${config["name"]}/assets")
-        if (assetsDirectory.isDirectory) sourceSets["main"].assets.srcDir(assetsDirectory)
+    // Raw module assets (including business example media): any enabled module's assets/ dir.
+    selectedModuleAssets.forEach { directory ->
+        sourceSets["main"].assets.srcDir(valdiRepoRoot.resolve(directory as String))
     }
     selectedNativeModules.forEach { value ->
         val config = value as Map<*, *>
@@ -43,7 +44,7 @@ android {
     }
     namespace = nativeAppConfig["androidNamespace"] as String
     compileSdk = 37
-    // The vision vendor archives (vision/vendor/install/android-arm64) were built with NDK r27.1 and c++_shared.
+    // Shared NDK toolchain used by the host and module CMake contributions.
     ndkVersion = "27.1.12297006"
 
     defaultConfig {
@@ -61,7 +62,7 @@ android {
             }
         }
     }
-    // OpenCV mobile + ncnn behind VisionHost; see src/main/cpp/CMakeLists.txt.
+    // The host aggregates selected module CMake contributions.
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
@@ -89,14 +90,8 @@ android {
 // valdi_runtime.aar bundles javax.inject, which CameraX (dagger) and ML Kit (datatransport) also bring.
 configurations.configureEach { exclude(group = "javax.inject", module = "javax.inject") }
 
-val valdiNativeModules = tasks.register<Exec>("valdiNativeModules") {
-    workingDir = rootProject.projectDir.parentFile
-    commandLine("node", "scripts/node-modules.mjs", "android")
-}
-tasks.named("preBuild") { dependsOn(valdiNativeModules) }
 
 dependencies {
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     testImplementation("junit:junit:4.13.2")
 
     // The Valdi runtime and Valdi's own modules, produced by scripts/export-android.sh; app_pages and the npm packages
@@ -142,36 +137,6 @@ kotlin {
 }
 
 /**
- * Static OTA configuration: the manually targeted app version, module inventory, base URL and public signing key.
- * Runtime export checks are separate from OTA compatibility, which the publisher manages.
- */
-abstract class ValdiOtaInfo : DefaultTask() {
-    @get:InputFile abstract val exportInfo: RegularFileProperty
-    @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE) abstract val configurationFiles: ConfigurableFileCollection
-    @get:Internal abstract val repoRoot: DirectoryProperty
-    @get:InputFile abstract val publicKey: RegularFileProperty
-    @get:Input abstract val appVersion: Property<String>
-    @get:Input abstract val updateUrl: Property<String>
-    @get:OutputDirectory abstract val outputDir: DirectoryProperty
-    @get:Inject abstract val execOperations: ExecOperations
-
-    @TaskAction
-    fun write() {
-        val out = ByteArrayOutputStream()
-        execOperations.exec {
-            commandLine(
-                listOf(
-                    "node", repoRoot.get().asFile.resolve("scripts/ota.mjs").path, "app-info", "android",
-                    exportInfo.get().asFile.path, appVersion.get(), updateUrl.get(),
-                ),
-            )
-            standardOutput = out
-        }
-        outputDir.get().asFile.resolve("valdi_ota.json").writeText(out.toString().trim())
-    }
-}
-
-/**
  * The Valdi modules tools/valdi-rolldown builds (app_pages, and the npm packages it bundles) as assets: JavaScript with
  * inline source maps in debug builds, Hermes bytecode and <module>.map.json in release builds, as Valdi ships them;
  * and app_pages' res/ images as drawables. scripts/export-android.sh leaves the modules out of the aar. Runs `pnpm`
@@ -193,7 +158,7 @@ abstract class ValdiModules : DefaultTask() {
         val mode = if (release.get()) listOf("--release") else emptyList()
         execOperations.exec {
             workingDir = toolDir.get().asFile
-            commandLine(pnpm.get() + listOf("exec", "tsx", "build.ts", "--out", out.path, "--res", resDir.get().asFile.path) + mode)
+            commandLine(pnpm.get() + listOf("exec", "tsx", "build.ts", "--native-platform", "android", "--out", out.path, "--res", resDir.get().asFile.path) + mode)
         }
     }
 }
@@ -201,15 +166,13 @@ abstract class ValdiModules : DefaultTask() {
 /**
  * Fails when generated/valdi (Kotlin) or module-owned C++ bindings differ from tools/valdi-rolldown/codegen.ts
  * generates from the current TypeScript: a native interface changed without the bindings being regenerated. Only
- * checks; regenerating is done by hand. The C++ is linked into the exported runtime, so it also fails when module C++
- * changed since libs/valdi_runtime.aar was exported (scripts/ota.mjs check-export).
+ * checks bindings; runtime exports remain an explicit developer action.
  */
 abstract class ValdiCodegenCheck : DefaultTask() {
     @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE) abstract val sources: ConfigurableFileCollection
     @get:Input abstract val pnpm: ListProperty<String>
     @get:Internal abstract val repoDir: DirectoryProperty
     @get:Internal abstract val generatedDir: DirectoryProperty
-    @get:Internal abstract val exportInfo: RegularFileProperty
     @get:OutputFile abstract val stamp: RegularFileProperty
     @get:Inject abstract val execOperations: ExecOperations
 
@@ -236,9 +199,6 @@ abstract class ValdiCodegenCheck : DefaultTask() {
                     "then export the runtime again (scripts/export-android.sh): the C++ is linked into it.",
             )
         }
-        execOperations.exec {
-            commandLine("node", repo.resolve("scripts/ota.mjs").path, "check-export", "android", exportInfo.get().asFile.path)
-        }
         stamp.get().asFile.writeText("ok")
     }
 }
@@ -256,9 +216,6 @@ val valdiCodegenCheck = tasks.register<ValdiCodegenCheck>("valdiCodegenCheck") {
         repo.resolve("valdi/modules/runtime-cpp.bzl"),
         fileTree(repo.resolve("valdi/bzl/module_cpp")),
         repo.resolve("scripts/ota.mjs"),
-        repo.resolve("scripts/native-cpp.mjs"),
-        repo.resolve("ota/fingerprint.json"),
-        file("libs/valdi_ota.json"),
     )
     pnpm = providers.gradleProperty("valdiPnpm").map { listOf(it) }.orElse(
         if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
@@ -269,7 +226,6 @@ val valdiCodegenCheck = tasks.register<ValdiCodegenCheck>("valdiCodegenCheck") {
     )
     repoDir = repo
     generatedDir = file("generated/valdi")
-    exportInfo = file("libs/valdi_ota.json")
     stamp = layout.buildDirectory.file("valdi/codegen-check")
 }
 tasks.named("preBuild") { dependsOn(valdiCodegenCheck) }
@@ -277,30 +233,14 @@ tasks.named("preBuild") { dependsOn(valdiCodegenCheck) }
 androidComponents {
     val repo = rootProject.projectDir.parentFile
     onVariants { variant ->
-        val info = tasks.register<ValdiOtaInfo>("${variant.name}ValdiOtaInfo") {
-            exportInfo = file("libs/valdi_ota.json")
-            configurationFiles.from(
-                repo.resolve("scripts/ota.mjs"),
-                repo.resolve("scripts/ota-delta.mjs"),
-                repo.resolve("scripts/prerequisites.mjs"),
-                repo.resolve("scripts/native-cpp.mjs"),
-                repo.resolve("package.json"),
-                repo.resolve("ota/fingerprint.json"),
-                repo.resolve("tools/valdi-rolldown/modules.mjs"),
-                fileTree(repo.resolve("valdi/modules")) { include("*/BUILD.bazel") },
-            )
-            repoRoot = repo
-            publicKey = repo.resolve("ota/public.pem")
-            val version = variant.outputs.single().versionName.orNull ?: throw GradleException("The app has no versionName")
-            appVersion = version
-            // gradle.properties or -PvaldiOtaUrl=…; empty turns updates off. Debug builds never take them: they run the
-            // modules they were built with, and pnpm dev's.
-            val url = if (variant.buildType == "release") providers.gradleProperty("valdiOtaUrl").getOrElse("") else ""
-            updateUrl = url
+        val nativeModules = tasks.register<Exec>("${variant.name}ValdiNativeModules") {
+            workingDir = repo
+            commandLine("node", "scripts/node-modules.mjs", "android", if (variant.buildType == "release") "release" else "debug")
         }
-        variant.sources.assets?.addGeneratedSourceDirectory(info, ValdiOtaInfo::outputDir)
-
+        tasks.matching { it.name == "pre${variant.name.replaceFirstChar { it.uppercaseChar() }}Build" }
+            .configureEach { dependsOn(nativeModules) }
         val modules = tasks.register<ValdiModules>("${variant.name}ValdiModules") {
+            dependsOn(nativeModules)
             val tool = repo.resolve("tools/valdi-rolldown")
             sources.from(
                 fileTree(repo.resolve("valdi/modules")) { include("*/src/**", "*/res/**", "*/sql/**", "*/tsconfig.json", "*/module.json", "*/BUILD.bazel") },
@@ -326,6 +266,13 @@ androidComponents {
         }
         variant.sources.assets?.addGeneratedSourceDirectory(modules, ValdiModules::outputDir)
         variant.sources.res?.addGeneratedSourceDirectory(modules, ValdiModules::resDir)
-        info.configure { dependsOn(modules) }
     }
+}
+
+// OTA owns its generated configuration task; removing app_ota also removes this build contribution.
+if (selectedNativeModules.any { (it as Map<*, *>)["name"] == "app_ota" }) {
+    apply(from = valdiRepoRoot.resolve("valdi/modules/app_ota/android/ota.gradle"))
+}
+if (selectedNativeModules.any { (it as Map<*, *>)["name"] == "app_ui" }) {
+    apply(from = valdiRepoRoot.resolve("valdi/modules/app_ui/android/appui.gradle"))
 }

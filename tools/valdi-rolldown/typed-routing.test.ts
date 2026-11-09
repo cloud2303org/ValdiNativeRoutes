@@ -166,34 +166,94 @@ test('typed router passes params and results through without JSON transport and 
   assert.equal(evaluate(`navigation.readParams({ params: { id: 123 } }).id`), 123);
 });
 
-test('routing rejects non-dictionary params and forwards other values to the host', async () => {
+test('routing rejects invalid nested payloads before navigation or finish dispatch', () => {
   const { evaluate, calls } = routingRuntime();
-  for (const expression of ['null', '[]', '42']) {
-    assert.throws(() => evaluate(`navigation.router.push('detail', (${expression}))`), /Invalid route data/);
-  }
-  assert.equal(calls.length, 0);
+  evaluate(`
+    globalThis.pageRouter = new navigation.Router({
+      finish: value => calls.push(['finish', value]), back() {},
+    });
+  `);
   for (const expression of [
+    'null', '[]', '42', '"text"', 'true', 'new Date()', 'new Map()',
     '{ callback() {} }', '{ nested: { callback() {} } }',
-    '{ value: new Date() }', '{ value: NaN }', '{ value: Infinity }',
+    '{ value: new Date() }', '{ value: new Map([["key", 1]]) }',
+    '{ value: new Set([1]) }', '{ value: new Uint8Array([1]) }',
+    '{ value: /pattern/ }', '{ value: new (class Payload { n = 1; })() }',
+    '{ value: new Number(1) }', '{ value: new Boolean(false) }',
+    '{ value: NaN }', '{ value: Infinity }', '{ value: -Infinity }',
+    '{ nested: [{ value: NaN }] }', '{ nested: { items: [Infinity] } }',
     '{ value: 1n }', '{ value: Symbol("x") }', '{ value: [undefined] }',
+    '{ value: Array(1) }',
+    '{ value: Object.assign([1], { extra: true }) }',
     'Object.assign({}, { [Symbol("x")]: 1 })',
+    '{ nested: { [Symbol("x")]: 1 } }',
     '(() => { const value = {}; value.self = value; return value; })()',
+    '(() => { const list = []; const value = { list }; list.push(value); return value; })()',
+    '(() => { const list = []; list.push(list); return { list }; })()',
     '({ get value() { throw Error("getter was executed"); } })',
+    '{ nested: { get value() { return 1; } } }',
+    '{ value: Object.defineProperty([1], "0", { get() { return 1; } }) }',
   ]) {
-    evaluate(`navigation.router.push('detail', (${expression}))`);
+    for (const operation of [
+      `navigation.router.push('detail', payload)`,
+      `navigation.router.replace('detail', payload)`,
+      `navigation.router.reset('detail', payload)`,
+      `navigation.router.pushForResult('picker', payload)`,
+      'pageRouter.finish(payload)',
+    ]) {
+      assert.throws(() => evaluate(`{ const payload = (${expression}); ${operation}; }`),
+        /Invalid route data/, `${operation}: ${expression}`);
+      assert.equal(calls.length, 0, 'validation must precede dispatch');
+    }
   }
-  assert.equal(calls.length, 11);
-  const resolved = await evaluate(`
+});
+
+test('routing rejects invalid returned payloads and preserves cancellation', async () => {
+  const { evaluate } = routingRuntime();
+  const result = evaluate(`
     globalThis.invalidResult = navigation.router.pushForResult('picker');
-    calls[11][4]({ value() {} }, false);
+    calls[0][4]({ nested: [NaN] }, false);
     invalidResult;
   `);
-  assert.equal(typeof resolved.value, 'function');
+  await assert.rejects(result, /Invalid route data/);
+  const pages = evaluate(`
+    globalThis.invalidPages = navigation.router.getCurrentPages();
+    returnPages([{ pageId: '1', route: 'detail', params: { nested: [Infinity] } }]);
+    invalidPages;
+  `);
+  await assert.rejects(pages, /Invalid route data/);
+  const canceled = evaluate(`
+    globalThis.canceledResult = navigation.router.pushForResult('picker');
+    calls[1][4]({ ignored() {} }, true);
+    canceledResult;
+  `);
+  assert.equal(await canceled, undefined);
+  assert.throws(() => evaluate('navigation.readParams({ params: { nested: [NaN] } })'), /Invalid route data/);
+});
+
+test('routing validates finite number edges and shared noncyclic graphs without copying', () => {
+  const { evaluate, calls } = routingRuntime();
   assert.equal(evaluate(`
     globalThis.shared = { text: 'ok' };
-    const routed = data.snapshotRouteData({ a: shared, b: shared });
-    routed.a === shared && routed.b === shared && routed.b.text === 'ok';
+    globalThis.sharedList = [shared, null, false];
+    globalThis.payload = {
+      a: shared, b: shared, lists: [sharedList, sharedList],
+      dictionary: Object.assign(Object.create(null), { child: shared, optional: undefined }),
+      keys: { ['__proto__']: 'data', constructor: true, toString: null },
+      numbers: [0, -0, Number.MIN_VALUE, Number.MAX_VALUE, Number.MAX_SAFE_INTEGER, 1.25, -4],
+      optional: undefined,
+    };
+    const routed = data.snapshotRouteData(payload);
+    navigation.router.push('detail', payload);
+    routed === payload && routed.a === shared && routed.b === shared
+      && routed.lists[0] === sharedList && routed.lists[1] === sharedList;
   `), true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][2], evaluate('payload'));
+  assert.equal(evaluate('Object.is(payload.numbers[1], -0)'), true);
+  assert.deepEqual(Array.from(calls[0][2].numbers), [0, -0, Number.MIN_VALUE, Number.MAX_VALUE, Number.MAX_SAFE_INTEGER, 1.25, -4]);
+  assert.equal(evaluate('Object.hasOwn(payload.dictionary, "optional")'), true);
+  assert.equal(calls[0][2].keys.__proto__, 'data');
 });
 
 test('routing accepts options directly and rejects removed sheet arguments before native calls', () => {
@@ -210,10 +270,20 @@ test('routing accepts options directly and rejects removed sheet arguments befor
   assert.equal(calls[0][3].durationMs, 120);
 });
 
-test('startup stays synchronous, installs error handler first, initializes services before authenticated root selection', () => {
+test('startup installs native Web globals before service imports and synchronously initializes the authenticated root', () => {
   for (const signedIn of [false, true]) {
     const events: string[] = [];
     const context = vm.createContext({ events, signedIn });
+    const emit = (file: string) => ts.transpileModule(readFileSync(file, 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+    }).outputText;
+    const nativeExports = { fetch: () => {}, WebSocket: class {}, AbortController: class {}, TextDecoder: class {} };
+    const nativeModule = { exports: {} as any };
+    const wrapper = path.join(valdiSourceRoot()!, 'src/valdi_modules/src/valdi/native_web/src/NativeWeb.ts');
+    vm.runInContext(`(function(require,module,exports){${emit(wrapper)}\n})`, context)(
+      (name: string) => { assert.equal(name, './NativeWebNative'); return nativeExports; },
+      nativeModule, nativeModule.exports,
+    );
     const startupSource = ts.transpileModule(readFileSync(source('app.ts'), 'utf8'), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
     }).outputText;
@@ -243,12 +313,29 @@ test('startup stays synchronous, installs error handler first, initializes servi
     // This test validates startup order; the real loader test below exercises
     // development subscription ownership and reloads.
     vm.runInContext(`(function(require,module,exports){${startupSource}\n})`, context)(
-      (name: string) => { assert.ok(mocks[name], name); return mocks[name]; }, module, module.exports,
+      (name: string) => {
+        if (name === './services/nativeWeb') {
+          vm.runInContext(`(function(require,exports){${emit(source('services/nativeWeb.ts'))}\n})`, context)(
+            (id: string) => { assert.equal(id, 'native_web/src/NativeWeb'); return nativeModule.exports; },
+            {},
+          );
+          events.push('web');
+          return {};
+        }
+        if (name === './services/api' || name === './services/database') {
+          for (const [key, value] of Object.entries(nativeExports)) {
+            assert.equal(vm.runInContext(`globalThis.${key}`, context), value,
+              `${key} must be installed before ${name} evaluates`);
+          }
+        }
+        assert.ok(mocks[name], name);
+        return mocks[name];
+      }, module, module.exports,
     );
     const result = module.exports.startApp(false);
     assert.equal(result.root, signedIn ? '$tabs' : 'login');
     assert.equal(typeof result.then, 'undefined');
-    assert.deepEqual(events, ['handler', 'theme', 'db', 'signedIn', 'declaration']);
+    assert.deepEqual(events, ['web', 'handler', 'theme', 'db', 'signedIn', 'declaration']);
   }
 });
 
@@ -279,6 +366,9 @@ test('pinned lazy ModuleLoader publishes fresh routes after hot unload and dispo
   evaluateModule(loaderCode, (id: string) => assert.fail(id), { exports: bootstrap }, bootstrap);
   const sources = new Map<string, string>([
     ['app_pages/src/app', emit(source('app.ts'))],
+    ['app_pages/src/services/nativeWeb', emit(source('services/nativeWeb.ts'))],
+    ['native_web/src/NativeWeb', emit(path.join(upstream, 'src/valdi_modules/src/valdi/native_web/src/NativeWeb.ts'))],
+    ['native_web/src/NativeWebNative', 'module.exports = {};'],
     ['app_foundation/src/navigation/NavigationHost', emit(foundation('navigation/NavigationHost.ts'))],
     ['app_foundation/src/navigation/config', emit(foundation('navigation/config.ts'))],
     ['valdi_core/src/ModuleLoaderGlobal', emit(path.join(core, 'ModuleLoaderGlobal.ts'))],

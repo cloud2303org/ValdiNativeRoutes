@@ -19,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
@@ -32,7 +31,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
-import androidx.core.view.WindowCompat
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.ui.window.Dialog as WindowDialog
@@ -76,14 +74,9 @@ internal fun DialogFrame(open: Boolean, onOpenChange: (Boolean, DialogDismissRea
             BackHandler(onBack = back)
             val view = LocalView.current
             val window = (view.parent as? DialogWindowProvider)?.window
-            val light = uiColors().surface.luminance() > 0.5f
             SideEffect {
                 window?.let {
                     it.setDimAmount(0f); it.setWindowAnimations(0)
-                    WindowCompat.getInsetsController(it, view).apply {
-                        isAppearanceLightStatusBars = light
-                        isAppearanceLightNavigationBars = light
-                    }
                 }
             }
             DialogContent(presentation.interactive, presentation.top, scrim.value, panel.value, scale.value,

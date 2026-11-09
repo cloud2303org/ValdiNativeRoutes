@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { RUNTIME_MODULE_IDS } from './runtime-module-ids';
 import { assertCppModuleName, cppModuleFiles } from './scaffold-cpp';
 
 export const MODULE_TEMPLATES = ['ui_component', 'polyglot_bridge_module', 'polyglot_view_module', 'cpp_bridge_module'] as const;
@@ -31,7 +32,7 @@ export function createModule({
   if (template === 'cpp_bridge_module') assertCppModuleName(name);
   const pascal = name.split('_').filter(Boolean).map(word => word[0].toUpperCase() + word.slice(1)).join('');
   if (!MODULE_TEMPLATES.includes(template)) throw new Error(`Unknown template: ${template}`);
-  if (['client_sql', 'coreutils', 'drawing', 'jasmine', 'source_map', 'valdi_core', 'valdi_tsx'].includes(name)) throw new Error(`${name} is a runtime module`);
+  if (RUNTIME_MODULE_IDS.includes(name)) throw new Error(`${name} is a runtime module`);
   if (existsSync(path.join(root, 'valdi/node_modules', name))) throw new Error(`${name} conflicts with an installed npm package`);
   const directory = path.join(root, 'valdi/modules', name);
   if (existsSync(directory)) throw new Error(`Path already exists: ${directory}`);
@@ -59,6 +60,7 @@ export function createModule({
   if (template !== 'cpp_bridge_module') copy(original);
   const config: Record<string, string | boolean> = { template, iosModuleName: pascal };
   if (polyglot) config.nativeBuild = 'bazel';
+  if (template === 'cpp_bridge_module') config.nativeBuild = 'cpp';
   if (template === 'polyglot_bridge_module') {
     config.androidModuleFactory = `com.snap.modules.${name}.CalculatorModuleFactoryImpl`;
     config.iosModuleFactory = `${pascal}CreateModuleFactory`;

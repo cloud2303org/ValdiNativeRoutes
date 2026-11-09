@@ -21,39 +21,41 @@ macOS.
 No Administrator-level system change is needed. The scripts only write to the
 repository, Gradle/Bazel caches, and the Android SDK build directories.
 
-## Full build
+## Install, export, then build
 
 ```powershell
 pnpm install
-powershell -ExecutionPolicy Bypass -File scripts/windows/build-android.ps1
+powershell -ExecutionPolicy Bypass -File scripts/windows/export-android.ps1 -Config debug
+pnpm android
+# Or build without installing/launching:
+pnpm build:android
 ```
 
-The cross-platform unified entry points work here too: `pnpm prebuild --platform android` prepares the
-fingerprint-selected artifacts, and `pnpm android [--device <serial>] [--no-install] [--no-launch]` runs prebuild,
-the Gradle build, and installs/launches on an emulator (a physical phone only when named with `--device`). The
-PowerShell script remains the Windows-specific implementation the Node dispatcher and CI call; it is the full
-bootstrap path described below.
-
-This exports the three-ABI Valdi runtime AAR, prepares the Android arm64
-OpenCV/ncnn libraries when they are missing, builds the custom Bazel-backed
-modules, and assembles the Debug APK with `gradlew.bat`. The Gradle pipeline's
+The manual export fetches the pinned Valdi sources, generates bindings and exports
+the three-ABI runtime AAR. `pnpm android [--device <serial>] [--no-install] [--no-launch]`
+runs the Gradle build and installs/launches on an emulator (a physical phone only
+when named with `--device`). Gradle automatically checks enabled modules' declared
+native dependencies, prepares missing/stale dependencies, and builds module
+libraries and module-declared CMake sources. Disabled modules do not participate.
+The root runner does not compile native module libraries before Gradle.
+The Gradle pipeline's
 TypeScript tasks invoke pnpm through `scripts/pnpm.mjs`, which uses Node and the
 bundled Corepack launcher instead of spawning a `.cmd` shim.
 
-`build-android.ps1` is the full entry point: it verifies every prerequisite, runs
-`pnpm install --frozen-lockfile` itself when the three dependency trees are missing,
-exports the runtime, prepares Vision, builds the Bazel-backed modules and assembles
-the APK. A new computer needs this one command plus the preinstalled tools; it does
-not need a previous export, APK or Maven seed. `pnpm build:android` is the daily
-entry point: it checks an existing export and fails with the
-`sh scripts/export-android.sh` instruction when the Valdi pin/toolchain or
-module C++ changed, instead of exporting silently.
-
-The complete Windows entry point is Debug-only, matching `pnpm build:android`.
+`pnpm build:android` is the daily build-only entry point. Runtime validation checks
+artifact existence and platform/configuration metadata. It does not compare
+source hashes or automatically re-export; manually export again after changes to
+the Valdi pin, runtime toolchain/compiler or C++ linked into the runtime.
+The normal app entry points build Debug.
 Release runtime export remains available through `export-android.ps1 -Config release`.
 
-Use `-SkipRuntimeExport` when the runtime and its fingerprint are already
-current. Use `-SkipVisionPrepare` to reuse an existing vision build.
+### Windows build wrapper
+
+After manually exporting the runtime, `scripts/windows/build-android.ps1` can
+configure Windows tools, proxy and cache paths and invoke the normal app build.
+It installs missing JS dependencies unless `-SkipInstall` is passed. It does not
+export the runtime or prepare Vision before the native build; Gradle owns module
+dependency preparation and native libraries.
 
 ## What is preinstalled and what is downloaded
 
@@ -77,6 +79,7 @@ Nearly all of this goes through HTTP(S). When the host needs a proxy, pass it ex
 particular local listener:
 
 ```powershell
+# After manually exporting the runtime:
 powershell -ExecutionPolicy Bypass -File scripts/windows/build-android.ps1 `
   -ProxyUrl http://proxy.example:8080 -NoProxy "repo1.maven.org,dl.google.com,maven.google.com"
 ```
@@ -104,7 +107,11 @@ The build writes only these caches:
 rewritten by every run (an empty file means "use the defaults"), so a previous isolated run cannot keep redirecting
 caches.
 
-`scripts/windows/test-cold-build.ps1` proves the fresh-computer path on one machine:
+### Cold-build runner
+
+`scripts/windows/test-cold-build.ps1` checks the install → manual export → native
+build sequence in isolation. The commands below describe the runner; this
+documentation update does not establish a fresh Windows pass.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/windows/test-cold-build.ps1 `
@@ -114,15 +121,17 @@ powershell -ExecutionPolicy Bypass -File scripts/windows/test-cold-build.ps1 `
 
 It requires an empty `-Root` on a short path, clones the repository over the network at one commit, verifies the
 clone is clean and holds no AAR/APK/vendor directories, and gives the build an empty, isolated directory for every
-cache above (`caches\…`, `bazel-out`). It then runs the unified `pnpm android --no-install --no-launch` (prebuild
-plus the Gradle build), the pipeline tests against the fetched
-Valdi sources, and `scripts/windows/test-native-invalidation.ps1` (standalone module change rebuilds the module
-library and APK without re-exporting; a TypeScript-only change does not rebuild either native artifact; a
-module C++ change fails the daily build with the export instruction). It then scaffolds a module through
-`pnpm new-module` and rebuilds the module bundles (`-SkipNewModule` opts out), writes
-`logs\cold-build-report.json` with the cache sizes after the run, output hashes, test results, invalidation and
-new-module evidence, and prints the artifact hashes. Preinstalled tools are reused explicitly; this validates an
-isolated cold build on existing hardware, not a pristine Windows installation.
+cache above (`caches\…`, `bazel-out`). It installs dependencies, explicitly invokes
+the runtime exporter, checks that runtime metadata contains only `platform` /
+`config`, and checks the generated bindings. It then runs
+`pnpm android --no-install --no-launch`, verifies that the manually exported AAR
+was not changed by the app build, and runs the pipeline tests against the fetched
+Valdi sources. It scaffolds a module and rebuilds the module bundles
+(`-SkipNewModule` opts out), again checking that the runtime stays unchanged.
+It writes `logs\cold-build-report.json` with cache sizes, output hashes, test
+results and new-module evidence, and prints artifact hashes. Preinstalled tools
+are reused explicitly; this is an isolated build on existing hardware, not a
+pristine Windows installation.
 
 An isolated Gradle home still has to download the wrapper distribution and the Android Gradle Plugin. Java ignores
 `HTTPS_PROXY`, so when `-ProxyUrl` is given the script also passes the proxy as JVM settings (`GRADLE_OPTS`) and as
@@ -159,8 +168,9 @@ The `Windows Android CI` workflow exposes the same proof as a manual `cold_build
 runs `test-cold-build.ps1` in `C:\vc-<run id>` with the repository's optional proxy variables, uploads
 `windows-cold-<run id>` (logs, report JSON, APK) and removes only that isolation root.
 
-The full flow passes the validated Valdi checkout to the runtime export and runs
-`scripts/export-android.sh`, the vision preparation, and `gradlew.bat` directly.
+The explicit runtime export passes the validated Valdi checkout to
+`scripts/export-android.sh`; the app build invokes `gradlew.bat`, whose module
+build steps prepare declared dependencies as needed.
 The checked-in scripts print the resolved `Git Bash`, `Valdi checkout` commit,
 and `Bazel output root` before building.
 
@@ -186,8 +196,8 @@ For staged validation against an unpushed Valdi feature checkout, pass
 the root of a git work tree whose `HEAD` is exactly the `VALDI_COMMIT` pinned in
 `valdi/MODULE.bazel` and whose `git status --porcelain` is empty. A different
 commit or a modified/untracked file is rejected with a message naming the
-expected and actual state: the OTA fingerprint names the pinned commit, so a
-checkout of another commit (or local edits) would make the fingerprint lie.
+expected and actual state. This enforces the wrapper's explicit pinned-source
+contract; runtime metadata no longer records a source fingerprint.
 
 After that check the wrapper writes ignored `valdi/win.local.bazelrc` and
 `module-build/win.local.bazelrc` files with the checkout's file registry and
@@ -266,9 +276,10 @@ server with a quoted, spaced, non-ASCII `--output_user_root` and shut it down.
 
 ## Verification
 
-The export writes `android/app/libs/valdi_ota.json`. Gradle's
-`valdiCodegenCheck` runs `node scripts/ota.mjs check-export android
-android/app/libs/valdi_ota.json` before packaging. To inspect the runtime
+The export writes `android/app/libs/valdi_ota.json` with only `platform` and `config`.
+Builds check artifact existence and this metadata; OTA packing requires a Release
+runtime for the selected platform. `valdiCodegenCheck` still checks generated
+bindings, without comparing runtime source hashes. To inspect the runtime
 action graph without launching a second build:
 
 ```powershell
@@ -285,18 +296,15 @@ cd ..
 node scripts/verify-runtime-actions.mjs runtime-actions.json
 ```
 
-## Native changes and invalidation
+## Native changes and build ownership
 
-`ota/fingerprint.json` splits the inputs into a Valdi half and a per-platform native half:
-
-- **`valdi`**: the Valdi fork pin/registry, `valdi/.bazelrc`, the runtime Node compiler
-  (`tools/valdi-rolldown/{runtime-module,valdiTs,pipeline,archive,hermes}.ts`, `codegen`, `vendor`), and
-  enabled modules' `cpp/` directories and their runtime linkage rules. Changing any of these makes
-  `scripts/ota.mjs check-export` fail with the `sh scripts/export-android.sh` instruction; the full Windows
-  entry point re-exports first, so it is the supported way to rebuild.
-- **`android`**: host sources, the standalone module's native implementation (`valdi/modules/calculator/android`,
-  `module.json`, `Calculator.d.ts`), `module-build/`, Gradle files, `vision/`, and `ota/public.pem`. Changing these
-  rebuilds the module library (`module-build` Bazel workspace) and the APK; the runtime AAR is not re-exported.
+- **Runtime**: after changing the Valdi fork pin/registry, runtime toolchain/Node
+  compiler or runtime-linked module C++, manually export the AAR and rebuild the
+  app. Source freshness is not inferred from metadata.
+- **Module and host code**: Gradle builds selected module libraries and the APK,
+  including module-declared Android CMake contributions. Native dependency hooks
+  check caches and prepare missing/stale dependencies as part of that build.
+  `pnpm dev` retains the existing TS/resource watch and hot reload.
 
 Generated Kotlin/Objective-C bindings still follow each module's native-build ownership.
 Canonical C++ generation uses `--cpp-modules-out ../../valdi/modules`: each C++ owner
@@ -310,14 +318,13 @@ generated include dependencies supply the transitive binding closure. Today this
 - C++ implementations, generated binding dependencies, module C++ build rules, and the
   runtime/toolchain inputs require a matching runtime export.
 
-`scripts/windows/test-native-invalidation.ps1` changes Calculator and the app-owned
-`valdi/modules/app_pages/cpp/src/Cpp.cpp` in turn to exercise those boundaries. It
-restores both sources afterward. A failed export never silently produces a new APK:
-`check-export` rejects the old runtime. This documents the runner; it is not a claim
-that a fresh Windows invalidation run has passed.
+The former `scripts/windows/test-native-invalidation.ps1` runner has been removed.
+Historical reports of automatic export or rejection of stale runtime source
+hashes describe the old workflow.
 
-The Vision preparation stamps its source pins; a changed `vision/vendor-lock.json` makes both the daily check and
-the full wrapper demand a fresh `prepare-native.cjs` instead of reusing old archives.
+Vision's module hook checks its preparation receipts against
+`vision/vendor-lock.json`. A stale receipt triggers preparation in the native
+build. These vendor cache checks are separate from runtime metadata.
 
 ## GitHub Actions
 
@@ -326,9 +333,10 @@ It only accepts pushes/manual runs for `hermes-v1`; pull-request events do not
 run on the personal Windows computer. The runner starts when its Windows user
 logs in, so that computer must be online with the user session available.
 It installs the pinned JS dependencies and Android SDK/NDK, fetches the exact
-`VALDI_COMMIT` as a clean Git checkout, and runs `build-android.ps1` without skip
-flags. The job also runs the Windows helper tests, pipeline tests, runtime
-fingerprint check and compiler action audit, and uploads logs and the Debug APK.
+`VALDI_COMMIT` as a clean Git checkout, explicitly exports the runtime, then runs
+`build-android.ps1`. It also runs helper and pipeline tests, validates runtime
+platform/configuration metadata, audits compiler actions, and uploads logs and the
+Debug APK. Gradle prepares selected modules' native dependencies during the build.
 The explicit checkout uses the same supported `-ValdiCheckout` path as local
 builds; it does not require a manually populated external repository directory.
 A successful local run is separate from the result of this hosted CI job.

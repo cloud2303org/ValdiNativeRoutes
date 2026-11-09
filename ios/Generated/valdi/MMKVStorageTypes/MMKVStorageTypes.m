@@ -86,20 +86,18 @@
 @implementation VRStorageReadReply
 
 @dynamic found;
-@dynamic payload;
-@dynamic error;
+@dynamic value;
 
-- (instancetype _Nonnull)initWithFound:(BOOL)found payload:(NSDictionary <NSString *, id> * _Nonnull)payload error:(NSString * _Nonnull)error
+- (instancetype _Nonnull)initWithFound:(BOOL)found value:(NSString * _Nonnull)value
 {
-    return [super initWithFieldValues:nil, found, payload, error];
+    return [super initWithFieldValues:nil, found, value];
 }
 
 + (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
 {
     static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
         {.name = "found", .selName = nil, .type = "b"},
-        {.name = "payload", .selName = nil, .type = "m<s,u>"},
-        {.name = "error", .selName = nil, .type = "s"},
+        {.name = "value", .selName = nil, .type = "s"},
         {.name = nil},
     };
     return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
@@ -120,18 +118,18 @@
 @implementation VRStorageWriteRequest
 
 @dynamic key;
-@dynamic payload;
+@dynamic value;
 
-- (instancetype _Nonnull)initWithKey:(NSString * _Nonnull)key payload:(NSDictionary <NSString *, id> * _Nonnull)payload
+- (instancetype _Nonnull)initWithKey:(NSString * _Nonnull)key value:(NSString * _Nonnull)value
 {
-    return [super initWithFieldValues:nil, key, payload];
+    return [super initWithFieldValues:nil, key, value];
 }
 
 + (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
 {
     static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
         {.name = "key", .selName = nil, .type = "s"},
-        {.name = "payload", .selName = nil, .type = "m<s,u>"},
+        {.name = "value", .selName = nil, .type = "s"},
         {.name = nil},
     };
     return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);

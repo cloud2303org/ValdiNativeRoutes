@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { nativeModules, syncNativeModuleRegistration } from './native-modules.mjs';
 import { availableModuleNames, pruneDisabledModuleOutputs } from '../tools/valdi-rolldown/modules.mjs';
+import { prepareNativeDependencies } from './native-dependencies.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const workspace = path.join(root, 'module-build');
@@ -62,8 +63,22 @@ export function bazelModules() {
   return nativeModules(root).filter(module => module.nativeBuild === 'bazel').map(module => module.name);
 }
 
+/** Bundle products already built by the native build task; packaging must not invoke Bazel again. */
+export function stagedModuleOutputs(platform, release = false, repository = root) {
+  if (!['ios', 'android'].includes(platform)) throw new Error('Module platform must be ios or android');
+  return new Map(nativeModules(repository).filter(module => module.nativeBuild === 'bazel').map(({ name }) => {
+    const directory = path.join(repository, 'module-build/out', platform, name, release ? 'bundle-release' : 'bundle-debug');
+    for (const file of [`${name}.valdimodule`, ...(release ? [`${name}.map.json`] : [])]) {
+      if (!existsSync(path.join(directory, file)))
+        throw new Error(`Missing ${platform} module bundle ${name}: build the native module task before packaging.`);
+    }
+    return [name, directory];
+  }));
+}
+
 export function buildNodeModules(platform = 'ios', release = false, native = false) {
   if (!['ios', 'android'].includes(platform)) throw new Error('Module platform must be ios or android');
+  if (native) prepareNativeDependencies(root, platform);
   const names = bazelModules();
   syncNativeModuleRegistration(root);
   const stage = path.join(workspace, 'out', platform);
@@ -155,6 +170,9 @@ function buildWithJunction(platform, release, native, names) {
     if (native) {
       const destination = path.join(workspace, 'out', platform, name);
       mkdirSync(destination, { recursive: true });
+      const bundle = path.join(destination, release ? 'bundle-release' : 'bundle-debug');
+      rmSync(bundle, { recursive: true, force: true });
+      copyModuleTree(outputs.get(name), bundle);
       const filename = platform === 'ios' ? `lib${name}_ios.a` : `${name}_android.jar`;
       // objc_library(alwayslink=True) emits an ar archive with Bazel's .lo suffix.
       const hasSwift = platform === 'ios' && configs.get(name).iosLanguage && configs.get(name).iosLanguage !== 'objc';

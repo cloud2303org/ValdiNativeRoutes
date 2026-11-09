@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { readAppConfig } from './app-config.mjs';
+import { moduleNativePath } from './module-native-config.mjs';
 
 const xml = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;')
   .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&apos;');
@@ -56,7 +57,8 @@ export function validatePlatformConfig(config, file) {
   }
 }
 
-export function syncModulePlatformConfig(root, modules, app = readAppConfig(root)) {
+export function syncModulePlatformConfig(root, modules, app = readAppConfig(root),
+  assetModules = modules.map(module => module.name)) {
   const write = (file, content) => {
     if (existsSync(file) && readFileSync(file, 'utf8') === content) return;
     mkdirSync(path.dirname(file), { recursive: true });
@@ -133,8 +135,28 @@ export function syncModulePlatformConfig(root, modules, app = readAppConfig(root
   write(path.join(root, 'ios/Generated/AppEntitlements.entitlements'),
     `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n${entitlements}</dict>\n</plist>\n`);
   const packages = {};
+  const includes = [];
   const dependencies = new Map();
+  const nativeSources = [];
+  const buildSettings = {};
   for (const module of modules) {
+    const relativePath = value => path.relative(path.join(root, 'ios/Generated'),
+      moduleNativePath(root, module.name, value)).split(path.sep).join('/');
+    if (module.iosProjectSpec) includes.push(relativePath(module.iosProjectSpec));
+    for (const value of module.iosNativeSources ?? [])
+      nativeSources.push({ path: relativePath(value), group: `Modules/${module.name}` });
+    for (const value of module.iosNativeFrameworks ?? []) {
+      const framework = relativePath(value);
+      dependencies.set(framework, { framework, embed: false, link: true });
+    }
+    for (const [key, value] of Object.entries(module.iosBuildSettings ?? {})) {
+      const expand = item => item.replaceAll('${MODULE_DIR}', `$(SRCROOT)/../valdi/modules/${module.name}`);
+      const expanded = Array.isArray(value) ? value.map(expand) : expand(value);
+      if (!(key in buildSettings)) buildSettings[key] = expanded;
+      else if (Array.isArray(expanded) && Array.isArray(buildSettings[key]))
+        buildSettings[key] = [...new Set([...buildSettings[key], ...expanded])];
+      else if (buildSettings[key] !== expanded) throw new Error(`Conflicting iosBuildSettings contribution: ${key}`);
+    }
     for (const item of module.iosPackages ?? []) {
       const config = { url: item.url, ...(item.revision ? { revision: item.revision } : { from: item.from }) };
       if (packages[item.name] && JSON.stringify(packages[item.name]) !== JSON.stringify(config))
@@ -150,10 +172,20 @@ export function syncModulePlatformConfig(root, modules, app = readAppConfig(root
   // every module's raw assets, which the app's resources carry for both host and bazel modules.
   const sources = modules.filter(module => module.nativeBuild === 'host' &&
     existsSync(path.join(root, `valdi/modules/${module.name}/ios`)))
-    .map(module => ({ path: `../../valdi/modules/${module.name}/ios`, group: `Modules/${module.name}` }))
-    .concat(modules.filter(module => existsSync(path.join(root, `valdi/modules/${module.name}/assets`)))
-      .map(module => ({ path: `../../valdi/modules/${module.name}/assets`, group: `Modules/${module.name}`, buildPhase: 'resources' })));
+    .map(module => ({
+      path: `../../valdi/modules/${module.name}/ios`, group: `Modules/${module.name}`,
+      ...(module.iosProjectSpec ? { excludes: [
+        path.relative(path.join(root, `valdi/modules/${module.name}/ios`),
+          moduleNativePath(root, module.name, module.iosProjectSpec)).split(path.sep).join('/'),
+      ] } : {}),
+    }))
+    .concat(assetModules.filter(name => existsSync(path.join(root, `valdi/modules/${name}/assets`)))
+      .map(name => ({ path: `../../valdi/modules/${name}/assets`, group: `Modules/${name}`, buildPhase: 'resources' })));
   write(path.join(root, 'ios/Generated/Modules.yml'), `${JSON.stringify({
-    packages, targets: { [app.name]: { sources, dependencies: [...dependencies.values()] } },
+    ...(includes.length ? { include: includes } : {}),
+    packages, targets: { [app.name]: {
+      sources: [...sources, ...nativeSources], dependencies: [...dependencies.values()],
+      ...(Object.keys(buildSettings).length ? { settings: { base: buildSettings } } : {}),
+    } },
   }, null, 2)}\n`);
 }

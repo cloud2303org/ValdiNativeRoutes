@@ -137,10 +137,7 @@ class AppFeedbackHost(private val activity: Activity) {
             @Suppress("DEPRECATION")
             navigationBarColor = Color.TRANSPARENT
             if (Build.VERSION.SDK_INT >= 29) isNavigationBarContrastEnforced = false
-            WindowCompat.getInsetsController(this, decorView).apply {
-                isAppearanceLightStatusBars = true
-                isAppearanceLightNavigationBars = true
-            }
+            // The overlay keeps its theme's default bar-icon appearance; no override is needed here.
             addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
             // Without a mask touches go through and the keyboard keeps its focus. A mask takes the focus (for Back) but
             // isn't the keyboard's target: it has nothing to type in, and the keyboard would show for it.

@@ -12,10 +12,12 @@
 - `app_pages`：业务页面、具体路由声明、认证策略、业务数据库和启动组合。
   页面在 `src/features/<功能>/`，业务 API、认证和数据库服务在 `src/services/`，
   应用主题及共享页面组件在 `src/components/`。
-- `app_vision`：Vision 的类型、生成 getter 和调用封装。OpenCV/ncnn 的链接、
-  平台实现和工厂注册由原生应用装配。
-- `app_ota`：OTA 状态与检查下载的生成 proxy、类型和 JS 入口。
-  原生应用持有客户端和工厂；它复用启动时的客户端，不另存 JS 状态。
+- `app_vision`：Vision 的类型、生成 getter、调用封装、Polyglot C++ 绑定和手写 C++ 适配器。
+  `module.json` 使用 `nativeBuild: "cpp"`，将 VisionCore 和静态 OpenCV/ncnn 链接进 ValdiRuntime；
+  适配器使用 runtime worker queue 和 disk cache。
+- `app_ota`：OTA 状态与检查下载的生成 proxy、类型、JS 入口、Kotlin/Swift 客户端及工厂，
+  以及共享 C codec、vendor 和平台构建声明。源码归模块，编译进宿主；不迁入 ValdiRuntime。
+  它复用启动时的客户端，不另存 JS 状态。
 - `app_ui`：弹窗、提示、选择器、BottomSheet、图片预览及原生控件。
   `src/wheels/` 拥有可复用的页面内滚轮、模型和校验；Android 内嵌滚轮和
   弹层滚轮共享这里的原生基础实现。
@@ -69,6 +71,7 @@ valdi/modules/
     cpp/                当前应用的 C++ 调用示例
   app_ui/src/wheels/    可复用滚轮组件、模型和校验
   app_vision/src/       Vision 能力接口和延迟调用
+  app_vision/cpp/       生成 C++ 绑定、手写适配器和 runtime 链接规则
 ```
 
 ## Android 宿主
@@ -77,11 +80,12 @@ valdi/modules/
 - `runtime/ValdiHost.kt`：运行时、模块资源、页面创建和宿主能力生命周期。
 - `navigation/`：Compose/Nav3 页面栈、Navigator、路由校验、Insets、tab 和转场。
 - `startup/`：同步 Splash 状态、内容就绪协调和默认静默的启动计时。
-- `features/picker/NativeScreens.kt`：应用自己的原生页面示例。
-- `images/`、`ota/`、`capabilities/vision/`：各自的平台实现。
-- `adapters/WheelViews.kt`：Valdi 自定义视图适配；保留生成模型转换、触摸、回收和事件回调。
-  滚轮的布局、绘制和日期/树选择逻辑复用 `app_ui/android/ui/NativeWheel*`，
-  宿主不再复制三份实现。
+- `features/picker/PickerScreen.kt`：应用自己的原生页面示例及显式注册；
+  通用 `NativePage`、`NativeScreens` 注册表在 `navigation/NativeScreens.kt`。
+- `images/`：平台图片加载。OTA 实现在 `app_ota/android/` 和 `app_ota/native/`；
+  宿主只保留启动、后台检查和图片读取接线。Vision 由 `app_vision/cpp/` 接入 runtime。
+- `app_ui/android/wheels/WheelViews.kt` 拥有 Valdi 滚轮模型转换、触摸、回收和事件回调，
+  布局、绘制和选择逻辑复用模块 `ui/NativeWheel*`。宿主只保留 binder 注册。
 
 AppUI 的主题、BottomSheet 和拖拽优先级仍由模块管理。共享滚轮保留
 `OwnsVerticalDrags` 标记；宿主仍提供 `ValdiTouchTarget` 转发。
@@ -93,17 +97,19 @@ Manifest、JNI、R8 或自定义视图使用的类名；这不是每个目录都
 ## iOS 宿主
 
 - `App.swift`：应用/Scene 入口和根控制器装配。
-- `Features/Picker/NativeScreens.swift`：`NativePage`、原生页面映射和选择页示例。
+- `Features/Picker/PickerScreen.swift`：原生选择页示例及显式注册；
+  通用 `NativePage`、注册表在 `Navigation/NativeScreens.swift`。
 - `Runtime/`：运行时、模块、页面创建和宿主能力。
 - `Navigation/`：Navigator、路由校验、自定义 tab 命中转发和页面键盘观察。
   `AppRoot.swift` 拥有 UIKit 页面/Tab 容器、页面挂载和安全区/键盘适配。
-- `AppNativeModules.swift`：应用导航、Vision 和 Splash 的工厂注册。
+- `AppNativeModules.swift`：应用导航和 Splash 的工厂注册。OTA 由模块元数据生成注册。
 - `Startup/`：同步 Splash 状态、首屏覆盖层和系统共用的启动 storyboard；
   公共接口与资源位置见 [SplashScreen](splash-screen.md)。
-- `Ota/`、`Capabilities/Vision/`：各自的平台实现。
+- OTA 平台实现在 `app_ota/ios/`，共享 codec 在 `app_ota/native/`；
+  宿主保留手动启动和图片读取接线。Vision 由 `app_vision/cpp/` 接入 runtime。
 - `Images/AppImages.swift`：应用共享图片缓存与加载策略。
-- `Adapters/Wheels/`：模块控件到 Valdi 的薄适配。
-  Objective-C 异常边界和 marshaller 生命周期仍有实际消费者。
+- `app_ui/ios/wheels/` 拥有模块控件到 Valdi 的适配、Objective-C 对象解码及生命周期。
+  AppUI 的两端测试和独立 runner 统一在 `app_ui/tests/`，不再固定放在宿主测试源码中。
 
 应用的 `KeyboardObserver` 服务页面容器；模块的 `AppUIKeyboardObserver`
 服务独立弹层。两者均有消费者，单例、tracking view 和准备时机不同，
@@ -152,16 +158,18 @@ C++ 的声明、实现和生成绑定按模块归属：
 - `app_foundation/cpp:bindings`：被应用 C++ 绑定引用的基础类型。
 
 宿主 `valdi/BUILD.bazel` 通过生成的 `CPP_IMPLEMENTATIONS` 选择启用模块的实现，
-当前只有 `//modules/app_pages/cpp:native`。
-三个 C++ target 均显式使用 `linkstatic = True`，最终链接进同一个 Valdi runtime，
-不会为每个模块另行打包 `.so`。Hermes 保持现有静态链接；Android Vision 的独立动态库链路不变。
+包含启用的 `app_pages` 和 `app_vision` C++ 实现及其所需绑定。
+这些业务 C++、VisionCore 和 OpenCV/ncnn 静态库最终链接进同一个动态 ValdiRuntime：
+Android 是 `libvaldi_runtime.so`，iOS 是 ValdiRuntime framework，
+不会为 Vision 另行打包 `.so` 或逐方法 Kotlin/Swift、JNI/Objective-C++ 桥接。Hermes 保持现有链接方式。
 只有包含静态工厂注册的手写实现 target 使用
 `alwayslink`；普通绑定 target 不使用它。旧的全局 `valdi/native` 目录已退役。
 
 执行 `codegen.ts --cpp-modules-out ../../valdi/modules` 时，生成器从启用模块的
 `cpp/src` 中寻找实现根，再根据生成的 C++ include 关系计算类型依赖闭包。
-当前闭包只有 `app_pages` 和 `app_foundation`，不会因 Vision、视频等模块有导出注解
-就把它们的 C++ 绑定一起链接。通用 `--cpp-out <临时目录>` 仍可用于独立绑定验证。
+`app_vision` 的 C++ 实现也成为绑定闭包的根；只有类型依赖的模块继续按闭包纳入，
+不会仅因其他 host 模块有导出注解就把它们的 C++ 绑定一起链接。
+通用 `--cpp-out <临时目录>` 仍可用于独立绑定验证，当前编译器支持 C++ 生成。
 同时生成的 `modules/runtime-cpp.bzl` 记录实现选择及绑定间的直接依赖，供宿主和公共规则读取。
 新建 C++ 模块使用 `pnpm new-module <名字> --template cpp_bridge_module`，启用后由同一流程接入，
 不需要按模块修改宿主 BUILD。
@@ -170,6 +178,10 @@ C++ 的声明、实现和生成绑定按模块归属：
 运行时工作区使用生成的 `modules/runtime-packages.bazelrc` 排除这些父 package，
 同时允许嵌套的 `modules/<模块>/cpp` package；新增模块后重新生成绑定即可更新清单。
 
-运行时导出检查保守地记录所有启用模块的 `cpp/` 目录、宿主链接规则和 package 清单。
-C++ 或规则变化需要重新导出运行时；纯页面 TS 修改不因此要求重导出。
+cpp 模块的 `nativeDependencies` 只在显式手动 runtime 导出时检查并按需准备，
+host 模块的依赖 hook 仍随正常 App 构建执行。Vision 使用 NDK r28 兼容的 Android arm64 静态缓存，
+以及 iOS arm64 真机/模拟器静态缓存；详见 [Vision 构建与打包](vision-build.md)。
+普通构建不计算运行时源码指纹，也不自动导出。C++、vendor、链接规则或启用的 cpp 模块名单变化后
+需手动重新导出运行时并重建 App；纯页面 TS 修改继续热重载。
+旧 shared/JNI 构建与设备证据不验证本次静态接入，本轮尚未完成静态方案的构建或设备验证。
 这里只调整编译依赖边界，不把增量构建改善当作已测得的启动加速。

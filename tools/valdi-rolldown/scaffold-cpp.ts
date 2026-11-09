@@ -78,7 +78,7 @@ Enable "${name}" in the App's package.json valdi.modules, then import:
 import { multiply } from '${name}/src';
 \`\`\`
 
-Run \`pnpm prebuild --platform android\` or \`pnpm prebuild --platform ios\`.
+Export the runtime explicitly with \`sh scripts/export-android.sh\` or \`sh scripts/export-ios.sh\`.
 The shared flow regenerates bindings, selects enabled C++ implementations and
 exports a matching runtime. No host BUILD or native registration edit is needed.
 C++ changes require a new native binary; they cannot be delivered as a TS-only OTA.

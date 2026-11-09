@@ -23,8 +23,6 @@ class VideoHostImpl internal constructor(internal val context: Context) : VideoH
         private set
     val loader = VideoLoader(this)
 
-    override fun getDemoSource(): String = "asset:///flower.mp4"
-
     override fun create(source: String): Promise<VideoPlayer> = onMain {
         checkNotNull(presentation) { "Video playback requires an attached Activity" }
         val uri = Uri.parse(source).normalizeScheme()
@@ -40,7 +38,12 @@ class VideoHostImpl internal constructor(internal val context: Context) : VideoH
 
     fun attach(activity: ComponentActivity, onFullscreenChanged: (Boolean) -> Unit) {
         checkMain()
-        check(presentation == null) { "Only one Activity can own video presentation" }
+        val current = presentation
+        if (current != null) {
+            if (current.activity === activity) return
+            // A relaunched task can attach before the previous Activity is destroyed.
+            detach(current.activity)
+        }
         presentation = VideoPresentation(this, activity, onFullscreenChanged)
     }
 

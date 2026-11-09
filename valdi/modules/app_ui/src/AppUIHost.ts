@@ -29,13 +29,20 @@ export interface ModalReply {
   content: string;
 }
 
+/** @ExportEnum({ios: 'VRToastRequestIcon', android: 'io.valdiroutes.app_ui.ToastRequestIcon'}) */
+export enum ToastRequestIcon {
+  Success = 'success',
+  Error = 'error',
+  Loading = 'loading',
+  None = 'none',
+}
+
 /**
  * @ExportModel({ios: 'VRToastRequest', android: 'io.valdiroutes.app_ui.ToastRequest'})
  */
 export interface ToastRequest {
   title: string;
-  /** 'success', 'error', 'loading' or 'none'. */
-  icon: string;
+  icon: ToastRequestIcon;
   /** Milliseconds. */
   duration: number;
   mask: boolean;
@@ -91,13 +98,21 @@ export interface PickerRequest {
   value: string;
 }
 
+/** @ExportEnum({ios: 'VRDatePickerMode', android: 'io.valdiroutes.app_ui.DatePickerMode'}) */
+export enum DatePickerMode {
+  Year = 'year',
+  YearMonth = 'year-month',
+  Date = 'date',
+  Time = 'time',
+  DateTime = 'datetime',
+}
+
 /**
  * @ExportModel({ios: 'VRDatePickerRequest', android: 'io.valdiroutes.app_ui.DatePickerRequest'})
  */
 export interface DatePickerRequest {
   title: string;
-  /** 'year', 'year-month', 'date', 'time' or 'datetime'. */
-  mode: string;
+  mode: DatePickerMode;
   /** YYYY, YYYY-MM, YYYY-MM-DD, HH:mm or YYYY-MM-DD HH:mm; '' for now. */
   value: string;
   confirmText: string;
@@ -156,6 +171,13 @@ export interface ScanCodeReply {
   scanType: string;
 }
 
+/** @ExportEnum({ios: 'VRAttachmentSource', android: 'io.valdiroutes.app_ui.AttachmentSource'}) */
+export enum AttachmentSource {
+  Photos = 'photos',
+  Camera = 'camera',
+  Files = 'files',
+}
+
 /**
  * Implemented by the host's AppUI. The modal is shown on whatever page is on top when its turn in the queue comes.
  *
@@ -172,8 +194,8 @@ export interface AppUIHost {
   previewImage: (request: ImagePreviewRequest) => Promise<PresentationReply>;
   /** Native camera scanner over the whole app, not a route; closing it rejects with 'cancel'. */
   scanCode: () => Promise<ScanCodeReply>;
-  /** source: 'photos', 'camera' or 'files'. Cancelling answers canceled: true. */
-  pickAttachments: (source: string, limit: number, mimeTypes: string[]) => Promise<AttachmentSelection>;
+  /** Cancelling answers canceled: true. */
+  pickAttachments: (source: AttachmentSource, limit: number, mimeTypes: string[]) => Promise<AttachmentSelection>;
   /** Deletes only the picker's own cached copies. */
   clearAttachmentCache: () => Promise<void>;
   showToast: (request: ToastRequest) => Promise<void>;

@@ -30,6 +30,7 @@ valdi_exported_library(
     native_deps = CPP_IMPLEMENTATIONS,
     deps = [
         "@valdi//src/valdi_modules/src/valdi/client_sql",
+        "@valdi//src/valdi_modules/src/valdi/native_web",
         "@valdi//src/valdi_modules/src/valdi/valdi_core",
         "@valdi//src/valdi_modules/src/valdi/valdi_tsx",
     ],

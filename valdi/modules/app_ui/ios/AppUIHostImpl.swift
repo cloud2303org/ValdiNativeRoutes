@@ -35,7 +35,7 @@ final class AppUIHostImpl: NSObject, VRAppUIHost {
 
     func showDatePicker(with request: VRDatePickerRequest) -> SCValdiPromise<VRPresentationReply> {
         present(.datePicker(DatePickerOptions(
-            title: request.title, mode: request.mode, value: request.value, minYear: Int(request.minYear),
+            title: request.title, mode: request.mode.rawValue, value: request.value, minYear: Int(request.minYear),
             maxYear: Int(request.maxYear), confirmText: request.confirmText, cancelText: request.cancelText
         )))
     }
@@ -63,13 +63,13 @@ final class AppUIHostImpl: NSObject, VRAppUIHost {
         }
     }
 
-    func pickAttachments(withSource source: String, limit: Double, mimeTypes: [String])
+    func pickAttachments(withSource source: VRAttachmentSource, limit: Double, mimeTypes: [String])
         -> SCValdiPromise<VRAttachmentSelection> {
         let options = AttachmentPickOptions(limit: limit.isFinite ? Int(min(max(1, limit), 20)) : 1, mimeTypes: mimeTypes)
         return AppUIPromise.make { complete in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    AppUI.shared.pickAttachments(source, options) { result in
+                    AppUI.shared.pickAttachments(source.rawValue, options) { result in
                         complete(result.map { selection in
                             VRAttachmentSelection(canceled: selection.canceled, assets: selection.assets.map {
                                 VRAttachmentAsset(id2: $0.id, uri: $0.uri, name: $0.name, mimeType: $0.mimeType, size: $0.size)
@@ -96,7 +96,7 @@ final class AppUIHostImpl: NSObject, VRAppUIHost {
 
     func showToast(with request: VRToastRequest) -> SCValdiPromise<SCValdiUndefinedValue> {
         onMain {
-            try AppUI.shared.showToast(ToastOptions(title: request.title, icon: request.icon,
+            try AppUI.shared.showToast(ToastOptions(title: request.title, icon: request.icon.rawValue,
                                                     duration: request.duration, mask: request.mask))
         }
     }

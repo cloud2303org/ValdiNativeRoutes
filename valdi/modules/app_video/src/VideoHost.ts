@@ -1,3 +1,10 @@
+/** @ExportEnum({ios: 'VRVideoMode', android: 'io.valdiroutes.video.VideoMode'}) */
+export enum VideoMode {
+  Inline = 'inline',
+  Fullscreen = 'fullscreen',
+  PictureInPicture = 'pictureInPicture',
+}
+
 /** @ExportModel({ios: 'VRVideoState', android: 'io.valdiroutes.video.VideoState'}) */
 export interface VideoState {
   currentTimeMs: number;
@@ -5,8 +12,7 @@ export interface VideoState {
   playing: boolean;
   /** Latest user/native-control intent, independent of buffering or visibility suspension. */
   requestedPlayback: boolean;
-  /** inline, fullscreen, or pictureInPicture. */
-  mode: string;
+  mode: VideoMode;
   supportsPictureInPicture: boolean;
   error: string;
   loaded: boolean;
@@ -38,6 +44,7 @@ export interface VideoPlayer {
   /** Sets a finite positive preferred speed without changing play/pause intent. Resolves after native application. */
   setPlaybackRate(rate: number): Promise<void>;
   seekTo(timeMs: number): Promise<void>;
+  /** Sets a finite volume in [0, 1]. Rejects invalid input without changing volume. */
   setVolume(volume: number): Promise<void>;
   setPageVisible(visible: boolean): Promise<void>;
   enterFullscreen(): Promise<void>;
@@ -55,6 +62,11 @@ export interface VideoPlayer {
  * @ExportProxy({ios: 'VRVideoHost', android: 'io.valdiroutes.video.VideoHost'})
  */
 export interface VideoHost {
-  getDemoSource(): string;
+  /**
+   * Creates a player for a caller-owned source. iOS accepts HTTPS, existing file URLs,
+   * or bundle:///filename for a packaged root resource (ASCII letters, digits, _, -, .;
+   * no leading dot, directories, escaping, authority, query, or fragment).
+   * Android accepts asset, HTTP(S), file and content URLs.
+   */
   create(source: string): Promise<VideoPlayer>;
 }

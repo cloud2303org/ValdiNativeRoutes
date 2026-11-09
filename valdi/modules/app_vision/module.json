@@ -1,5 +1,20 @@
 {
-  "nativeBuild": "host",
-  "iosLanguage": "objc",
-  "androidClassPath": "io.valdiroutes.pages"
+  "nativeBuild": "cpp",
+  "nativeDependencies": {
+    "script": "scripts/native-dependencies.mjs",
+    "inputs": [
+      "scripts/check-dependencies.mjs",
+      "../../../vision/vendor-lock.json",
+      "../../../vision/scripts",
+      "../../../vision/patches",
+      "../../../vision/BUILD.bazel",
+      "../../../vision/MODULE.bazel",
+      "../../../vision/android-runtime.json",
+      "../../../vision/ios-runtime.json"
+    ]
+  },
+  "nativeInputs": [
+    "cpp",
+    "../../../vision/cpp"
+  ]
 }

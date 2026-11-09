@@ -23,17 +23,12 @@ if (command === 'toolchain') {
     capture('cmake', ['--version']), capture('ninja', ['--version'])].join('\n');
   console.log(versions);
   output('key', createHash('sha256').update(versions).digest('hex'));
-} else if (['runtime-key', 'runtime-valid'].includes(command) && ['android', 'ios'].includes(platform)) {
-  if (command === 'runtime-key') {
-    const stamp = JSON.parse(execFileSync(process.execPath, ['scripts/ota.mjs', 'valdi-hash', platform, 'debug'], { cwd: root, encoding: 'utf8' }));
-    output('key', stamp.valdi);
-  } else {
-    try {
-      checkRuntime(root, platform);
-      output('valid', 'true');
-    } catch (error) {
-      console.log(error.message);
-      output('valid', 'false');
-    }
+} else if (command === 'runtime-valid' && ['android', 'ios'].includes(platform)) {
+  try {
+    checkRuntime(root, platform);
+    output('valid', 'true');
+  } catch (error) {
+    console.log(error.message);
+    output('valid', 'false');
   }
-} else throw new Error('Usage: node scripts/ci.mjs toolchain | runtime-key PLATFORM | runtime-valid PLATFORM');
+} else throw new Error('Usage: node scripts/ci.mjs toolchain | runtime-valid PLATFORM');

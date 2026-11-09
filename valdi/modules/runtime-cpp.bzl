@@ -2,6 +2,7 @@
 # Only implementation owners link into the runtime; explicit binding requests remain binding-only.
 CPP_IMPLEMENTATIONS = [
     "//modules/app_pages/cpp:native",
+    "//modules/app_vision/cpp:native",
 ]
 
 CPP_BINDING_DEPS = {
@@ -9,5 +10,7 @@ CPP_BINDING_DEPS = {
     ],
     "app_pages": [
         "//modules/app_foundation/cpp:bindings",
+    ],
+    "app_vision": [
     ],
 }

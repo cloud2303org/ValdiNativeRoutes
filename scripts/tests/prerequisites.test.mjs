@@ -1,117 +1,67 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { checkRuntime, checkSources, checkVision, runPnpm } from '../prerequisites.mjs';
+import { checkRuntime, checkSources, runPnpm } from '../prerequisites.mjs';
+import { runtimeInfo } from '../runtime-info.mjs';
+import { checkVision } from '../../valdi/modules/app_vision/scripts/check-dependencies.mjs';
 
-const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-
-function fixture(t, config = 'debug') {
+const repository = path.resolve(import.meta.dirname, '../..');
+function fixture(t, platform = 'android', config = 'debug') {
   const root = mkdtempSync(path.join(tmpdir(), 'valdiroutes-prerequisites-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const write = (name, content) => {
-    mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
-    writeFileSync(path.join(root, name), content);
+  const write = (file, content) => {
+    mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    writeFileSync(path.join(root, file), content);
   };
-  write('package.json', JSON.stringify({ valdi: { modules: ['app_foundation', 'app_pages'] } }));
-  write('ota/fingerprint.json', JSON.stringify({ valdi: ['valdi/MODULE.bazel', 'valdi/bzl/patches', 'valdi/bzl/node_compiler', 'tools/valdi-rolldown/runtime-module.ts'] }));
-  write('valdi/MODULE.bazel', 'pinned Valdi version');
-  write('valdi/BUILD.bazel', 'native_deps = ["//modules/app_pages/cpp:native"]');
-  write('valdi/modules/runtime-packages.bazelrc', 'common --deleted_packages=modules/app_foundation,modules/app_pages,modules/unused');
-  write('valdi/modules/runtime-cpp.bzl', 'CPP_IMPLEMENTATIONS = ["//modules/app_pages/cpp:native"]');
-  write('valdi/bzl/module_cpp/module.bzl', 'def module_cpp_library(module_name): pass');
-  write('valdi/modules/app_pages/src/index.ts', 'export {};');
-  write('valdi/modules/app_foundation/src/index.ts', 'export {};');
-  write('valdi/modules/unused/src/index.ts', 'export {};');
-  write('valdi/modules/app_pages/cpp/src/Module.cpp', 'original implementation');
-  write('valdi/modules/app_pages/cpp/BUILD.bazel', 'deps = ["//modules/app_foundation/cpp:bindings"]');
-  write('valdi/modules/app_foundation/cpp/generated/valdi_modules/app_foundation/app_foundation.hpp', 'original shared binding');
-  write('valdi/bzl/patches/rules_python/toolchain.patch', 'original toolchain patch');
-  write('tools/valdi-rolldown/runtime-module.ts', 'original Node compiler');
-  mkdirSync(path.join(root, 'scripts'));
-  cpSync(path.join(repository, 'scripts/ota.mjs'), path.join(root, 'scripts/ota.mjs'));
-  cpSync(path.join(repository, 'scripts/ota-delta.mjs'), path.join(root, 'scripts/ota-delta.mjs'));
-  cpSync(path.join(repository, 'scripts/hdiff-tool.mjs'), path.join(root, 'scripts/hdiff-tool.mjs'));
-  cpSync(path.join(repository, 'scripts/hdiff-tool.json'), path.join(root, 'scripts/hdiff-tool.json'));
-  cpSync(path.join(repository, 'scripts/prerequisites.mjs'), path.join(root, 'scripts/prerequisites.mjs'));
-  cpSync(path.join(repository, 'scripts/native-cpp.mjs'), path.join(root, 'scripts/native-cpp.mjs'));
-  cpSync(path.join(repository, 'scripts/native-modules.mjs'), path.join(root, 'scripts/native-modules.mjs'));
-  cpSync(path.join(repository, 'scripts/module-platform-config.mjs'), path.join(root, 'scripts/module-platform-config.mjs'));
-  cpSync(path.join(repository, 'scripts/app-config.mjs'), path.join(root, 'scripts/app-config.mjs'));
-  write('tools/valdi-rolldown/modules.mjs', readFileSync(path.join(repository, 'tools/valdi-rolldown/modules.mjs'), 'utf8'));
-  const info = JSON.parse(execFileSync(process.execPath, [path.join(root, 'scripts/ota.mjs'), 'valdi-hash', 'android', config], { encoding: 'utf8' }));
-  write('android/app/libs/valdi_runtime.aar', 'runtime artifact');
-  write('android/app/libs/valdi_ota.json', JSON.stringify(info));
-  return { root, write, info };
+  const directory = platform === 'android' ? 'android/app/libs' : 'ios/Frameworks';
+  const artifact = platform === 'android' ? `${directory}/valdi_runtime.aar` : `${directory}/ValdiRuntime.xcframework/Info.plist`;
+  write(artifact, 'manually exported runtime');
+  write(`${directory}/valdi_ota.json`, JSON.stringify(runtimeInfo(platform, config)));
+  return { root, write, directory, artifact };
 }
 
-test('a matching export stays valid after frontend or host-only changes', t => {
-  const { root, write } = fixture(t);
-  write('valdi/modules/app_pages/src/HomePage.tsx', 'new frontend');
-  write('android/app/src/main/Host.kt', 'new host');
-  assert.doesNotThrow(() => checkRuntime(root, 'android'));
+test('manual runtime metadata contains only platform and build configuration', () => {
+  assert.deepEqual(runtimeInfo('android', 'debug'), { platform: 'android', config: 'debug' });
+  assert.deepEqual(runtimeInfo('ios', 'release'), { platform: 'ios', config: 'release' });
+  assert.throws(() => runtimeInfo('web', 'debug'));
+  assert.throws(() => runtimeInfo('ios', 'unknown'));
 });
 
-test('a missing runtime gives an export command without creating artifacts', t => {
+test('native builds accept a manual runtime after source changes without fingerprint inputs', t => {
+  for (const platform of ['android', 'ios']) {
+    const { root, write } = fixture(t, platform);
+    write('valdi/MODULE.bazel', 'a changed fork pin');
+    write('valdi/modules/app_pages/cpp/src/Module.cpp', 'a changed implementation');
+    write('tools/valdi-rolldown/runtime-module.ts', 'a changed compiler');
+    assert.doesNotThrow(() => checkRuntime(root, platform));
+    assert.equal(existsSync(path.join(root, 'ota/fingerprint.json')), false);
+    assert.equal(existsSync(path.join(root, 'scripts/ota.mjs')), false);
+  }
+});
+
+test('missing runtime artifacts fail with explicit export instructions without creating outputs', t => {
+  for (const platform of ['android', 'ios']) {
+    const { root, artifact } = fixture(t, platform);
+    rmSync(path.join(root, platform === 'android' ? artifact : 'ios/Frameworks/ValdiRuntime.xcframework'), { recursive: true, force: true });
+    assert.throws(() => checkRuntime(root, platform), new RegExp(`runtime is missing.*\\n.*export-${platform}\\.sh`));
+    assert.equal(existsSync(path.join(root, artifact)), false);
+  }
+});
+
+test('invalid runtime metadata and wrong platform are rejected without source hashing', t => {
+  const { root, write, directory } = fixture(t);
+  write(`${directory}/valdi_ota.json`, '{broken');
+  assert.throws(() => checkRuntime(root, 'android'), /valdi_ota.json is invalid/);
+  write(`${directory}/valdi_ota.json`, JSON.stringify(runtimeInfo('ios', 'debug')));
+  assert.throws(() => checkRuntime(root, 'android'), /does not describe a valid android export/);
+});
+
+test('a clean checkout reports missing sources with a preparation command', t => {
   const { root } = fixture(t);
-  rmSync(path.join(root, 'android/app/libs/valdi_runtime.aar'));
-  assert.throws(() => checkRuntime(root, 'android'), /runtime is missing.*\n.*export-android\.sh/);
-  assert.equal(existsSync(path.join(root, 'android/app/libs/valdi_runtime.aar')), false);
-});
-
-test('changed C++ requires a new export and preserves the release configuration', t => {
-  const { root, write } = fixture(t, 'release');
-  write('valdi/modules/app_pages/cpp/src/Module.cpp', 'changed implementation');
-  assert.throws(() => checkRuntime(root, 'android'), /out of date.*\n.*export-android\.sh release/);
-});
-
-test('a changed shared C++ binding or module build rule invalidates the export', t => {
-  const { root, write } = fixture(t);
-  write('valdi/modules/app_foundation/cpp/generated/valdi_modules/app_foundation/app_foundation.hpp', 'changed shared binding');
-  assert.throws(() => checkRuntime(root, 'android'), /runtime is out of date/);
-  const another = fixture(t);
-  another.write('valdi/modules/app_pages/cpp/BUILD.bazel', 'deps = []');
-  assert.throws(() => checkRuntime(another.root, 'android'), /runtime is out of date/);
-});
-
-test('host C++ selection invalidates the export while disabled-module C++ does not', t => {
-  const { root, write } = fixture(t);
-  write('valdi/modules/unused/src/index.ts', 'export {};');
-  write('valdi/modules/unused/cpp/src/Unused.cpp', 'unselected implementation');
-  assert.doesNotThrow(() => checkRuntime(root, 'android'));
-  write('valdi/BUILD.bazel', 'native_deps = []');
-  assert.throws(() => checkRuntime(root, 'android'), /runtime is out of date/);
-});
-
-test('generated C++ selection and common build rules invalidate the export', t => {
-  const selection = fixture(t);
-  selection.write('valdi/modules/runtime-cpp.bzl', 'CPP_IMPLEMENTATIONS = []');
-  assert.throws(() => checkRuntime(selection.root, 'android'), /runtime is out of date/);
-  const rules = fixture(t);
-  rules.write('valdi/bzl/module_cpp/module.bzl', 'def module_cpp_library(module_name): fail("changed")');
-  assert.throws(() => checkRuntime(rules.root, 'android'), /runtime is out of date/);
-});
-
-test('a changed fork pin invalidates the export even when C++ is unchanged', t => {
-  const { root, write } = fixture(t);
-  write('valdi/MODULE.bazel', 'a different immutable fork commit');
-  assert.throws(() => checkRuntime(root, 'android'), /runtime is out of date/);
-});
-
-test('a changed local dependency-rule patch invalidates the export', t => {
-  const { root, write } = fixture(t);
-  write('valdi/bzl/patches/rules_python/toolchain.patch', 'changed toolchain patch');
-  assert.throws(() => checkRuntime(root, 'android'), /runtime is out of date/);
-});
-
-test('a changed runtime compiler invalidates the export', t => {
-  const { root, write } = fixture(t);
-  write('tools/valdi-rolldown/runtime-module.ts', 'changed Node compiler');
-  assert.throws(() => checkRuntime(root, 'android'), /runtime is out of date/);
+  assert.throws(() => checkSources(root), /Valdi sources are not prepared.*\n.*prepare-valdi\.mjs/);
 });
 
 test('Windows routes pnpm through bundled Corepack without invoking a batch shim', t => {
@@ -129,97 +79,86 @@ test('Windows routes pnpm through bundled Corepack without invoking a batch shim
   runPnpm(['--version'], repository);
 });
 
-test('the removed legacy backend environment variable cannot select a compiler or invalidate Node exports', t => {
-  const previous = process.env.VALDI_COMPILER_BACKEND;
-  t.after(() => {
-    if (previous === undefined) delete process.env.VALDI_COMPILER_BACKEND;
-    else process.env.VALDI_COMPILER_BACKEND = previous;
-  });
-  const { root } = fixture(t);
-  process.env.VALDI_COMPILER_BACKEND = previous === 'swift' ? 'node' : 'swift';
-  assert.doesNotThrow(() => checkRuntime(root, 'android'));
-});
-
-test('invalid metadata and a stamp from another platform are rejected', t => {
-  const { root, write, info } = fixture(t);
-  write('android/app/libs/valdi_ota.json', '{broken');
-  assert.throws(() => checkRuntime(root, 'android'), /valdi_ota.json is invalid/);
-  write('android/app/libs/valdi_ota.json', JSON.stringify({ ...info, platform: 'ios' }));
-  assert.throws(() => checkRuntime(root, 'android'), /does not describe a valid android export/);
-});
-
-test('an iOS export is checked independently against its platform', t => {
-  const { root, write, info } = fixture(t);
-  mkdirSync(path.join(root, 'ios/Frameworks/ValdiRuntime.xcframework'), { recursive: true });
-  write('ios/Frameworks/valdi_ota.json', JSON.stringify({ ...info, platform: 'ios' }));
-  assert.doesNotThrow(() => checkRuntime(root, 'ios'));
-});
-
-test('a clean checkout reports missing sources with a preparation command', t => {
-  const { root } = fixture(t);
-  assert.throws(() => checkSources(root), /Valdi sources are not prepared.*\n.*prepare-valdi\.mjs/);
-});
-
-test('Android Vision requires every shared library and a compatible shared receipt', t => {
-  const { root, write } = fixture(t);
-  const lock = { opencv: { version: '4.12.0', sha256: 'opencv-sha' }, ncnn: { version: '20250503', sha256: 'ncnn-sha' } };
-  write('vision/vendor-lock.json', JSON.stringify(lock));
-  const patch = 'Android-only highgui source hook';
-  write('vision/patches/opencv-mobile-android/INIT_MODULE_SOURCES_opencv_highgui.cmake', patch);
-  const stamp = (opencv = lock.opencv, ncnn = lock.ncnn) => JSON.stringify({
-    target: 'android-arm64', opencv: opencv.version, ncnn: ncnn.version,
-    sourcePins: { opencv: opencv.sha256, ncnn: ncnn.sha256 },
-    cpuOnly: true,
-    linkage: 'shared',
-    android: {
-      abi: 'arm64-v8a', api: 28, stl: 'c++_shared', cxxStandard: 20,
-      rtti: true, exceptions: true, ndkRevision: '27.1.12297006', videoCaptureBackend: 'none',
-    },
-    patches: { opencvAndroidHighgui: createHash('sha256').update(patch).digest('hex') },
-  });
-  for (const name of ['opencv_core', 'opencv_imgproc', 'opencv_highgui', 'ncnn']) {
-    write(`vision/vendor/install/android-arm64/lib/lib${name}.a`, 'archive');
-  }
-  write('vision/vendor/install/android-arm64/native-routes-vision.json', stamp());
-  // A previous static install must not let prebuild skip shared preparation.
-  assert.throws(() => checkVision(root, 'android'), /prepare-native\.cjs --target android-arm64/);
-  for (const name of ['opencv_core', 'opencv_imgproc', 'opencv_highgui']) {
-    write(`vision/vendor/install/android-arm64/shared/lib/lib${name}.so`, 'shared library');
-  }
-  assert.throws(() => checkVision(root, 'android'), /prepare-native\.cjs --target android-arm64/);
-  write('vision/vendor/install/android-arm64/shared/lib/libncnn.so', 'shared library');
-  assert.throws(() => checkVision(root, 'android'), /another vision\/vendor-lock\.json/);
-  write('vision/vendor/install/android-arm64/shared/native-routes-vision.json', stamp());
-  assert.doesNotThrow(() => checkVision(root, 'android'));
-  for (const patch of [
-    { linkage: 'static' },
-    { cpuOnly: false },
-    { android: { ...JSON.parse(stamp()).android, abi: 'x86_64' } },
-    { android: { ...JSON.parse(stamp()).android, stl: 'c++_static' } },
-    { android: { ...JSON.parse(stamp()).android, exceptions: false } },
-    { android: { ...JSON.parse(stamp()).android, videoCaptureBackend: 'v4l2' } },
-    { patches: { opencvAndroidHighgui: 'outdated-hook' } },
-  ]) {
-    write('vision/vendor/install/android-arm64/shared/native-routes-vision.json',
-      JSON.stringify({ ...JSON.parse(stamp()), ...patch }));
-    assert.throws(() => checkVision(root, 'android'), /shared.*configuration/);
-  }
-  write('vision/vendor/install/android-arm64/shared/native-routes-vision.json', stamp());
-  // A changed lock invalidates the existing build.
-  write('vision/vendor-lock.json', JSON.stringify({ ...lock, ncnn: { version: '20250504', sha256: 'other-ncnn-sha' } }));
-  assert.throws(() => checkVision(root, 'android'), /another vision\/vendor-lock\.json/);
-});
-
-test('iOS Vision still accepts its existing static XCFramework and preparation receipts', t => {
+test('Android Vision requires static archives built for the runtime toolchain and verifies their contents', t => {
   const { root, write } = fixture(t);
   const lock = { opencv: { version: '4.13.0', sha256: 'opencv-sha' }, ncnn: { version: '20260526', sha256: 'ncnn-sha' } };
+  write('vision/vendor-lock.json', JSON.stringify(lock));
+  const runtime = JSON.parse(readFileSync(path.join(repository, 'vision/android-runtime.json'), 'utf8'));
+  write('vision/android-runtime.json', JSON.stringify(runtime));
+  const patch = 'Android-only highgui source hook';
+  write('vision/patches/opencv-mobile-android/INIT_MODULE_SOURCES_opencv_highgui.cmake', patch);
+  const digest = value => createHash('sha256').update(value).digest('hex');
+  const artifacts = Object.fromEntries(['opencv_core', 'opencv_imgproc', 'opencv_highgui', 'ncnn']
+    .map(name => [`lib/lib${name}.a`, digest(`archive-${name}`)]));
+  const receipt = {
+    target: 'android-arm64', opencv: lock.opencv.version, ncnn: lock.ncnn.version,
+    sourcePins: { opencv: lock.opencv.sha256, ncnn: lock.ncnn.sha256 },
+    cpuOnly: true, linkage: 'static', artifacts,
+    android: { ...runtime, cxxStandard: 20, rtti: true, exceptions: true, pic: true, videoCaptureBackend: 'none' },
+    patches: { opencvAndroidHighgui: digest(patch) },
+  };
+  const prefix = 'vision/vendor/install/android-arm64/static';
+  const stamp = value => write(`${prefix}/native-routes-vision.json`, JSON.stringify(value));
+  // Old shared libraries must not satisfy a static-in-runtime dependency.
+  for (const name of ['opencv_core', 'opencv_imgproc', 'opencv_highgui', 'ncnn'])
+    write(`vision/vendor/install/android-arm64/shared/lib/lib${name}.so`, 'old shared library');
+  assert.throws(() => checkVision(root, 'android'), /--linkage static/);
+  stamp(receipt);
+  for (const name of ['opencv_core', 'opencv_imgproc', 'opencv_highgui', 'ncnn'])
+    write(`${prefix}/lib/lib${name}.a`, `archive-${name}`);
+  for (const header of ['opencv4/opencv2/core.hpp', 'opencv4/opencv2/imgproc.hpp',
+    'opencv4/opencv2/highgui/highgui.hpp', 'ncnn/net.h', 'ncnn/platform.h'])
+    write(`${prefix}/include/${header}`, 'header');
+  assert.doesNotThrow(() => checkVision(root, 'android'));
+  for (const patch of [
+    { linkage: 'shared' }, { cpuOnly: false },
+    { android: { ...receipt.android, ndkRevision: '27.1.12297006' } },
+    { android: { ...receipt.android, stl: 'c++_shared' } },
+    { android: { ...receipt.android, pic: false } },
+    { android: { ...receipt.android, exceptions: false } },
+    { android: { ...receipt.android, videoCaptureBackend: 'v4l2' } },
+    { patches: { opencvAndroidHighgui: 'outdated-hook' } },
+  ]) {
+    stamp({ ...receipt, ...patch });
+    assert.throws(() => checkVision(root, 'android'), /missing|runtime configuration/);
+  }
+  stamp(receipt);
+  write(`${prefix}/lib/libncnn.a`, 'modified archive');
+  assert.throws(() => checkVision(root, 'android'), /changed archive/);
+  write(`${prefix}/lib/libncnn.a`, 'archive-ncnn');
+  rmSync(path.join(root, `${prefix}/include/ncnn/net.h`));
+  assert.throws(() => checkVision(root, 'android'), /missing header/);
+  write(`${prefix}/include/ncnn/net.h`, 'header');
+  write('vision/vendor-lock.json', JSON.stringify({ ...lock, ncnn: { version: 'other', sha256: 'other-sha' } }));
+  assert.throws(() => checkVision(root, 'android'), /another vision\/vendor-lock\.json/);
+});
+
+test('iOS Vision requires both static XCFramework slices and matching preparation receipts', t => {
+  const { root, write } = fixture(t);
+  const lock = { opencv: { version: '4.13.0', sha256: 'opencv-sha' }, ncnn: { version: '20260526', sha256: 'ncnn-sha' } };
+  const runtime = JSON.parse(readFileSync(path.join(repository, 'vision/ios-runtime.json'), 'utf8'));
+  write('vision/ios-runtime.json', JSON.stringify(runtime));
   write('vision/vendor-lock.json', JSON.stringify(lock));
   write('vision/vendor/install/ios/VisionDependencies.xcframework/Info.plist', 'static XCFramework metadata');
   for (const target of ['ios-arm64', 'ios-simulator-arm64']) {
     write(`vision/vendor/install/${target}/native-routes-vision.json`, JSON.stringify({
       target, opencv: lock.opencv.version, ncnn: lock.ncnn.version,
       sourcePins: { opencv: lock.opencv.sha256, ncnn: lock.ncnn.sha256 }, cpuOnly: true,
+      linkage: 'static', ios: { deploymentTarget: runtime.deploymentTarget, arch: 'arm64' },
     }));
   }
+  const digest = createHash('sha256').update('slice input').digest('hex');
+  write('vision/vendor/install/ios/native-routes-vision.json', JSON.stringify({
+    target: 'ios', linkage: 'static', deploymentTarget: runtime.deploymentTarget,
+    sourcePins: { opencv: lock.opencv.sha256, ncnn: lock.ncnn.sha256 },
+    artifacts: Object.fromEntries(['ios-arm64', 'ios-arm64-simulator'].map(slice => [`${slice}/libVisionDependencies.a`, digest])),
+  }));
+  assert.throws(() => checkVision(root, 'ios'), /slice input/);
+  for (const slice of ['ios-arm64', 'ios-arm64-simulator']) {
+    for (const file of ['libVisionDependencies.a', 'Headers/opencv4/opencv2/core.hpp', 'Headers/ncnn/net.h', 'Headers/ncnn/platform.h'])
+      write(`vision/vendor/install/ios/VisionDependencies.xcframework/${slice}/${file}`, 'slice input');
+  }
   assert.doesNotThrow(() => checkVision(root, 'ios'));
+  rmSync(path.join(root, 'vision/vendor/install/ios/VisionDependencies.xcframework/ios-arm64-simulator/libVisionDependencies.a'));
+  assert.throws(() => checkVision(root, 'ios'), /slice input/);
 });

@@ -46,8 +46,9 @@ ClientSQL 的扩展绑定另由 `runtime-native-drizzle-golden.json` 校验，�
 `scripts/verify-runtime-actions.mjs` 审查 aquery JSON 构建图，要求内置模块的 Node action 存在，
 并拒绝旧编译器和 toolbox action，包括缓存中的动作。`compiler/compiler:valdi_proto*` 是运行时协议定义，保留其 C++ 生成。
 
-`ota/fingerprint.json` 把运行时 Node 编译器、转换器、绑定生成器及其依赖锁纳入 runtime 指纹。
-更改这些输入需要重新导出 runtime。后端选择本身也计入指纹。
+运行时 Node 编译器、转换器、绑定生成器或其依赖锁变化后，需要手动重新导出 runtime。
+构建只检查运行时产物存在及平台/配置元数据，不比较源码哈希，也不自动重导出。
+绑定生成结果和 golden 检查继续保留；下文日期段落中的指纹结果属于当时的历史验证。
 
 ## 范围与源码清理
 

@@ -34,7 +34,7 @@ import {
 } from './pipeline';
 import { addFontEntries, assetCatalog, findFonts, findImages, writeAndroidResources, writeIosResources, writeResTs } from './resources';
 import { sourceFiles, valdiTs } from './valdiTs';
-import { buildNodeModules, copyModuleTree } from '../../scripts/node-modules.mjs';
+import { buildNodeModules, copyModuleTree, stagedModuleOutputs } from '../../scripts/node-modules.mjs';
 import { availableModuleNames, pruneDisabledModuleOutputs } from './modules.mjs';
 
 const value = (name: string) => {
@@ -57,6 +57,12 @@ const release = process.argv.includes('--release');
 const minify = release || process.argv.includes('--minify');
 const selected = value('--module');
 const baseFile = option('--hermes-base');
+// Gradle/Xcode depend on their native module build task and reuse its bundle products.
+const nativePlatform = value('--native-platform');
+if (nativePlatform !== undefined && !['android', 'ios'].includes(nativePlatform))
+  throw new Error('--native-platform requires android or ios');
+if (nativePlatform && (selected || !archivesOnly || nativePlatform === 'android' && !androidRes || nativePlatform === 'ios' && !iosRes))
+  throw new Error('--native-platform requires full native App packaging with --out and platform resources');
 if (baseFile && (!release || !selected)) throw new Error('--hermes-base requires --release and one --module');
 // Validate references before starting native module actions.
 const allModules = appModules();
@@ -82,7 +88,7 @@ if (archivesOnly) {
 
 if (androidRes && !selected) rmSync(androidRes, { recursive: true, force: true });
 const bazelOutputs = !selected || moduleConfig(selected).nativeBuild === 'bazel'
-  ? buildNodeModules(androidRes ? 'android' : 'ios', release)
+  ? nativePlatform ? stagedModuleOutputs(nativePlatform, release) : buildNodeModules(androidRes ? 'android' : 'ios', release)
   : new Map();
 for (const [name, compiled] of bazelOutputs) {
   rmSync(genDir(name), { recursive: true, force: true });

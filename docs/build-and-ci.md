@@ -5,23 +5,36 @@
 平台构建已内含 TS 模块构建，无需先手动运行 `pnpm build`。
 
 统一开发入口由 `scripts/cli.mjs` 用 Node 分发（Windows / macOS / Linux 一致）：
-`pnpm prebuild --platform android|ios` 按指纹准备 Valdi 源码、绑定、运行时、原生模块和 Vision（未变化时走快速
-路径）；`pnpm android` / `pnpm ios` 依次执行 prebuild、构建、安装并在唯一模拟器（或显式 `--device`）上启动；
+首次 checkout 执行 `pnpm install`，再手动运行 `scripts/export-android.sh debug` 或
+`scripts/export-ios.sh debug`（Windows 使用 `scripts/windows/export-android.ps1 -Config debug`）。
+导出获取固定 Valdi 源码并生成绑定。`pnpm android` / `pnpm ios` 执行正常原生构建、安装，
+并在唯一模拟器（或显式 `--device`）上启动；
 `pnpm dev` 仍是现有热重载；`pnpm build:android` / `pnpm build:ios` 保持纯构建；`pnpm test` 不变。
 物理 Android 设备永远不会被自动选中，多个模拟器会要求 `--device`；iOS 安装/启动只在 macOS 模拟器上支持
-（不驱动物理 iPhone）。`pnpm android`/`pnpm ios` 只支持 Debug，Release OTA（导出 release、签名、记录）仍按
-下文的手动流程执行。
+（不驱动物理 iPhone）。`pnpm android`/`pnpm ios` 只支持 Debug，Release OTA 的手动导出、宿主构建和签名
+见 [OTA 说明](ota.md)。
 
 `nativeBuild: "bazel"` 的模块（目前为 calculator、bluetooth、valdi_webview）由独立 `module-build/` workspace 构建。
 它调用同一套 Node TS / 绑定 / 资源管线，再编译模块原生库并接入 Gradle / Xcode；不通过主 App 的旧模块规则。
-见 [自定义模块实验](custom-modules.md)。模块 native targets 依赖现有导出的 runtime，CI 原生任务会自动准备模块库。
+见 [自定义模块实验](custom-modules.md)。模块 native targets 依赖现有导出的 runtime；
+Gradle / Xcode 的构建步骤负责模块库，根 project runner 不提前重复编译。
 启用哪些 App 模块由根 `package.json` 的 `valdi.modules` 明确指定，TS、原生注册和宿主打包读取同一份名单；
 新建模块不会自动集成。未启用模块仍被业务代码引用时，构建会提示修正名单或移除引用。
 
-根目录 `pnpm install` 的 postinstall 安装两个子项目的锁定依赖，并生成编辑器 tsconfig。运行时导出和
-OpenCV/ncnn 编译是单独的原生准备步骤，不在 npm 安装阶段运行。构建入口先检查缺失的产物及运行时指纹，
-Valdi fork 提交、工具链配置、runtime Node 编译器或应用 C++ 变化会提示重新导出；页面 TS 与宿主 Kotlin/Swift 的变化不会误触发运行时重导出。
-首次导出先运行 `scripts/prepare-valdi.mjs`，通过 Bazel 的 `fetch --repo=@valdi` 获取类型声明，再检查 C++ 绑定。
+根目录 `pnpm install` 的 postinstall 安装两个子项目的锁定依赖，并生成编辑器 tsconfig。
+运行时导出和 OpenCV/ncnn 编译不在 npm 安装阶段运行。`app_vision` 使用 `nativeBuild: "cpp"`，
+它的 `nativeDependencies` hook 只在显式手动 runtime 导出中运行：先检查缓存，必要时准备静态 vendor 并复查。
+Android vendor 使用兼容 runtime 的 NDK r28 arm64 配置，iOS 分别准备 arm64 真机和模拟器静态缓存。
+停用模块不参与检查或准备；正常 App 构建不执行 cpp 模块 hook。host 模块的依赖 hook 仍在正常原生构建中运行，
+宿主声明的 Android CMake、iOS 源码和 framework 仍由 Gradle / Xcode 编译链接。
+运行时导出始终手动执行。构建只检查产物存在及平台/配置元数据，不计算运行时源码指纹或自动重导出。
+Valdi fork、运行时工具链、runtime Node 编译器、链接进 runtime 的 C++、vendor 或启用的 cpp 模块名单变化后，
+开发者应主动重新导出。纯 TS 页面继续使用正常热重载；不提供公开 prebuild 或自动导出入口。
+Vision 的生成绑定、手写 C++ 适配器、VisionCore 和静态 vendor 链接进同一个动态 ValdiRuntime，
+不再使用独立 Vision/vendor DSO 或逐方法 Kotlin/Swift、JNI/Objective-C++ 桥接。
+适配器复用 runtime worker queue 与 disk cache；OTA 继续保留宿主 Kotlin/Swift 和 C codec 链接。
+详见 [Vision 构建与打包](vision-build.md)。该静态方案尚无本轮导出、App 构建或设备验证结果。
+首次导出先运行 `scripts/prepare-valdi.mjs`，通过 Bazel 的 `fetch --repo=@valdi` 获取类型声明，再生成绑定。
 只获取已固定的 fork 源码，不解析应用模块、旧 TS 编译器或 C++ 工具链目标。仅构建 TS 模块时无需编译原生 host 工具或导出 Android/iOS 运行时。图片由预编译 sharp 处理，
 Release 字节码由官方 hermes-compiler 生成，应用 Node 管线不再依赖 toolbox、ClientSQL Python 生成器或 SQLite 3.16 校验器。
 
@@ -49,7 +62,8 @@ Bazel 磁盘 action cache 空闲清理目标保留为 3 GB；这与构建并发�
 
 Linux GitHub-hosted 临时 runner 在恢复缓存之前运行 `scripts/ci-linux-disk.sh prepare`，
 移除本项目不用的预装 .NET、GHC、CodeQL，以及 Android SDK 中非选定的 NDK；
-保留 Gradle/Vision 使用的 `27.1.12297006`，Bazel 仍下载自身固定的 NDK。
+保留宿主 Gradle 所需的 NDK；Vision 静态缓存要求 runtime 兼容的 NDK r28，不能用旧 r27/shared 缓存替代。
+Bazel 仍使用自身固定的 NDK，清理及缓存配置需保留静态 vendor 准备所需的工具链。
 清理不会触碰工作区、依赖缓存、当前选定的 Android 工具、Java 或 Node；
 脚本不会在本地机器或 self-hosted runner 上删除工具。
 `.ci/disk-prepare.log`、`.ci/disk-before-export.log`、`.ci/disk-final.log`
@@ -59,10 +73,11 @@ Linux GitHub-hosted 临时 runner 在恢复缓存之前运行 `scripts/ci-linux-
 
 三条任务先跑测试和 golden，尽早发现 Node 绑定生成与上游语义的差异。
 此阶段的滚轮 Renderer 测试读取已固定的 Valdi 源码，不要求本地已有 AAR 或 XCFramework。
-原生任务恢复或导出运行时，不再单独编译应用 host 工具或 SQL 校验器。
+原生任务显式导出运行时，由 Bazel 自身缓存复用构建结果；不再单独编译应用 host 工具或 SQL 校验器。
 随后设置 `WHEEL_RUNTIME=android|ios`，用相同滚轮断言验证该任务平台实际导出的运行时模块；
 缺少产物或所需模块会直接失败，不回退到源码，也不要求另一个平台的导出产物。
-运行时和视觉依赖准备完成后立即保存对应缓存，后续 App 编译或上传失败也不会丢掉它们。
+视觉依赖缓存恢复后，由显式 runtime 导出的 cpp 模块 hook 检查并按需准备，再保存可用缓存；
+后续宿主构建消费该导出。host 模块的依赖检查仍随正常构建执行。
 同一分支的运行中构建会完成以保存缓存，后续提交只保留最新的待运行版本。
 artifact 上传是可选步骤：账号存储额度不足时会在日志和任务 summary 中警告，测试/构建仍按自身结果判定；
 这种情况下无法下载 APK、模拟器 App 和报告，只能查看 workflow 日志。清理账号其他仓库的产物或调整额度需单独处理。
@@ -89,19 +104,18 @@ artifact 上传是可选步骤：账号存储额度不足时会在日志和任�
 helloworld / Widgets / Web 示例构建、Snap 发布和 GCP 缓存认证。这些是上游项目自己的职责，
 并非都已经获得本项目的等价覆盖；特别是新 Node 热重载路径还没有专门的自动 delivery smoke。
 
-## Windows 冷启动与失效验证
+## Windows 构建与冷启动检查
 
-`scripts/windows/build-android.ps1` 是完整入口：缺依赖时会先跑 `pnpm install --frozen-lockfile`，再导出
-运行时、准备 Vision、构建 module-build 模块并打包 APK；新机器只需要预装工具（Node 24、pnpm 启动器、
-Bazel 8.2.1、JDK 17、Android SDK/NDK/CMake、Git Bash、CMake/Ninja/curl）。`pnpm build:android` 是日常入口：
-运行时缺失或 `valdi` 指纹过期时只报错并给出 `sh scripts/export-android.sh` 指令，不会静默复用旧 AAR。
+Windows 使用与其他平台相同的顺序：`pnpm install`，手动运行
+`scripts/windows/export-android.ps1 -Config debug`，再 `pnpm android` 或 `pnpm build:android`。
+新机器仍需预装 Node 24、pnpm 启动器、Bazel 8.2.1、JDK 17、Android SDK/NDK/CMake、
+Git Bash、CMake/Ninja/curl。日常入口检查运行时产物及平台/配置元数据；不会根据源码变化决定重新导出。
 
-`scripts/windows/test-cold-build.ps1` 在空目录里从网络克隆一个提交，并使用空的 pnpm store、Bazel
-output/user root/repository/disk cache、Gradle user home、Go/Coursier 缓存和 Vision 目录跑完整入口，
-然后跑管线测试和 `scripts/windows/test-native-invalidation.ps1`（独立模块改动只重建模块库+APK；
-模块 `cpp/` 改动会让日常构建拒绝旧 AAR，完整入口重新导出）。CI 的 `Windows Android CI` 增加手动的
-`cold_build` 输入，用同一脚本在隔离路径运行，上传 `logs/cold-build-report.json` 与 APK；workflow 并发组与
-常规 Windows 任务共用，避免同一台机器上并发大构建。详见 [Windows 原生构建](windows-native-build.md)。
+`scripts/windows/build-android.ps1` 配置 Windows 工具与缓存后调用正常宿主构建；
+它要求先手动导出运行时。`scripts/windows/test-cold-build.ps1` 在空的隔离目录克隆指定提交，
+安装依赖、显式导出运行时，再构建 App、检查绑定和运行管线测试，验证正常构建没有改写导出的 AAR。
+旧源码指纹失效 runner 已移除，历史报告不代表当前流程已通过；此次文档更新没有运行 Windows 构建。
+命令与证据路径见 [Windows 原生构建](windows-native-build.md)。
 
 ## 仍然需要的原生工具与产物
 
@@ -120,9 +134,10 @@ output/user root/repository/disk cache、Gradle user home、Go/Coursier 缓存�
 - **宿主**：Android Gradle / SDK / NDK / CMake；iOS Xcode / XcodeGen / SwiftPM。
 - **视觉依赖**：`vision/scripts/prepare-native.cjs` 按 `vision/vendor-lock.json` 准备 OpenCV Mobile / ncnn。
 
-这些产物没有全部提交，因此 CI 在缓存缺失时导出运行时、构建视觉库。
-运行时缓存按平台、架构、Debug 配置、工具链和 `ota.mjs` 的 Valdi 指纹匹配，还纳入导出脚本、CLI lock 和 patch。
-恢复后仍运行与本地相同的 `checkRuntime`；过期就重新导出，宿主构建继续保留原有 `check-export` 检查。
+这些产物没有全部提交，因此 CI 显式导出运行时，并在该导出中按需准备静态视觉库。
+运行时通过显式导出获得；Bazel action cache 处理它自己的构建输入和增量编译。
+宿主的运行时检查只验证产物存在及平台/配置元数据；`valdi_ota.json` 仅含 `platform` / `config`，
+用于 OTA 的 Release runtime 检查。绑定生成结果与 codegen golden 检查继续保留。
 视觉缓存按平台、工具链、NDK、vendor lock 和准备脚本匹配。Bazel 仅缓存可校验的 action 输出与下载，
 不缓存 `bazel-out` / `bazel-valdi` 绝对路径链接或整个 output base。
 
@@ -130,7 +145,8 @@ GitHub 缓存默认在超过 7 天未访问或仓库缓存总量超过 10 GB 时
 具体以仓库设置和 [GitHub 缓存规则](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching) 为准。
 输入变化导致缓存不匹配不等于旧缓存被删除；输入未变也只有在缓存尚存且当前分支可访问时才能恢复。
 
-只改页面或宿主 Kotlin / Swift 时可复用匹配的导出运行时；更改 Valdi fork 提交、工具链或应用 C++ 时重新导出。
+只改页面或宿主 Kotlin / Swift 时可复用导出运行时；更改 Valdi fork、运行时工具链、链接进 runtime 的 C++、
+vendor 或启用的 cpp 模块名单时手动重新导出。
 缓存都是加速手段，干净 runner 仍有完整的准备路径。原生冷构建较重，首次 GitHub runner 的耗时、磁盘和内存
 仍需以实际运行结果调整；本地构建通过不代表 hosted runner 已通过。
 

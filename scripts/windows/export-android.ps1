@@ -98,16 +98,20 @@ Write-BazelRcFiles -AppRoot $root -Lines $localBazelRc -CacheLines $cacheBazelRc
 # the repository cache. Command-line startup/build flags are the only thing that beats it, so an explicit
 # isolated root also becomes an environment flag for the export and the module-build workspace.
 $env:VALDI_BAZEL_STARTUP_ARGS = if ($OutputBase) {
-    $root = $resolvedOutputBase -replace '\\', '/'
+    $outputRoot = $resolvedOutputBase -replace '\\', '/'
     # A host rc that sets `startup --output_base` beats --output_user_root, so name both. valdi and
     # module-build are different workspaces and each gets its own base under this run's root.
-    $env:VALDI_BAZEL_OUTPUT_BASE_ROOT = "$root/base"
-    "--output_user_root=$root --output_base=$root/base/valdi"
+    $env:VALDI_BAZEL_OUTPUT_BASE_ROOT = "$outputRoot/base"
+    "--output_user_root=$outputRoot --output_base=$outputRoot/base/valdi"
 } else { '' }
 $env:VALDI_BAZEL_ARGS = if ($RepositoryCache) { '--repository_cache=' + ($resolvedRepositoryCache -replace '\\', '/') } else { '' }
 
 $bash = Resolve-GitBashPath $GitBash
 $env:BAZEL_SH = $bash
+$gitBashDirectories = Get-GitBashDirectories $bash
+$gitBashPathEntries = @($gitBashDirectories.UsrBin, $gitBashDirectories.Cmd) |
+    Where-Object { Test-Path -LiteralPath $_ -PathType Container }
+if ($gitBashPathEntries) { $env:PATH = (($gitBashPathEntries -join ';') + ';' + $env:PATH) }
 Write-Output "Git Bash: $bash"
 Write-Output "Bazel output root: $resolvedOutputBase"
 if ($resolvedDiskCache) { Write-Output "Bazel disk action cache: $resolvedDiskCache" }
@@ -122,5 +126,8 @@ if ($OutputDir) {
 $exportArguments = @($Config)
 if ($bashOutput) { $exportArguments += $bashOutput }
 
+# The shared manual export generates the Kotlin/C++ bindings and writes only
+# {platform, config} to valdi_ota.json. Keep its generation and metadata contract
+# identical on Windows; the wrapper only configures the host tools and caches.
 $exitCode = Invoke-GitBash -BashPath $bash -ScriptPath (Join-Path $root 'scripts/export-android.sh') -Arguments $exportArguments
 exit $exitCode

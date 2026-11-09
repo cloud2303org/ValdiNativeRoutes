@@ -27,10 +27,13 @@ test('base compilation and module selection reject invalid options before changi
     ['--release', '--hermes-base', base],
     ['--release', '--module', 'app_pages', '--hermes-base', base],
     ['--release', '--module', 'calculator', '--hermes-base', base],
+    ['--native-platform', 'web'],
+    ['--native-platform', 'android'],
+    ['--native-platform', 'ios', '--module', 'app_pages'],
   ]) {
     const result = run([...args, '--out', dir]);
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /module|base|archive|Zstd|ZSTD|zstd|magic/i);
+    assert.match(result.stderr, /module|base|archive|Zstd|ZSTD|zstd|magic|native-platform/i);
     assert.doesNotMatch(result.stderr, /must-not-run-bazel/);
     assert.equal(readFileSync(marker, 'utf8'), 'untouched');
     assert.equal(existsSync(path.join(dir, 'app_pages.valdimodule')), false);

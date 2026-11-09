@@ -767,37 +767,6 @@
   },
   "selectedYankedVersions": {},
   "moduleExtensions": {
-    "@@apple_support+//crosstool:setup.bzl%apple_cc_configure_extension": {
-      "general": {
-        "bzlTransitiveDigest": "k23mASTHkkG/bV3aaIbqd43gnYBIYlpsDv9xXbLcCfM=",
-        "usagesDigest": "BvrHpqm7is9bAqWHYejVYvqNilzxwSMoZ7hRfa+kmjY=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
-        "generatedRepoSpecs": {
-          "local_config_apple_cc_toolchains": {
-            "repoRuleId": "@@apple_support+//crosstool:setup.bzl%_apple_cc_autoconf_toolchains",
-            "attributes": {}
-          },
-          "local_config_apple_cc": {
-            "repoRuleId": "@@apple_support+//crosstool:setup.bzl%_apple_cc_autoconf",
-            "attributes": {}
-          }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "apple_support+",
-            "bazel_tools",
-            "bazel_tools"
-          ],
-          [
-            "bazel_tools",
-            "rules_cc",
-            "rules_cc+"
-          ]
-        ]
-      }
-    },
     "@@aspect_rules_js+//npm:extensions.bzl%pnpm": {
       "general": {
         "bzlTransitiveDigest": "OsjC+dnh/NOneGmAyeK3KOYOvgqxkMIIRc4l0zXBGfE=",
@@ -2738,7 +2707,7 @@
     },
     "@@valdi+//bzl:valdi_toolchains.bzl%valdi_toolchains": {
       "general": {
-        "bzlTransitiveDigest": "gAz1K0LiZ3+l0sty+1lSjBOojv7ZpNf5lHehxZR2dKQ=",
+        "bzlTransitiveDigest": "vZ/2DRf5UOQidmptVii3yMVmzpA/c8krJLXmhc9tozE=",
         "usagesDigest": "lBdUky8WjLwmLt4fZFRyLNt6fhZrzim/0833fTNe1vo=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},

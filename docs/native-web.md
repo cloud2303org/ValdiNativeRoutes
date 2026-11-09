@@ -4,26 +4,22 @@ The new Valdi fork integration ports NSH's Rust Web APIs to Hermes through a
 C++ binding. JavaScript imports the native exports; it does not run a QuickJS
 engine or a streams/fetch polyfill.
 
-The implementation is available in the pinned Valdi fork. The separate
-`valdi/native_web/BUILD.bazel` export includes this optional module, using the
-same runtime library and framework names as the normal export. Choose one
-runtime export for an application.
+The implementation is available in the pinned Valdi fork and is included in
+this template's standard runtime. `valdi/BUILD.bazel` packages the `native_web`
+framework module, and `valdi/.bazelrc` enables its Rust/C++ implementation.
+The application entry installs its globals before loading business services.
 
-## Build the optional runtime
+## Build the runtime
 
 ```sh
-export VALDI_BAZEL_ARGS="--define=valdi_native_web=true"
-
-scripts/export-android.sh release /tmp/native-web-runtime/android \
-  //native_web:valdi_runtime_android
-
-scripts/export-ios.sh debug /tmp/native-web-runtime/ios \
-  //native_web:valdi_runtime_ios
+scripts/export-android.sh release
+scripts/export-ios.sh debug
 ```
 
-Run these scripts from the repository root. Their optional third argument
-selects the Bazel library; omitting it preserves the normal export. They also
-write the usual runtime export receipt and package Swift support libraries.
+Run these scripts from the repository root. The optional second argument
+sets the output directory. Both standard runtime targets include Native Web.
+The scripts also write runtime `valdi_ota.json` with only `platform` / `config`
+and package Swift support libraries.
 
 The pinned fork configures Bazel-managed Rust 1.99.1, rules_rust 0.75.0, and mobile target
 libraries. Source exports download and cache that toolchain as needed; no
@@ -43,7 +39,10 @@ separate from the native Web framework changes.
 
 These are native runtime builds. An OTA package cannot add the native
 implementation to an existing binary. Runtime artifacts must be re-exported
-after updating the fork pin.
+after updating the fork pin. Native builds check artifact existence and
+platform/configuration metadata; developers must manually replace exports from
+before this integration. There is no automatic source fingerprint validation or
+runtime re-export.
 
 ## Use the native exports
 
@@ -99,9 +98,14 @@ Response chunks can split both UTF-8 characters and SSE records. Streaming
 `TextDecoder` handles the former; the application still needs an SSE record
 parser. A body chunk is not necessarily one message.
 
-Importing the module provides named exports without changing globals.
-For global APIs, call this once from the application entry before code that
-uses them:
+Importing the framework module provides named exports without changing globals.
+This template already calls the installer in
+`app_pages/src/services/nativeWeb.ts`, imported first by `app_pages/src/app.ts`.
+Pages and services can use global `fetch`, `WebSocket`, `AbortController`,
+`TextDecoder` and streams directly. No per-page installer is needed.
+
+For a different application entry, preserve that first side-effect import or
+install once before loading services:
 
 ```ts
 import { installNativeWeb } from 'native_web/src/NativeWeb';

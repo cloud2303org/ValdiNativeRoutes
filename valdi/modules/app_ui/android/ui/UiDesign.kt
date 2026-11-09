@@ -1,8 +1,9 @@
-// Copied from ExpoNativeRoutes android/native/ui (io/nativeroutes/ui/UiDesign.kt).
-// Generated from packages/ui/design/tokens.json. Run pnpm tokens:generate; do not edit.
+// Shared design fields read the native ThemeTokensStore; component-only constants remain here.
 package io.valdiroutes.app_ui.ui
 
 import androidx.compose.ui.graphics.Color
+import io.valdiroutes.app.modules.theme_bridge.ThemeTokensStore
+import kotlin.math.roundToInt
 
 object UiDesign {
   object palette {
@@ -24,32 +25,32 @@ object UiDesign {
   object light {
     object color {
       val page = Color(0xffeaf1fb)
-      val canvas = Color(0xfff5f7fb)
-      val surface = Color(0xffffffff)
-      val ink = Color(0xff101828)
+      val canvas = themeTokenColor(ThemeTokensStore.tokens.light.canvas)
+      val surface = themeTokenColor(ThemeTokensStore.tokens.light.surface)
+      val ink = themeTokenColor(ThemeTokensStore.tokens.light.ink)
       val heading = Color(0xff203d65)
-      val title = Color(0xff233d63)
+      val title = themeTokenColor(ThemeTokensStore.tokens.light.title)
       val subtitle = Color(0xff728bac)
-      val section = Color(0xff617e9f)
-      val description = Color(0xff7c8fa9)
-      val icon = Color(0xff377dff)
-      val chevron = Color(0xff8499b6)
-      val hairline = Color(0xffececec)
+      val section = themeTokenColor(ThemeTokensStore.tokens.light.section)
+      val description = themeTokenColor(ThemeTokensStore.tokens.light.description)
+      val icon = themeTokenColor(ThemeTokensStore.tokens.light.icon)
+      val chevron = themeTokenColor(ThemeTokensStore.tokens.light.chevron)
+      val hairline = themeTokenColor(ThemeTokensStore.tokens.light.hairline)
       val onInverse = Color(0xffffffff)
-      val iconWell = Color(0x1a377dff)
-      val pressed = Color(0x1a377dff)
-      val separator = Color(0x244d70a3)
+      val iconWell = themeTokenColor(ThemeTokensStore.tokens.light.iconWell)
+      val pressed = themeTokenColor(ThemeTokensStore.tokens.light.pressed)
+      val separator = themeTokenColor(ThemeTokensStore.tokens.light.separator)
       val cardBorder = Color(0xc7ffffff)
-      val backPressed = Color(0x0f101828)
-      val primary = Color(0xff1e62d0)
+      val backPressed = themeTokenColor(ThemeTokensStore.tokens.light.backPressed)
+      val primary = themeTokenColor(ThemeTokensStore.tokens.light.primary)
       val accent = Color(0xff377dff)
-      val success = Color(0xff0ecd9d)
-      val text = Color(0xff172033)
-      val muted = Color(0xff667085)
+      val success = themeTokenColor(ThemeTokensStore.tokens.light.success)
+      val text = themeTokenColor(ThemeTokensStore.tokens.light.text)
+      val muted = themeTokenColor(ThemeTokensStore.tokens.light.muted)
       val subtle = Color(0xfff4f6f8)
-      val border = Color(0xffe8ecf1)
-      val scrim = Color(0x52101828)
-      val danger = Color(0xffd54941)
+      val border = themeTokenColor(ThemeTokensStore.tokens.light.border)
+      val scrim = themeTokenColor(ThemeTokensStore.tokens.light.scrim)
+      val danger = themeTokenColor(ThemeTokensStore.tokens.light.danger)
       val error = Color(0xffd54941)
       val cancelFill = Color(0xfff2f4f7)
       val cancelText = Color(0xff43556f)
@@ -62,22 +63,22 @@ object UiDesign {
       val dangerText = Color(0xffac293c)
       val dangerBorder = Color(0xfff3cdd2)
       val disabledFill = Color(0xffedf1f7)
-      val segmentTrack = Color(0xffe9edf3)
-      val segmentIndicator = Color(0xffffffff)
-      val segmentText = Color(0xff606b7a)
-      val segmentTextActive = Color(0xff18263b)
-      val handle = Color(0xffd6dce5)
+      val segmentTrack = themeTokenColor(ThemeTokensStore.tokens.light.segmentTrack)
+      val segmentIndicator = themeTokenColor(ThemeTokensStore.tokens.light.segmentIndicator)
+      val segmentText = themeTokenColor(ThemeTokensStore.tokens.light.segmentText)
+      val segmentTextActive = themeTokenColor(ThemeTokensStore.tokens.light.segmentTextActive)
+      val handle = themeTokenColor(ThemeTokensStore.tokens.light.handle)
       val dialogShadow = Color(0x2e102b52)
       val segmentShadow = Color(0x1f18273f)
       val floatingCloseFill = Color(0x61000000)
       val floatingCloseBorder = Color(0x3dffffff)
       val toastFill = Color(0xf0181c23)
-      val buttonPrimary = Color(0xff1e62d0)
-      val buttonOnPrimary = Color(0xffffffff)
-      val buttonSecondary = Color(0xffeef2f7)
-      val buttonOnSecondary = Color(0xff1d2939)
-      val buttonDanger = Color(0xfffdecec)
-      val buttonOnDanger = Color(0xffd92d20)
+      val buttonPrimary = themeTokenColor(ThemeTokensStore.tokens.light.buttonPrimary)
+      val buttonOnPrimary = themeTokenColor(ThemeTokensStore.tokens.light.buttonOnPrimary)
+      val buttonSecondary = themeTokenColor(ThemeTokensStore.tokens.light.buttonSecondary)
+      val buttonOnSecondary = themeTokenColor(ThemeTokensStore.tokens.light.buttonOnSecondary)
+      val buttonDanger = themeTokenColor(ThemeTokensStore.tokens.light.buttonDanger)
+      val buttonOnDanger = themeTokenColor(ThemeTokensStore.tokens.light.buttonOnDanger)
     }
     object shadow {
       val card = "0px 6px 24px rgba(31,69,125,0.045)"
@@ -88,32 +89,32 @@ object UiDesign {
   object dark {
     object color {
       val page = Color(0xff121316)
-      val canvas = Color(0xff121316)
-      val surface = Color(0xff1e1f23)
-      val ink = Color(0xffffffff)
+      val canvas = themeTokenColor(ThemeTokensStore.tokens.dark.canvas)
+      val surface = themeTokenColor(ThemeTokensStore.tokens.dark.surface)
+      val ink = themeTokenColor(ThemeTokensStore.tokens.dark.ink)
       val heading = Color(0xffffffff)
-      val title = Color(0xffffffff)
+      val title = themeTokenColor(ThemeTokensStore.tokens.dark.title)
       val subtitle = Color(0xffd5d5d6)
-      val section = Color(0xff969696)
-      val description = Color(0xffd5d5d6)
-      val icon = Color(0xff377dff)
-      val chevron = Color(0xff969696)
-      val hairline = Color(0xff2a2b32)
+      val section = themeTokenColor(ThemeTokensStore.tokens.dark.section)
+      val description = themeTokenColor(ThemeTokensStore.tokens.dark.description)
+      val icon = themeTokenColor(ThemeTokensStore.tokens.dark.icon)
+      val chevron = themeTokenColor(ThemeTokensStore.tokens.dark.chevron)
+      val hairline = themeTokenColor(ThemeTokensStore.tokens.dark.hairline)
       val onInverse = Color(0xffffffff)
-      val iconWell = Color(0x29377dff)
-      val pressed = Color(0xff2e2f36)
-      val separator = Color(0xff2a2b32)
+      val iconWell = themeTokenColor(ThemeTokensStore.tokens.dark.iconWell)
+      val pressed = themeTokenColor(ThemeTokensStore.tokens.dark.pressed)
+      val separator = themeTokenColor(ThemeTokensStore.tokens.dark.separator)
       val cardBorder = Color(0xff2a2b32)
-      val backPressed = Color(0xff2e2f36)
-      val primary = Color(0xff377dff)
+      val backPressed = themeTokenColor(ThemeTokensStore.tokens.dark.backPressed)
+      val primary = themeTokenColor(ThemeTokensStore.tokens.dark.primary)
       val accent = Color(0xff377dff)
-      val success = Color(0xff56dcba)
-      val text = Color(0xffffffff)
-      val muted = Color(0xff969696)
+      val success = themeTokenColor(ThemeTokensStore.tokens.dark.success)
+      val text = themeTokenColor(ThemeTokensStore.tokens.dark.text)
+      val muted = themeTokenColor(ThemeTokensStore.tokens.dark.muted)
       val subtle = Color(0xff2e2f36)
-      val border = Color(0xff2a2b32)
-      val scrim = Color(0xbf000000)
-      val danger = Color(0xfff56c6c)
+      val border = themeTokenColor(ThemeTokensStore.tokens.dark.border)
+      val scrim = themeTokenColor(ThemeTokensStore.tokens.dark.scrim)
+      val danger = themeTokenColor(ThemeTokensStore.tokens.dark.danger)
       val error = Color(0xfff56c6c)
       val cancelFill = Color(0xff2e2f36)
       val cancelText = Color(0xffd5d5d6)
@@ -126,22 +127,22 @@ object UiDesign {
       val dangerText = Color(0xffff8a8a)
       val dangerBorder = Color(0x66f56c6c)
       val disabledFill = Color(0xff2a2b32)
-      val segmentTrack = Color(0xff1e1f23)
-      val segmentIndicator = Color(0xff454750)
-      val segmentText = Color(0xffd5d5d6)
-      val segmentTextActive = Color(0xffffffff)
-      val handle = Color(0xff969696)
+      val segmentTrack = themeTokenColor(ThemeTokensStore.tokens.dark.segmentTrack)
+      val segmentIndicator = themeTokenColor(ThemeTokensStore.tokens.dark.segmentIndicator)
+      val segmentText = themeTokenColor(ThemeTokensStore.tokens.dark.segmentText)
+      val segmentTextActive = themeTokenColor(ThemeTokensStore.tokens.dark.segmentTextActive)
+      val handle = themeTokenColor(ThemeTokensStore.tokens.dark.handle)
       val dialogShadow = Color(0x80000000)
       val segmentShadow = Color(0x59000000)
       val floatingCloseFill = Color(0x61000000)
       val floatingCloseBorder = Color(0x3dffffff)
       val toastFill = Color(0xff1e1f23)
-      val buttonPrimary = Color(0xff377dff)
-      val buttonOnPrimary = Color(0xffffffff)
-      val buttonSecondary = Color(0xff2c2e35)
-      val buttonOnSecondary = Color(0xfff2f4f7)
-      val buttonDanger = Color(0x2ef56c6c)
-      val buttonOnDanger = Color(0xffff8a8a)
+      val buttonPrimary = themeTokenColor(ThemeTokensStore.tokens.dark.buttonPrimary)
+      val buttonOnPrimary = themeTokenColor(ThemeTokensStore.tokens.dark.buttonOnPrimary)
+      val buttonSecondary = themeTokenColor(ThemeTokensStore.tokens.dark.buttonSecondary)
+      val buttonOnSecondary = themeTokenColor(ThemeTokensStore.tokens.dark.buttonOnSecondary)
+      val buttonDanger = themeTokenColor(ThemeTokensStore.tokens.dark.buttonDanger)
+      val buttonOnDanger = themeTokenColor(ThemeTokensStore.tokens.dark.buttonOnDanger)
     }
     object shadow {
       val card = "0px 6px 24px rgba(0,0,0,0.35)"
@@ -150,25 +151,25 @@ object UiDesign {
     }
   }
   object radius {
-    val card = 22f
-    val sheet = 22f
-    val icon = 12f
-    val control = 12f
-    val surface = 20f
-    val tiny = 2f
-    val small = 6f
-    val medium = 8f
-    val compact = 10f
-    val pill = 999f
-    val button = 14f
+    val card = ThemeTokensStore.tokens.shared.radius.card.toFloat()
+    val sheet = ThemeTokensStore.tokens.shared.radius.sheet.toFloat()
+    val icon = ThemeTokensStore.tokens.shared.radius.icon.toFloat()
+    val control = ThemeTokensStore.tokens.shared.radius.control.toFloat()
+    val surface = ThemeTokensStore.tokens.shared.radius.surface.toFloat()
+    val tiny = ThemeTokensStore.tokens.shared.radius.tiny.toFloat()
+    val small = ThemeTokensStore.tokens.shared.radius.small.toFloat()
+    val medium = ThemeTokensStore.tokens.shared.radius.medium.toFloat()
+    val compact = ThemeTokensStore.tokens.shared.radius.compact.toFloat()
+    val pill = ThemeTokensStore.tokens.shared.radius.pill.toFloat()
+    val button = ThemeTokensStore.tokens.shared.radius.button.toFloat()
   }
   object size {
-    val nav = 44f
+    val nav = ThemeTokensStore.tokens.shared.size.nav.toFloat()
     val navNative = 52f
-    val back = 40f
-    val icon = 36f
-    val row = 72f
-    val button = 48f
+    val back = ThemeTokensStore.tokens.shared.size.back.toFloat()
+    val icon = ThemeTokensStore.tokens.shared.size.icon.toFloat()
+    val row = ThemeTokensStore.tokens.shared.size.row.toFloat()
+    val button = ThemeTokensStore.tokens.shared.size.button.toFloat()
     val dialogWidth = 360f
     val dialogMaxHeight = 600f
   }
@@ -199,40 +200,40 @@ object UiDesign {
     }
   }
   object space {
-    val xs = 4f
-    val sm = 8f
-    val md = 12f
-    val lg = 16f
-    val xl = 20f
-    val content = 24f
-    val section = 10f
+    val xs = ThemeTokensStore.tokens.shared.space.xs.toFloat()
+    val sm = ThemeTokensStore.tokens.shared.space.sm.toFloat()
+    val md = ThemeTokensStore.tokens.shared.space.md.toFloat()
+    val lg = ThemeTokensStore.tokens.shared.space.lg.toFloat()
+    val xl = ThemeTokensStore.tokens.shared.space.xl.toFloat()
+    val content = ThemeTokensStore.tokens.shared.space.content.toFloat()
+    val section = ThemeTokensStore.tokens.shared.space.section.toFloat()
     val sheetTop = 22f
     val hairline = 1f
-    val xxs = 2f
+    val xxs = ThemeTokensStore.tokens.shared.space.xxs.toFloat()
     val inset = 3f
-    val tight = 6f
-    val xxl = 32f
-    val wide = 40f
-    val bottom = 48f
+    val tight = ThemeTokensStore.tokens.shared.space.tight.toFloat()
+    val xxl = ThemeTokensStore.tokens.shared.space.xxl.toFloat()
+    val wide = ThemeTokensStore.tokens.shared.space.wide.toFloat()
+    val bottom = ThemeTokensStore.tokens.shared.space.bottom.toFloat()
     val buttonCompact = 9f
-    val roomy = 28f
+    val roomy = ThemeTokensStore.tokens.shared.space.roomy.toFloat()
   }
   object font {
-    val nav = 17f
-    val heading = 30f
+    val nav = ThemeTokensStore.tokens.shared.font.nav.toFloat()
+    val heading = ThemeTokensStore.tokens.shared.font.heading.toFloat()
     val headingLine = 39f
-    val section = 13f
+    val section = ThemeTokensStore.tokens.shared.font.section.toFloat()
     val sectionLine = 19f
-    val title = 15f
+    val title = ThemeTokensStore.tokens.shared.font.title.toFloat()
     val titleLine = 21f
-    val body = 12f
+    val body = ThemeTokensStore.tokens.shared.font.body.toFloat()
     val bodyLine = 17f
-    val button = 16f
+    val button = ThemeTokensStore.tokens.shared.font.button.toFloat()
     val buttonLine = 22f
-    val sheetTitle = 20f
-    val segment = 14f
+    val sheetTitle = ThemeTokensStore.tokens.shared.font.sheetTitle.toFloat()
+    val segment = ThemeTokensStore.tokens.shared.font.segment.toFloat()
     val segmentLine = 20f
-    val tiny = 11f
+    val tiny = ThemeTokensStore.tokens.shared.font.tiny.toFloat()
     val content = 14f
     val control = 16f
     val subtitle = 17f
@@ -251,15 +252,15 @@ object UiDesign {
     val iconDisplay = 29f
   }
   object icon {
-    val row = 21f
-    val chevron = 19f
-    val back = 28f
+    val row = ThemeTokensStore.tokens.shared.icon.row.toFloat()
+    val chevron = ThemeTokensStore.tokens.shared.icon.chevron.toFloat()
+    val back = ThemeTokensStore.tokens.shared.icon.back.toFloat()
   }
   object motion {
-    val pressedOpacity = 0.82f
+    val pressedOpacity = ThemeTokensStore.tokens.shared.motion.pressedOpacity.toFloat()
     val confirmOpacity = 0.9f
-    val pressedScale = 0.97f
-    val disabledOpacity = 0.4f
+    val pressedScale = ThemeTokensStore.tokens.shared.motion.pressedScale.toFloat()
+    val disabledOpacity = ThemeTokensStore.tokens.shared.motion.disabledOpacity.toFloat()
   }
   object component {
     object card {
@@ -403,4 +404,12 @@ object UiDesign {
     val scannerCanvas = Color(0xff111318)
     val torchOff = Color(0xff2c2f36)
   }
+}
+
+private fun themeTokenColor(value: String): Color {
+    if (value.startsWith("#")) return Color(android.graphics.Color.parseColor(value))
+    require(value.startsWith("rgba(") && value.endsWith(")"))
+    val parts = value.substring(5, value.length - 1).split(",").map { it.trim().toDouble() }
+    require(parts.size == 4)
+    return Color(parts[0].toInt(), parts[1].toInt(), parts[2].toInt(), (parts[3] * 255).roundToInt())
 }

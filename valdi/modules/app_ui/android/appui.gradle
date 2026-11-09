@@ -1,0 +1,4 @@
+// Applied by the host only when app_ui is selected; all AppUI features stay together.
+def repo = rootProject.projectDir.parentFile
+extensions.getByName("android").sourceSets.getByName("test").kotlin.directories
+    .add(new File(repo, "valdi/modules/app_ui/tests/android").path)

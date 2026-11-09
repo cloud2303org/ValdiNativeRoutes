@@ -1,0 +1,11 @@
+load("//bzl/module_cpp:module.bzl", "module_cpp_library")
+
+# Bindings, adapter and vendors share the runtime's C++ linkage and ownership.
+module_cpp_library(
+    module_name = "app_vision",
+    srcs = ["src/VisionModule.cpp"],
+    deps = [
+        "@valdi//valdi:valdi_runtime",
+        "@vision//:vision_core",
+    ],
+)

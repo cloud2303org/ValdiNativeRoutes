@@ -72,6 +72,41 @@ class RouteDataSnapshotTest {
     }
 
     @Test
+    fun finiteNumberEdgesKeepTheirValuesAndTypes() {
+        val numbers = listOf(
+            0.0, -0.0, Double.MIN_VALUE, Double.MAX_VALUE, 1.25, -4.0,
+            Float.MIN_VALUE, Float.MAX_VALUE, -0.0f,
+            Byte.MIN_VALUE, Short.MAX_VALUE, Int.MIN_VALUE, Long.MAX_VALUE,
+        )
+        val result = snapshotRouteData(mapOf("nested" to listOf(mapOf("numbers" to numbers))))
+        val nested = (result.getValue("nested") as List<*>).single() as Map<*, *>
+        val copied = nested["numbers"] as List<*>
+        assertEquals(numbers, copied)
+        numbers.zip(copied).forEach { (original, snapshot) ->
+            assertEquals(original.javaClass, snapshot!!.javaClass)
+        }
+        assertEquals((-0.0).toRawBits(), (copied[1] as Double).toRawBits())
+        assertEquals((-0.0f).toRawBits(), (copied[8] as Float).toRawBits())
+    }
+
+    @Test
+    fun nestedNonFiniteNumbersAndUnsupportedContainersAreRejected() {
+        for (number in listOf(
+            Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY,
+            Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY,
+        )) {
+            assertThrows(IllegalArgumentException::class.java) {
+                snapshotRouteData(mapOf("nested" to listOf(mapOf("number" to number))))
+            }
+        }
+        for (value in listOf(setOf(1), arrayOf(1), byteArrayOf(1), { true }, Any())) {
+            assertThrows(IllegalArgumentException::class.java) {
+                snapshotRouteData(mapOf("nested" to listOf(mapOf("value" to value))))
+            }
+        }
+    }
+
+    @Test
     fun cyclesMutableObjectsNonStringKeysAndNonFiniteNumbersAreRejected() {
         val map = mutableMapOf<String, Any?>()
         map["self"] = map

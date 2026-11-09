@@ -58,7 +58,10 @@ router.switchTab('home');
 - 启动声明、路由更新、导航选项、参数、返回值和当前页面栈通过 Valdi 生成模型与字典
   marshaller 传递，路由协议不再编码/解析 JSON 字符串。公开 router 保留页面特定泛型，
   它约束调用方，不替代 Kotlin/Swift 编译或原生返回字段的业务校验。
-- 参数/结果原样交给原生 marshaller。路由根必须是字典；嵌套值不再在 JS 里预校验或深拷贝。
+- 参数/结果保持原有对象身份交给原生 marshaller。路由根必须是普通字典，
+  JS 在发送前递归检查允许值域：拒绝非有限数、环引用、函数、symbol、访问器、
+  不支持的容器和稀疏/undefined 数组项；允许非循环的共享引用和可选字典字段。
+  验证不序列化为 JSON，也不深拷贝业务对象；原生仍对保存的参数/结果取值快照。
 
 组件引用在 Node 编译时转成 canonical 路径，消费引用后移除无用的组件导入。
 路由表不会为了注册页面提前执行所有页面，页面仍由 Valdi loader 按需加载。
@@ -67,17 +70,20 @@ router.switchTab('home');
 ## 原生页面
 
 `nativePage({ name: 'picker' })` 的 `name` 是原生注册标识，可与 App 路由名不同。
-现有页面可以直接手写，不强制使用脚手架。Android 在 `NativeScreens.registerDefaults()`
-中注册，`App.onCreate()` 调用一次：
+现有页面可以直接手写，不强制使用脚手架。通用 `NativePage` 和 `NativeScreens`
+位于两端 `navigation/` / `Navigation/`。示例页面单独位于
+`features/picker/PickerScreen.kt` / `Features/Picker/PickerScreen.swift`，
+删除示例时不用改通用注册表。Android 在 `NativeExamples.registerScreens()`
+中显式注册，`App.onCreate()` 调用一次：
 
 ```kt
-register("picker") { PickerPage(it) }
+NativeScreens.register("picker") { PickerPage(it) }
 ```
 
-iOS 的 `NativeScreens.registerDefaults()` 返回页面工厂字典：
+iOS 在 `NativeExamples.registerScreens()` 注册，`AppDelegate` 启动时调用一次：
 
 ```swift
-["picker": { UIHostingController(rootView: PickerScreen(page: $0)) }]
+NativeScreens.register("picker") { UIHostingController(rootView: PickerScreen(page: $0)) }
 ```
 
 页面接收 `NativePage`，读取结构化字典 `params`，使用 `finish(result)` 返回字典或用

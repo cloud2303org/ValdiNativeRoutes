@@ -28,7 +28,7 @@ const signatures = {
   showBottomSheet: ['request: BottomSheetRequest', 'PresentationReply'],
   previewImage: ['request: ImagePreviewRequest', 'PresentationReply'],
   scanCode: ['', 'ScanCodeReply'],
-  pickAttachments: ['source: string, limit: number, mimeTypes: string[]', 'AttachmentSelection'],
+  pickAttachments: ['source: AttachmentSource, limit: number, mimeTypes: string[]', 'AttachmentSelection'],
   clearAttachmentCache: ['', 'void'],
   showToast: ['request: ToastRequest', 'void'],
   hideToast: ['', 'void'],
@@ -184,7 +184,7 @@ test('real generator emits canonical Kotlin, Objective-C and C++ Promise proxies
   assert.equal((cppSchema.match(/f\|m\|/g) ?? []).length, 13);
   assert.equal((cppSchema.match(/: p</g) ?? []).length, 13);
   assert.match(cppSchema, /'scanCode':f\|m\|\(\): p<r:/);
-  assert.match(cppSchema, /'pickAttachments':f\|m\|\(s, d, a<s>\): p<r:/);
+  assert.match(cppSchema, /'pickAttachments':f\|m\|\(r:'\[\d+\]', d, a<s>\): p<r:/);
   assert.match(cppSchema, /'clearAttachmentCache':f\|m\|\(\): p<v>/);
   assert.doesNotMatch(cppSchema, /f\([^)]*f\(|'done'|m<s,u>/);
   assert.match(outputs.cpp, /Valdi::Ref<AppUIHost>/);

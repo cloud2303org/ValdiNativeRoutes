@@ -12,7 +12,7 @@ import io.valdiroutes.app_ui.appui.ActionSheetOptions
 import io.valdiroutes.app_ui.appui.AppPresentationOptions
 import io.valdiroutes.app_ui.appui.AppUI
 import io.valdiroutes.app_ui.appui.BottomSheetOptions
-import io.valdiroutes.app_ui.appui.DatePickerMode
+import io.valdiroutes.app_ui.appui.DatePickerMode as AppDatePickerMode
 import io.valdiroutes.app_ui.appui.DatePickerOptions
 import io.valdiroutes.app_ui.appui.ImagePreviewOptions
 import io.valdiroutes.app_ui.appui.LoadingOptions
@@ -65,12 +65,11 @@ class AppUIHostImpl(context: Context) : AppUIHost {
 
     override fun showDatePicker(request: DatePickerRequest): Promise<PresentationReply> {
         val mode = when (request.mode) {
-            "year" -> DatePickerMode.Year
-            "year-month" -> DatePickerMode.YearMonth
-            "date" -> DatePickerMode.Date
-            "time" -> DatePickerMode.Time
-            "datetime" -> DatePickerMode.DateTime
-            else -> return AppUIPromise.reject(IllegalArgumentException("unsupported picker mode"))
+            DatePickerMode.Year -> AppDatePickerMode.Year
+            DatePickerMode.YearMonth -> AppDatePickerMode.YearMonth
+            DatePickerMode.Date -> AppDatePickerMode.Date
+            DatePickerMode.Time -> AppDatePickerMode.Time
+            DatePickerMode.DateTime -> AppDatePickerMode.DateTime
         }
         return present {
             DatePickerOptions(
@@ -94,9 +93,9 @@ class AppUIHostImpl(context: Context) : AppUIHost {
         AppUI.scanCode { result -> AppUIPromise.complete(promise, result) { ScanCodeReply(it.result, it.scanType) } }
     }
 
-    override fun pickAttachments(source: String, limit: Double, mimeTypes: List<String>): Promise<AttachmentSelection> =
+    override fun pickAttachments(source: AttachmentSource, limit: Double, mimeTypes: List<String>): Promise<AttachmentSelection> =
         onMain { promise ->
-            AppUI.pickAttachments(source, limit.toInt(), mimeTypes) { result ->
+            AppUI.pickAttachments(source.value, limit.toInt(), mimeTypes) { result ->
                 AppUIPromise.complete(promise, result) { assets ->
                     AttachmentSelection(assets.isEmpty(), assets.map {
                         AttachmentAsset(it.id, it.uri, it.name, it.mimeType, it.size)
@@ -110,7 +109,7 @@ class AppUIHostImpl(context: Context) : AppUIHost {
         AppUIPromise.background({ thread(name = "attachment-cache", block = it) }) { AttachmentCache.clear(appContext) }
 
     override fun showToast(request: ToastRequest): Promise<Unit> = feedback {
-        AppUI.showToast(ToastOptions(request.title, request.icon, request.duration.toLong(), request.mask))
+        AppUI.showToast(ToastOptions(request.title, request.icon.value, request.duration.toLong(), request.mask))
     }
 
     override fun hideToast(): Promise<Unit> = feedback { AppUI.hideToast() }

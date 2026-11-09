@@ -481,8 +481,8 @@ internal class VideoSession(
     private class StateEvent(val state: VideoState, val recipients: List<VideoSubscriptionImpl>)
 
     companion object {
-        const val INLINE = "inline"
-        const val FULLSCREEN = "fullscreen"
-        const val PIP = "pictureInPicture"
+        val INLINE = VideoMode.Inline
+        val FULLSCREEN = VideoMode.Fullscreen
+        val PIP = VideoMode.PictureInPicture
     }
 }

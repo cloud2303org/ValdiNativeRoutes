@@ -11,7 +11,7 @@ consumer and imports the service modules directly. Legacy forwarding files under
 | `permissions` | Permission status, request serialization and settings entry points | `native_common` |
 | `wifi` | Existing Wi-Fi API, events and native hosts | `permissions`, `native_common` |
 | `nfc` | Android reader/tag API; iOS retains explicit unsupported behavior | `permissions`, `native_common` |
-| `app_ui` | Dialogs, pickers, feedback, media selection and native presentation controls | `native_common` |
+| `app_ui` | Dialogs, pickers, feedback, media selection and native presentation controls | `native_common`, `theme_bridge` |
 | `native_common` | Shared data validation and TS helpers | None |
 
 ## Selection and host integration

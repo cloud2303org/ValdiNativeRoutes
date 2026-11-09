@@ -10,5 +10,6 @@ node_valdi_module(
     ios_language = "objc",
     deps = [
         "//modules/native_common:native_common_compiled",
+        "//modules/theme_bridge:theme_bridge_compiled",
     ],
 )

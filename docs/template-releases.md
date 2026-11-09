@@ -26,6 +26,11 @@ pnpm install --frozen-lockfile
 # 新应用需要 OTA 时，在第一次构建前生成自己的密钥：
 node scripts/ota.mjs keygen
 
+# 手动导出所需平台的 Debug runtime（获取固定框架源码并生成绑定）：
+scripts/export-android.sh debug
+# 或 macOS：
+scripts/export-ios.sh debug
+
 pnpm android
 # 或 macOS：
 pnpm ios
@@ -33,7 +38,8 @@ pnpm ios
 
 需要 Node 24 和项目固定的 pnpm。Android 还需要 JDK 17、Android SDK
 和 Bazel；iOS 还需要 macOS、Xcode、XcodeGen。
-正常 prebuild 会获取固定的框架源码并准备原生产物。
+运行时由上述脚本手动导出；原生构建自动准备已启用模块声明的依赖并编译模块库和宿主源码。
+Windows 使用 `scripts/windows/export-android.ps1 -Config debug`。
 HDiff 桌面工具仅差分发布时需要；可提前运行 `pnpm ota:tool`。
 平台详细前置条件见 `build-and-ci.md` 和 `windows-native-build.md`。
 
@@ -60,9 +66,11 @@ git switch -c upgrade/template-next
 git merge <新的模板tag>
 pnpm install --frozen-lockfile
 pnpm test
-pnpm prebuild --platform android
+scripts/export-android.sh debug
+pnpm build:android
 # macOS 下还验证 iOS：
-pnpm prebuild --platform ios
+scripts/export-ios.sh debug
+pnpm build:ios
 ```
 
 合并仍需审查业务与模板代码的冲突。当前没有自动 SDK 升级器，

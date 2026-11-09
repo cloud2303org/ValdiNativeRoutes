@@ -58,4 +58,5 @@ bazel test @valdi//bzl/valdi:common_test \
 无需旧模块编译器。
 
 框架或编译器更新后，应重新导出 AAR/XCFramework，再构建宿主应用。
-导出脚本根据实际更新后的输入生成 fingerprint；不应手工绕过 OTA 兼容性检查。
+当前导出脚本生成绑定，并在 runtime 的 `valdi_ota.json` 中仅记录平台/配置。
+构建不计算源码指纹或自动重新导出；OTA 的原生 API 兼容性由发布者按平台和 App 版本负责。

@@ -24,9 +24,12 @@ export const genDir = (name: string) => path.join(genRoot, name);
 export const modulesDir = path.join(valdi, 'modules');
 
 export interface ModuleConfig {
-  nativeBuild?: 'bazel' | 'host';
+  nativeBuild?: 'bazel' | 'host' | 'cpp';
+  nativeDependencies?: { script: string; inputs: string[] };
+  nativeInputs?: string[];
   iosModuleName?: string;
   iosLanguage?: 'objc' | 'swift' | 'both';
+  iosProjectSpec?: string;
   androidClassPath?: string;
   androidModuleFactory?: string;
   androidModuleFactoryContext?: boolean;
@@ -48,7 +51,13 @@ export function moduleConfig(name: string): ModuleConfig {
   const file = path.join(modulesDir, name, 'module.json');
   if (!existsSync(file)) return {};
   const config = JSON.parse(readFileSync(file, 'utf8'));
-  if (config.nativeBuild !== undefined && !['bazel', 'host'].includes(config.nativeBuild)) throw new Error(`${file}: unsupported nativeBuild`);
+  if (config.nativeBuild !== undefined && !['bazel', 'host', 'cpp'].includes(config.nativeBuild)) throw new Error(`${file}: unsupported nativeBuild`);
+  // Keep the cpp ownership contract aligned with scripts/module-native-config.mjs.
+  if (config.nativeBuild === 'cpp') {
+    const contribution = Object.keys(config).find(field => /^(android|ios)/.test(field) &&
+      !['androidClassPath', 'iosModuleName', 'iosLanguage'].includes(field));
+    if (contribution) throw new Error(`${file}: nativeBuild cpp cannot declare platform contribution ${contribution}`);
+  }
   if (config.iosModuleName !== undefined && !/^[A-Za-z][A-Za-z0-9_]*$/.test(config.iosModuleName)) {
     throw new Error(`${file}: invalid iosModuleName`);
   }

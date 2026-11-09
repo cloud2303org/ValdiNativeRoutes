@@ -1,4 +1,5 @@
 #import "VRVideoService.h"
+#import "VRVideoSource.h"
 #import <AVFoundation/AVFoundation.h>
 #import <AVKit/AVKit.h>
 #import <UIKit/UIKit.h>
@@ -305,11 +306,11 @@ static VRVideoState *VRVideoCopyState(VRVideoState *state) {
 }
 - (SCValdiPromise<SCValdiUndefinedValue *> *)setVolumeWithVolume:(double)volume {
     return [self perform:^(VRVideoSession *session, SCValdiResolvablePromise *promise) {
-        if (!isfinite(volume)) {
-            [promise fulfillWithError:VRVideoError(@"Volume must be finite")];
+        if (!isfinite(volume) || volume < 0 || volume > 1) {
+            [promise fulfillWithError:VRVideoError(@"Volume must be finite and between zero and one")];
             return;
         }
-        session.player.volume = (float)fmin(1, fmax(0, volume));
+        session.player.volume = (float)volume;
         [session emitState];
         [promise fulfillWithSuccessValue:[SCValdiUndefinedValue undefined]];
     }];
@@ -480,20 +481,13 @@ static VRVideoState *VRVideoCopyState(VRVideoState *state) {
     [self.sessions removeObjectForKey:session.identifier];
     [self updateAudio];
 }
-- (NSString *)getDemoSource {
-    // XcodeGen copies this single resource into the main bundle. No remote fallback or missing-asset success.
-    return [NSBundle.mainBundle URLForResource:@"flower" withExtension:@"mp4"].absoluteString ?: @"";
-}
 - (SCValdiPromise<id<VRVideoPlayer>> *)createWithSource:(NSString *)source {
     SCValdiResolvablePromise<id<VRVideoPlayer>> *promise = [SCValdiResolvablePromise new];
     dispatch_async(dispatch_get_main_queue(), ^{
-        NSURL *url = [NSURL URLWithString:source];
-        NSString *scheme = url.scheme.lowercaseString;
-        // AVURLAsset handles progressive MP4 and ordinary HLS VOD/live URLs without extension sniffing.
-        if (!url || !([scheme isEqual:@"https"] || url.isFileURL) ||
-            ([scheme isEqual:@"https"] && !url.host.length) ||
-            (url.isFileURL && ![NSFileManager.defaultManager fileExistsAtPath:url.path])) {
-            [promise fulfillWithError:VRVideoError(@"Expected an existing file URL or an HTTPS video/HLS URL")];
+        NSError *error = nil;
+        NSURL *url = VRVideoSourceURL(source, NSBundle.mainBundle, &error);
+        if (!url) {
+            [promise fulfillWithError:error];
             return;
         }
         VRVideoSession *session = [[VRVideoSession alloc] initWithURL:url service:self];
@@ -907,7 +901,8 @@ static VRVideoState *VRVideoCopyState(VRVideoState *state) {
     [self reconcile];
 }
 - (VRVideoState *)state {
-    NSString *mode = self.pip.pictureInPictureActive ? @"pictureInPicture" : (self.fullscreen ? @"fullscreen" : @"inline");
+    VRVideoMode mode = self.pip.pictureInPictureActive ? VRVideoModePictureInPicture
+        : (self.fullscreen ? VRVideoModeFullscreen : VRVideoModeInline);
     return [[VRVideoState alloc] initWithCurrentTimeMs:VRVideoMilliseconds(self.player.currentTime)
         durationMs:VRVideoMilliseconds(self.item.duration)
         playing:self.player.timeControlStatus == AVPlayerTimeControlStatusPlaying

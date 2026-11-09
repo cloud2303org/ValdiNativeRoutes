@@ -8,6 +8,16 @@ Hermes bytecode contract, or other required native behavior becomes incompatible
 
 ## Contents and ownership
 
+Client sources and native build declarations live in
+[`valdi/modules/app_ota`](../valdi/modules/app_ota/README.md): Kotlin/JNI under
+`android/`, Swift/Objective-C and the XcodeGen codec target under `ios/`, and
+the shared C codec, vendors and tests under `native/`. The module owns factory
+registration and platform dependencies. The host retains explicit startup,
+background-check and image-provider calls. Follow the module README to enable
+or remove those calls manually. An empty server URL disables checks while keeping
+the client compiled into the app. Publisher scripts and `ota/` working data remain
+at the repository root.
+
 Only `app_pages` is OTA-owned: its `.valdimodule`, optional `.map.json` and owned
 resources. All other enabled application and Valdi modules, including their JS
 wrappers, remain bundled in the native installation. Production clients require
@@ -24,8 +34,12 @@ and resources still use verified full-file reuse/download; Android bundled
 drawable reuse is best-effort because resource selection can change density.
 
 The `.valdimodule` format remains a default-ZSTD-compressed Valdi packet.
-The source/build hashes in runtime export receipts still detect stale C++
-exports; those checks do not decide which OTA version a device can receive.
+Runtime export metadata (`android/app/libs/valdi_ota.json` or
+`ios/Frameworks/valdi_ota.json`) contains only `platform` and `config`. OTA packing
+requires the target platform's Release runtime artifacts and matching metadata.
+It does not compare runtime source/build hashes or re-export the runtime.
+Manually export again after runtime changes; native API compatibility remains
+the publisher's responsibility.
 
 ## Native and business versions
 
@@ -33,8 +47,9 @@ exports; those checks do not decide which OTA version a device can receive.
 or iOS `CFBundleShortVersionString`. The root `package.json` field
 `valdi.ota.bundleVersion` identifies that binary's embedded business bundle
 (initially `pages-001`); app-info writes it and `modules: ["app_pages"]` into
-`valdi_ota.json`. Set it to the business version actually embedded when building
-a new native binary.
+the application's bundled `valdi_ota.json`. This app-info file is separate from
+the runtime export metadata described above. Set the configured bundle version
+to the business version actually embedded when building a new native binary.
 
 Checks request
 `<base>/<platform>/<appVersion>/latest.json?platform=<platform>&appVersion=<appVersion>&bundleVersion=<runningVersion>`

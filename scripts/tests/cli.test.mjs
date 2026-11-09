@@ -7,7 +7,6 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { parseAdbDevices, parseIosSimulators, selectAndroidDevice, selectIosSimulator } from '../device.mjs';
 import { ensureBazelShell, extraBazelFlags } from '../node-modules.mjs';
-import { planPrebuild } from '../cli.mjs';
 import { sampleApp } from './fixtures/app-config.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -19,12 +18,16 @@ function freshIconProject(t) {
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(path.join(root, 'scripts'));
   mkdirSync(path.join(root, 'assets'));
-  for (const name of ['cli.mjs', 'prerequisites.mjs', 'device.mjs', 'app-config.mjs', 'app-icons.mjs']) {
+  for (const name of ['cli.mjs', 'prerequisites.mjs', 'device.mjs', 'app-config.mjs', 'app-icons.mjs',
+    'native-dependencies.mjs', 'native-modules.mjs', 'module-native-config.mjs', 'module-platform-config.mjs']) {
     copyFileSync(path.join(repository, 'scripts', name), path.join(root, 'scripts', name));
   }
   copyFileSync(path.join(repository, 'assets/app-icon.png'), path.join(root, 'assets/app-icon.png'));
+  mkdirSync(path.join(root, 'tools/valdi-rolldown'), { recursive: true });
+  mkdirSync(path.join(root, 'valdi/modules'), { recursive: true });
+  copyFileSync(path.join(repository, 'tools/valdi-rolldown/modules.mjs'), path.join(root, 'tools/valdi-rolldown/modules.mjs'));
   writeFileSync(path.join(root, 'package.json'), JSON.stringify({
-    valdi: { app: { ...sampleApp(), icon: 'assets/app-icon.png' } },
+    valdi: { app: { ...sampleApp(), icon: 'assets/app-icon.png' }, modules: [] },
   }));
   // Stop at the dependency-install boundary; this fixture never invokes a package manager.
   writeFileSync(path.join(root, 'scripts/pnpm.mjs'),
@@ -37,23 +40,13 @@ function freshIconProject(t) {
   };
 }
 
-test('fresh icon prebuild reaches dependency installation before requiring sharp', t => {
+test('fresh icon dry-run plans only the native build without installing dependencies or generating assets', t => {
   const f = freshIconProject(t);
-  const result = f.run(['prebuild', '--platform', 'android']);
-  assert.equal(result.status, 1, result.stderr);
-  assert.match(result.stdout, /fixture dependency installer reached/);
-  assert.match(result.stderr, /exited with 23/);
-  assert.doesNotMatch(result.stderr, /sharp is unavailable/);
-  assert.equal(existsSync(path.join(f.root, 'ios/Generated')), false);
-  assert.equal(existsSync(path.join(f.root, 'android/app/build')), false);
-});
-
-test('fresh icon dry-run needs no sharp or dependency installation and writes no assets', t => {
-  const f = freshIconProject(t);
-  const result = f.run(['prebuild', '--platform', 'android', '--dry-run', '--json']);
+  const result = f.run(['android', '--dry-run', '--json', '--no-install']);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(JSON.parse(result.stdout).platform, 'android');
-  assert.doesNotMatch(result.stdout, /fixture dependency installer reached/);
+  assert.equal(JSON.parse(result.stdout).build, 'Debug');
+  assert.doesNotMatch(result.stdout, /fixture dependency installer reached|fingerprint|dependencies:/);
   assert.equal(existsSync(path.join(f.root, 'ios/Generated')), false);
   assert.equal(existsSync(path.join(f.root, 'android/app/build')), false);
 });
@@ -61,7 +54,7 @@ test('fresh icon dry-run needs no sharp or dependency installation and writes no
 test('--help documents the unified commands and exits 0', () => {
   const result = cliRun(['--help']);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /prebuild --platform <android\|ios>/);
+  assert.doesNotMatch(result.stdout, /prebuild|force-export|no-prebuild/);
   assert.match(result.stdout, /android \[options\]/);
   assert.match(result.stdout, /ios \[options\]/);
   assert.match(result.stdout, /dev\s+Hot reload/);
@@ -74,10 +67,15 @@ test('unknown options fail with the usage text', () => {
   assert.match(result.stderr, /Unknown option: --nope/);
 });
 
-test('prebuild requires an explicit platform', () => {
+test('removed prebuild command and flags are rejected without compatibility aliases', () => {
   const result = cliRun(['prebuild']);
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /requires --platform android or --platform ios/);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /Unknown command: prebuild/);
+  for (const flag of ['--no-prebuild', '--force-export', '--platform']) {
+    const removed = cliRun(['android', flag]);
+    assert.equal(removed.status, 2);
+    assert.match(removed.stderr, /Unknown option/);
+  }
 });
 
 test('release is refused instead of silently building Debug', () => {
@@ -132,24 +130,6 @@ test('iOS simulators keep only available iPhones and honour --device', () => {
   assert.equal(selectIosSimulator([noneBooted[0]], undefined).udid, 'AAA');
 });
 
-test('the prebuild plan separates runtime export from module-only work', () => {
-  const current = planPrebuild({ platform: 'android', runtimeCurrent: true, visionCurrent: true, bindingsStale: false });
-  assert.match(current.steps.find(step => step.step === 'runtime').action, /skip export/);
-  assert.match(current.steps.find(step => step.step === 'modules').action, /module libraries/);
-  const stale = planPrebuild({ platform: 'android', runtimeCurrent: false, visionCurrent: false, bindingsStale: true });
-  assert.match(stale.steps.find(step => step.step === 'bindings').action, /regenerate/);
-  assert.match(stale.steps.find(step => step.step === 'runtime').action, /export the Valdi runtime/);
-  assert.match(stale.steps.find(step => step.step === 'vision').action, /build OpenCV\/ncnn/);
-});
-
-test('prebuild --dry-run reports a platform plan from the real repository state', () => {
-  const result = cliRun(['prebuild', '--platform', 'android', '--dry-run', '--json']);
-  assert.equal(result.status, 0, result.stderr);
-  const plan = JSON.parse(result.stdout);
-  assert.equal(plan.platform, 'android');
-  assert.deepEqual(plan.steps.map(step => step.step), ['sources', 'bindings', 'runtime', 'vision', 'modules']);
-});
-
 test('android --dry-run stops after the plan instead of building or installing', () => {
   const result = cliRun(['android', '--dry-run', '--json', '--', '--stacktrace']);
   assert.equal(result.status, 0, result.stderr);
@@ -166,15 +146,11 @@ test('dev --dry-run never starts the hot reload loop', () => {
   assert.match(result.stdout, /Hot reload plan: .*hotreload\.sh/);
 });
 
-/*
- * pnpm runs a `prebuild` script before `build` unless pre/post scripts are disabled. The unified UX
- * needs both `pnpm prebuild --platform android` and `pnpm build`, so the repository pins the setting.
- */
-test('pnpm does not run the prebuild script as an implicit build hook', () => {
-  const npmrc = readFileSync(path.join(repository, '.npmrc'), 'utf8');
-  assert.match(npmrc, /^enable-pre-post-scripts=false$/m);
+test('the template exposes native builds and hot reload without a prebuild lifecycle script', () => {
   const scripts = JSON.parse(readFileSync(path.join(repository, 'package.json'), 'utf8')).scripts;
-  assert.equal(scripts.prebuild, 'node scripts/cli.mjs prebuild');
+  assert.equal(scripts.prebuild, undefined);
+  assert.equal(scripts.dev, 'node scripts/cli.mjs dev');
+  assert.equal(scripts['build:android'], 'node scripts/project.mjs android');
 });
 
 test('Bazel startup/build flags from the environment are split and may be empty', () => {

@@ -2,8 +2,8 @@ import Foundation
 import MMKV
 import ValdiRuntime
 
-/// `api.*StorageSync` (storage.ts): a dedicated structured store in MMKV's default directory (Documents/mmkv).
-/// Called on the JS thread; MMKV is thread safe. Only the persistence layer handles JSON text.
+/// `api.*StorageSync` (storage.ts): a dedicated string store in MMKV's default directory (Documents/mmkv). Values
+/// are JSON text serialized by JS; the bridge carries strings only. Called on the JS thread; MMKV is thread safe.
 final class StorageHostImpl {
     private let mmkv: MMKV
 
@@ -15,13 +15,10 @@ final class StorageHostImpl {
 
     lazy var host = VRStorageHost(
         get: { [unowned self] key in
-            let read = StorageCodec.decode(mmkv.string(forKey: key))
-            return VRStorageReadReply(found: read.found, payload: read.payload, error: read.error)
+            let stored = mmkv.string(forKey: key)
+            return VRStorageReadReply(found: stored != nil, value: stored ?? "")
         },
-        set: { [unowned self] request in
-            guard let text = try? StorageCodec.encode(request.payload) else { return false }
-            return mmkv.set(text, forKey: request.key)
-        },
+        set: { [unowned self] request in mmkv.set(request.value, forKey: request.key) },
         remove: { [unowned self] key in mmkv.removeValue(forKey: key) },
         clear: { [unowned self] in mmkv.clearAll() }
     )

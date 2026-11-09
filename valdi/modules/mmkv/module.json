@@ -7,8 +7,7 @@
   "iosModuleFactoryClass": "VRMMKVModuleFactory",
   "iosModuleName": "MMKVStorage",
   "androidDependencies": [
-    "com.tencent:mmkv:2.4.3",
-    "org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0"
+    "com.tencent:mmkv:2.4.3"
   ],
   "iosPackages": [
     {

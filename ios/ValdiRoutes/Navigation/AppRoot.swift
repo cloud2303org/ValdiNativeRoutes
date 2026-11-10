@@ -1,9 +1,5 @@
 import UIKit
 
-extension UIColor {
-    static let pageBackground = UIColor(red: 0xf3 / 255, green: 0xf4 / 255, blue: 0xf6 / 255, alpha: 1)
-}
-
 /// Holds the page stack once the route table has loaded, and presents the full-screen cover. Nothing in UIKit avoids
 /// the keyboard: KeyboardObserver reports its height continuously, and each page container pads itself (PageContainerView).
 final class RootController: UIViewController {
@@ -12,7 +8,7 @@ final class RootController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .pageBackground
+        view.backgroundColor = .clear
         splash = StartupSplashScreen.shared.attach(
             to: view,
             roots: { [weak self] in self?.navigator?.initialContentRoots() },
@@ -237,7 +233,8 @@ final class PageController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .pageBackground
+        // The embedded Valdi/native page owns its background.
+        view.backgroundColor = .clear
         switch entry.definition.kind {
         case "valdi":
             break

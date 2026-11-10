@@ -60,11 +60,13 @@ Native code can consume module implementations directly:
 
 - **ThemeBridge:** AppUI's Kotlin/Swift `UiDesign` reads `ThemeTokensStore`.
   This is a declared `app_ui -> theme_bridge` native dependency. Both native UI
-  and the generated JS accessor read the native token tree. Android's page
-  containers also select their canvas from that tree using the current system
-  appearance. Keep the light/night `page_background` resources aligned with
-  those canvas tokens for the starting window and splash screen; Android Force
-  Dark is disabled because the application selects its own palettes.
+  and the generated JS accessor read the native token tree. Valdi and native
+  pages own their backgrounds; the Android/iOS route containers do not paint a
+  shared page color. Android's normal window has no background drawable.
+  The light/night `page_background` resources provide the system splash and
+  startup error background only. Android Force Dark is disabled because the
+  application selects its own palettes. Transparent route containers do not
+  synchronize navigation transitions with asynchronous content rendering.
 - **AppUI:** native pages call Android `NativeApp.ui` or iOS `app.ui`.
   Activity attachment, foreground-page notifications and application image-loader
   injection provide presentation context. Wheel adapters and their tests are

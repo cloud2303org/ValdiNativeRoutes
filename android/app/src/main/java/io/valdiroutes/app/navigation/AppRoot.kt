@@ -5,7 +5,6 @@ import android.app.Activity
 import android.graphics.BitmapFactory
 import android.view.ViewGroup
 import android.widget.FrameLayout
-import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -44,7 +43,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.graphics.toColorInt
 import androidx.core.view.WindowCompat
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.rememberDecoratedNavEntries
@@ -55,7 +53,6 @@ import dev.chrisbanes.haze.hazeSource
 import io.valdiroutes.app_ui.appui.AppModalHost
 import io.valdiroutes.app_ui.appui.AppPresentationHost
 import io.valdiroutes.app_ui.appui.AppUI
-import io.valdiroutes.app.modules.theme_bridge.ThemeTokensStore
 
 @Composable
 internal fun AppRoot(navigator: Navigator, started: Boolean) {
@@ -126,10 +123,10 @@ private fun pageInsets(): Insets {
     return insetsOf(density, top = top, bottom = bottom, horizontal = bars, layoutDirection = LocalLayoutDirection.current)
 }
 
-/** Full-screen Valdi page: edge-to-edge, the page pads itself with the insets, the keyboard shrinks it. */
+/** Full-screen Valdi page: the page owns its background and insets; the keyboard shrinks its container. */
 @Composable
 private fun ValdiScreen(entry: PageEntry, navigator: Navigator) {
-    Box(Modifier.fillMaxSize().background(pageBackground()).padding(bottom = keyboardHeight())) {
+    Box(Modifier.fillMaxSize().padding(bottom = keyboardHeight())) {
         ValdiPage(entry, pageInsets(), navigator, Modifier.fillMaxSize())
     }
 }
@@ -162,13 +159,6 @@ private fun ValdiPage(entry: PageEntry, insets: Insets, navigator: Navigator, mo
     )
 }
 
-/** Match the Valdi palette while a new page's native view is still rendering. */
-@Composable
-private fun pageBackground(): Color {
-    val colors = if (isSystemInDarkTheme()) ThemeTokensStore.tokens.dark else ThemeTokensStore.tokens.light
-    return Color(colors.canvas.toColorInt())
-}
-
 private fun insetsOf(density: Density, top: Int, bottom: Int, horizontal: WindowInsets, layoutDirection: LayoutDirection) = Insets(
     top = top / density.density,
     bottom = bottom / density.density,
@@ -191,7 +181,8 @@ private fun TabsScreen(shell: PageEntry, navigator: Navigator) {
         val hazeState = remember(shell.id) { HazeState() }
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            containerColor = pageBackground(),
+            // The selected Valdi/native page paints its own background, including behind the glass bar.
+            containerColor = Color.Transparent,
             // Pages already receive all system insets through PageViewModel/NativePage.
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = { OfficialTabBar(bar, selected, hazeState) { navigator.selectTab(shell, it) } },
@@ -213,7 +204,7 @@ private fun TabPage(shell: PageEntry, selected: String, insets: Insets, navigato
     // its first visit so switching back never re-creates it. Startup renders just the visible page.
     val mounted = remember(shell.id) { mutableStateListOf<String>() }
     LaunchedEffect(selected) { if (selected !in mounted) mounted.add(selected) }
-    Box(Modifier.fillMaxSize().background(pageBackground())) {
+    Box(Modifier.fillMaxSize()) {
         bar.tabs.forEach { item ->
             val active = item.route == selected
             if (!active && item.route !in mounted) return@forEach

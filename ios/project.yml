@@ -42,6 +42,8 @@ targets:
     preBuildScripts:
       - name: Native Valdi modules
         basedOnDependencyAnalysis: false
+        outputFiles:
+          - "$(SRCROOT)/../module-build/out/ios/libvaldi_modules_ios.a"
         script: |
           set -e
           export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"

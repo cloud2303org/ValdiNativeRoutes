@@ -6,9 +6,8 @@ import { DevicePage } from './features/device/DevicePage';
 import { FormPage } from './features/form/FormPage';
 import { HomePage } from './features/home/HomePage';
 import { InputCheckPage } from './features/inputs/InputCheckPage';
-import { LoginPage } from './features/auth/LoginPage';
 import { LottiePage } from './features/lottie/LottiePage';
-import type { FormLayout } from './routing/index';
+import type { FormLayout } from './features/form/types';
 import { defineRoutes, nativePage, valdiPage } from 'app_foundation/src/navigation/config';
 import { PresentationPage } from './features/presentation/PresentationPage';
 import { RouteAnimationPage } from './features/navigation/RouteAnimationPage';
@@ -23,7 +22,6 @@ export const routes = defineRoutes({
     android: { animation: 'slideRight', durationMs: 300 },
   },
   pages: {
-    login: valdiPage({ component: LoginPage, title: '登录' }),
     inputCheck: valdiPage({ component: InputCheckPage, title: '输入自检' }),
     home: valdiPage({ component: HomePage, title: '首页' }),
     detail: valdiPage<{ id: number; from: string }, { visited: number }>({ component: DetailPage, title: '详情' }),

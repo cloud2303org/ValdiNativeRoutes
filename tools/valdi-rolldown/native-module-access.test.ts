@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 import vm from 'node:vm';
@@ -9,7 +8,6 @@ import { codegenModules, generateNativeCode } from './codegen/index';
 
 const app = path.resolve(import.meta.dirname, '../../valdi/modules/app_pages');
 const modules = path.dirname(app);
-const requireApp = createRequire(path.join(app, 'package.json'));
 
 function runtime() {
   const calls: string[] = [];
@@ -19,8 +17,6 @@ function runtime() {
   let callback: ((error: string, value?: object) => void) | undefined;
   const navigation = { updateRoutes: (value: unknown) => calls.push(`routes:${String(value)}`) };
   const boundaries: Record<string, unknown> = {
-    valibot: requireApp('valibot'),
-    'zustand/vanilla': requireApp('zustand/vanilla'),
     'valdi_core/src/NativeReferences': {
       withGlobalNativeRefs: (name: string, body: () => unknown) => {
         scopes.push(name);
@@ -30,10 +26,6 @@ function runtime() {
     'app_foundation/src/host/AppContext': { getHost: () => {
       calls.push(`context:${scopes.at(-1)}`);
       return { getNavigationHost: () => navigation };
-    } },
-    'app_pages/src/routing/index': { router: {
-      resetToTabs: () => calls.push('tabs'),
-      reset: (route: string) => calls.push(`reset:${route}`),
     } },
     'app_vision/src/Vision': { getHost: () => {
       calls.push(`vision:${scopes.at(-1)}`);
@@ -60,43 +52,16 @@ function runtime() {
   return { load, calls, scopes, complete: (error: string, value?: object) => callback!(error, value) };
 }
 
-test('application Zustand session works independently of the lazy native navigation host', () => {
+test('native navigation host is acquired lazily and restores its native scope after publishing', () => {
   const f = runtime();
-  const { auth } = f.load('app_pages/src/services/auth');
-  const { sessionStore } = f.load('app_pages/src/state/session');
   const navigation = f.load('app_foundation/src/navigation/NavigationHost');
   assert.deepEqual(f.calls, []);
-  const changes: (string | undefined)[] = [];
-  const unsubscribe = sessionStore.subscribe((state: { token: string | undefined }) => changes.push(state.token));
-  assert.equal(auth.isSignedIn(), false);
-  auth.signIn('test-token');
-  assert.equal(auth.getToken(), 'test-token');
-  assert.equal(auth.isSignedIn(), true);
-  auth.signOut();
-  assert.equal(auth.getToken(), undefined);
-  assert.throws(() => auth.signIn(' '));
-  assert.deepEqual(changes, ['test-token', undefined]);
-  unsubscribe();
-  sessionStore.setState({ token: 'application-owned' });
-  assert.equal(auth.getToken(), 'application-owned');
-  assert.deepEqual(changes, ['test-token', undefined], 'unsubscribed application listeners are detached');
   assert.equal(navigation.navigationHost(), navigation.navigationHost());
   navigation.publishRoutes('fixture');
   assert.deepEqual(f.calls, [
-    'tabs', 'reset:login',
     'context:app-navigation', 'routes:fixture',
   ]);
   assert.deepEqual(f.scopes, [], 'native scope is restored after synchronous marshaling');
-});
-
-test('demo sessions are scoped to their JS runtime without native token restoration', () => {
-  const first = runtime();
-  first.load('app_pages/src/services/auth').auth.signIn('demo-session');
-  const second = runtime();
-  const { auth } = second.load('app_pages/src/services/auth');
-  assert.equal(auth.isSignedIn(), false);
-  assert.equal(auth.getToken(), undefined);
-  assert.deepEqual(second.calls, []);
 });
 
 test('Vision registers real one-shot callbacks on first use and preserves result/errors', async () => {

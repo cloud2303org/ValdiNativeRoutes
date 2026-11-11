@@ -8,6 +8,8 @@ import android.os.Trace
 import android.util.Log
 import android.view.View
 import com.snap.valdi.InflationCompletion
+import com.snap.valdi.logger.DefaultLogger
+import com.snap.valdi.logger.Logger
 import com.snap.valdi.views.ValdiRootView
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
@@ -96,6 +98,25 @@ internal object StartupTrace {
 
     internal fun pageDetails(kind: String, id: String, route: String): String =
         if (enabled) "kind=$kind page_id=${quoted(id)} route=${quoted(route)}" else ""
+
+    /**
+     * Timestamp receipt of our fixed-format JS diagnostics on the native clock, without adding
+     * a native bridge API. JS runtime_ms remains its own clock; receipt includes logging overhead.
+     * Other runtime messages retain the default logger and are never copied into diagnostic files.
+     */
+    internal fun pageLogger(): Logger? {
+        if (!enabled) return null
+        val delegate = DefaultLogger()
+        return object : Logger by delegate {
+            override fun log(level: Int, message: String?) {
+                if (message?.startsWith("[ValdiPageTrace] ") == true) {
+                    mark("js.page_event", message.removePrefix("[ValdiPageTrace] "))
+                } else {
+                    delegate.log(level, message)
+                }
+            }
+        }
+    }
 
     /**
      * Pinned ValdiRuntime.inflateViewAsync registers completion via enqueueNextRenderCallback,

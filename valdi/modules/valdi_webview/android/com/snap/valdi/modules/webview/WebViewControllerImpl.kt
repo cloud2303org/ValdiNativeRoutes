@@ -17,11 +17,13 @@ internal class WebViewControllerImpl : IWebViewController, ValdiNativeWebViewCon
         webViewHolder = AndroidWebViewHolder(
             webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                    WebViewTrace.mark("onPageStarted", view)
                     loading = true
                     webViewHolder.injectBridge()
                 }
 
                 override fun onPageFinished(view: WebView, url: String?) {
+                    WebViewTrace.mark("onPageFinished", view)
                     loading = false
                     webViewHolder.injectBridge()
                     lockedListener()?.onLoadCompleted()
@@ -34,6 +36,7 @@ internal class WebViewControllerImpl : IWebViewController, ValdiNativeWebViewCon
                     description: String?,
                     failingUrl: String?
                 ) {
+                    WebViewTrace.mark("onReceivedError", view)
                     loading = false
                     lockedListener()?.onLoadFailed(description ?: "Failed to load $failingUrl")
                 }
@@ -42,6 +45,7 @@ internal class WebViewControllerImpl : IWebViewController, ValdiNativeWebViewCon
             bridgeName = BRIDGE_NAME,
             nativeBridgeName = NATIVE_BRIDGE_NAME
         )
+        WebViewTrace.link("controller_holder", this, webViewHolder)
     }
 
     override fun getWebView(context: Context): android.view.View? {
@@ -49,8 +53,9 @@ internal class WebViewControllerImpl : IWebViewController, ValdiNativeWebViewCon
     }
 
     override fun load(request: WebViewLoadRequest) {
+        WebViewTrace.mark("load.enqueued", this)
         webViewHolder.getWebViewOnUiThread { webView ->
-            loadRequest(request, webView)
+            WebViewTrace.section("loadRequest", webView) { loadRequest(request, webView) }
         }
     }
 

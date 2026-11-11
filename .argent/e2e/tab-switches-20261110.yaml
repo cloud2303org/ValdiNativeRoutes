@@ -1,0 +1,13 @@
+# Recorded live. The recorder selected obscured page labels under the native glass bar.
+# Exact native tab labels were independently probed with successful taps and destination checks.
+executionPrerequisite: Android device, io.valdiroutes.app foreground on the Home tab, no keyboard or overlay. For first-mount evidence, Components and Device tabs must not yet have been visited in this app process.
+steps:
+  - await: { visible: { text: push 详情页 }, timeout: 10000 }
+  # Home updates its visible-seconds counter continuously; wait for the fixed tab control.
+  - await: { visible: { text: { matches: '^组件$' } } }
+  - tap: { text: { matches: '^组件$' } }
+  - await: { visible: { text: 页面内滚轮 }, timeout: 10000 }
+  - await: { idle: true }
+  - tap: { text: { matches: '^设备$' } }
+  - await: { visible: { text: Wi-Fi 与 NFC }, timeout: 10000 }
+  - await: { idle: true }

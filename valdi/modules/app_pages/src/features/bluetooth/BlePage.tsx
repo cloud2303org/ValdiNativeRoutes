@@ -8,7 +8,7 @@ import type { BLEPeripheralServer, BluetoothDevice } from 'bluetooth/src/index';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { Page } from 'app_foundation/src/page/PageComponent';
 import { PageHeader } from '../../components/PageHeader';
-import { Router } from '../../routing/index';
+import { Router } from '../../router';
 
 /** The service this page publishes in peripheral mode, so a phone or computer can connect to it as a central. */
 const DEMO_SERVICE = '0000feed-0000-1000-8000-00805f9b34fb';

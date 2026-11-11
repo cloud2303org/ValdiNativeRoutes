@@ -4,7 +4,7 @@
 `Page<PageViewModel, State, PageContext>` using the real `<animatedimage>`
 element. Its native exports are `VRLottiePage` (iOS) and
 `io.valdiroutes.pages.LottiePage` (Android). Open route `lottie` from Home's
-"Lottie 动画" button or the same button on the login page, without signing in.
+"Lottie 动画" button. The app starts directly on Home.
 
 ## Offline resource and license
 
@@ -138,6 +138,9 @@ Stable accessibility IDs:
 | `lottie-license` | Expand/collapse complete MIT notice |
 
 ## Validation, 2026-11-05
+
+These are historical package/replay results from before the Login removal.
+The saved flows now enter from Home; this entry migration has not been replayed.
 
 - Android arm64/API 36 emulator: visible colored cat, initial paused load,
   real progress, pause/reset/repeated midpoint seeks, speed-option cycling,

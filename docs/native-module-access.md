@@ -28,7 +28,7 @@ installation function.
 Host registration and runtime-linked C++ factories expose these native entries:
 
 - `app_foundation/src/host/AppContext` exposes only the minimal navigation host. The application factory
-  retains its owner. Authentication and Zustand state belong to the app.
+  retains its owner. Ordinary JavaScript state belongs to the app.
 - `app_vision/src/Vision` exposes Vision through the existing strongly typed
   Polyglot C++ bindings and handwritten C++ adapter. `nativeBuild: "cpp"` selects
   the implementation; VisionCore and static OpenCV/ncnn libraries link into the
@@ -45,8 +45,8 @@ Both hosts additionally register `app_foundation/src/splash/SplashScreenNative`
 for the synchronous startup splash policy. See [SplashScreen](splash-screen.md).
 
 `startApp(debug)` still installs the error handler and theme observer, initializes
-the app database, retains the service facades, and selects the authenticated
-initial route. Database migration and application initialization are separate
+the app database, retains the service facades, and returns the default Tab root
+(`routes.home = '$tabs'`, initial tab `home`). Database migration and application initialization are separate
 from native module installation. Route declarations remain TypeScript.
 
 ## Native consumers and application composition

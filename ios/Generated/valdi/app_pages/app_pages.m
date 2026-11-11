@@ -328,38 +328,6 @@ static id SCValdiBlockCreateOB_o(SCValdiBlockTrampoline trampoline) {
 
 
 //
-// VRLoginPage.m
-//
-
-#import <app_pages/app_pages.h>
-#import <ValdiRuntime/SCValdiRuntimeProtocol.h>
-#import <ValdiRuntime/SCValdiContextProtocol.h>
-@implementation VRLoginPage
-
-+ (NSString *)componentPath
-{
-    return @"LoginPage@app_pages/src/features/auth/LoginPage";
-}
-
-- (instancetype)initWithViewModel:(NSDictionary<NSString *, id> *)viewModel componentContext:(NSDictionary<NSString *, id> *)componentContext runtime:(id<SCValdiRuntimeProtocol>)runtime
-{
-    return [super initWithViewModelUntyped:viewModel componentContextUntyped:componentContext runtime:runtime];
-}
-
-- (void)setViewModel:(NSDictionary<NSString *, id> *)viewModel
-{
-    self.valdiContext.viewModel = viewModel;
-}
-
-- (NSDictionary<NSString *, id> *)viewModel
-{
-    return self.valdiContext.viewModel;
-}
-
-@end
-
-
-//
 // VRLottiePage.m
 //
 

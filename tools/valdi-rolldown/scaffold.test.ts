@@ -173,7 +173,7 @@ test('new-module CLI prepares C++ bindings and selection without modifying the h
     cpSync(path.join(import.meta.dirname, name), path.join(tool, name), { recursive: true });
   }
   for (const name of ['package.json', 'node_modules', 'modules.mjs', 'valdiTs.ts', 'module-selection.ts',
-    'editor-config.ts', 'scaffold.ts', 'scaffold-cpp.ts', 'runtime-module-ids.ts', 'vendor']) {
+    'editor-config.ts', 'localization.ts', 'scaffold.ts', 'scaffold-cpp.ts', 'runtime-module-ids.ts', 'vendor']) {
     symlinkSync(path.join(import.meta.dirname, name), path.join(tool, name));
   }
   symlinkSync(path.join(root, 'scripts'), path.join(fixture, 'scripts'));

@@ -310,8 +310,11 @@ Generated Kotlin/Objective-C bindings still follow each module's native-build ow
 Canonical C++ generation uses `--cpp-modules-out ../../valdi/modules`: each C++ owner
 gets `cpp/generated/valdi_modules/<id>/`, and explicit module `cpp/BUILD.bazel` targets
 compile it. The default roots are enabled modules with `cpp/src` implementations;
-generated include dependencies supply the transitive binding closure. Today this is
-`app_pages -> app_foundation`. The runtime links only `//modules/app_pages/cpp:native`.
+generated include dependencies supply the transitive binding closure. A module's
+optional `cppSourceRoots` narrows only this module-owned C++ generation. `app_pages`
+selects `src/cpp/Cpp.d.ts`, so its demo bindings no longer depend on foundation's
+routing contracts. The current closure contains `app_pages` and `app_vision`; the
+runtime links their `cpp:native` targets.
 
 - A host-only binding outside that C++ closure rebuilds its native module/app, without
   adding a new runtime C++ dependency. Its changed native ABI still affects OTA compatibility.

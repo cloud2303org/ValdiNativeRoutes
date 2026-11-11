@@ -38,7 +38,11 @@ class PageEntry(
 
     /** A tab shell's pages by tab, created when first selected. */
     val tabPages = mutableMapOf<String, PageEntry>()
-    var selectedTab by mutableStateOf<String?>(null)
+    internal val tabSelection = TabSelectionState()
+    var selectedTab: String?
+        get() = tabSelection.requested
+        set(value) { tabSelection.reset(value) }
+    internal var tabContentInitialized by mutableStateOf(false)
     internal var customTabBar: CustomTabBar? = null
     /** For a tab page, the shell it is in. */
     var shell: PageEntry? = null
@@ -73,6 +77,7 @@ class PageEntry(
     fun destroy() {
         rootView?.destroy()
         rootView = null
+        tabContentInitialized = false
         customTabBar?.destroy()
         customTabBar = null
     }
@@ -130,7 +135,7 @@ class Navigator(private var routes: RouteTable) {
     /** The page the user sees: the stack's top, or for a tab shell its selected page. */
     fun frontPage(): PageEntry? {
         val top = stack.lastOrNull() ?: return null
-        val tab = top.selectedTab ?: return top
+        val tab = top.tabSelection.displayed ?: return top
         return if (top.definition.kind == "tabs") tabPage(top, tab) else top
     }
 
@@ -233,14 +238,18 @@ class Navigator(private var routes: RouteTable) {
         val index = stack.indexOfLast { it.route == bar.route }
         if (index < 0) return reset(bar.route, mapOf("tab" to tab))
         keep(index + 1)
-        stack[index].selectedTab = tab
+        selectTab(stack[index], tab)
     }
 
     /** Bar taps belong to this shell only; they do not pop pages or target a replacement shell. */
     internal fun selectTab(shell: PageEntry, tab: String) {
         if (shell.removed || shell !in stack) return
         require(tabBar?.tabs?.any { it.route == tab } == true) { "Unknown tab: $tab" }
-        shell.selectedTab = tab
+        shell.tabSelection.request(tab)
+    }
+
+    internal fun commitTab(shell: PageEntry, request: TabSelectionState.Request) {
+        if (!shell.removed && stack.lastOrNull() === shell) shell.tabSelection.commit(request)
     }
 
     /** Root first; the pages in a tab shell are not on the stack. */

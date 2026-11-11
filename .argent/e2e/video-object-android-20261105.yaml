@@ -2,13 +2,14 @@
 # Original recorded step numbers and findings: android-qa/report.md. No full replay pass.
 steps:
   - launch: io.valdiroutes.app
+  - await: { visible: { text: push 详情页 }, timeout: 20000 }
+  - scroll-to: { target: { text: 原生视频播放器（MP4 / HLS） } }
   - tool: await-ui-element
     args:
       condition: visible
       selector:
         text: 原生视频播放器（MP4 / HLS）
       timeoutMs: 5000
-  - await: { idle: true }
   - tap:
       text: 原生视频播放器（MP4 / HLS）
   - tool: await-ui-element
@@ -243,4 +244,3 @@ steps:
       selector:
         text: 原生视频播放器（MP4 / HLS）
       timeoutMs: 5000
-  - await: { idle: true }

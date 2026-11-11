@@ -9,6 +9,7 @@ import { sourceFiles, type ValdiModule, type ValdiTsPlugin } from './valdiTs';
 import { availableModuleNames, enabledModuleNames } from './modules.mjs';
 import { assertEnabledImports } from './module-selection';
 import { createEditorConfig } from './editor-config';
+import { addStringEntries, prepareStrings } from './localization';
 
 
 export const root = path.resolve(import.meta.dirname, '../..');
@@ -25,6 +26,8 @@ export const modulesDir = path.join(valdi, 'modules');
 
 export interface ModuleConfig {
   nativeBuild?: 'bazel' | 'host' | 'cpp';
+  /** Module-relative TS entry files for --cpp-modules-out only; imports remain part of the program. */
+  cppSourceRoots?: string[];
   nativeDependencies?: { script: string; inputs: string[] };
   nativeInputs?: string[];
   iosModuleName?: string;
@@ -129,6 +132,8 @@ export function valdiSourceRoot(): string | undefined {
  * local aliases. The boolean means changed; it does not indicate build readiness.
  */
 export function writeTsconfig(module: ValdiModule, modules: ValdiModule[]): boolean {
+  // `pnpm tsconfig` also prepares Strings for editor completion before a build.
+  if (module.generatedDirs[0]) prepareStrings(module, module.generatedDirs[0]);
   const canonical = (file: string) => existsSync(file) ? realpathSync(file) : path.resolve(file);
   const canonicalModule = (value: ValdiModule): ValdiModule => ({
     ...value,
@@ -144,7 +149,7 @@ export function writeTsconfig(module: ValdiModule, modules: ValdiModule[]): bool
   const config = createEditorConfig(canonicalModule(module), modules.map(canonicalModule), {
     frameworkSources: framework && canonical(framework),
     bootstrapBase: canonical(bootstrapBase),
-    generatedRoot: canonical(genRoot),
+    generatedRoot: canonical(module.generatedDirs[0] ? path.dirname(module.generatedDirs[0]) : genRoot),
   });
   const file = path.join(module.dir, 'tsconfig.json');
   const content = `${JSON.stringify(config, null, 4)}\n`;
@@ -324,6 +329,7 @@ export async function buildModule(module: ValdiModule, plugin: ValdiTsPlugin, mi
     built.entries.set(`${chunk.fileName}.js`, Buffer.from(chunk.code));
     if (chunk.map) built.maps.set(`${chunk.fileName}.js`, chunk.map.toString());
   }
+  addStringEntries(built.entries, module.generatedDirs[0] ? prepareStrings(module, module.generatedDirs[0]) : undefined);
   return built;
 }
 

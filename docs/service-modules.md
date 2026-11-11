@@ -37,7 +37,13 @@ module registration. Navigation ownership and image caching remain in the host.
 See [custom module configuration](custom-modules.md) and the
 [source-move handoff](../valdi/modules/native_common/SPLIT_INTEGRATION.md).
 
-## Validation on November 4, 2026
+## Historical validation on November 4, 2026
+
+The login/sign-out observations and replay counts below belong to that package.
+The saved Android/iOS smoke flows were migrated on November 10 to direct Home
+entry, retaining MMKV, process restart and general AppUI modal checks. This
+entry migration has not been replayed; the old counts do not describe the
+current YAML.
 
 App-owned wheel validation remains in `app_ui/src/wheels/schemas.ts`; common request
 schemas are imported directly from `native_common/src/pickerSchemas`. AppUI also

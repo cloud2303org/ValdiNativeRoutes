@@ -25,7 +25,7 @@ open class ValdiWebView(context: Context) : FrameLayout(context), ValdiTouchTarg
         }
         detachControllerWebView()
         this.controller = controller
-        attachControllerWebView()
+        WebViewTrace.section("attachControllerWebView", this) { attachControllerWebView() }
     }
 
     override fun processTouchEvent(event: MotionEvent): ValdiTouchEventResult {

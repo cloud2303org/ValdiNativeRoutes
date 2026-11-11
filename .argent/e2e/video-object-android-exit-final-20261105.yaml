@@ -1,10 +1,11 @@
 steps:
   - launch: io.valdiroutes.app
+  - await: { visible: { text: push 详情页 }, timeout: 20000 }
+  - scroll-to: { target: { text: 原生视频播放器（MP4 / HLS） } }
   - await:
       visible:
         text: 原生视频播放器（MP4 / HLS）
       timeout: 10000
-  - await: { idle: true }
   - tap:
       text: 原生视频播放器（MP4 / HLS）
   - await:
@@ -46,7 +47,6 @@ steps:
       visible:
         text: 原生视频播放器（MP4 / HLS）
       timeout: 10000
-  - await: { idle: true }
   - tap:
       text: 原生视频播放器（MP4 / HLS）
   - await:
@@ -66,4 +66,3 @@ steps:
       visible:
         text: 原生视频播放器（MP4 / HLS）
       timeout: 10000
-  - await: { idle: true }

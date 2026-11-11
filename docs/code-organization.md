@@ -9,8 +9,8 @@
 - `app_foundation`：通用导航契约与配置机制、页面生命周期、同步 Splash、
   首内容绘制钩子、Drizzle 通用驱动和原生连接类型。
   它不导入业务页面、业务路由、业务表结构或认证跳转策略。
-- `app_pages`：业务页面、具体路由声明、认证策略、业务数据库和启动组合。
-  页面在 `src/features/<功能>/`，业务 API、认证和数据库服务在 `src/services/`，
+- `app_pages`：业务页面、具体路由声明、业务数据库和启动组合。
+  页面在 `src/features/<功能>/`，业务 API、网络和数据库服务在 `src/services/`，
   应用主题及共享页面组件在 `src/components/`。
 - `app_vision`：Vision 的类型、生成 getter、调用封装、Polyglot C++ 绑定和手写 C++ 适配器。
   `module.json` 使用 `nativeBuild: "cpp"`，将 VisionCore 和静态 OpenCV/ncnn 链接进 ValdiRuntime；
@@ -39,12 +39,18 @@
 视频对象的释放语义都由各模块原有实现保留。
 
 业务依赖基础设施和能力模块；基础设施、能力模块不反向依赖 `app_pages`。
-用户状态在应用自己的 `state/` 中定义；示例使用 `zustand/vanilla`，不提供原生 TokenStore。
+普通 JS 状态由应用定义；示例已移除登录页和会话 store，不提供原生 TokenStore。
 原生 Host 扩展见[应用 Host 类型扩展](extending-app-host.md)。
 `app_pages/src/routes.ts` 和 `src/app.ts` 是应用组合入口。前者声明业务页面，
 后者组合错误策略、主题、业务数据库、API 和首次路由。
-`src/routing/index.ts` 根据具体 routes 推导业务路由名、参数和结果类型；
+`src/router.ts` 根据具体 routes 推导业务路由名、参数和结果类型；
 通用的 host、options、数据快照及声明工具在 `app_foundation/src/navigation/`。
+表单的 `FormLayout` 类型归 `src/features/form/types.ts`，路由声明和页面直接引用，
+不通过 router 反向引用业务类型。`app.ts` 直接初始化数据库，以副作用导入保留 API
+模块依赖；开发环境通过模块加载器读取更新后的路由声明，首次直接进入首页 Tab。
+有参页面使用 `RouteViewModel<'路由名'>` 绑定参数类型，直接读取 `viewModel.params`。
+Native Web 原生模块注册由 runtime 完成；`services/nativeWeb.ts` 只安装 JS 全局，
+应用入口先导入它，再加载业务服务。
 
 数据库也遵守这个边界：通用 `driver.ts` 和 `native-types.ts` 在 foundation；
 `app_pages/src/database/` 保留 schema、生成迁移和应用迁移流程；
@@ -62,12 +68,11 @@ valdi/modules/
   app_pages/src/
     app.ts              应用启动组合
     routes.ts           具体业务路由
+    router.ts           绑定业务 routes 的类型安全 router
     components/         应用主题、按钮、表单和导航 UI
     database/           业务表结构和迁移
-    features/           home、auth、form、video、vision 等页面
-    routing/            绑定业务 routes 的类型安全 router
-    services/           应用 API、认证策略和数据库服务
-    state/              应用自己的 Zustand 状态
+    features/           home、form、video、vision 等页面
+    services/           应用 API、网络和数据库服务
     cpp/                当前应用的 C++ 调用示例
   app_ui/src/wheels/    可复用滚轮组件、模型和校验
   app_vision/src/       Vision 能力接口和延迟调用
@@ -155,7 +160,6 @@ C++ 的声明、实现和生成绑定按模块归属：
 - `app_pages/cpp/src/Cpp.cpp`：对应手写实现。
 - `app_pages/cpp/generated/valdi_modules/app_pages/`：生成接口、模型和转换代码。
 - `app_pages/cpp/BUILD.bazel`：公共 `module_cpp_library` 规则创建 `:bindings` 和 `:native`。
-- `app_foundation/cpp:bindings`：被应用 C++ 绑定引用的基础类型。
 
 宿主 `valdi/BUILD.bazel` 通过生成的 `CPP_IMPLEMENTATIONS` 选择启用模块的实现，
 包含启用的 `app_pages` 和 `app_vision` C++ 实现及其所需绑定。
@@ -169,6 +173,14 @@ Android 是 `libvaldi_runtime.so`，iOS 是 ValdiRuntime framework，
 `cpp/src` 中寻找实现根，再根据生成的 C++ include 关系计算类型依赖闭包。
 `app_vision` 的 C++ 实现也成为绑定闭包的根；只有类型依赖的模块继续按闭包纳入，
 不会仅因其他 host 模块有导出注解就把它们的 C++ 绑定一起链接。
+模块可在 `module.json` 中配置 `cppSourceRoots`，只为这条生成命令选择 TS 入口文件；
+未配置时仍使用完整模块程序。入口必须是模块内存在的 TS 文件，列表不能为空，
+导入的文件和生成绑定的 include 依赖仍按原流程解析，路径错误在写入任何输出前失败。
+`app_pages` 配置为 `{"cppSourceRoots":["src/cpp/Cpp.d.ts"]}`，
+因此只生成示例的 `CppStats`、`CppModule` 和工厂，保留原命名空间与模块路径。
+`StartApp`、TabBar 等宿主契约继续从完整程序生成 Kotlin/Objective-C；
+当前 runtime C++ 绑定闭包为 `app_pages`、`app_vision`，无需生成 `app_foundation/cpp`。
+`cppSourceRoots` 不改变注解语义、宿主模块配置或通用 `--cpp-out` 的完整程序输出。
 通用 `--cpp-out <临时目录>` 仍可用于独立绑定验证，当前编译器支持 C++ 生成。
 同时生成的 `modules/runtime-cpp.bzl` 记录实现选择及绑定间的直接依赖，供宿主和公共规则读取。
 新建 C++ 模块使用 `pnpm new-module <名字> --template cpp_bridge_module`，启用后由同一流程接入，

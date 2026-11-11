@@ -59,7 +59,8 @@ export class LottiePage extends Page<PageViewModel, State, PageContext> {
   onCreate(): void {
     this.prepareCallbacks();
     try {
-      this.asset = makeAssetFromBytes(Base64.toByteArray(LOTTIE_DEMO_BASE64));
+      const bytes = Base64.toByteArray(LOTTIE_DEMO_BASE64);
+      this.asset = makeAssetFromBytes(bytes);
     } catch (error) {
       this.setState({ load: 'error', error: String(error) });
     }

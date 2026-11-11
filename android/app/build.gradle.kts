@@ -121,7 +121,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
-    implementation("dev.chrisbanes.haze:haze:1.7.2")
+    implementation("dev.chrisbanes.haze:haze-blur:2.1.0")
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.core:core-splashscreen:1.2.0")
     implementation("androidx.navigation3:navigation3-runtime:1.1.7")
@@ -207,8 +207,8 @@ val valdiCodegenCheck = tasks.register<ValdiCodegenCheck>("valdiCodegenCheck") {
     val repo = rootProject.projectDir.parentFile
     val tool = repo.resolve("tools/valdi-rolldown")
     sources.from(
-        fileTree(repo.resolve("valdi/modules")) { include("*/src/**", "*/cpp/**", "*/tsconfig.json", "*/module.json") },
-        fileTree(tool) { include("codegen.ts", "cpp-modules.ts", "codegen/**", "vendor/**", "valdiTs.ts", "routes-transform.ts", "pipeline.ts", "modules.mjs", "module-selection.ts", "package.json", "pnpm-lock.yaml") },
+        fileTree(repo.resolve("valdi/modules")) { include("*/src/**", "*/cpp/**", "*/strings/strings-*.json", "*/tsconfig.json", "*/module.json") },
+        fileTree(tool) { include("codegen.ts", "cpp-modules.ts", "codegen/**", "vendor/**", "valdiTs.ts", "localization.ts", "routes-transform.ts", "pipeline.ts", "modules.mjs", "module-selection.ts", "package.json", "pnpm-lock.yaml") },
         repo.resolve("package.json"),
         fileTree("generated/valdi"),
         repo.resolve("valdi/BUILD.bazel"),
@@ -243,7 +243,7 @@ androidComponents {
             dependsOn(nativeModules)
             val tool = repo.resolve("tools/valdi-rolldown")
             sources.from(
-                fileTree(repo.resolve("valdi/modules")) { include("*/src/**", "*/res/**", "*/sql/**", "*/tsconfig.json", "*/module.json", "*/BUILD.bazel") },
+                fileTree(repo.resolve("valdi/modules")) { include("*/src/**", "*/res/**", "*/strings/strings-*.json", "*/sql/**", "*/tsconfig.json", "*/module.json", "*/BUILD.bazel") },
                 fileTree(tool) { include("*.ts", "*.mjs", "vendor/**", "package.json", "pnpm-lock.yaml") },
                 repo.resolve("package.json"),
                 repo.resolve("scripts/node-modules.mjs"),

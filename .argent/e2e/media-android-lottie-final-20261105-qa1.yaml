@@ -5,23 +5,17 @@
       "launch": "io.valdiroutes.app"
     },
     {
+      "await": { "visible": { "text": "push 详情页" }, "timeout": 20000 }
+    },
+    {
+      "scroll-to": { "target": { "text": "Lottie 动画" } }
+    },
+    {
       "await": {
         "visible": {
           "text": "Lottie 动画"
         },
         "timeout": 20000
-      }
-    },
-    {
-      "await": {
-        "visible": {
-          "text": "Valdi + Compose Nav3"
-        }
-      }
-    },
-    {
-      "await": {
-        "idle": true
       }
     },
     {
@@ -390,16 +384,10 @@
       }
     },
     {
-      "await": {
-        "visible": {
-          "text": "Valdi + Compose Nav3"
-        }
-      }
+      "await": { "visible": { "text": "push 详情页" } }
     },
     {
-      "await": {
-        "idle": true
-      }
+      "scroll-to": { "target": { "text": "Lottie 动画" } }
     },
     {
       "tap": {

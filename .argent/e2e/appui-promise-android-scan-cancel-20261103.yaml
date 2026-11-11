@@ -1,8 +1,7 @@
-# Android regression recorded against the signed-in demo fixture.
+# Android scanner regression; launch directly into Home.
 steps:
   - launch: io.valdiroutes.app
   - await: { visible: { text: "push 详情页" }, timeout: 20000 }
-  - await: { idle: true, timeout: 10000 }
   - run: presentation-action-sheet
   - echo: Open the native scanner from the presentation page.
   - scroll-to: { target: { text: "scanCode 扫码" } }

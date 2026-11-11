@@ -7,7 +7,7 @@ import { BUILD_INFO, CppStats, sha256, stats } from '../../cpp/Cpp';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { Page } from 'app_foundation/src/page/PageComponent';
 import { PageHeader } from '../../components/PageHeader';
-import { Router } from '../../routing/index';
+import { Router } from '../../router';
 import { runDemo, VisionDemoResult } from 'app_vision/src/VisionHost';
 
 const CHANNEL_NAMES: Record<string, string> = {

@@ -4,6 +4,11 @@
 `pnpm build:android` 调用宿主 Gradle；`pnpm build:ios` 生成 Xcode 工程并构建模拟器 Debug App。
 平台构建已内含 TS 模块构建，无需先手动运行 `pnpm build`。
 
+模块的 `strings/strings-*.json` 通过官方 Inline localization 随 `.valdimodule` 打包；
+构建与 `pnpm dev` 自动生成类型化 `Strings` 访问器，dev 同时监听 JSON 变化。
+Bazel / Gradle 声明字符串输入，iOS 沿用每次执行的模块构建阶段。
+文件格式、Release / OTA 行为与验证边界见[本地化](localization.md)。
+
 统一开发入口由 `scripts/cli.mjs` 用 Node 分发（Windows / macOS / Linux 一致）：
 首次 checkout 执行 `pnpm install`，再手动运行 `scripts/export-android.sh debug` 或
 `scripts/export-ios.sh debug`（Windows 使用 `scripts/windows/export-android.ps1 -Config debug`）。
@@ -153,14 +158,16 @@ vendor 或启用的 cpp 模块名单时手动重新导出。
 ## 后续 UI 覆盖
 
 这次 CI 到 Debug 构建为止，不启动模拟器、不运行 e2e、不签名发布。UI 测试的默认设备来自当前开发环境，
-接入 CI 时必须通过 `ANDROID_DEVICE` / `IOS_DEVICE` 指定 runner 自己创建的设备，再安装本次产物并提供测试 secret。
+接入 CI 时必须通过 `ANDROID_DEVICE` / `IOS_DEVICE` 指定 runner 自己创建的设备，再安装本次产物。
+共享 `home.yaml` 直接启动 Home 并等待「push 详情页」，不需要登录 fixture 或 secret。
+Home 的可见时计时器持续更新，等待下一个实际控件，不以整屏 idle 作为启动就绪条件。
 Android 当前只打包 arm64，届时需要选择相应设备或明确增加测试 ABI。
 `pnpm test` 包含前置检查、升级脚本测试、图片/字节码适配测试和绑定 golden 对比；构建通过也不代表 UI、热重载或 Release 字节码验证通过。
 
 ### 真机输入测试
 
-登录页账号、密码框分别使用 `login-account`、`login-password` 标识；独立的输入自检页可从登录页
-进入，无需认证。输入后点「提交输入」，检查下方收到的 JSON 字符串和提交次数，才能确认文本经过
+App 启动后从首页「输入自检」（`input-check`）进入独立输入页。
+输入后点「提交输入」，检查下方收到的 JSON 字符串和提交次数，才能确认文本经过
 原生输入事件到达 TS state。仅看到输入框显示文本不足以证明这条链路。
 
 2026-11-01 在 Argent 0.30.1 / MEIZU 20 上实测，`fill` 显示成功后，输入自检页提交仍得到空字符串；
@@ -169,8 +176,8 @@ Android 当前只打包 arm64，届时需要选择相应设备或明确增加测
 微信输入法可能保留组合候选或转换标点，需提交候选并核对页面收到的文本；
 无障碍树可能缓存旧标签，必要时用页面回显与可见界面交叉确认。
 
-登录是本地演示逻辑，测试使用公开的非空 fixture 即可，不需要真实账号或密码。不要在填写密码后保存
-包含输入区域的截图或原始字段值。蓝牙测试仅扫描与广播时，不能把结果写成已验证连接后的读写或通知收发。
+演示登录及退出用例已删除，功能 E2E 从 Home 进入。
+蓝牙测试仅扫描与广播时，不能把结果写成已验证连接后的读写或通知收发。
 
 ## 格式化范围
 

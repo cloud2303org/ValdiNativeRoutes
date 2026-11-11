@@ -74,7 +74,11 @@ See [Android details](android-splash-screen.md).
 Launch storyboards, native code and image resources require a new native app
 build. They are not JS-only OTA changes.
 
-## Validation on November 6, 2026
+## Historical validation on November 6, 2026
+
+The Login handoffs below describe the package tested on that date. The current
+application starts directly on the Home tab; this documentation update does
+not establish a new startup-handoff result.
 
 The iOS Debug simulator App and Android R8 Release APK both built after the
 runtime exports and canonical bindings were refreshed. The focused tests

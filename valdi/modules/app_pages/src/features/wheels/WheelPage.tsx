@@ -5,7 +5,7 @@ import { color, tokens } from '../../components/theme';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { Page } from 'app_foundation/src/page/PageComponent';
 import { PageHeader } from '../../components/PageHeader';
-import { Router } from '../../routing/index';
+import { Router } from '../../router';
 import { ColumnPicker, TimePicker, TreeNode, TreePicker, timePickerValue, treePickerValue } from 'app_ui/src/wheels/WheelPickers';
 
 const LOCATIONS = [

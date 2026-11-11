@@ -19,6 +19,7 @@
 // Canonical C++ command (from this directory): npx tsx codegen.ts --cpp-modules-out ../../valdi/modules
 // Host Kotlin/ObjC sync removes Bazel/CPP-owned root copies; cpp modules emit only C++ even when named explicitly.
 // --cpp-out retains the generic flat layout and --cpp-modules-out keeps its independent runtime closure.
+// module.json cppSourceRoots optionally narrows only module-owned C++ entry files; imports are still followed.
 // At least one output is needed. Files are written only when their content changes.
 // --check writes nothing and fails, listing them, when files would change: the build runs it, developers run the
 // generator when they change a native interface.
@@ -26,6 +27,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import path from 'node:path';
 import { codegenModules, generateNativeCode, nativeSourceFiles, type CodegenModule, type NativeCode } from './codegen/index';
 import { planCppModules, syncCppModules } from './cpp-modules';
+import { cppSourceRootTarget } from './codegen/cpp-source-roots';
 import { moduleConfig, root } from './pipeline';
 import { availableModuleNames, enabledModuleNames } from './modules.mjs';
 
@@ -85,11 +87,22 @@ const generate = (target: CodegenModule): NativeCode => {
   return code;
 };
 // Resolve the complete closure before touching any output, so a disabled/missing dependency fails cleanly.
+// Validate every configured C++ source-root list first. Host/flat generation keeps the original targets and cache.
+const cppTargets = cppModulesOut ? Object.fromEntries(Object.entries(configuredModules).map(([id, target]) =>
+  [id, cppSourceRootTarget(target, moduleConfig(id).cppSourceRoots)])) : undefined;
+const generatedCpp = new Map<string, NativeCode>();
 const cppPlan = cppModulesOut ? planCppModules({
   modules: configuredModules,
   availableModules: availableModuleNames(root),
   roots: name ? [name] : undefined,
-  generate,
+  generate: target => {
+    let code = generatedCpp.get(target.module.name);
+    if (!code) {
+      code = generateNativeCode(cppTargets![target.module.name]);
+      generatedCpp.set(target.module.name, code);
+    }
+    return code;
+  },
 }) : undefined;
 
 /** Relative to the working directory when inside it. */

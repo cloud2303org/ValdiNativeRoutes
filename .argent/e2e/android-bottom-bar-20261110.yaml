@@ -1,0 +1,5 @@
+# Restart into Home so Components and Device are first mounted in this process.
+steps:
+  - launch: io.valdiroutes.app
+  - await: { visible: { text: "push 详情页" }, timeout: 20000 }
+  - run: tab-switches-20261110.yaml

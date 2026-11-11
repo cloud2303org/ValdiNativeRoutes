@@ -10,8 +10,6 @@ import androidx.activity.addCallback
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBars
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
@@ -47,22 +45,20 @@ class CodeScanner(private val activity: ComponentActivity) : DefaultLifecycleObs
                 setContent {
                     val density = LocalDensity.current
                     CompositionLocalProvider(LocalUiAppearance provides UiAppearance.Dark) {
-                        MaterialTheme(colorScheme = darkColorScheme()) {
-                            Scanner(active = true, onScan = { scan ->
-                                val format = when (scan.type) {
-                                    "qr" -> "QR_CODE"
-                                    "ean13" -> "EAN_13"
-                                    "ean8" -> "EAN_8"
-                                    "code128" -> "CODE_128"
-                                    "code39" -> "CODE_39"
-                                    "upc_a" -> "UPC_A"
-                                    else -> return@Scanner
-                                }
-                                finish(Result.success(ScanCodeResult(scan.value, format)))
-                            }, onBack = ::cancel, modifier = Modifier.fillMaxSize(),
-                                topInset = WindowInsets.systemBars.getTop(density) / density.density,
-                                bottomInset = WindowInsets.systemBars.getBottom(density) / density.density)
-                        }
+                        Scanner(active = true, onScan = { scan ->
+                            val format = when (scan.type) {
+                                "qr" -> "QR_CODE"
+                                "ean13" -> "EAN_13"
+                                "ean8" -> "EAN_8"
+                                "code128" -> "CODE_128"
+                                "code39" -> "CODE_39"
+                                "upc_a" -> "UPC_A"
+                                else -> return@Scanner
+                            }
+                            finish(Result.success(ScanCodeResult(scan.value, format)))
+                        }, onBack = ::cancel, modifier = Modifier.fillMaxSize(),
+                            topInset = WindowInsets.systemBars.getTop(density) / density.density,
+                            bottomInset = WindowInsets.systemBars.getBottom(density) / density.density)
                     }
                 }
             }

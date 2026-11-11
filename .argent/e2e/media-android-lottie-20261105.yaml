@@ -4,8 +4,9 @@ steps:
     args:
       condition: visible
       selector:
-        identifier: lottie-check
+        text: push 详情页
       timeoutMs: 20000
+  - scroll-to: { target: { text: Lottie 动画 } }
   - tool: await-ui-element
     args:
       condition: visible

@@ -4,10 +4,10 @@ steps:
     args:
       condition: visible
       selector:
-        identifier: login-account
-  - await: { idle: true }
+        text: push 详情页
+  - scroll-to: { target: { text: 原生视频播放器（MP4 / HLS） } }
   - tap:
-      text: 视频播放器
+      text: 原生视频播放器（MP4 / HLS）
   - tool: await-ui-element
     args:
       condition: text
@@ -57,5 +57,4 @@ steps:
     args:
       condition: visible
       selector:
-        identifier: login-account
-  - await: { idle: true }
+        text: push 详情页

@@ -2,12 +2,13 @@
 # no back id or label; see the selector limitation in docs/webview-module.md.
 steps:
   - launch: io.valdiroutes.app
+  - await: { visible: { text: "push 详情页" }, timeout: 20000 }
+  - scroll-to: { target: { text: "WebView" } }
   - await:
-      visible: { text: "WebView 自检（无需登录）" }
+      visible: { text: "WebView" }
       timeout: 5000
-  - await: { idle: true }
-  - echo: Open the offline WebView check from login.
-  - tap: { text: "WebView 自检（无需登录）" }
+  - echo: Open the offline WebView check from Home.
+  - tap: { text: "WebView" }
   - await:
       visible: { text: "离线页面已加载" }
       timeout: 15000
@@ -33,13 +34,13 @@ steps:
         in: { id: webview-state-result }
         equals: "后退 false · 前进 false · 加载中 false"
       timeout: 5000
-  - echo: Use the AX-derived back point; verify login before reopening.
+  - echo: Use the AX-derived back point; verify Home before reopening.
   - tap: { x: 0.07, y: 0.096 }
   - await:
-      visible: { text: "WebView 自检（无需登录）" }
+      visible: { text: "push 详情页" }
       timeout: 5000
-  - await: { idle: true }
-  - tap: { text: "WebView 自检（无需登录）" }
+  - scroll-to: { target: { text: "WebView" } }
+  - tap: { text: "WebView" }
   - await:
       text:
         in: { id: webview-phase }

@@ -130,7 +130,11 @@ The test transport implements the structural native callback ABI over `node:sqli
 
 `pnpm db:test:native` prepares the patched framework and executes ClientSQL's native test target. It checks both patch copies before running. The Node suites do not establish native writer scheduling, on-device callback disposal, or native device presentation; those need separate native and mobile validation.
 
-## Local validation on 2026-11-05
+## Historical local validation on 2026-11-05
+
+The Login/session observations below belong to the then-installed QA package.
+The current app starts directly on Home; these records do not establish a
+fresh runtime result after the example Login removal.
 
 The selected ClientSQL integration passed 42 macOS native cases (34 existing cases plus eight extension regressions), 30 Drizzle driver cases, and 17 migration/app cases. The complete npm test pipeline and generated binding goldens passed. The final runtime ABI check requires the patched ClientSQL declaration rather than accepting the old ABI.
 

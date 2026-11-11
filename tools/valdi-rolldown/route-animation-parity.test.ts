@@ -99,7 +99,7 @@ function runtime(platform: Platform, navigation?: NavigationOptions, routeOption
   }
   const page = new (load(pageFile).RouteAnimationPage)();
   page.context = { back: () => { backs++; } };
-  const router = new (load(source('routing/index.ts')).Router)(page.context);
+  const router = new (load(source('router.ts')).Router)(page.context);
   function render(animation = 'list') {
     nodes.length = 0;
     page.viewModel = vm.runInContext(`(${JSON.stringify({

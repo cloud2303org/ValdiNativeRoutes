@@ -51,7 +51,7 @@ object ValdiHost {
         val tweaks = StartupTrace.section("runtime.tweaks.create") { ValdiTweaks() }
         val moduleProvider = StartupTrace.section("ota.provider.select") { ValdiOta.start(app) }
         runtimeManager = StartupTrace.section("runtime.manager.create") {
-            ValdiRuntimeManager(app, tweaks = tweaks, customModuleProvider = moduleProvider)
+            ValdiRuntimeManager(app, tweaks = tweaks, customModuleProvider = moduleProvider, customLogger = StartupTrace.pageLogger())
         }
         // Only valdi-video:// session URLs use this loader. The generated native module factory and loader
         // explicitly share one resource registry; ordinary images and media URL resolution stay independent.
@@ -141,11 +141,17 @@ object ValdiHost {
     /** `router` (routes.ts) lands here on the JS thread; the navigator lives on the main thread. */
     private val navigationHost = NavigationHost(
         { route, params, navigation ->
-            onNavigator { it.open(route, params, navigation) }
+            onNavigator {
+                StartupTrace.section("navigation.open", if (StartupTrace.enabled) "route=$route" else "") {
+                    it.open(route, params, navigation)
+                }
+            }
         },
         { route, params, navigation, onResult ->
             onNavigator {
-                it.open(route, params, navigation, onResult)
+                StartupTrace.section("navigation.open", if (StartupTrace.enabled) "route=$route" else "") {
+                    it.open(route, params, navigation, onResult)
+                }
             }
         },
         { route, params, navigation -> onNavigator { it.replace(route, params, navigation) } },

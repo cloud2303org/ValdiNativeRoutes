@@ -11,7 +11,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -61,14 +60,12 @@ class MainActivity : ComponentActivity() {
             // This measures only the setContent call, not composition, root inflation, or content displayed.
             StartupTrace.section("activity.setContent.call") {
                 if (!startupFailed) setContent {
-                    MaterialTheme {
-                        navigator?.let {
-                            AppRoot(it, started)
-                            SideEffect { initialContentSplash?.onContentComposed() }
-                        }
-                        // Registered after navigation handlers: fullscreen back exits video presentation first.
-                        BackHandler(enabled = videoFullscreen) { ValdiHost.videoHost.exitFullscreenFromBack() }
+                    navigator?.let {
+                        AppRoot(it, started)
+                        SideEffect { initialContentSplash?.onContentComposed() }
                     }
+                    // Registered after navigation handlers: fullscreen back exits video presentation first.
+                    BackHandler(enabled = videoFullscreen) { ValdiHost.videoHost.exitFullscreenFromBack() }
                 }
             }
         }

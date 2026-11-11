@@ -2,6 +2,9 @@
 
 业务页面用 Valdi（TSX）写，保留一个原生选择页用于互操作示例。原生负责路由：Android 用 Compose Navigation 3 管页面栈，iOS 用 UIKit 的 UINavigationController。
 
+App 启动直接进入首页 Tab（`routes.home = '$tabs'`，`tabs.initial = 'home'`）。
+首页提供「输入自检」「WebView」「Lottie 动画」「原生视频播放器（MP4 / HLS）」入口。
+
 媒体示例从首页进入：[`Lottie 动画`](docs/lottie-demo.md) 使用官方 `<animatedimage>`，
 [`原生视频播放器`](docs/video-demo.md) 使用官方 `<video>` 接入 Android Media3 和 iOS AVPlayer，
 通过每播放器的 Valdi 原生对象接口和事件订阅控制，
@@ -14,7 +17,7 @@ valdi/                  Valdi 工作区（Bazel），只用来编 Valdi 运行�
   modules/app_foundation/ 通用导航、页面生命周期、Splash 和数据库驱动
   modules/app_pages/    业务页面、应用路由与初始化
     src/features/       按功能归类的页面
-    src/services/       业务 API、认证和数据库服务
+    src/services/       业务 API、网络和数据库服务
     src/routes.ts       具体路由声明，由 StartApp(debug) 返回给原生
   modules/app_vision/   Vision 强类型契约、C++ 适配及 runtime 静态链接规则
   modules/              AppUI、视频、蓝牙、存储等能力及其平台实现
@@ -32,6 +35,8 @@ scripts/
 ```
 
 模块和两端宿主的职责、共享实现与生成代码边界见[代码组织](docs/code-organization.md)。
+模块可按 `strings/strings-*.json` 接入官方 Inline 本地化；构建与 `pnpm dev` 自动生成类型化
+`Strings` 访问器并处理 JSON，使用与范围见[本地化](docs/localization.md)。
 ThemeBridge 和 AppUI 是默认启用的基础组件，原生代码也能直接使用。
 AppUI 保持整包，包含扫码、附件等能力。原生消费者与宿主接线见
 [原生模块入口](docs/native-module-access.md#native-consumers-and-application-composition)，
@@ -136,7 +141,7 @@ node scripts/ios-project.mjs         # brew install xcodegen；按 valdi.app 配
 
 真机运行要在 `project.yml` 里填 `DEVELOPMENT_TEAM`。
 
-**UI 测试**用 [argent](https://www.npmjs.com/package/@swmansion/argent)（`npm i -g @swmansion/argent`）：`.argent/e2e/*.yaml` 是测试流程，按页面上的文字找元素、点击、断言，同一份在 iOS 模拟器和 Android 模拟器上跑，不经过 AI。`scripts/e2e.sh [ios|android]` 依次在两个平台上跑全部流程，设备由 `IOS_DEVICE` / `ANDROID_DEVICE` 指定，只用这两台（Android 默认是远程模拟器 `100.78.189.64:5555`，先 `adb connect`）。跑之前它会打开 iOS 模拟器的 `ApplicationAccessibilityEnabled`（不开的话 argent 读不到 UILabel 的文字），在 Android 上预先授予 app 的运行时权限（否则系统授权框会挡住后面所有测试），并放一张测试照片（`.argent/fixtures/e2e-photo.jpg`）给相册选图用。`.argent/e2e/` 覆盖路由、输入和 AppUI 等行为；移除路由 Sheet 后，相应的五个专用流程已删除。平台限定流程保留各自的条件。测试密码在 `.argent/secrets.env`（不进 git）。iOS 页面开了 Valdi 的无障碍树（`ValdiHost.swift` 的 `enableAccessibility`），argent 和 VoiceOver 才读得到 Valdi 页面的内容。
+**UI 测试**用 [argent](https://www.npmjs.com/package/@swmansion/argent)（`npm i -g @swmansion/argent`）：`.argent/e2e/*.yaml` 是测试流程，按页面上的文字找元素、点击、断言，同一份在 iOS 模拟器和 Android 模拟器上跑，不经过 AI。`scripts/e2e.sh [ios|android]` 依次在两个平台上跑全部流程，设备由 `IOS_DEVICE` / `ANDROID_DEVICE` 指定，只用这两台（Android 默认是远程模拟器 `100.78.189.64:5555`，先 `adb connect`）。跑之前它会打开 iOS 模拟器的 `ApplicationAccessibilityEnabled`（不开的话 argent 读不到 UILabel 的文字），在 Android 上预先授予 app 的运行时权限（否则系统授权框会挡住后面所有测试），并放一张测试照片（`.argent/fixtures/e2e-photo.jpg`）给相册选图用。`.argent/e2e/` 覆盖路由、输入和 AppUI 等行为；移除路由 Sheet 后，相应的五个专用流程已删除。平台限定流程保留各自的条件。共享 `home.yaml` 启动 App 后等待「push 详情页」，无需账号、密码或登录 secret；Home 的计时器持续更新，后续等待实际控件而非整屏静止。iOS 页面开了 Valdi 的无障碍树（`ValdiHost.swift` 的 `enableAccessibility`），argent 和 VoiceOver 才读得到 Valdi 页面的内容。
 
 ## 设计
 
@@ -146,7 +151,7 @@ node scripts/ios-project.mjs         # brew install xcodegen；按 valdi.app 配
 
 **每个页面一个 Valdi 根 view，由宿主持有。** `PageEntry` 持有 `ValdiRootView`。Nav3 会释放被覆盖页面的 composition，所以根 view 不能放在 Compose 里；`AndroidView` 释放时只把它摘下来，页面真正出栈后才 `destroy()`。
 
-**路由通过原生 host 调用。** 全局 `NavigationHost` 提供导航能力，页面的 `PageContext` 只提供 `finish` 和 `back`。TS 侧包成类型化的 `router` / `Router`，调用为 `router.push(route, params, options)` 或 `router.pushForResult(route, params, options)`；第三个参数是导航选项，TS 合并好再交给原生。
+**路由通过原生 host 调用。** 全局 `NavigationHost` 提供导航能力，页面的 `PageContext` 只提供 `finish` 和 `back`。`app_foundation` 提供通用的 `createRouter` / `Router`，`app_pages` 绑定自己的路由表并导出类型化的 `router` / `Router`，调用为 `router.push(route, params, options)` 或 `router.pushForResult(route, params, options)`；第三个参数是导航选项，TS 合并好再交给原生。
 
 **inset 由宿主算好放进 viewModel。** 开了 edge-to-edge，页面按 `viewModel.insets` 自己留边。Valdi 自带的 `Device.getDisplayTopInset()` 在 Android 上一直是 0，不用它。
 
@@ -184,7 +189,7 @@ _ = try await app.ui.showToast(ToastOptions(title: "已同步", icon: "none"))
 - **Modal**：所有 `showModal` 共用一个串行队列，前一个完全关闭后才显示下一个，关闭动画结束后才返回结果。弹出时归属当时最上层的页面，这个页面被覆盖或移除时按取消结束。返回键、点遮罩都算取消。Android 是 Compose 自己的窗口，iOS 是加在窗口最上层的 view。输入框的键盘：Android 用弹窗窗口的 IME inset，iOS 用 `KeyboardObserver`，只在键盘真的挡住卡片时把卡片往上推。
 - **Toast / Loading**：各占一个独立窗口，在 Modal 之上，Toast 又在 Loading 之上。`mask: true` 时吞掉触摸（Android 也吞掉返回键）。Loading 一直显示到 `hideLoading`。
 - 外观照 ExpoNativeRoutes 原生 Dialog/Toast 的 token：卡片宽度不超过 360、圆角 20、内边距 24，标题 18/26，按钮高 48、圆角 14。
-- **Android 注意**：交给 JS 长期持有的原生函数，属于传递它时所在的 `createScopedJSRuntime` 作用域；这个作用域对象被回收后，JS 再调用会报 `Cannot unwrap native function … reference was disposed`。所以 `ValdiHost` 仍保留应用启动的 `hosts` 作用域；延迟获取认证、导航和注册长期事件时使用官方 `withGlobalNativeRefs`，不依赖首次调用的页面寿命。
+- **Android 注意**：交给 JS 长期持有的原生函数，属于传递它时所在的 `createScopedJSRuntime` 作用域；这个作用域对象被回收后，JS 再调用会报 `Cannot unwrap native function … reference was disposed`。所以 `ValdiHost` 仍保留应用启动的 `hosts` 作用域；延迟获取导航和注册长期事件时使用官方 `withGlobalNativeRefs`，不依赖首次调用的页面寿命。
 
 ## 选择与展示 API
 
@@ -244,7 +249,7 @@ await api.createBLEConnection({ deviceId });
 
 ## 原生调用与页面
 
-原生服务统一通过生成的 `@ExportModule` / `getHost()` 获取，业务无需调用安装函数。认证、导航和 Vision 的工厂注册、延迟创建及回调所有权见 [原生模块入口](docs/native-module-access.md)。
+原生服务统一通过生成的 `@ExportModule` / `getHost()` 获取，业务无需调用安装函数。导航和 Vision 的工厂注册、延迟创建及回调所有权见 [原生模块入口](docs/native-module-access.md)。
 
 Valdi 把页面传给原生的 JS 函数登记在当时的页面名下（根 Context），页面销毁时一起清掉；原生之后再调用，只会在日志里报 `Cannot unwrap JS value reference … as it was disposed`（Valdi 文档 `advanced-native-references.md`）。页面在退出动画结束时销毁。蓝牙、Wi-Fi、NFC 和权限的状态是整个应用共用的：比如连接中途返回，结果回调丢了，`wechat.ts` 的设备队列就会一直等着，之后所有页面都用不了这个设备。
 
@@ -269,7 +274,7 @@ const socket = new WebSocket('wss://example.com/socket');
 
 ## 路由动画
 
-照 ExpoNativeRoutes 的 `NativeRouteAnimations`：全局 `NAVIGATION`、路由的 `options`、每次调用的 `options` 三层合并，后面的覆盖前面的，每层可以有 `android` / `ios` 分支。`routes.ts` 的 `resolveNavigation` 在 TS 里校验并合并成本平台的 `{animation, durationMs, presentation}`，写错直接抛错，不会推页面。
+照 ExpoNativeRoutes 的 `NativeRouteAnimations`：全局 `NAVIGATION`、路由的 `options`、每次调用的 `options` 三层合并，后面的覆盖前面的，每层可以有 `android` / `ios` 分支。`app_foundation` 的 `resolveNavigation` 在 TS 里校验并合并成本平台的 `{animation, durationMs, presentation}`，写错直接抛错，不会推页面。
 
 ```ts
 this.router.push('detail', { id: 1, from: 'home' }, {
@@ -305,7 +310,7 @@ ClientSQL 负责连接、调度和事务协调；业务表和迁移记录只由 
 
 | 小程序 | 这里 |
 |---|---|
-| `onLoad` | `onCreate()`（参数用 `readParams`） |
+| `onLoad` | `onCreate()`（参数直接读 `this.viewModel.params`） |
 | `onShow` | `onShow(reason)`：`'navigation'`（打开或上面的页面关了）、`'tab'`、`'foreground'` |
 | `onHide` | `onHide(reason)`：`'covered'`、`'tab'`、`'background'` |
 | `onUnload` | `onDestroy()`；页面关闭时不先调 `onHide`，和小程序一样 |
@@ -324,7 +329,7 @@ ClientSQL 负责连接、调度和事务协调；业务表和迁移记录只由 
   - 入参用 valibot 在入口校验，错了抛 `ApiError`，比如 `setStorageSync:fail data must be JSON, …`。
   - 底层是一个 MMKV 实例 `app`，和 ExpoNativeRoutes 一样。目录：iOS `Documents/mmkv`，安卓 `files/mmkv`。iOS 用 SPM，钉在 v2.4.3 的 commit 上（它的包用了 `unsafeFlags`，SPM 只允许按 revision 引用这种包）；安卓用 `com.tencent:mmkv:2.4.3`。
   - MMKV 的文件没加密，拿到 app 文件的人能读，所以不放机密。
-- **应用状态：** 示例使用 `app_pages/src/state/session.ts` 的 `zustand/vanilla` store，认证跳转在 `services/auth.ts`。示例会话只在当前 JS runtime 内有效，重启后重新登录。用户模型、认证和持久化策略由应用自己实现，基础模块不提供 TokenStore。普通 JS 状态不需要生成原生代理。
+- **应用状态：** 示例直接进入首页，已移除演示登录页、认证服务和会话 store。业务需要的用户模型、认证和持久化策略由应用自己实现，基础模块不提供 TokenStore。普通 JS 状态不需要生成原生代理。
 
 ## Valdi fork 与工具补丁
 
@@ -460,7 +465,7 @@ TS 声明一个 `@ExportModule` 的 `.d.ts`，C++ 实现它，JS 像普通模块
 
 - **生成**：`codegen.ts --cpp-modules-out ../../valdi/modules` 写出模块自己的 `cpp/generated/valdi_modules/<模块>/<模块>.{hpp,cpp}`；默认只生成有手写 C++ 的模块及其生成类型依赖，命名空间 `snap::valdi_modules::app_pages`，和 Valdi 编译器的输出一样。`Cpp.d.ts` 生成接口 `CppModule`（每个函数一个纯虚方法，常量是无参方法）和工厂 `CppModuleFactory`；同时也生成 Kotlin / Objective-C 的同名接口，没人实现，不影响。模块和模型要像其他注解一样写上 `ios` / `android` 名字，否则 Kotlin 默认落在 `com.snap.modules.app_pages`，和模块的包冲突，生成会失败（Valdi 的编译器也一样）。
 - **实现**：继承 `CppModuleFactory`，重写 `onLoadModule()` 返回 `CppModule` 的实现，再用 `Valdi::RegisterModuleFactory::registerTyped<…>()` 静态注册。运行时创建时收集这些注册，JS 第一次读 `app_pages/src/cpp/Cpp` 时调用工厂。
-- **编进运行时**：启用的 C++ 模块由生成的 `CPP_IMPLEMENTATIONS` 选择，手写实现及其生成绑定通过 `valdi_exported_library` 的 `native_deps` 链接进 `libvaldi_runtime.so` 和 `ValdiRuntime.xcframework`。例如 `app_pages/cpp:native` 依赖自身与 `app_foundation` 的绑定；`app_vision/cpp:native` 还纳入 VisionCore 和静态 OpenCV/ncnn。业务代码静态链接进动态 runtime，不在宿主 CMake / Xcode 中另编一个 Vision DSO。包含静态工厂注册的实现 target 使用 `alwayslink`。
+- **编进运行时**：启用的 C++ 模块由生成的 `CPP_IMPLEMENTATIONS` 选择，手写实现及其生成绑定通过 `valdi_exported_library` 的 `native_deps` 链接进 `libvaldi_runtime.so` 和 `ValdiRuntime.xcframework`。`app_pages` 通过 `module.json` 的 `cppSourceRoots` 将运行时 C++ 生成入口限定为 `src/cpp/Cpp.d.ts`，因此 `app_pages/cpp:native` 只依赖自己的示例绑定，不再带入 `app_foundation` 的路由契约；Kotlin / Objective-C 和通用 `--cpp-out` 仍处理完整模块。`app_vision/cpp:native` 还纳入 VisionCore 和静态 OpenCV/ncnn。业务代码静态链接进动态 runtime，不在宿主 CMake / Xcode 中另编一个 Vision DSO。包含静态工厂注册的实现 target 使用 `alwayslink`。
 - **检查与更新**：导出脚本生成绑定；Gradle 的 `valdiCodegenCheck` 和 Xcode 的 “Valdi bindings check” 继续检查生成结果。构建不比较 runtime 源码哈希；链接进 runtime 的 C++、vendor 或 cpp 模块启用名单变化后需手动重新导出并构建宿主。cpp 模块的依赖 hook 只随显式导出执行；其他 host 模块通过 `androidCmake`、`iosNativeSources` / `iosNativeFrameworks` 声明的宿主 C++ 和依赖仍由 Gradle / Xcode 正常构建处理。详见 [Vision 构建与打包](docs/vision-build.md)。C++ 在安装包里，不能热更新；OTA 接收版本由发布者手动指定。
 - **耗时的计算**：同步调用期间 JS 线程被占住。Vision 使用类型化回调，把任务交给 runtime worker queue，并将 PNG 写入 runtime disk cache；回调通过 Valdi 返回 JS。
 

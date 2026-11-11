@@ -6,10 +6,7 @@ CPP_IMPLEMENTATIONS = [
 ]
 
 CPP_BINDING_DEPS = {
-    "app_foundation": [
-    ],
     "app_pages": [
-        "//modules/app_foundation/cpp:bindings",
     ],
     "app_vision": [
     ],

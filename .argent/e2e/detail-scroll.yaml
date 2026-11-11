@@ -1,6 +1,5 @@
 steps:
   - run: home.yaml
-  - await: { idle: true }
   - echo: 打开详情页，向下滚动到最后一个状态栏按钮，再滚回顶部；导航栏始终固定。
   - tap:
       text: push 详情页

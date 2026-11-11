@@ -46,7 +46,7 @@ function routingRuntime() {
   };
   const evaluate = (code: string) => vm.runInContext(code, context);
   globals.config = load(foundation('navigation/config.ts'));
-  modules['../routes'] = evaluate(`({
+  modules['./routes'] = evaluate(`({
     routes: config.defineRoutes({
       navigation: { android: { animation: 'slideRight', durationMs: 333 } },
       pages: {
@@ -57,7 +57,8 @@ function routingRuntime() {
     }),
   })`);
   globals.host = load(foundation('navigation/NavigationHost.ts'));
-  globals.navigation = load(source('routing/index.ts'));
+  globals.navigation = load(source('router.ts'));
+  globals.foundationRouting = load(foundation('navigation/router.ts'));
   globals.data = load(foundation('navigation/data.ts'));
   evaluate(`
     globalThis.nativeNavigation = {
@@ -65,12 +66,53 @@ function routingRuntime() {
       pushForResult: (...args) => calls.push(['pushForResult', ...args]),
       replace: (...args) => calls.push(['replace', ...args]),
       reset: (...args) => calls.push(['reset', ...args]),
+      back: (...args) => calls.push(['back', ...args]),
+      popToRoot: (...args) => calls.push(['popToRoot', ...args]),
+      switchTab: (...args) => calls.push(['switchTab', ...args]),
       currentPages: done => { globalThis.returnPages = done; },
       updateRoutes: declaration => calls.push(['updateRoutes', declaration]),
     };
   `);
   return { evaluate, calls, globals, load };
 }
+
+test('foundation binds independent route declarations and page handles without application imports', async () => {
+  const { evaluate, calls } = routingRuntime();
+  assert.equal(calls.length, 0, 'binding routers must not dispatch or acquire the native host');
+  evaluate(`
+    globalThis.other = foundationRouting.createRouter(config.defineRoutes({
+      navigation: { android: { animation: 'fade', durationMs: 120 } },
+      pages: { other: config.nativePage({ name: 'other', title: 'Other' }) },
+    }));
+    navigation.router.push('detail');
+    other.push('other');
+    globalThis.bound = new foundationRouting.Router({
+      finish: result => calls.push(['finish', result]), back: () => calls.push(['pageBack']),
+    }, other);
+    bound.push('other');
+    bound.finish({ accepted: true });
+    bound.back();
+    other.back(2);
+    other.popToRoot();
+    navigation.router.switchTab('detail');
+  `);
+  assert.deepEqual(calls.slice(0, 3).map(call => [call[1], call[3].animation, call[3].durationMs]), [
+    ['detail', 'slideRight', 333], ['other', 'fade', 120], ['other', 'fade', 120],
+  ]);
+  assert.deepEqual(calls.slice(3).map(call => call[0]), ['finish', 'pageBack', 'back', 'popToRoot', 'switchTab']);
+  const count = calls.length;
+  assert.throws(() => evaluate(`other.push('detail')`), /Unknown route/);
+  assert.throws(() => evaluate(`navigation.router.push('other')`), /Unknown route/);
+  assert.throws(() => evaluate('other.resetToTabs()'), /No tabs declared/);
+  assert.equal(calls.length, count);
+  const canGoBack = evaluate(`
+    const detached = other.canGoBack;
+    const pending = detached();
+    returnPages([{ pageId: 'root', route: 'other', params: {} }, { pageId: 'next', route: 'other', params: {} }]);
+    pending;
+  `);
+  assert.equal(await canGoBack, true);
+});
 
 test('tab bar config normalizes omitted/default modes, validates custom metadata, and publishes typed declarations', () => {
   const { evaluate, calls } = routingRuntime();
@@ -163,7 +205,6 @@ test('typed router passes params and results through without JSON transport and 
     pagesPromise;
   `);
   assert.equal((await pages)[0].params.nested[2].n, 100);
-  assert.equal(evaluate(`navigation.readParams({ params: { id: 123 } }).id`), 123);
 });
 
 test('routing rejects invalid nested payloads before navigation or finish dispatch', () => {
@@ -208,27 +249,31 @@ test('routing rejects invalid nested payloads before navigation or finish dispat
   }
 });
 
-test('routing rejects invalid returned payloads and preserves cancellation', async () => {
+test('routing reads decoded results and stack entries without traversing them again', async () => {
   const { evaluate } = routingRuntime();
   const result = evaluate(`
-    globalThis.invalidResult = navigation.router.pushForResult('picker');
-    calls[0][4]({ nested: [NaN] }, false);
-    invalidResult;
+    // A traversal trap proves reads do not scan the already decoded dictionary.
+    globalThis.decoded = new Proxy({ value: '选中', nested: [1, null] }, {
+      ownKeys() { throw Error('Decoded route data must not be traversed again'); },
+    });
+    globalThis.result = navigation.router.pushForResult('picker');
+    calls[0][4](decoded, false);
+    result;
   `);
-  await assert.rejects(result, /Invalid route data/);
+  assert.equal(await result, evaluate('decoded'));
   const pages = evaluate(`
-    globalThis.invalidPages = navigation.router.getCurrentPages();
-    returnPages([{ pageId: '1', route: 'detail', params: { nested: [Infinity] } }]);
-    invalidPages;
+    globalThis.pagesPromise = navigation.router.getCurrentPages();
+    globalThis.decodedPages = [{ pageId: '1', route: 'detail', params: decoded }];
+    returnPages(decodedPages);
+    pagesPromise;
   `);
-  await assert.rejects(pages, /Invalid route data/);
+  assert.equal(await pages, evaluate('decodedPages'));
   const canceled = evaluate(`
     globalThis.canceledResult = navigation.router.pushForResult('picker');
-    calls[1][4]({ ignored() {} }, true);
+    calls[1][4](decoded, true);
     canceledResult;
   `);
   assert.equal(await canceled, undefined);
-  assert.throws(() => evaluate('navigation.readParams({ params: { nested: [NaN] } })'), /Invalid route data/);
 });
 
 test('routing validates finite number edges and shared noncyclic graphs without copying', () => {
@@ -270,10 +315,10 @@ test('routing accepts options directly and rejects removed sheet arguments befor
   assert.equal(calls[0][3].durationMs, 120);
 });
 
-test('startup installs native Web globals before service imports and synchronously initializes the authenticated root', () => {
-  for (const signedIn of [false, true]) {
+test('startup installs native Web globals before service imports and synchronously opens the Home tabs', () => {
+  for (const debug of [false, true]) {
     const events: string[] = [];
-    const context = vm.createContext({ events, signedIn });
+    const context = vm.createContext({ events });
     const emit = (file: string) => ts.transpileModule(readFileSync(file, 'utf8'), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
     }).outputText;
@@ -284,6 +329,8 @@ test('startup installs native Web globals before service imports and synchronous
       (name: string) => { assert.equal(name, './NativeWebNative'); return nativeExports; },
       nativeModule, nativeModule.exports,
     );
+    assert.equal(vm.runInContext('typeof fetch', context), 'undefined',
+      'loading the native module does not install global APIs');
     const startupSource = ts.transpileModule(readFileSync(source('app.ts'), 'utf8'), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
     }).outputText;
@@ -294,11 +341,8 @@ test('startup installs native Web globals before service imports and synchronous
         setCatchAllUncaughtErrorHandler: () => events.push('handler'),
       },
       './services/api': { api: {} },
-      './services/auth': {
-        auth: { isSignedIn: () => { events.push('signedIn'); return signedIn; } },
-      },
       './services/database': { initializeAppDb: () => events.push('db') },
-      './routes': { routes: { home: '$tabs', toHost: (root: string) => { events.push('declaration'); return { root }; } } },
+      './routes': { routes: { home: '$tabs', toHost: (root = '$tabs') => { events.push('declaration'); return { root }; } } },
       './components/theme': { installTheme: () => events.push('theme') },
     };
     mocks['valdi_core/src/ModuleLoaderGlobal'] = {
@@ -332,10 +376,10 @@ test('startup installs native Web globals before service imports and synchronous
         return mocks[name];
       }, module, module.exports,
     );
-    const result = module.exports.startApp(false);
-    assert.equal(result.root, signedIn ? '$tabs' : 'login');
+    const result = module.exports.startApp(debug);
+    assert.equal(result.root, '$tabs');
     assert.equal(typeof result.then, 'undefined');
-    assert.deepEqual(events, ['web', 'handler', 'theme', 'db', 'signedIn', 'declaration']);
+    assert.deepEqual(events, ['web', 'handler', 'theme', 'db', 'declaration']);
   }
 });
 
@@ -381,15 +425,11 @@ test('pinned lazy ModuleLoader publishes fresh routes after hot unload and dispo
     ['app_pages/src/services/api', `exports.api = {};`],
     ['app_pages/src/services/database', `exports.initializeAppDb = () => events.push('db');`],
     ['app_pages/src/components/theme', `exports.installTheme = () => events.push('theme');`],
-    ['app_pages/src/services/auth', `
-      exports.auth = { isSignedIn: () => globalThis.tokens.has() };
-    `],
   ]);
   const routeSource = (title: string) => `
     const config = require('app_foundation/src/navigation/config', true);
     exports.routes = config.defineRoutes({
       pages: {
-        login: config.nativePage({ name: 'login', title: '登录' }),
         home: config.nativePage({ name: 'home', title: '${title}' }),
       },
       tabs: { items: [{ route: 'home', text: '${title}', icon: { name: 'tab_home' } }] },
@@ -402,14 +442,11 @@ test('pinned lazy ModuleLoader publishes fresh routes after hot unload and dispo
     evaluateModule(code!, require, module, exports);
   }, undefined, undefined, false);
   globals.moduleLoader = loader;
-  let signedIn = false;
-  const tokens = { has: () => signedIn };
   const navigation = { updateRoutes: (value: any) => updates.push(value) };
-  globals.tokens = tokens;
   globals.navigation = navigation;
   const start = loader.load('app_pages/src/app', true).startApp;
-  assert.equal(start(true).root, 'login');
-  assert.equal(start(true).root, 'login');
+  assert.equal(start(true).root, '$tabs');
+  assert.equal(start(true).root, '$tabs');
   assert.equal(updates.length, 0, 'initial startup only returns a declaration');
   sources.set('app_pages/src/routes', routeSource('替换'));
   const unloaded = loader.unload(['app_pages/src/routes'], true, true);
@@ -417,12 +454,12 @@ test('pinned lazy ModuleLoader publishes fresh routes after hot unload and dispo
   assert.equal(loader.isLoaded('app_pages/src/app'), true, 'route reload must retain its app observer');
   assert.equal(updates.length, 1, 'repeated start must not duplicate the observer');
   assert.equal(updates[0].tabBar.tabs[0].text, '替换', 'callback resolves replacement module exports');
-  assert.equal(updates[0].root, 'login');
-  signedIn = true;
-  sources.set('app_pages/src/routes', routeSource('已登录'));
+  assert.equal(updates[0].root, '$tabs');
+  sources.set('app_pages/src/routes', routeSource('再次替换'));
   loader.unload(['app_pages/src/routes'], true, true);
   assert.equal(updates.length, 2);
-  assert.equal(updates[1].root, '$tabs', 'reload consults current auth state');
+  assert.equal(updates[1].root, '$tabs', 'reload preserves the configured Home tabs');
+  assert.equal(updates[1].tabBar.tabs[0].text, '再次替换');
   loader.unload(['app_pages/src/routes'], false, true);
   assert.equal(updates.length, 2, 'ordinary unload does not publish');
   loader.load('app_pages/src/routes', true);

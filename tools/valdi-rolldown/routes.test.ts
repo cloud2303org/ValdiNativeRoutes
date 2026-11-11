@@ -20,6 +20,7 @@ async function fixture(t: TestContext, dev = false) {
   mkdirSync(dir);
   cpSync(path.join(original.dir, 'src'), path.join(dir, 'src'), { recursive: true });
   cpSync(path.join(original.dir, 'res'), path.join(dir, 'res'), { recursive: true });
+  cpSync(path.join(original.dir, 'strings'), path.join(dir, 'strings'), { recursive: true });
   const generated = path.join(temporary, 'generated');
   const module = { ...original, dir, generatedDirs: [generated] };
   // A fresh checkout has no .gen output. Generate declarations from this fixture's
@@ -28,7 +29,7 @@ async function fixture(t: TestContext, dev = false) {
   assert.ok(writeTsconfig(module, [module, ...appModules().filter(other => other.name !== module.name)]));
   const config = JSON.parse(readFileSync(path.join(dir, 'tsconfig.json'), 'utf8'));
   config.compilerOptions.baseUrl = dir;
-  config.compilerOptions.rootDirs = [path.dirname(dir), generated];
+  config.compilerOptions.rootDirs = [dir, generated];
   config.compilerOptions.paths['app_pages/*'] = [path.join(dir, '*'), path.join(generated, '*')];
   symlinkSync(original.nodeModules!, path.join(dir, 'node_modules'), 'junction');
   writeFileSync(path.join(dir, 'tsconfig.json'), JSON.stringify(config));
@@ -93,8 +94,9 @@ test('routes compile direct components/res to metadata, execute without loading 
   assert.equal(f.plugin.diagnostics(), '');
   f.change(f.routeFile, text => text.replace("name: 'picker'", "name: 'app/device-picker'"));
   const { routes, loaded } = execute(f);
-  const host = routes.toHost('login');
-  assert.equal(host.root, 'login');
+  const host = routes.toHost();
+  assert.equal(host.root, '$tabs');
+  assert.equal(host.routes.some((route: any) => route.route === 'login'), false);
   assert.equal(routes.home, '$tabs');
   assert.equal(host.routes.find((route: any) => route.route === 'home').component, 'HomePage@app_pages/src/features/home/HomePage');
   assert.equal(host.routes.find((route: any) => route.route === 'calculator').component, 'CalculatorComponent@calculator/src/CalculatorComponent');
@@ -326,8 +328,9 @@ test('editor types reject unknown native/Valdi routes, wrong params/results, and
   const f = await fixture(t);
   const file = path.join(f.module.dir, 'src/navigation-types.ts');
   writeFileSync(file, `
-import { router, Router, readParams } from './routing/index';
-import type { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
+import { router, Router, type RouteViewModel } from './router';
+import type { PageContext } from 'app_foundation/src/page/Page';
+import type { DetailPage } from './features/detail/DetailPage';
 router.push('home');
 router.push('picker');
 router.push('detail', { id: 123, from: 'test' });
@@ -355,14 +358,27 @@ router.pushForResult('picker').then(result => {
   const wrong: number = result.value;
 });
 declare const context: PageContext;
-declare const model: PageViewModel;
+declare const model: RouteViewModel<'detail'>;
 new Router(context).finish<'detail'>({ visited: 123 });
 // @ts-expect-error result type is preserved despite the private native any map
 new Router(context).finish<'detail'>({ visited: '123' });
-const params = readParams<'detail'>(model);
+const params = model.params;
 const id: number = params.id;
-// @ts-expect-error readParams returns route-specific data rather than any
+// @ts-expect-error typed params must not be weakened by the native any dictionary
 const wrongId: string = params.id;
+// @ts-expect-error undeclared fields are not accepted
+params.missing;
+const route: 'detail' = model.route;
+// @ts-expect-error a view model is bound to its declared page
+const wrongRoute: 'form' = model.route;
+// @ts-expect-error only routes in this application have view model contracts
+type MissingPage = RouteViewModel<'absent'>;
+declare const detailPage: DetailPage;
+const pageId: number = detailPage.viewModel.params.id;
+// @ts-expect-error the actual page exposes typed params, not the native any dictionary
+const wrongPageId: string = detailPage.viewModel.params.id;
+// @ts-expect-error a detail page's model cannot be used as a form page's model
+const formModel: RouteViewModel<'form'> = detailPage.viewModel;
 `);
   f.plugin.invalidate(file);
   assert.equal(f.plugin.diagnostics(), '', 'every expect-error must be consumed and valid calls must type-check');
@@ -373,6 +389,64 @@ test('tabs.initial is independently typed from items and must not widen the acce
   f.change(f.routeFile, text => text.replace("initial: 'home'", "initial: 'detail'"));
   assert.match(f.plugin.diagnostics(), /detail.*not assignable|not assignable.*detail/);
   assert.throws(() => f.plugin.emit(f.routeFile), /tabs.initial must name a route in tabs.items/);
+});
+
+test('foundation router infers each independent app contract and preserves typed page handles', async t => {
+  const f = await fixture(t);
+  const file = path.join(f.module.dir, 'src/foundation-router-types.ts');
+  writeFileSync(file, `
+import { defineRoutes, nativePage } from 'app_foundation/src/navigation/config';
+import { createRouter, Router, type RouteViewModel } from 'app_foundation/src/navigation/router';
+import type { PageContext } from 'app_foundation/src/page/Page';
+const firstRoutes = defineRoutes({
+  pages: {
+    start: nativePage({ name: 'start', title: 'Start' }),
+    choose: nativePage<{ id: number }, { selected: boolean }>({ name: 'choose', title: 'Choose' }),
+  },
+  tabs: { items: [{ route: 'start', text: 'Start', icon: { name: 'tab_home' } as any }] },
+});
+const first = createRouter(firstRoutes);
+const secondRoutes = defineRoutes({ pages: { other: nativePage({ name: 'other', title: 'Other' }) } });
+const second = createRouter(secondRoutes);
+first.push('start');
+first.push('choose', { id: 1 });
+first.switchTab('start');
+second.push('other');
+// @ts-expect-error app-specific names cannot cross router instances
+first.push('other');
+// @ts-expect-error the second app cannot navigate to the first app's routes
+second.push('choose', { id: 1 });
+// @ts-expect-error required parameters are retained through the generic factory
+first.push('choose');
+// @ts-expect-error parameter types are retained
+first.replace('choose', { id: 'wrong' });
+// @ts-expect-error only declared tabs are accepted
+first.switchTab('choose');
+// @ts-expect-error a no-tabs app has no accepted tab names
+second.switchTab('other');
+first.pushForResult('choose', { id: 1 }).then(result => {
+  if (!result) return;
+  const selected: boolean = result.selected;
+  // @ts-expect-error returned field types are retained
+  const wrong: string = result.selected;
+});
+declare const context: PageContext;
+declare const model: RouteViewModel<typeof firstRoutes, 'choose'>;
+const page = new Router(context, first);
+page.push('choose', { id: 1 });
+page.finish<'choose'>({ selected: true });
+// @ts-expect-error page handles retain the result contract
+page.finish<'choose'>({ selected: 'wrong' });
+// @ts-expect-error page handles retain the route names
+page.push('other');
+const id: number = model.params.id;
+// @ts-expect-error the parameter type belongs to this route
+const wrongId: string = model.params.id;
+// @ts-expect-error view model names remain bound to the route table
+type OtherModel = RouteViewModel<typeof firstRoutes, 'other'>;
+`);
+  f.plugin.invalidate(file);
+  assert.equal(f.plugin.diagnostics(), '', 'all valid calls and expect-error checks must retain their types');
 });
 
 test('default selection uses first item; duplicate and unknown Tab references fail before publishing', async t => {
@@ -417,10 +491,10 @@ test('dev icon bytes change emitted routes and refresh the host; production refe
   const config = load(foundation('navigation/config.ts'));
   const changed = config.defineRoutes({ pages: routes.pages, tabs: { items: [{ route: 'home', text: 'Changed', icon: { name: 'tab_home', data } }] } });
   assert.equal(updates.length, 0, 'defining routes is side-effect free even with a native host installed');
-  changed.publish('login');
+  changed.publish();
   assert.equal(updates.length, 1);
   assert.equal(updates[0].tabBar.tabs[0].text, 'Changed');
-  assert.equal(updates[0].root, 'login');
+  assert.equal(updates[0].root, '$tabs');
   const prod = await fixture(t);
   assert.equal(execute(prod).routes.toHost().tabBar.tabs[0].iconData, undefined);
 });

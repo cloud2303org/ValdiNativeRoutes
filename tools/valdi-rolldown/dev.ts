@@ -16,19 +16,14 @@
 // renamed shows in Valdi pages. Route declarations inline their Tab icons in dev output, so the native bar reloads too.
 // Font files and their catalog entries go too; already-loaded platform fonts may require an app restart. A module
 // created while it runs is picked up on the next start.
+// strings/ JSON changes regenerate the typed src/Strings accessor before checking consumers. Text-only edits
+// also change Strings.js, so normal module unloading clears the Inline resolver's cached translation.
 import { execFileSync } from 'node:child_process';
-import { readFileSync, watch } from 'node:fs';
+import { watch } from 'node:fs';
 import net from 'node:net';
-import path from 'node:path';
-import type { ArchiveEntries } from './archive';
-import { appModules, buildModule, genDir, inlineSourceMaps, modulesDir } from './pipeline';
-import { addFontEntries, assetCatalog, findFonts, findImages, writeResTs, type Font, type Image } from './resources';
-import { valdiTs, type ValdiModule } from './valdiTs';
+import { appModules, modulesDir } from './pipeline';
 import { startDevControls } from '../../scripts/dev-controls.mjs';
-import { assertEnabledImports } from './module-selection';
-import { availableModuleNames } from './modules.mjs';
-import { root } from './pipeline';
-import { sourceFiles } from './valdiTs';
+import { DevBuild, ModuleBuild, recordChange, type Pending } from './dev-build';
 
 import { DEVICE_PORT, encodeDevPacket, updatedResources, type DevResource } from './dev-protocol';
 /** The name the booted iOS simulator goes by here; it is reached at 127.0.0.1:DEVICE_PORT, without a forward. */
@@ -39,88 +34,8 @@ type Resource = DevResource;
 
 // ---- Building
 
-/** One module: its resources, its generated sources and its TypeScript program, kept between builds. */
-class ModuleBuild {
-  private images: Image[] | undefined;
-  private fonts: Font[] = [];
-  readonly plugin: ReturnType<typeof valdiTs>;
-  lastDiagnostics: string | undefined;
-
-  private constructor(readonly module: ValdiModule, images: Image[] | undefined) {
-    this.updateResources(images);
-    this.plugin = valdiTs(module, undefined, true);
-  }
-
-  /** Reads res/ again; res.ts changes with the image and font names. */
-  static async create(module: ValdiModule): Promise<ModuleBuild> {
-    return new ModuleBuild(module, await findImages(module));
-  }
-
-  async loadResources() {
-    this.updateResources(await findImages(this.module));
-    // Tab references compile to native image descriptors, including bytes in development builds.
-    for (const file of sourceFiles(this.module)) this.plugin.invalidate(file);
-  }
-
-  private updateResources(images: Image[] | undefined) {
-    const { module } = this;
-    this.images = images;
-    this.fonts = findFonts(module) ?? [];
-    if (writeResTs(module, this.images, genDir(module.name), this.fonts)) this.plugin?.invalidate(path.join(genDir(module.name), 'res.ts'));
-  }
-
-  async build(): Promise<ArchiveEntries> {
-    // sourceFiles() contains virtual IDs such as app_pages/res.ts; the program roots contain their real .gen paths.
-    assertEnabledImports(this.plugin.program().getRootFileNames(), modulesDir, availableModuleNames(root), [...modules.keys()]);
-    const diagnostics = this.plugin.diagnostics();
-    if (diagnostics) throw new Error(diagnostics);
-    const { images, fonts } = this;
-    const built = await buildModule(this.module, this.plugin, false);
-    inlineSourceMaps(built);
-    if (images || fonts.length) {
-      built.entries.set('res.assetcatalog', assetCatalog(images ?? [], fonts));
-      for (const image of images ?? []) built.entries.set(`res/${image.name}.${image.extension}`, readFileSync(image.file));
-    }
-    addFontEntries(built.entries, fonts);
-    if (diagnostics !== this.lastDiagnostics) {
-      console.log(diagnostics || `✓ ${this.module.name}: no type errors`);
-      this.lastDiagnostics = diagnostics;
-    }
-    return built.entries;
-  }
-}
-
 const modules = new Map(await Promise.all(appModules().map(async module => [module.name, await ModuleBuild.create(module)] as const)));
-
-/** What the apps have, per bundle and file: the last build's output. */
-const current = new Map<string, ArchiveEntries>();
-
-/** Builds the given modules (all of them by default) and returns the files that changed. */
-async function build(names: Iterable<string> = modules.keys()): Promise<Resource[]> {
-  const started = performance.now();
-  // An API edit in one module may invalidate callers in another, even when only the former emits new files.
-  for (const module of modules.values()) {
-    const diagnostics = module.plugin.diagnostics();
-    if (diagnostics) throw new Error(diagnostics);
-  }
-  const changed: Resource[] = [];
-  const staged = new Map<string, ArchiveEntries>();
-  for (const name of names) {
-    const entries = await modules.get(name)!.build();
-    const before = current.get(name);
-    for (const [file, data] of entries) {
-      if (!before?.get(file)?.equals(data)) changed.push({ bundle: name, file, data });
-    }
-    staged.set(name, entries);
-  }
-  for (const [name, entries] of staged) current.set(name, entries);
-  console.log(`Built in ${Math.round(performance.now() - started)} ms, ${changed.length} file(s) changed`);
-  return changed;
-}
-
-function allResources(): Resource[] {
-  return [...current].flatMap(([bundle, entries]) => [...entries].map(([file, data]) => ({ bundle, file, data })));
-}
+const builds = new DevBuild(modules);
 
 // ---- Devices
 
@@ -198,7 +113,7 @@ class DeviceConnection {
       this.write({ response: { request_id: request.request_id, configure: {} } });
       this.configured = true;
       console.log(`[${this.serial}] Connected: ${application_id} (${platform})`);
-      this.send(allResources());
+      this.send(builds.allResources());
     } else if (request) {
       this.write({ response: { request_id: request.request_id, error: { error_message: 'Not supported by this dev server' } } });
     }
@@ -247,24 +162,13 @@ function pollDevices() {
 
 // ---- Watching
 
-/** What changed since the last build, per module. */
-interface Pending {
-  files: Set<string>;
-  res: boolean;
-}
 let pending = new Map<string, Pending>();
 let timer: NodeJS.Timeout | undefined;
 let building: Promise<void> = Promise.resolve();
 
 watch(modulesDir, { recursive: true }, (_event, file) => {
   if (!file) return;
-  const [name, dir] = file.split(path.sep);
-  if (!modules.has(name)) return;
-  const changes = pending.get(name) ?? { files: new Set<string>(), res: false };
-  if (dir === 'src' && /\.tsx?$/.test(file)) changes.files.add(path.join(modulesDir, file));
-  else if (dir === 'res') changes.res = true;
-  else return;
-  pending.set(name, changes);
+  if (!recordChange(pending, modules, modulesDir, file)) return;
   clearTimeout(timer);
   // Editors save in bursts; and one build at a time.
   timer = setTimeout(() => {
@@ -272,13 +176,7 @@ watch(modulesDir, { recursive: true }, (_event, file) => {
     pending = new Map();
     building = building.then(async () => {
       try {
-        // Every program reads the changed file again: a module type-checks the others' sources it imports.
-        const files = [...batch.values()].flatMap(changes => [...changes.files]);
-        for (const module of modules.values()) for (const file of files) module.plugin.invalidate(file);
-        for (const [name, changes] of batch) {
-          if (changes.res) await modules.get(name)!.loadResources();
-        }
-        const changed = await build(current.size ? batch.keys() : modules.keys());
+        const changed = await builds.rebuild(batch);
         for (const device of devices.values()) device.send(changed);
       } catch (error) {
         console.error(error instanceof Error ? error.message : error);
@@ -289,7 +187,7 @@ watch(modulesDir, { recursive: true }, (_event, file) => {
 
 // Register the watcher before the first build, including its error report. A quick fix after an initial diagnostic
 // must not land in the gap before watch() and be silently missed.
-building = build().catch(error => {
+building = builds.build().then(() => {}).catch(error => {
   console.error(error instanceof Error ? error.message : error);
   console.log('Fix the errors above; watching for changes.');
 });
@@ -308,4 +206,4 @@ for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
     process.exit(0);
   });
 }
-console.log(`Watching src and res of ${[...modules.keys()].join(', ')}`);
+console.log(`Watching src, res and strings of ${[...modules.keys()].join(', ')}`);

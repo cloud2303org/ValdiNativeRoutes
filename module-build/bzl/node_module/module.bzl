@@ -25,7 +25,7 @@ def _compiled_impl(ctx):
              for directory in [ios_name, ios_name + "Types"]]
     resources = ctx.actions.declare_directory(base + "/resources")
     manifest = ctx.actions.declare_file(base + "/build.json")
-    inputs = depset(ctx.files.srcs + ctx.files.res + [ctx.file.config], transitive = [dep[NodeValdiModuleInfo].inputs for dep in ctx.attr.deps])
+    inputs = depset(ctx.files.srcs + ctx.files.res + ctx.files.strings + [ctx.file.config], transitive = [dep[NodeValdiModuleInfo].inputs for dep in ctx.attr.deps])
     dependencies = {}
     for dep in ctx.attr.deps:
         for module in dep[NodeValdiModuleInfo].modules:
@@ -63,6 +63,7 @@ _node_valdi_compiled = rule(
         "ios_language": attr.string(default = "objc", values = ["objc", "swift", "both"]),
         "srcs": attr.label_list(allow_files = [".ts", ".tsx"]),
         "res": attr.label_list(allow_files = True),
+        "strings": attr.label_list(allow_files = [".json"]),
         "config": attr.label(allow_single_file = [".json"], mandatory = True),
         "deps": attr.label_list(providers = [NodeValdiModuleInfo]),
         "release": attr.bool(),
@@ -74,21 +75,26 @@ def node_valdi_module(name, srcs, config, ios_module_name = None, res = [], deps
                       android_srcs = [], android_deps = [], ios_srcs = [], ios_hdrs = [], ios_deps = [],
                       ios_language = "objc", swift_srcs = [], swift_deps = [],
                       ios_frameworks = [],
-                      visibility = ["//visibility:public"]):
+                      visibility = ["//visibility:public"], strings = None):
     """Create debug/release Node artifacts and standalone Android/iOS libraries.
 
     Module dependencies name other modules' `_compiled` targets. Kotlin/ObjC
     dependencies are explicit, separate from TS dependencies. C++ generated
     sources are exposed via the `cpp` output group for native consumers.
+    Inline localization JSON defaults to module-owned strings/strings-*.json;
+    modules without strings keep an empty input list. Pass strings explicitly
+    to override the declared inputs.
     """
     if native.package_name() != "modules/" + name:
         fail("node_valdi_module must live at //modules/<name> and use that module's name")
     if swift_srcs and ios_language == "objc":
         fail("Swift module implementations require ios_language = 'swift' or 'both'")
+    if strings == None:
+        strings = native.glob(["strings/strings-*.json"], allow_empty = True)
     ios_name = ios_module_name or name
     for suffix, release in [("_compiled", False), ("_release", True)]:
         _node_valdi_compiled(name = name + suffix, module_name = name, ios_module_name = ios_name,
-                             srcs = srcs, res = res, config = config, deps = deps,
+                             srcs = srcs, res = res, strings = strings, config = config, deps = deps,
                              ios_language = ios_language,
                              release = release, visibility = visibility)
     for group in ["kotlin", "objc_headers", "objc_sources", "cpp", "swift"]:

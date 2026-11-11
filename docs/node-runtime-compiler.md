@@ -16,7 +16,8 @@
 - 现有 Bazel 原生库、资源嵌入、AAR / XCFramework 导出规则继续负责原生编译和打包。
 - 原生导出路径排除模块的 `test/`、`.spec.` 源码和 `test_deps`；上游测试工具不进入发布 runtime。
 
-覆盖的内置模块是 `valdi_core`、`valdi_tsx`、`coreutils`、`source_map`、`jasmine`、`drawing`、`client_sql`。
+覆盖的内置模块是 `valdi_core`、`valdi_tsx`、`coreutils`、`source_map`、`jasmine`、
+`drawing`、`client_sql`、`native_web`。
 应用数据库复用 ClientSQL 原生执行层，上层 schema、查询和业务迁移由 Drizzle 管理。
 两个 Bazel workspace 应用同一份 `clientsql-drizzle.patch`，补充 `queryRows` 和 `run`。
 calculator 的独立自定义规则见 [custom-modules.md](custom-modules.md)，它不经过这里的 `valdi_compiled` 适配。

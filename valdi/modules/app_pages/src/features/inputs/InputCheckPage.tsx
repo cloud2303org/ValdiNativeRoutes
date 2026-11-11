@@ -34,7 +34,7 @@ export class InputCheckPage extends Page<PageViewModel, State, PageContext> {
           paddingRight={insets.right + tokens.space.content}
           paddingBottom={insets.bottom + tokens.space.content}
         >
-          <label style={styles.hint} numberOfLines={0} value="输入测试文字，点击提交，再核对下方收到的内容。无需登录，不发送网络请求；请勿填写密码。" />
+          <label style={styles.hint} numberOfLines={0} value="输入测试文字，点击提交，再核对下方收到的内容。不发送网络请求；请勿填写密码。" />
           <view style={styles.box} limitToViewport={false}>
             <textfield
               accessibilityId="input-check-field"

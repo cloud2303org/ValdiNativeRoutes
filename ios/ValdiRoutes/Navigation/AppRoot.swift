@@ -157,14 +157,19 @@ final class CustomTabsController: UIViewController, TabsContainer {
         guard isViewLoaded, !shell.removed,
               let page = pages.first(where: { $0.entry.route == shell.selectedTab }) else { return }
         if displayedPage !== page {
-            displayedPage?.willMove(toParent: nil)
-            displayedPage?.view.removeFromSuperview()
-            displayedPage?.removeFromParent()
+            let previousPage = displayedPage
             addChild(page)
             page.view.frame = view.bounds
             page.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             view.insertSubview(page.view, at: 0)
             page.didMove(toParent: self)
+            // Keep the previous content attached through the incoming page's first layout, which creates its Valdi
+            // root with the attached safe area. This completes UIKit setup, not asynchronous Valdi rendering.
+            page.view.setNeedsLayout()
+            page.view.layoutIfNeeded()
+            previousPage?.willMove(toParent: nil)
+            previousPage?.view.removeFromSuperview()
+            previousPage?.removeFromParent()
             displayedPage = page
         }
         updateTabBar()

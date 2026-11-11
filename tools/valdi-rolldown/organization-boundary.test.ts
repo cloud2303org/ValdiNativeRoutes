@@ -105,14 +105,15 @@ test('feature route metadata uses canonical feature IDs without evaluating featu
     );
     return module.exports;
   };
-  const declaration = load('app_pages/src/routes').routes.toHost('login');
+  const declaration = load('app_pages/src/routes').routes.toHost();
   const expected: string[] = [];
   for (const statement of compiler.program().getSourceFile(routeFile)!.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) ||
         !statement.moduleSpecifier.text.startsWith('./features/')) continue;
     const componentPath = `app_pages/src/${statement.moduleSpecifier.text.slice(2)}`;
     const clause = statement.importClause;
-    assert.ok(clause && !clause.isTypeOnly);
+    // Feature-owned parameter types are erased; only runtime imports declare page components.
+    if (!clause || clause.isTypeOnly) continue;
     if (clause.name) expected.push(`default@${componentPath}`);
     const bindings = clause.namedBindings;
     if (bindings) {
@@ -127,7 +128,7 @@ test('feature route metadata uses canonical feature IDs without evaluating featu
     .filter((component: unknown): component is string =>
       typeof component === 'string' && component.includes('@app_pages/'));
   assert.deepEqual(components.sort(), expected.sort());
-  assert.equal(declaration.root, 'login');
+  assert.equal(declaration.root, '$tabs');
   assert.equal(declaration.routes.find((route: any) => route.route === 'picker').nativeName, 'picker');
   assert.equal(declaration.routes.find((route: any) => route.route === 'calculator').component,
     'CalculatorComponent@calculator/src/CalculatorComponent');

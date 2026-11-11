@@ -1,0 +1,15 @@
+steps:
+  - launch: io.valdiroutes.app
+  - await: { visible: { text: push 详情页 }, timeout: 20000 }
+  - scroll-to: { target: { text: WebView } }
+  - tap:
+      text: WebView
+  - await: { visible: { id: webview-phase, text: 离线页面已加载 }, timeout: 15000 }
+  - await: { idle: true }
+  - tap:
+      text: 载入离线 HTML
+  - await: { visible: { id: webview-phase, text: 离线页面已加载 }, timeout: 15000 }
+  - await: { idle: true }
+  - tap:
+      id: navigation-back
+  - await: { visible: { text: push 详情页 }, timeout: 10000 }

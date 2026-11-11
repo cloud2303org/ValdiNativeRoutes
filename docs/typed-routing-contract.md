@@ -112,9 +112,9 @@ The host supplies current items, selection, and system bottom safe area to the
 custom component and updates its view model when these change. `selectTab` uses
 the host's existing tab-switch path, including its route validation.
 
-`startApp(debug, navigation, tokens): RouteDeclaration` remains synchronous.
+`startApp(debug): RouteDeclaration` remains synchronous.
 It installs the error handler first, initializes services before opening any
-page, and chooses the authenticated root after installing the token store.
+page, and returns the default Tab root (`routes.home = '$tabs'`, initial tab `home`).
 There is no additional startup wrapper.
 
 `NavigationHost` retains its exported native names. Its changed methods are:
@@ -158,9 +158,9 @@ returns its declaration directly and does not call `updateRoutes`.
 
 The debug App bootstrap registers the official
 `getModuleLoader().onHotReload(module, 'app_pages/src/routes', callback)` once.
-It loads routes/auth through the loader rather than holding a static dependency
+It loads routes through the loader rather than holding a static dependency
 that would unload the observer with routes. The callback runs after unload,
-reads current module exports and explicitly publishes the auth-selected root.
+reads current module exports and calls `routes.publish()` for the default root.
 The observing module's official disposable removes the listener at app-module
 unload. A normal unload and initial startup do not publish.
 

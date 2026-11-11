@@ -14,6 +14,7 @@ import ts from 'typescript';
 import { createConsoleLogTransformer } from './vendor/companion/ConsoleLogTransformer';
 import { JSXProcessor } from './vendor/companion/JSXProcessor';
 import { routeTransformer } from './routes-transform';
+import { prepareStrings } from './localization';
 
 export interface ValdiModule {
   /** The Valdi module name, the first segment of its import paths (`app_pages`). */
@@ -60,6 +61,9 @@ export interface ValdiTsPlugin extends Plugin {
 }
 
 export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, inlineRouteIcons = false): ValdiTsPlugin {
+  // Generate before creating the program so imports and accessor types work on
+  // the first compile, including codegen consumers that don't run build.ts.
+  if (module.generatedDirs[0]) prepareStrings(module, module.generatedDirs[0]);
   /** A file's place in the module's tree → where it is on disk. */
   const located = new Map<string, string>();
   const locate = (file: string): string | undefined => {

@@ -3,8 +3,7 @@
 两端使用 Valdi 官方 `<video>` 接口和应用持有的原生播放器；运行验证范围见文末。
 
 - [HomePage](../valdi/modules/app_pages/src/features/home/HomePage.tsx)：点击「原生视频播放器（MP4 / HLS）」（`video`）。
-- [LoginPage](../valdi/modules/app_pages/src/features/auth/LoginPage.tsx)：未登录也可点击「视频播放器」（`video-check`）。
-- 两者进入 [routes.ts](../valdi/modules/app_pages/src/routes.ts) 的 `video` 路由，显示 [VideoPage](../valdi/modules/app_pages/src/features/video/VideoPage.tsx)「原生视频播放器」。
+- App 启动直接进入 Home；该按钮进入 [routes.ts](../valdi/modules/app_pages/src/routes.ts) 的 `video` 路由，显示 [VideoPage](../valdi/modules/app_pages/src/features/video/VideoPage.tsx)「原生视频播放器」。
 
 ## 源码已实现
 
@@ -227,6 +226,9 @@ HTTPS/file 原策略及 35 个无效/缺失资源输入。TS 测试执行真实�
 下文保留历史验证范围，不将历史设备结果当成本次资源迁移后的运行证据。
 
 ## 此前 session 接口的验证，2026-11-05
+
+以下设备记录均保留当时安装包与入口的历史结果。相关 E2E 已于 2026-11-10 改为从
+Home 进入和返回，仍保留原 QA App ID 及播放检查；此次入口迁移未执行设备重放。
 
 - Android arm64/API 36 模拟器：Debug APK 编译、安装成功。已看到离线视频实际画面、
   约 5.1 秒时长与推进进度，执行了播放/暂停、定位、全屏往返并保留 2.5 秒位置，

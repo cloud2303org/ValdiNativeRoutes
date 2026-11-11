@@ -1,7 +1,7 @@
 // Bazel's module action. It invokes only our Node compiler/codegen, stages its
 // inputs in a temporary module, and writes only declared Bazel outputs.
 import { createHash } from 'node:crypto';
-import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pack } from './archive';
@@ -48,14 +48,30 @@ export async function compileNodeModule(
   const originalConfigFile = path.join(original.dir, 'module.json');
   const originalConfig = existsSync(originalConfigFile)
     ? JSON.parse(readFileSync(originalConfigFile, 'utf8')) : moduleConfig(name);
-  const temporary = mkdtempSync(path.join(tmpdir(), `node-valdi-${name}-`));
+  const temporary = realpathSync(mkdtempSync(path.join(tmpdir(), `node-valdi-${name}-`)));
   try {
     symlinkSync(original.nodeModules!, path.join(temporary, 'node_modules'), 'dir');
-    cpSync(path.join(original.dir, 'src'), path.join(temporary, 'src'), { recursive: true });
+    // Source and generated roots share module-relative names, just as the
+    // checkout's modules/<name> and .gen/<name>. Keep dependency overlays in
+    // that namespace too, so './Strings' cannot resolve another module's file.
+    const staged = (source: ValdiModule): ValdiModule => {
+      const dir = path.join(temporary, 'modules', source.name);
+      const generated = path.join(temporary, 'generated', source.name);
+      mkdirSync(dir, { recursive: true });
+      for (const entry of ['src', 'strings', 'module.json']) {
+        if (existsSync(path.join(source.dir, entry)))
+          cpSync(path.join(source.dir, entry), path.join(dir, entry), { recursive: true });
+      }
+      for (const input of source.generatedDirs) {
+        if (existsSync(input)) cpSync(input, generated, { recursive: true });
+      }
+      return { ...source, dir, generatedDirs: [generated] };
+    };
+    const module = staged({ ...original, generatedDirs: [] });
+    const stagedDependencies = dependencies.map(staged);
     if (existsSync(path.join(original.dir, 'res')))
-      cpSync(path.join(original.dir, 'res'), path.join(temporary, 'res'), { recursive: true });
-    const module = { ...original, dir: temporary, generatedDirs: [path.join(temporary, '.gen')] };
-    writeTsconfig(module, [module, ...dependencies]);
+      cpSync(path.join(original.dir, 'res'), path.join(module.dir, 'res'), { recursive: true });
+    writeTsconfig(module, [module, ...stagedDependencies]);
     const images = await findImages(module);
     const fonts = findFonts(module) ?? [];
     writeResTs(module, images, module.generatedDirs[0], fonts);
@@ -77,7 +93,7 @@ export async function compileNodeModule(
     const target = {
       module,
       program: () => plugin.program(),
-      nativeDependencies: dependencies.map(module => {
+      nativeDependencies: stagedDependencies.map(module => {
         const configFile = path.join(module.dir, 'module.json');
         const config = existsSync(configFile) ? JSON.parse(readFileSync(configFile, 'utf8')) : moduleConfig(module.name);
         return { module, bundleInfo: {
@@ -125,6 +141,11 @@ export async function compileNodeModule(
     mkdirSync(path.join(resources, 'ts'), { recursive: true });
     const declarations = path.join(module.generatedDirs[0], 'res.ts');
     if (existsSync(declarations)) copyFileSync(declarations, path.join(resources, 'ts/res.ts'));
+    const strings = path.join(module.generatedDirs[0], 'src/Strings.ts');
+    if (existsSync(strings)) {
+      mkdirSync(path.join(resources, 'ts/src'), { recursive: true });
+      copyFileSync(strings, path.join(resources, 'ts/src/Strings.ts'));
+    }
     await writeAndroidResources(module, images ?? [], path.join(resources, 'android'));
     await writeIosResources(module, images ?? [], path.join(resources, 'ios'));
     writeFileSync(

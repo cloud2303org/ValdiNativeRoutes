@@ -106,3 +106,48 @@ test('declared module dependencies supply resource types while undeclared import
   assert.match(entries.get('src/index.js')!.toString(), /require\(["']math\/src\/index["']\)/);
   assert.ok(!entries.has('src/Calculator.js'));
 });
+
+test('localized module compilation packages Inline JSON and supplies typed Strings to dependent modules', async t => {
+  const dep = fixture(t);
+  const localized = { ...dep.module, name: 'messages' };
+  mkdirSync(path.join(dep.dir, 'strings'));
+  const english = { greeting: { defaultMessage: 'Hello {name}' } };
+  const japanese = { greeting: { defaultMessage: 'こんにちは、{name}' } };
+  writeFileSync(path.join(dep.dir, 'strings/strings-en.json'), JSON.stringify(english));
+  writeFileSync(path.join(dep.dir, 'strings/strings-ja.json'), JSON.stringify(japanese));
+  writeFileSync(path.join(dep.dir, 'src/index.ts'), `
+import Strings from './Strings';
+export const greet = (name: string) => Strings.greeting(name);
+`);
+
+  for (const mode of ['debug', 'release'] as const) {
+    await compileNodeModule(localized, dep.out, 'Messages', mode);
+    const entries = unpack(readFileSync(path.join(dep.out, 'messages.valdimodule')));
+    assert.deepEqual(JSON.parse(entries.get('strings/strings-en.json')!.toString()), english);
+    assert.deepEqual(JSON.parse(entries.get('strings/strings-ja.json')!.toString()), japanese);
+    assert.ok(entries.get('src/Strings.js')!.length > 0);
+    if (mode === 'debug') assert.match(entries.get('src/Strings.js')!.toString(), /buildInlineModule/);
+    else assert.ok(entries.get('src/Strings.js')!.includes(Buffer.from([0xc6, 0x1f, 0xbc, 0x03])));
+  }
+  assert.ok(!existsSync(path.join(dep.dir, 'src/Strings.ts')), 'generation must not mutate source directories');
+  assert.ok(existsSync(path.join(dep.out, 'resources/ts/src/Strings.ts')));
+
+  const consumer = fixture(t);
+  const index = path.join(consumer.dir, 'src/index.ts');
+  mkdirSync(path.join(consumer.dir, 'strings'));
+  writeFileSync(path.join(consumer.dir, 'strings/strings-en.json'),
+    JSON.stringify({ own_title: { defaultMessage: 'Consumer' } }));
+  writeFileSync(index, `
+import Strings from './Strings';
+import { greet } from 'messages/src/index';
+export const message = [Strings.ownTitle(), greet('Ada')];
+`);
+  const dependency = { ...localized, generatedDirs: [path.join(dep.out, 'resources/ts')] };
+  await compileNodeModule(consumer.module, consumer.out, 'Fixture', 'debug', [dependency]);
+  const entries = unpack(readFileSync(path.join(consumer.out, 'fixture.valdimodule')));
+  assert.match(entries.get('src/index.js')!.toString(), /messages\/src\/index/);
+  assert.ok(entries.has('src/Strings.js'));
+  writeFileSync(index, "import Strings from 'messages/src/Strings';\nexport const message = Strings.greeting(42);\n");
+  await assert.rejects(compileNodeModule(consumer.module, consumer.out, 'Fixture', 'debug', [dependency]),
+    /not assignable|Argument of type/);
+});

@@ -1,5 +1,7 @@
 steps:
   - launch: io.valdiroutes.app
+  - await: { visible: { text: push 详情页 }, timeout: 20000 }
+  - scroll-to: { target: { text: 原生视频播放器（MP4 / HLS） } }
   - tool: await-ui-element
     args:
       condition: visible

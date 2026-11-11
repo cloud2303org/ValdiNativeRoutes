@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, globSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { cpSync, existsSync, globSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test, { type TestContext } from 'node:test';
 import { codegenModules, generateNativeCode, nativeSourceFiles, VALDI_PROJECT_CONFIG, type CodegenModule, type NativeCode } from './codegen/index';
 import { generatedCppDependencies, ownsCppImplementation, planCppModules, syncCppModules } from './cpp-modules';
+import { cppSourceRootTarget } from './codegen/cpp-source-roots';
 import { availableModuleNames, enabledModuleNames } from './modules.mjs';
+import { moduleConfig } from './pipeline';
 import { cppModuleFiles } from './scaffold-cpp';
 
 function temporary(t: TestContext): string {
@@ -51,6 +54,27 @@ function snapshot(directory: string): Record<string, { content: string; mtime: n
   };
   visit(directory);
   return files;
+}
+
+function cliWorkspace(t: TestContext, names: string[]) {
+  const directory = temporary(t);
+  const tool = path.join(directory, 'tools/valdi-rolldown');
+  mkdirSync(tool, { recursive: true });
+  // Copy entry points that derive the project root and the backend that imports that pipeline.
+  for (const name of ['codegen.ts', 'cpp-modules.ts', 'pipeline.ts', 'hermes.ts', 'codegen']) {
+    cpSync(path.join(import.meta.dirname, name), path.join(tool, name), { recursive: true });
+  }
+  for (const name of ['package.json', 'node_modules', 'modules.mjs', 'valdiTs.ts',
+    'module-selection.ts', 'editor-config.ts', 'localization.ts', 'vendor']) {
+    symlinkSync(path.join(import.meta.dirname, name), path.join(tool, name));
+  }
+  const modules = path.join(directory, 'valdi/modules');
+  put(path.join(directory, 'package.json'), JSON.stringify({ valdi: { modules: names } }));
+  const run = (args: string[]) => spawnSync(process.execPath, [
+    path.join(import.meta.dirname, 'node_modules/tsx/dist/cli.mjs'),
+    path.join(tool, 'codegen.ts'), ...args,
+  ], { cwd: tool, encoding: 'utf8', timeout: 60_000 });
+  return { directory, tool, modules, run };
 }
 
 test('default roots require cpp/src implementations, including nested cc/cxx, and skip unrelated native files', t => {
@@ -510,26 +534,137 @@ test('empty binding placeholders are omitted and old owned files are removed', t
   assert.deepEqual(syncCppModules(plan, output), []);
 });
 
-test('real app_pages codegen requires only app_foundation when pages owns a C++ implementation', t => {
+test('C++ source roots retain tsconfig options, ambient types, generated aliases and transitive source/include dependencies', t => {
   const directory = temporary(t);
-  // Bound this check to pages; other enabled runtime owners have independent dependency closures.
-  const modules = Object.fromEntries(Object.entries(codegenModules())
-    .filter(([name]) => ['app_pages', 'app_foundation'].includes(name)));
+  const modules = catalog(directory, ['owner', 'types']);
+  const owner = modules.owner.module.dir;
+  const generated = path.join(directory, '.gen/owner');
+  modules.owner.module.generatedDirs = [generated];
+  put(path.join(owner, 'base.json'), JSON.stringify({
+    compilerOptions: {
+      moduleResolution: 'node',
+      paths: { 'types/*': ['../types/*'] },
+      types: ['./ambient'],
+      strict: true,
+    },
+  }));
+  put(path.join(owner, 'tsconfig.json'), JSON.stringify({ extends: './base.json', include: ['src/**/*.ts'] }));
+  put(path.join(owner, 'ambient.d.ts'), 'declare type AmbientNumber = number;\n');
+  put(path.join(owner, 'src/entry.ts'), [
+    "import { Child } from './child';",
+    "import { Shared } from 'types/src/Shared';",
+    "import { Generated } from 'owner/Generated';",
+    '/** @ExportModel */',
+    'export interface Entry { child: Child; shared: Shared; generated: Generated; value: AmbientNumber; }',
+  ].join('\n'));
+  put(path.join(owner, 'src/child.ts'), '/** @ExportModel */\nexport interface Child { count: number; }\n');
+  put(path.join(owner, 'src/unrelated.ts'), '/** @ExportModel */\nexport interface Unrelated { value: string; }\n');
+  put(path.join(generated, 'Generated.ts'), '/** @ExportModel */\nexport interface Generated { value: boolean; }\n');
+  put(path.join(modules.types.module.dir, 'src/Shared.ts'),
+    '/** @ExportModel */\nexport interface Shared { value: number; }\n');
+  put(path.join(modules.types.module.dir, 'tsconfig.json'), '{"include":["src/**/*.ts"]}');
+  put(path.join(owner, 'cpp/src/main.cpp'));
+  modules.owner.nativeDependencies = [modules.types];
+  assert.equal(cppSourceRootTarget(modules.owner, undefined), modules.owner);
+  const selected = cppSourceRootTarget(modules.owner, ['src/entry.ts', 'src/entry.ts']);
+  const program = selected.program!();
+  assert.deepEqual(program.getRootFileNames(), [path.join(owner, 'src/entry.ts')]);
+  assert.equal(program.getCompilerOptions().strict, true);
+  for (const file of [path.join(owner, 'src/child.ts'), path.join(owner, 'ambient.d.ts'),
+    path.join(generated, 'Generated.ts'), path.join(modules.types.module.dir, 'src/Shared.ts')]) {
+    assert.ok(program.getSourceFiles().some(source => realpathSync(source.fileName) === realpathSync(file)),
+      `normal dependency resolution includes ${file}`);
+  }
+  assert.deepEqual(program.getSemanticDiagnostics(), []);
+  assert.equal(program.getSourceFile(path.join(owner, 'src/unrelated.ts')), undefined);
+  const plan = planCppModules({ modules, generate: target =>
+    generateNativeCode(target.module.name === 'owner' ? selected : target) });
+  assert.deepEqual(plan.modules.map(({ name, dependencies }) => ({ name, dependencies })), [
+    { name: 'owner', dependencies: ['types'] }, { name: 'types', dependencies: [] },
+  ]);
+  const header = plan.modules[0].files.get('valdi_modules/owner/owner.hpp')!;
+  for (const name of ['Entry', 'Child', 'Generated']) assert.match(header, new RegExp(`class ${name}:`));
+  assert.doesNotMatch(header, /Unrelated/);
+  assert.match(header, /double getValue\(\) const/);
+});
+
+test('CLI rejects malformed, empty, missing and escaping C++ roots before any combined-output mutation', t => {
+  const { directory, modules, run } = cliWorkspace(t, ['owner', 'unplanned']);
+  for (const name of ['owner', 'unplanned']) {
+    put(path.join(modules, name, 'src/Value.ts'), '/** @ExportModel */\nexport interface Value { value: number; }\n');
+    put(path.join(modules, name, 'tsconfig.json'), '{"include":["src/**/*.ts"]}');
+  }
+  put(path.join(modules, 'owner/cpp/src/main.cpp'));
+  const config = path.join(modules, 'unplanned/module.json');
+  const outside = path.join(directory, 'outside.ts');
+  put(outside, 'export interface Outside { value: number; }\n');
+  symlinkSync(outside, path.join(modules, 'unplanned/src/outside.ts'));
+  mkdirSync(path.join(modules, 'unplanned/directory.ts'));
+  const output = path.join(directory, 'output');
+  // Successful sync would delete this stale file and write/update every output family.
+  put(path.join(output, 'modules/stale/cpp/generated/valdi_modules/stale/stale.hpp'), 'sentinel\n');
+  for (const platform of ['kotlin', 'objc', 'flat']) put(path.join(output, platform, 'sentinel.txt'), 'preserve\n');
+  const args = ['--cpp-modules-out', path.join(output, 'modules'),
+    '--kotlin-out', path.join(output, 'kotlin'), '--objc-out', path.join(output, 'objc'),
+    '--cpp-out', path.join(output, 'flat')];
+  const before = snapshot(output);
+  const invalid = [null, [], 'src/Value.ts', {}, [null], [42], [''], [' '], ['src/missing.ts'],
+    ['directory.ts'], [outside], ['../outside.ts'], ['src/outside.ts'],
+    ['..\\outside.ts'], ['C:/outside.ts'], ['src/Value.js']];
+  for (const cppSourceRoots of invalid) {
+    put(config, JSON.stringify({ cppSourceRoots }));
+    const result = run(args);
+    assert.notEqual(result.status, 0, JSON.stringify(cppSourceRoots));
+    assert.match(result.stderr, /unplanned: cppSourceRoots/, result.stderr);
+    assert.deepEqual(snapshot(output), before, `no writes for ${JSON.stringify(cppSourceRoots)}`);
+  }
+  const invalidCheck = run([...args, '--check']);
+  assert.notEqual(invalidCheck.status, 0);
+  assert.match(invalidCheck.stderr, /unplanned: cppSourceRoots/);
+  assert.deepEqual(snapshot(output), before);
+  // This option belongs only to module C++: malformed config is ignored by host and generic flat outputs.
+  const generic = run(['owner', '--kotlin-out', path.join(output, 'kotlin'),
+    '--objc-out', path.join(output, 'objc'), '--cpp-out', path.join(output, 'flat')]);
+  assert.equal(generic.status, 0, generic.stderr);
+  assert.equal(readFileSync(path.join(output, 'modules/stale/cpp/generated/valdi_modules/stale/stale.hpp'), 'utf8'), 'sentinel\n');
+  t.diagnostic(`${invalid.length} invalid configurations rejected before output mutation, including an unplanned module`);
+});
+
+test('real module C++ source roots preserve the exact demo prefix and omit foundation, retaining all implementation owners', t => {
+  const directory = temporary(t);
+  const modules = codegenModules();
+  const full = nativeSourceFiles(modules.app_pages, generateNativeCode(modules.app_pages), 'cpp');
   const calls: string[] = [];
   const cache = new Map<string, NativeCode>();
   const generate = (target: CodegenModule) => {
     calls.push(target.module.name);
-    const code = generateNativeCode(target);
+    const code = generateNativeCode(cppSourceRootTarget(target, moduleConfig(target.module.name).cppSourceRoots));
     cache.set(target.module.name, code);
     return code;
   };
   const plan = planCppModules({ modules, availableModules: availableModuleNames(path.resolve(import.meta.dirname, '../..')), generate });
-  assert.deepEqual(plan.roots, ['app_pages']);
+  assert.deepEqual(plan.roots, ['app_pages', 'app_vision']);
+  assert.deepEqual(plan.implementationRoots, plan.roots);
   assert.deepEqual(plan.modules.map(({ name, dependencies }) => ({ name, dependencies })), [
-    { name: 'app_foundation', dependencies: [] },
-    { name: 'app_pages', dependencies: ['app_foundation'] },
+    { name: 'app_pages', dependencies: [] },
+    { name: 'app_vision', dependencies: [] },
   ]);
-  assert.deepEqual(calls, ['app_pages', 'app_foundation']);
+  assert.deepEqual(calls, plan.roots);
+  for (const [file, content] of plan.modules.find(module => module.name === 'app_pages')!.files) {
+    const generic = full.get(file)!;
+    assert.ok(content.length > 0 && content.length < generic.length);
+    assert.equal(generic.slice(0, content.length), content, `exact CppStats/CppModule prefix: ${file}`);
+    assert.match(content, /snap::valdi_modules::app_pages/);
+    assert.doesNotMatch(content, /app_foundation|StartApp|TabBarViewModel/);
+    assert.match(generic, /StartApp|TabBarViewModel/);
+    if (file.endsWith('.hpp')) {
+      assert.match(content, /class CppStats: /);
+      assert.match(content, /class CppModule: /);
+      assert.match(content, /class CppModuleFactory: /);
+    } else {
+      assert.match(content, /return Valdi::StringBox::fromCString\("app_pages\/src\/cpp\/Cpp"\)/);
+    }
+  }
   const output = path.join(directory, 'output');
   assert.equal(syncCppModules(plan, output).length, 8);
   for (const module of plan.modules) {
@@ -540,23 +675,14 @@ test('real app_pages codegen requires only app_foundation when pages owns a C++ 
   assert.deepEqual(syncCppModules(plan, output, true), []);
   assert.equal(existsSync(path.join(output, 'app_ui')), false);
   assert.equal(existsSync(path.join(output, 'app_video')), false);
-  assert.equal(existsSync(path.join(output, 'app_vision')), false);
+  assert.equal(existsSync(path.join(output, 'app_foundation')), false);
+  const before = snapshot(output);
+  assert.deepEqual(syncCppModules(plan, output), []);
+  assert.deepEqual(snapshot(output), before);
 });
 
 test('positional CLI creates pure TS dependency packages while preserving both independent implementation owners', t => {
-  const directory = temporary(t);
-  const tool = path.join(directory, 'tools/valdi-rolldown');
-  mkdirSync(tool, { recursive: true });
-  // Copy the entry points that derive the project root, and the real backend that imports that pipeline.
-  for (const name of ['codegen.ts', 'cpp-modules.ts', 'pipeline.ts', 'hermes.ts', 'codegen']) {
-    cpSync(path.join(import.meta.dirname, name), path.join(tool, name), { recursive: true });
-  }
-  for (const name of ['package.json', 'node_modules', 'modules.mjs', 'valdiTs.ts',
-    'module-selection.ts', 'editor-config.ts', 'vendor']) {
-    symlinkSync(path.join(import.meta.dirname, name), path.join(tool, name));
-  }
-  const output = path.join(directory, 'valdi/modules');
-  put(path.join(directory, 'package.json'), JSON.stringify({ valdi: { modules: ['first', 'second', 'extra', 'types'] } }));
+  const { directory, modules: output, run: cli } = cliWorkspace(t, ['first', 'second', 'extra', 'types']);
   for (const name of ['first', 'second', 'extra', 'types']) {
     put(path.join(output, name, 'src/index.ts'),
       '/** @ExportModel */\nexport interface Value { readonly value: number; }\n');
@@ -576,10 +702,7 @@ test('positional CLI creates pure TS dependency packages while preserving both i
   put(path.join(output, 'first/module.json'), JSON.stringify({ nativeBuild: 'cpp' }));
   put(path.join(output, 'second/cpp/src/deep/main.cc'), 'int second() { return 2; }\n');
   put(path.join(output, 'second/module.json'), JSON.stringify({ nativeBuild: 'bazel' }));
-  const run = (args: string[]) => spawnSync(process.execPath, [
-    path.join(import.meta.dirname, 'node_modules/tsx/dist/cli.mjs'),
-    path.join(tool, 'codegen.ts'), ...args, '--cpp-modules-out', output,
-  ], { cwd: tool, encoding: 'utf8', timeout: 60_000 });
+  const run = (args: string[]) => cli([...args, '--cpp-modules-out', output]);
   const generatedFile = (name: string, extension: string) =>
     path.join(output, name, `cpp/generated/valdi_modules/${name}/${name}.${extension}`);
   const initial = run([]);
@@ -646,6 +769,15 @@ test('CLI combines module C++, generic flat C++, Kotlin and ObjC, and reports re
     path.join(import.meta.dirname, 'node_modules/tsx/dist/cli.mjs'),
     path.join(import.meta.dirname, 'codegen.ts'), ...args, ...extra,
   ], { cwd: import.meta.dirname, encoding: 'utf8', timeout: 60_000 });
+  const baseline = path.join(directory, 'baseline');
+  const generic = spawnSync(process.execPath, [
+    path.join(import.meta.dirname, 'node_modules/tsx/dist/cli.mjs'),
+    path.join(import.meta.dirname, 'codegen.ts'), 'app_pages',
+    '--cpp-out', path.join(baseline, 'flat'),
+    '--kotlin-out', path.join(baseline, 'kotlin'),
+    '--objc-out', path.join(baseline, 'objc'), '--objc-framework', 'ValdiRuntime',
+  ], { cwd: import.meta.dirname, encoding: 'utf8', timeout: 60_000 });
+  assert.equal(generic.status, 0, generic.stderr);
   const missing = run(['--check']);
   assert.equal(missing.status, 1, missing.stderr);
   assert.match(missing.stderr, /run: npx tsx codegen\.ts app_pages --kotlin-out .*--cpp-modules-out /);
@@ -659,10 +791,18 @@ test('CLI combines module C++, generic flat C++, Kotlin and ObjC, and reports re
   assert.equal(existsSync(path.join(directory, 'flat/runtime-packages.bazelrc')), false);
   assert.equal(existsSync(path.join(directory, 'flat/runtime-cpp.bzl')), false);
   for (const extension of ['hpp', 'cpp']) {
-    assert.equal(readFileSync(path.join(out, `app_pages/cpp/generated/valdi_modules/app_pages/app_pages.${extension}`), 'utf8'),
-      readFileSync(path.join(directory, `flat/valdi_modules/app_pages/app_pages.${extension}`), 'utf8'));
+    const scoped = readFileSync(path.join(out, `app_pages/cpp/generated/valdi_modules/app_pages/app_pages.${extension}`), 'utf8');
+    const flat = readFileSync(path.join(directory, `flat/valdi_modules/app_pages/app_pages.${extension}`), 'utf8');
+    assert.equal(flat.slice(0, scoped.length), scoped);
+    assert.ok(flat.length > scoped.length);
   }
-  assert.ok(existsSync(path.join(out, 'app_foundation/cpp/generated/valdi_modules/app_foundation/app_foundation.hpp')));
+  for (const platform of ['kotlin', 'objc', 'flat']) {
+    const hashes = (root: string) => Object.fromEntries(Object.entries(snapshot(path.join(root, platform)))
+      .map(([file, { content }]) => [file, createHash('sha256').update(content).digest('hex')]));
+    assert.deepEqual(hashes(directory), hashes(baseline), `${platform} hashes unchanged in combined invocation`);
+  }
+  assert.equal(existsSync(path.join(out, 'app_foundation')), false);
+  assert.ok(existsSync(path.join(out, 'app_vision/cpp/generated/valdi_modules/app_vision/app_vision.hpp')));
   assert.match(readFileSync(path.join(directory, 'kotlin/app_pages.kt'), 'utf8'), /CppStats/);
   assert.match(readFileSync(path.join(directory, 'objc/app_pagesTypes/app_pagesTypes.h'), 'utf8'), /ValdiRuntime\//);
   assert.equal(existsSync(path.join(directory, 'flat/valdi_modules/app_foundation')), false);

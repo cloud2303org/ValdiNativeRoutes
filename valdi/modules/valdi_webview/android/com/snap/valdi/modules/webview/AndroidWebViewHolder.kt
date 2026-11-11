@@ -39,7 +39,7 @@ internal class AndroidWebViewHolder(
             result = ensureWebView()
             latch.countDown()
         }
-        latch.await()
+        WebViewTrace.section("getWebViewSync.wait_for_ui", this) { latch.await() }
         return result
     }
 
@@ -99,10 +99,11 @@ internal class AndroidWebViewHolder(
         }
 
         val context = context ?: return null
-        return WebView(context).also {
+        return WebViewTrace.section("construct", this) { WebView(context) }.also {
+            WebViewTrace.link("holder_view", this, it)
             webView = it
-            configureWebView(it)
-            flushPendingCallbacks(it)
+            WebViewTrace.section("configure", this) { configureWebView(it) }
+            WebViewTrace.section("flushPendingCallbacks", this) { flushPendingCallbacks(it) }
         }
     }
 

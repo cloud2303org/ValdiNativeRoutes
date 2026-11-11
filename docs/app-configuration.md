@@ -127,7 +127,7 @@ source fingerprint checks or compatibility records. The publisher is responsible
 for native API compatibility. Identity or icon changes alone do not require
 recompiling the Valdi runtime.
 
-Application session state and its persistence policy are app-owned. The demo
-uses an in-memory Zustand store and has no native token-storage service.
+Application state and its persistence policy are app-owned. The demo starts
+directly on Home and has no example authentication/session store or native token-storage service.
 OTA remains the existing host Kotlin/Swift client plus host C codec linkage;
 the Vision selection does not migrate OTA into ValdiRuntime.

@@ -174,8 +174,9 @@ On the dedicated `ValdiRoutes_NoHwKeyboard` Android emulator, the installed APK 
 two-modal queue and action-sheet selection paths. The new
 `.argent/e2e/appui-promise-android-scan-cancel-20261103.yaml` regression was recorded live and replayed
 end to end twice; its final comparison requires exactly `结果：scanCode:fail cancel`.
-The scanner regression expects the signed-in demo fixture. Initial home stillness warnings remain in the
-runtime proof; scanner navigation and the final exact error check have their own assertions.
+That historical APK used a signed-in demo fixture. The saved scanner regression now starts directly
+on Home; its entry migration has not been replayed. Initial home stillness warnings remain in the
+historical runtime proof; scanner navigation and the final exact error check have their own assertions.
 
 The immutable APK, AAR, screenshot and bounded run results are referenced by
 `.ci/harmony/2026-11-02-completion/appui-promise-android-runtime-r1-proof.json`.

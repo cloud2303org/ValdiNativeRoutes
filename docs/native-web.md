@@ -119,6 +119,9 @@ The public `native_web/src/NativeWeb` entry is a small JS wrapper. Its internal
 raw factory is registered in C++ at `native_web/src/NativeWebNative`; application
 code should keep importing the public path. The generated raw declaration
 `src/NativeWebNative.d.ts` contains the Web API types without an installer.
+Registering that factory makes the module loadable; it does not put its exports
+on `globalThis`. The application's first side-effect import installs those globals
+once; it does not register the native module again.
 
 The JS installer calls `Object.defineProperty` with the original native values
 captured when the wrapper evaluates. Native raw exports are non-enumerable,

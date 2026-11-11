@@ -7,7 +7,7 @@ import { color, tokens } from '../../components/theme';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { Page } from 'app_foundation/src/page/PageComponent';
 import { PageHeader } from '../../components/PageHeader';
-import { Router } from '../../routing/index';
+import { Router } from '../../router';
 
 const PHOTOS = [
   'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200',

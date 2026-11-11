@@ -1,3 +1,0 @@
-load("//bzl/module_cpp:module.bzl", "module_cpp_library")
-
-module_cpp_library(module_name = "app_foundation")

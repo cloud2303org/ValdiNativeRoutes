@@ -8,7 +8,7 @@ import { color, tokens } from '../../components/theme';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { Page } from 'app_foundation/src/page/PageComponent';
 import { PageHeader } from '../../components/PageHeader';
-import { NavigationOptions, Router, readParams } from '../../routing/index';
+import { NavigationOptions, Router, type RouteViewModel } from '../../router';
 
 interface Example {
   title: string;
@@ -64,6 +64,8 @@ const AVAILABLE = Device.isAndroid()
  * @ExportModel({ios: 'VRRouteAnimationPage', android: 'io.valdiroutes.pages.RouteAnimationPage'})
  */
 export class RouteAnimationPage extends Page<PageViewModel, {}, PageContext> {
+  declare readonly viewModel: Readonly<RouteViewModel<'animation'>>;
+
   state = {};
 
   private get router(): Router {
@@ -72,7 +74,7 @@ export class RouteAnimationPage extends Page<PageViewModel, {}, PageContext> {
 
   onRender(): void {
     const { insets } = this.viewModel;
-    const { animation } = readParams<'animation'>(this.viewModel);
+    const { animation } = this.viewModel.params;
     const example = AVAILABLE.some(name => name === animation) ? EXAMPLES[animation] : undefined;
 
     <view style={styles.page}>

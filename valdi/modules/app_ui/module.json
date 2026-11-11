@@ -15,7 +15,7 @@
     "androidx.appcompat:appcompat:1.7.1",
     "androidx.dynamicanimation:dynamicanimation:1.1.0",
     "androidx.viewpager2:viewpager2:1.1.0",
-    "dev.chrisbanes.haze:haze:1.7.2",
+    "dev.chrisbanes.haze:haze:2.1.0",
     "io.coil-kt.coil3:coil-core:3.3.0",
     "io.coil-kt.coil3:coil-network-okhttp:3.3.0",
     "io.coil-kt.coil3:coil-network-cache-control:3.3.0",

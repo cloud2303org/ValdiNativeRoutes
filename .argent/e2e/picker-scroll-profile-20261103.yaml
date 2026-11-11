@@ -1,9 +1,10 @@
 # Profile the parent page scroll, not the wheels. Region-label drags keep the
-# pointer outside the nested pickers. Signed-in demo session required.
+# pointer outside the nested pickers. Launch directly into Home.
 steps:
   - launch: io.valdiroutes.app
   - await: { visible: { text: "push 详情页" } }
-  - await: { idle: true }
+  # Home's counter keeps moving; wait for the native tab control.
+  - await: { visible: { text: "组件" } }
   - tap: { text: "组件" }
   - await: { visible: { text: "页面内滚轮" } }
   - await: { idle: true }

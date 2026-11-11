@@ -1,5 +1,7 @@
 steps:
   - launch: io.valdiroutes.mediaqa
+  - await: { visible: { text: push 详情页 }, timeout: 20000 }
+  - scroll-to: { target: { text: Lottie 动画 } }
   - tool: await-ui-element
     args:
       condition: visible

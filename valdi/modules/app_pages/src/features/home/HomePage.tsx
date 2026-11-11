@@ -2,14 +2,16 @@ import { Style } from 'valdi_core/src/Style';
 import { systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
 import { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
 import { ApiError, api } from '../../services/api';
-import { auth } from '../../services/auth';
 import { Button } from '../../components/Button';
 import { color, tokens } from '../../components/theme';
 import { getAppDb } from '../../services/database';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { HideReason, Page, ShowReason } from 'app_foundation/src/page/PageComponent';
 import { PageHeader } from '../../components/PageHeader';
-import { FormLayout, Router } from '../../routing/index';
+import { Router } from '../../router';
+import Strings from '../../Strings';
+import { AppLanguage, languageStore, selectLanguage } from '../../services/localization';
+import type { FormLayout } from '../form/types';
 
 /** The JS engine running this page, read from the runtime itself. */
 function describeJsEngine(): string {
@@ -24,6 +26,7 @@ function describeJsEngine(): string {
 const JS_ENGINE = describeJsEngine();
 
 interface State {
+  language: AppLanguage;
   /** Survives while the page is covered; a remount would reset it. */
   taps: number;
   lastResult: string;
@@ -50,6 +53,7 @@ const KEYBOARD_CASES: Record<string, FormLayout> = {
  */
 export class HomePage extends Page<PageViewModel, State, PageContext> {
   state: State = {
+    language: languageStore.getState().language,
     taps: 0,
     lastResult: '还没有结果',
     savedCount: 0,
@@ -61,6 +65,9 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
   private stopSavedCount?: () => void;
 
   onCreate(): void {
+    this.registerDisposable(
+      languageStore.subscribe(({ language }) => this.setState({ language })),
+    );
     const opens = (api.getStorageSync<number>(OPENS_KEY) ?? 0) + 1;
     api.setStorageSync(OPENS_KEY, opens);
     this.setState({ opens });
@@ -94,7 +101,7 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
 
   onRender(): void {
     const { insets } = this.viewModel;
-    const { taps, lastResult, savedCount, opens, lifecycle, visibleSeconds } = this.state;
+    const { language, taps, lastResult, savedCount, opens, lifecycle, visibleSeconds } = this.state;
 
     <view style={styles.page}>
       <scroll style={styles.scroll}>
@@ -109,6 +116,17 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
             title="Valdi + Compose Nav3"
             subtitle={`${JS_ENGINE}\ninset 上 ${Math.round(insets.top)} · 下 ${Math.round(insets.bottom)} · 左 ${Math.round(insets.left)} · 右 ${Math.round(insets.right)}`}
           />
+
+          <label style={styles.section} value={Strings.languageTitle()} />
+          <label accessibilityId="language-greeting" style={styles.result} value={Strings.languageGreeting('Valdi')} />
+          <Button
+            id="language-system"
+            title={Strings.languageSystem()}
+            secondary={language !== undefined}
+            onTap={() => selectLanguage(undefined)}
+          />
+          <Button id="language-en" title="English" secondary={language !== 'en'} onTap={() => selectLanguage('en')} />
+          <Button id="language-zh" title="简体中文" secondary={language !== 'zh-CN'} onTap={() => selectLanguage('zh-CN')} />
 
           <label style={styles.section} value="路由" />
           <Button id="calculator" title="Calculator" onTap={() => this.router.push('calculator', {})} />
@@ -128,10 +146,6 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
             value={`onShow ${lifecycle.shows} 次（${lifecycle.lastShow}）· onHide ${lifecycle.hides} 次（${lifecycle.lastHide}）`}
           />
           <label key="visible-seconds" style={styles.result} value={`可见时计时（whileVisible）：${visibleSeconds} 秒`} />
-
-          <label style={styles.section} value="登录（auth）" />
-          <label key="token" style={styles.result} numberOfLines={0} value={`token：${auth.getToken() ?? '没有'}`} />
-          <Button id="sign-out" title="退出登录" secondary={true} onTap={this.handleSignOut} />
 
           <label style={styles.section} value="存储（api.*StorageSync，MMKV）" />
           <label key="opens" style={styles.result} value={`首页打开过 ${opens} 次，重启后接着数`} />
@@ -173,11 +187,6 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
       const result = await this.router.pushForResult('picker', { selected: undefined });
       this.setState({ lastResult: result ? `原生页选了 ${result.value}` : '原生页取消了' });
     }
-  };
-
-  private handleSignOut = async () => {
-    const answer = await api.showModal({ title: '退出登录？', content: '会回到登录页，当前页面都会关闭' });
-    if (answer.confirm) auth.signOut();
   };
 
   private handleClearStorage = () => {

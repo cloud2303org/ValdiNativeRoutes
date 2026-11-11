@@ -5,7 +5,7 @@ import { Button } from '../../components/Button';
 import { NavigationBar } from '../../components/NavigationBar';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { Page, StatusBarStyle } from 'app_foundation/src/page/PageComponent';
-import { Router, readParams, router } from '../../routing/index';
+import { Router, router, type RouteViewModel } from '../../router';
 import { color } from '../../components/theme';
 
 interface State {
@@ -20,6 +20,8 @@ interface State {
  * @ExportModel({ios: 'VRDetailPage', android: 'io.valdiroutes.pages.DetailPage'})
  */
 export class DetailPage extends Page<PageViewModel, State, PageContext> {
+  declare readonly viewModel: Readonly<RouteViewModel<'detail'>>;
+
   state: State = { deepest: 0, pages: '' };
 
   private get router(): Router {
@@ -28,7 +30,7 @@ export class DetailPage extends Page<PageViewModel, State, PageContext> {
 
   onRender(): void {
     const { insets, pageId } = this.viewModel;
-    const { id, from } = readParams<'detail'>(this.viewModel);
+    const { id, from } = this.viewModel.params;
     const deepest = Math.max(this.state.deepest, id);
 
     <view style={styles.page}>
@@ -74,7 +76,7 @@ export class DetailPage extends Page<PageViewModel, State, PageContext> {
   }
 
   private handleReplace = () => {
-    const { id } = readParams<'detail'>(this.viewModel);
+    const { id } = this.viewModel.params;
     router.replace('detail', { id: id + 1, from: `replace 自 #${id}` });
   };
 
@@ -93,7 +95,7 @@ export class DetailPage extends Page<PageViewModel, State, PageContext> {
   };
 
   private handleNext = async () => {
-    const { id } = readParams<'detail'>(this.viewModel);
+    const { id } = this.viewModel.params;
     const result = await this.router.pushForResult('detail', { id: id + 1, from: `详情 #${id}` });
     if (result) {
       this.setState({ deepest: result.visited });
@@ -105,7 +107,7 @@ export class DetailPage extends Page<PageViewModel, State, PageContext> {
   };
 
   private handleFinish = () => {
-    const { id } = readParams<'detail'>(this.viewModel);
+    const { id } = this.viewModel.params;
     this.router.finish<'detail'>({ visited: Math.max(this.state.deepest, id) });
   };
 }

@@ -11,7 +11,7 @@ import { FormField } from '../../components/FormField';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { Page } from 'app_foundation/src/page/PageComponent';
 import { PageHeader } from '../../components/PageHeader';
-import { Router, readParams } from '../../routing/index';
+import { Router, type RouteViewModel } from '../../router';
 
 const SCROLL_FIELDS = ['姓名', '电话', '邮箱', '公司', '城市', '街道', '门牌号', '邮编'];
 const NOTES = '备注';
@@ -29,6 +29,8 @@ interface State {
  * @ExportModel({ios: 'VRFormPage', android: 'io.valdiroutes.pages.FormPage'})
  */
 export class FormPage extends Page<PageViewModel, State, PageContext> {
+  declare readonly viewModel: Readonly<RouteViewModel<'form'>>;
+
   state: State = { values: {} };
 
   private focusScroller = new FocusScroller();
@@ -38,7 +40,7 @@ export class FormPage extends Page<PageViewModel, State, PageContext> {
   }
 
   onRender(): void {
-    const { layout } = readParams<'form'>(this.viewModel);
+    const { layout } = this.viewModel.params;
     if (layout === 'scroll') {
       this.renderScrollForm();
     } else {

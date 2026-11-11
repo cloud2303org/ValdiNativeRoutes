@@ -1,29 +1,27 @@
-# Demo credentials only; start signed out and finish signed out.
+# Home entry migrated on 2026-11-10; historical replay counts are in docs/service-modules.md.
+# Keep MMKV initialization, process restart, and AppUI cancel/confirm coverage.
 steps:
   - launch: io.valdiroutes.app
-  - await: { visible: { id: login-account }, timeout: 15000 }
-  - await: { idle: true }
-  - type: { into: { id: login-account }, text: modules, submit: false }
-  - type: { into: { id: login-password }, text: demo }
-  - tool: button
-    args: { button: back }
-  - tap: { text: 登录 }
-  - await: { visible: { text: Valdi + Compose Nav3 }, timeout: 15000 }
-  - await: { idle: true }
+  - await: { visible: { text: push 详情页 }, timeout: 20000 }
+  - scroll-to: { target: { text: 首页打开过 } }
   - assert: { visible: { text: 首页打开过 } }
   - launch: io.valdiroutes.app
-  - await: { visible: { text: Valdi + Compose Nav3 }, timeout: 15000 }
-  - await: { idle: true }
-  - tap: { text: 退出登录 }
-  - await: { visible: { text: 退出登录？ } }
+  - await: { visible: { text: push 详情页 }, timeout: 20000 }
+  - scroll-to: { target: { text: 首页打开过 } }
+  - assert: { visible: { text: 首页打开过 } }
+  - scroll-to: { target: { id: modal-confirm } }
+  - tap: { id: modal-confirm }
+  - await: { visible: { text: 删除这条记录？ } }
   - await: { idle: true }
   - tap: { text: 取消 }
-  - await: { hidden: { text: 退出登录？ } }
-  - await: { visible: { text: Valdi + Compose Nav3 } }
+  - await: { hidden: { text: 删除这条记录？ } }
+  - scroll-to: { target: { text: push 详情页 }, direction: up }
+  - await: { visible: { text: 结果：取消了删除 } }
+  - scroll-to: { target: { id: modal-confirm } }
+  - tap: { id: modal-confirm }
+  - await: { visible: { text: 删除这条记录？ } }
   - await: { idle: true }
-  - tap: { text: 退出登录 }
-  - await: { visible: { text: 退出登录？ } }
-  - await: { idle: true }
-  - tap: { text: 确定 }
-  - await: { visible: { id: login-account }, timeout: 15000 }
-  - await: { idle: true }
+  - tap: { text: 删除 }
+  - await: { hidden: { text: 删除这条记录？ } }
+  - scroll-to: { target: { text: push 详情页 }, direction: up }
+  - await: { visible: { text: 结果：确认删除 } }

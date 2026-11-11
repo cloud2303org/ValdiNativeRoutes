@@ -1,7 +1,23 @@
 # 路由声明与原生页面
 
-App 的唯一声明是 `valdi/modules/app_pages/src/routes.ts`。导航调用从 `app_pages/src/routing` 导入；
+App 的唯一声明是 `valdi/modules/app_pages/src/routes.ts`。导航调用从 `app_pages/src/router` 导入；
 不再提供 `ROUTES`、`TAB_BAR` 或手写组件路径的旧声明方式。
+
+通用路由实现位于 `app_foundation/src/navigation/router.ts`：`createRouter(routes)` 提供
+`push`、`pushForResult`、`replace`、`back`、`popToRoot`、`reset`、Tab 操作、页面栈查询
+及参数读取；基础层 `Router` 提供单页的跳转、`finish` 和 `back`。Foundation 不导入应用页面。
+`app_pages/src/router.ts` 只创建当前应用的实例、导出从路由表推导的类型，并把页面句柄
+绑定到这个实例，因此现有页面的调用方式不变。其他应用可用自己的 `defineRoutes()` 结果独立绑定：
+
+```ts
+import { createRouter } from 'app_foundation/src/navigation/router';
+import { routes } from './routes';
+
+export const router = createRouter(routes);
+```
+
+参数校验、Promise/取消结果转换和转场选项合并由基础层负责；路由名、页面参数/结果、
+Tab 配置及启动根页面由应用负责。实际页面栈和转场仍由 Kotlin/Swift 宿主执行。
 
 ```ts
 import res from 'app_pages/res';
@@ -31,13 +47,23 @@ export const routes = defineRoutes({
 ```
 
 `tabs` 存在就生成 App 的 Tab 容器。`tabs.initial` 只控制首次选中哪个 Tab，省略时选择
-`items` 第一项。它必须出现在 `items` 中，切换后保留选择和已创建页面。App 启动/登录
-逻辑独立决定是否先显示登录页；登录后调用 `router.resetToTabs()`，也可指定默认选中项：
+`items` 第一项。它必须出现在 `items` 中，切换后保留选择和已创建页面。当前 App
+直接以 `routes.home = '$tabs'` 启动，由 `tabs.initial = 'home'` 选中首页。
+需要重置导航栈时可调用 `router.resetToTabs()`，也可指定选中项：
 `router.resetToTabs('device')`。没有 Tabs 时，可用顶层 `initial` 指定启动页，省略则使用
 第一个声明的页面。Tab 容器使用内部标识 `$tabs`，不需要手动声明 `main` 页面。
 
+App 只有一个全局导航栈，Tab 是容器内的单层页面选择，各 Tab 没有独立返回栈。
+Android 的内部 `NavDisplay` 只显示一个 Tab entry；首次创建 Valdi Tab 时，当前页面继续
+绘制，目标在禁止输入的透明槽中完成初始渲染事务和布局准备，再提交最新选择。
+准备过程不阻止窗口绘制，已经初始化的页面复用其 root。此回调表示事务与布局准备完成，
+不代表 GPU 已呈现，也不等待页面后续加载的所有图片或网络内容。
+iOS 默认使用 `UITabBarController`，每个 Tab 直接持有页面控制器；自定义容器先完成目标
+子控制器的挂载与同步布局，再移除原页面。`push` 从当前 Tab 覆盖到全局栈，返回后保留
+该 Tab 的选择和页面实例。
+
 ```ts
-import { router } from 'app_pages/src/routing';
+import { router } from 'app_pages/src/router';
 
 router.push('home');                         // 空参数可以省略
 router.push('detail', { id: 123 });           // 参数/路由名自动补全
@@ -45,8 +71,24 @@ const result = await router.pushForResult('chooseDevice');
 router.switchTab('home');
 ```
 
-页面自己的 `Router`、`readParams` 和 `NavigationOptions` 也从 `app_pages/src/routing` 导入。
+页面自己的 `Router`、`RouteViewModel` 和 `NavigationOptions` 也从 `app_pages/src/router` 导入。
 `finish<'detail'>({ visited: 123 })` 返回结果，取消/离开页面则调用方得到 `undefined`。
+有参页面声明一次对应的 ViewModel 类型后，直接读取 `this.viewModel.params`：
+
+```ts
+export class DetailPage extends Page<PageViewModel, State, PageContext> {
+  declare readonly viewModel: Readonly<RouteViewModel<'detail'>>;
+
+  onCreate(): void {
+    const { id, from } = this.viewModel.params;
+  }
+}
+```
+
+`RouteViewModel` 从路由声明推导 `route` 和 `params`，先移除原生模型的通用字段再替换，
+避免 `params: any` 污染页面类型。`declare` 只约束 TS 类型，不生成字段、转换或运行时校验。
+组件注解及基类继续引用通用 `PageViewModel`，两端原生绑定不变。
+返回结果和页面栈查询也直接使用 marshaller 返回的数据，不再递归检查或重建对象。
 
 ## 开发校验
 
@@ -106,9 +148,9 @@ Tab 图标直接写 `app_pages/res` 的 `res.xxx`。编译器解析真实文件�
 
 `defineRoutes()` 仅构建和校验声明，没有原生发布副作用；`routes.toHost(root?)` 返回
 固定的 `RouteDeclaration`，其中 `routes` 为 `RouteEntry[]`。同步 `startApp` 先安装错误
-处理器，再初始化服务/数据库和 token store，最后选择登录页或 Tab 根并返回声明。
+处理器，再初始化主题、服务和数据库，最后返回默认 Tab 根的声明。
 开发启动在 App 作用域使用官方 `ModuleLoader.onHotReload` 监听路由模块；模块卸载后
-重新读取 routes/auth 并调用 `routes.publish(root?)`。观察 App 模块卸载时官方 loader
+重新读取 routes 并调用 `routes.publish()`。观察 App 模块卸载时官方 loader
 清理监听器。需要手动更新配置时同样显式调用 `publish`。
 
 固定模型、原生构造器、schema 和当前导出器动态字典类型的限制见

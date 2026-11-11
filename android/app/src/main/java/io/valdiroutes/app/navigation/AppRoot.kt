@@ -3,9 +3,13 @@ package io.valdiroutes.app
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.graphics.BitmapFactory
+import android.util.Log
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
@@ -16,15 +20,16 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCompositionContext
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
@@ -41,7 +46,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.navigation3.runtime.NavEntry
@@ -132,11 +136,24 @@ private fun ValdiScreen(entry: PageEntry, navigator: Navigator) {
 }
 
 @Composable
-private fun ValdiPage(entry: PageEntry, insets: Insets, navigator: Navigator, modifier: Modifier) {
+private fun ValdiPage(
+    entry: PageEntry,
+    insets: Insets,
+    navigator: Navigator,
+    modifier: Modifier,
+    acceptsInput: Boolean = true,
+    prepareTab: Boolean = false,
+    onTabReady: () -> Unit = {},
+    onTabFailure: (Exception) -> Unit = {},
+) {
+    val hostView = LocalView.current
+    val latestReady by rememberUpdatedState(onTabReady)
+    val latestFailure by rememberUpdatedState(onTabFailure)
     AndroidView(
         modifier = modifier,
         factory = { context ->
-            FrameLayout(context).apply {
+            PageContentContainer(context).apply {
+                this.acceptsInput = acceptsInput
                 val rootView = entry.rootView ?: ValdiHost.createPage(context, entry, insets, navigator).also {
                     entry.rootView = it
                     entry.appliedInsets = insets
@@ -145,7 +162,8 @@ private fun ValdiPage(entry: PageEntry, insets: Insets, navigator: Navigator, mo
                 addView(rootView, FrameLayout.LayoutParams(-1, -1))
             }
         },
-        update = {
+        update = { container ->
+            container.acceptsInput = acceptsInput
             if (entry.appliedInsets != insets) {
                 entry.appliedInsets = insets
                 ValdiHost.updateInsets(entry, insets)
@@ -157,6 +175,12 @@ private fun ValdiPage(entry: PageEntry, insets: Insets, navigator: Navigator, mo
             if (entry.removed) entry.destroy()
         },
     )
+    DisposableEffect(entry, hostView, prepareTab) {
+        val preparation = if (prepareTab && !entry.tabContentInitialized) {
+            TabPagePreparation(hostView, entry, { latestReady() }, { latestFailure(it) })
+        } else null
+        onDispose { preparation?.dispose() }
+    }
 }
 
 private fun insetsOf(density: Density, top: Int, bottom: Int, horizontal: WindowInsets, layoutDirection: LayoutDirection) = Insets(
@@ -200,22 +224,70 @@ private fun TabsScreen(shell: PageEntry, navigator: Navigator) {
 @Composable
 private fun TabPage(shell: PageEntry, selected: String, insets: Insets, navigator: Navigator) {
     val bar = requireNotNull(navigator.tabBar) { "No tab bar" }
-    // Mount tabs lazily: only the selected tab initializes at startup, and a tab stays mounted after
-    // its first visit so switching back never re-creates it. Startup renders just the visible page.
-    val mounted = remember(shell.id) { mutableStateListOf<String>() }
-    LaunchedEffect(selected) { if (selected !in mounted) mounted.add(selected) }
-    Box(Modifier.fillMaxSize()) {
-        bar.tabs.forEach { item ->
-            val active = item.route == selected
-            if (!active && item.route !in mounted) return@forEach
-            key(item.route) {
-                Box(Modifier.fillMaxSize().zIndex(if (active) 1f else 0f).alpha(if (active) 1f else 0f)) {
-                    val page = navigator.tabPage(shell, item.route)
-                    if (page.definition.kind == "valdi") ValdiPage(page, insets, navigator, Modifier.fillMaxSize())
-                    else NativeScreens.Content(NativePage(page, navigator, insets))
+    val latestInsets = rememberUpdatedState(insets)
+    val isTop = navigator.stack.lastOrNull() === shell
+    val latestIsTop = rememberUpdatedState(isTop)
+    val selection = shell.tabSelection
+    val pending = selection.pending
+    val displayed = selection.displayed ?: selected
+    // Keep the catalog for saved state, but give NavDisplay exactly one current root.
+    // Creating PageEntry objects does not inflate the pages.
+    val entries = bar.tabs.map { item ->
+        val page = navigator.tabPage(shell, item.route)
+        key(page.id) {
+            val content = remember(page) {
+                movableContentOf {
+                    if (page.definition.kind == "valdi") {
+                        ValdiPage(
+                            page, latestInsets.value, navigator, Modifier.fillMaxSize(),
+                            acceptsInput = selection.displayed == page.route && latestIsTop.value,
+                            prepareTab = true,
+                            onTabReady = {
+                                selection.pending?.takeIf { it.route == page.route }?.let {
+                                    navigator.commitTab(shell, it)
+                                }
+                            },
+                            onTabFailure = { error ->
+                                selection.pending?.takeIf { it.route == page.route }?.let(selection::cancel)
+                                Log.e("TabPagePreparation", "Cannot prepare tab ${page.route}", error)
+                            },
+                        )
+                    } else NativeScreens.Content(NativePage(page, navigator, latestInsets.value))
                 }
             }
+            remember(page) { NavEntry(page, contentKey = page.id) { content() } }
         }
+    }
+    val decoratedEntries = rememberDecoratedNavEntries(
+        entries = entries,
+        entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator()),
+    )
+    val displayedIndex = bar.tabs.indexOfFirst { it.route == displayed }
+    val pendingIndex = bar.tabs.indexOfFirst { it.route == pending?.route }
+    val pendingPage = pending?.let { navigator.tabPage(shell, it.route) }
+    val canCommit = pendingPage != null &&
+        (pendingPage.definition.kind != "valdi" || pendingPage.tabContentInitialized)
+    LaunchedEffect(pending, isTop, canCommit) {
+        if (pending != null && isTop && canCommit) {
+            navigator.commitTab(shell, pending)
+        }
+    }
+    Box(Modifier.fillMaxSize()) {
+        if (isTop && pendingIndex >= 0 && pendingIndex != displayedIndex) {
+            // Keep preparation behind the current page so it cannot receive that page's touches.
+            val page = navigator.tabPage(shell, requireNotNull(pending).route)
+            if (page.definition.kind == "valdi") {
+                Box(Modifier.fillMaxSize().alpha(0f)) { entries[pendingIndex].Content() }
+            }
+        }
+        NavDisplay(
+            entries = listOf(decoratedEntries[displayedIndex]),
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+            popTransitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+            predictivePopTransitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+            onBack = {},
+        )
     }
 }
 

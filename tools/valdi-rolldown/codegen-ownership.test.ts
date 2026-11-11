@@ -35,7 +35,7 @@ function fixture(t: TestContext) {
   for (const name of ['codegen.ts', 'cpp-modules.ts', 'pipeline.ts', 'hermes.ts', 'codegen']) {
     cpSync(path.join(import.meta.dirname, name), path.join(tool, name), { recursive: true });
   }
-  for (const name of ['package.json', 'modules.mjs', 'module-selection.ts', 'editor-config.ts']) {
+  for (const name of ['package.json', 'modules.mjs', 'module-selection.ts', 'editor-config.ts', 'localization.ts']) {
     cpSync(path.join(import.meta.dirname, name), path.join(tool, name));
   }
   // Keep valdiTs's own relative imports in the original tool directory.

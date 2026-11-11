@@ -1,7 +1,8 @@
 steps:
   - launch: io.valdiroutes.app
+  - await: { visible: { text: push 详情页 }, timeout: 20000 }
+  - scroll-to: { target: { id: input-check } }
   - await: { visible: { id: input-check } }
-  - await: { idle: true }
   - tap: { id: input-check }
   - await: { visible: { id: input-check-field } }
   - await: { idle: true }
@@ -31,7 +32,6 @@ steps:
   - assert: { text: { in: { id: input-check-result }, equals: '已提交："third-789"' } }
   - tap: { text: 返回 }
   - await: { visible: { id: input-check } }
-  - await: { idle: true }
   - tap: { id: input-check }
   - await: { visible: { id: input-check-field } }
   - await: { idle: true }

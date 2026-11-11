@@ -1,0 +1,19 @@
+# Recorded live. A role-only Home tap was restored and re-recorded on its text label.
+executionPrerequisite: Android device with io.valdiroutes.app foreground on the Device tab, no keyboard or overlay. Theme follows the current system mode; this fragment does not change it.
+steps:
+  - echo: From Device, return Home and open the native picker.
+  - tap: { text: { matches: '^首页$' } }
+  - await: { visible: { text: push 详情页 }, timeout: 10000 }
+  # Home's counter keeps moving; readiness is the actual control used next.
+  - await: { visible: { text: 打开原生选择页，等结果 } }
+  - tap: { text: 打开原生选择页，等结果 }
+  - await: { visible: { text: Compose 页面，选一项返回给 Valdi 页面 }, timeout: 10000 }
+  - await: { visible: { text: { matches: '^苹果$' } } }
+  - echo: Choose Apple and verify the result delivered to Home.
+  - tap: { text: { matches: '^苹果$' } }
+  - await: { visible: { text: 结果：原生页选了 苹果 }, timeout: 10000 }
+  - await: { visible: { text: { matches: '^设备$' } } }
+  - echo: Return to Device after the native result.
+  - tap: { text: { matches: '^设备$' } }
+  - await: { visible: { text: Wi-Fi 与 NFC }, timeout: 10000 }
+  - await: { idle: true }

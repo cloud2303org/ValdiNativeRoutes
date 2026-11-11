@@ -13,6 +13,20 @@ const run = (args: string[]) => spawnSync(process.execPath, [tsx, path.join(tool
   cwd: tool, encoding: 'utf8', env: { ...process.env, BAZEL_BIN: 'must-not-run-bazel-for-invalid-options' },
 });
 
+test('removed comparison and unknown options fail before changing outputs or starting a build', t => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'valdi-build-options-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const marker = path.join(dir, 'app_pages.valdimodule');
+  writeFileSync(marker, 'untouched');
+  for (const option of ['--compare', '--unknown']) {
+    const result = run([option, '--out', dir]);
+    assert.notEqual(result.status, 0);
+    assert.ok(result.stderr.includes(`Unknown build option: ${option}`), result.stderr);
+    assert.doesNotMatch(result.stderr, /must-not-run-bazel/);
+    assert.equal(readFileSync(marker, 'utf8'), 'untouched');
+  }
+});
+
 test('base compilation and module selection reject invalid options before changing outputs', t => {
   const dir = mkdtempSync(path.join(tmpdir(), 'valdi-build-cli-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

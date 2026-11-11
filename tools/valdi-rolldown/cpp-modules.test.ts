@@ -26,7 +26,7 @@ function put(file: string, content = '// handwritten\n'): void {
 function catalog(directory: string, names: string[]): Record<string, CodegenModule> {
   return Object.fromEntries(names.map(name => [name, {
     module: { name, dir: path.join(directory, name), generatedDirs: [] },
-    bundleInfo: { ...VALDI_PROJECT_CONFIG, name, iosModuleName: name, asyncStrictMode: false },
+    bundleInfo: { ...VALDI_PROJECT_CONFIG, name, iosModuleName: name, iosLanguage: 'objc' as const, asyncStrictMode: false },
   }]));
 }
 
@@ -65,7 +65,7 @@ function cliWorkspace(t: TestContext, names: string[]) {
     cpSync(path.join(import.meta.dirname, name), path.join(tool, name), { recursive: true });
   }
   for (const name of ['package.json', 'node_modules', 'modules.mjs', 'valdiTs.ts',
-    'module-selection.ts', 'editor-config.ts', 'localization.ts', 'vendor']) {
+    'module-selection.ts', 'editor-config.ts', 'localization.ts', 'resources.ts', 'vendor']) {
     symlinkSync(path.join(import.meta.dirname, name), path.join(tool, name));
   }
   const modules = path.join(directory, 'valdi/modules');
@@ -543,7 +543,7 @@ test('C++ source roots retain tsconfig options, ambient types, generated aliases
   put(path.join(owner, 'base.json'), JSON.stringify({
     compilerOptions: {
       moduleResolution: 'node',
-      paths: { 'types/*': ['../types/*'] },
+      paths: { 'types/*': ['../types/*'], 'owner/*': [path.join(owner, '*'), path.join(generated, '*')] },
       types: ['./ambient'],
       strict: true,
     },

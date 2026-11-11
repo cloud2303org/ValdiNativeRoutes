@@ -19,16 +19,16 @@ export interface NfcAvailabilityModel {
 
 /** @ExportModel({ios: 'VRNfcRecord', android: 'io.valdiroutes.nfc.NfcRecord'}) */
 export interface NfcRecordModel {
-  id: Uint8Array;
-  type: Uint8Array;
-  payload: Uint8Array;
+  id: Uint8Array<ArrayBuffer>;
+  type: Uint8Array<ArrayBuffer>;
+  payload: Uint8Array<ArrayBuffer>;
   tnf: number;
 }
 
 /** @ExportModel({ios: 'VRNfcTag', android: 'io.valdiroutes.nfc.NfcTag'}) */
 export interface NfcTagModel {
   tagHandle: string;
-  id: Uint8Array;
+  id: Uint8Array<ArrayBuffer>;
   techs: string[];
   messages: NfcRecordModel[];
 }
@@ -57,12 +57,12 @@ export interface NfcHost {
   connect(handle: NfcHandleModel): Promise<void>;
   close(handle: NfcHandleModel): Promise<void>;
   isConnected(handle: NfcHandleModel): Promise<boolean>;
-  transceive(handle: NfcHandleModel, data: Uint8Array): Promise<Uint8Array>;
+  transceive(handle: NfcHandleModel, data: Uint8Array): Promise<Uint8Array<ArrayBuffer>>;
   getMaxTransceiveLength(handle: NfcHandleModel): Promise<number>;
   setTimeout(handle: NfcHandleModel, timeout: number): Promise<void>;
-  getAtqa(handle: NfcHandleModel): Promise<Uint8Array>;
+  getAtqa(handle: NfcHandleModel): Promise<Uint8Array<ArrayBuffer>>;
   getSak(handle: NfcHandleModel): Promise<number>;
-  getHistoricalBytes(handle: NfcHandleModel): Promise<Uint8Array>;
+  getHistoricalBytes(handle: NfcHandleModel): Promise<Uint8Array<ArrayBuffer>>;
   writeNdefMessage(handle: NfcHandleModel, records: NfcRecordModel[], uris: string[], texts: string[]): Promise<void>;
 }
 

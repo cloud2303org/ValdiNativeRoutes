@@ -10,9 +10,9 @@ import type { NativeNFCTag, NFCDiscoveryState, NFCRecord, NFCTechHandle } from '
 // for direct typed callers; it does not enable public NFC support.
 
 // Public schemas own outgoing snapshots. Full-buffer replies reuse their native-backed storage.
-const buffer = (value: Uint8Array): ArrayBuffer =>
+const buffer = (value: Uint8Array<ArrayBuffer>): ArrayBuffer =>
   value.byteOffset === 0 && value.byteLength === value.buffer.byteLength
-    ? (value.buffer as ArrayBuffer)
+    ? value.buffer
     : value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
 const record = (value: NfcRecordModel): NFCRecord => ({
   tnf: value.tnf,

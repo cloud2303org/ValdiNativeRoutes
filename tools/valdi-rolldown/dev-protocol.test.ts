@@ -31,6 +31,21 @@ test('ValdiPacket rejects bad magic, huge lengths, invalid JSON and nonobject pa
   }
 });
 
+test('ValdiPacket rejects a fragmented oversized header before buffering a body or dispatching later frames', () => {
+  const header = encodeDevPacket({}).subarray(0, 8);
+  header.writeUInt32LE(128 * 1024 * 1024 + 1, 4);
+  const reader = new DevPacketReader();
+  const received: object[] = [];
+  const handle = (value: object) => received.push(value);
+  reader.receive(header.subarray(0, 7), handle);
+  assert.throws(() => reader.receive(Buffer.concat([header.subarray(7), encodeDevPacket({ event: {} })]), handle),
+    /ValdiPacket exceeds size limit/);
+  assert.deepEqual(received, []);
+  // Reconnection uses a fresh reader, with no bytes retained from the bad stream.
+  new DevPacketReader().receive(encodeDevPacket({ request: { request_id: 'new' } }), handle);
+  assert.deepEqual(received, [{ request: { request_id: 'new' } }]);
+});
+
 test('updated_resources preserves inline sources, source maps and binary resources exactly', () => {
   const resources = [
     { bundle: 'app_pages', file: 'src/Home.js', data: Buffer.from('/* 汉字 */\nmodule.exports = 1;\n//# sourceMappingURL=data:application/json;base64,e30=\n') },

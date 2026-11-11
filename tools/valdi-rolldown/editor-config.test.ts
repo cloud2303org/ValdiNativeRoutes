@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { createInterface } from 'node:readline';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
+import { projectDiagnostics, readModuleProject } from './typescript-project';
 import { valdiTs } from './valdiTs';
 import type { ValdiModule } from './valdiTs';
 
@@ -107,9 +110,10 @@ function assertLocalResolution(f: Awaited<ReturnType<typeof fixture>>, config: t
   assertResolution(f.own, config.options, 'sibling/res', path.join(f.sibling.generatedDirs[0], 'res.ts'));
   assertResolution(f.own, config.options, 'fixture-npm', path.join(f.own.nodeModules!, 'fixture-npm/index.d.ts'));
   assert.deepEqual(config.fileNames.sort(), [
+    path.join(f.own.generatedDirs[0], 'res.ts'),
     path.join(f.own.dir, 'local.d.ts'), path.join(f.own.dir, 'src/Helper.ts'),
     path.join(f.own.dir, 'src/index.tsx'), path.join(f.own.dir, 'src/jsx.d.ts'),
-  ].sort(), 'default roots stay inside the individual module');
+  ].sort(), 'roots contain only the individual module sources, declarations and generated inputs');
   const program = ts.createProgram(config.fileNames, config.options);
   const diagnostics = ts.getPreEmitDiagnostics(program);
   assert.deepEqual(diagnostics.map(d => `${d.code}: ${ts.flattenDiagnosticMessageText(d.messageText, '\n')}`), []);
@@ -130,6 +134,90 @@ function prepare(f: Awaited<ReturnType<typeof fixture>>) {
   put(path.join(sources, 'src/valdi_modules/src/valdi/valdi_core/src/tslib.d.ts'), 'export {};\n');
   return sources;
 }
+
+test('editor and build check the same sources and declarations while bundling emits ES modules', async t => {
+  const f = await fixture(t);
+  const sibling = path.join(f.sibling.dir, 'src/Component.tsx');
+  put(sibling, `import npm = require('fixture-npm'); export const sibling = npm.npmValue;\n`);
+  put(path.join(f.own.dir, 'tests/node.test.mts'), `const value: string = 1; export { value };\n`);
+  f.pipeline.writeTsconfig(f.own, f.modules);
+  const plugin = valdiTs(f.own);
+  t.after(() => plugin.dispose());
+  assert.equal(plugin.diagnostics(), '', 'CommonJS framework imports are valid source');
+  assert.equal(plugin.program().getCompilerOptions().module, ts.ModuleKind.CommonJS);
+  assert.match(plugin.emit(path.join(f.own.dir, 'src/Helper.ts')), /export const value/);
+  assert.ok(!plugin.program().getRootFileNames().some(file => file.endsWith('node.test.mts')));
+
+  const owned = path.join(f.own.dir, 'local.d.ts');
+  const external = path.join(f.own.nodeModules!, 'fixture-npm/index.d.ts');
+  put(owned, 'interface Owned { run(): void } declare class InvalidOwned implements Owned {}\n');
+  put(external, 'interface External { run(): void } export declare class InvalidExternal implements External {} export declare const npmValue: number;\n');
+  put(sibling, 'export const sibling: string = 1;\n');
+  for (const file of [owned, external, sibling]) plugin.invalidate(file);
+  const config = readModuleProject(f.own);
+  const editor = projectDiagnostics(ts.createProgram(config.fileNames, config.options), f.own.dir);
+  const diagnostics = plugin.diagnostics();
+  assert.equal(diagnostics, editor);
+  for (const name of ['InvalidOwned', 'InvalidExternal', 'Component.tsx']) assert.ok(diagnostics.includes(name), diagnostics);
+  assert.match(diagnostics, /TS2420/);
+  assert.match(diagnostics, /TS2322/);
+  await assert.rejects(f.pipeline.buildModule(f.own, plugin, false), error =>
+    error instanceof Error && error.message === diagnostics);
+});
+
+test('project invalidation discovers added sources and generated declarations and forgets removed roots', async t => {
+  const f = await fixture(t);
+  f.pipeline.writeTsconfig(f.own, f.modules);
+  const plugin = valdiTs(f.own);
+  t.after(() => plugin.dispose());
+  assert.equal(plugin.diagnostics(), '');
+  const source = path.join(f.own.dir, 'src/Added.ts');
+  const generated = path.join(f.own.generatedDirs[0], 'src/AddedResource.ts');
+  put(source, `import { value } from 'own/src/AddedResource'; export const added: number = value;\n`);
+  plugin.invalidate(source);
+  assert.match(plugin.diagnostics(), /TS2307/);
+  put(generated, 'export const value = "wrong type";\n');
+  plugin.invalidate(generated);
+  plugin.invalidate(source);
+  assert.match(plugin.diagnostics(), /TS2322/);
+  assert.ok(plugin.program().getRootFileNames().includes(generated));
+  put(generated, 'export const value = 7;\n');
+  plugin.invalidate(generated);
+  assert.equal(plugin.diagnostics(), '');
+  rmSync(source);
+  rmSync(generated);
+  plugin.invalidate(source);
+  plugin.invalidate(generated);
+  assert.equal(plugin.diagnostics(), '');
+  for (const file of [source, generated]) assert.ok(!plugin.program().getRootFileNames().includes(file));
+});
+
+test('bundling rejects owned CommonJS-only syntax before emission while bootstrap preserves its semantics', async t => {
+  const f = await fixture(t);
+  f.pipeline.writeTsconfig(f.own, f.modules);
+  const importer = path.join(f.own.dir, 'src/Helper.ts');
+  const assignment = path.join(f.own.dir, 'src/Assignment.ts');
+  put(importer, `import npm = require('fixture-npm'); export const value = npm.npmValue;\n`);
+  put(assignment, 'const value = () => 7; export = value;\n');
+  const plugin = valdiTs(f.own);
+  const bootstrap = valdiTs(f.own, ts.ModuleKind.CommonJS);
+  t.after(() => { plugin.dispose(); bootstrap.dispose(); });
+  assert.equal(projectDiagnostics(bootstrap.program(), f.own.dir), '');
+  const diagnostics = plugin.diagnostics();
+  assert.match(diagnostics, /TS1202/);
+  assert.match(diagnostics, /TS1203/);
+  assert.throws(() => plugin.emit(importer), /TS1202/);
+  assert.throws(() => plugin.emit(assignment), /TS1203/);
+  await assert.rejects(f.pipeline.buildModule(f.own, plugin, false), /TS1202/);
+  assert.equal(bootstrap.diagnostics(), '');
+  const imported = { exports: {} as { value?: number } };
+  new Function('module', 'exports', 'require', bootstrap.emit(importer))(
+    imported, imported.exports, () => ({ npmValue: 6 }));
+  assert.equal(imported.exports.value, 6);
+  const exported = { exports: {} as unknown };
+  new Function('module', 'exports', bootstrap.emit(assignment))(exported, exported.exports);
+  assert.equal((exported.exports as () => number)(), 7);
+});
 
 test('missing sources still produce parseable, strict TSX configs with local aliases and unchanged root discovery', async t => {
   const f = await fixture(t);
@@ -306,16 +394,15 @@ test('config generation preserves absolute Windows drives and UNC shares', async
   const config = createEditorConfig(own, [own, sibling], {
     frameworkSources: 'D:\\framework',
     bootstrapBase: 'C:\\repo with spaces\\valdi\\tsconfig.editor-base.json',
-    generatedRoot: '\\\\server\\generated',
   }, path.win32);
   assert.equal(config.extends, 'D:/framework/modules/_configs/base.tsconfig.json');
   assert.deepEqual(config.compilerOptions.paths['own/*'], ['C:/repo with spaces/valdi/modules/own/*', 'D:/cache/own/*']);
   assert.deepEqual(config.compilerOptions.paths['sibling/*'], ['//server/share/sibling/*']);
   assert.deepEqual(config.compilerOptions.paths['*'], ['C:/repo with spaces/valdi/node_modules/*']);
-  assert.deepEqual(config.compilerOptions.rootDirs, ['C:/repo with spaces/valdi/modules', '//server/generated/']);
+  assert.ok(!('rootDirs' in config.compilerOptions), 'generated APIs use explicit module aliases');
   assert.deepEqual(config.compilerOptions.types, ['D:/framework/modules/types/Long', 'D:/framework/modules/types/globals']);
   const unc = createEditorConfig(own, [own], {
-    frameworkSources: '\\\\buildhost\\cache', bootstrapBase: 'C:\\repo\\base.json', generatedRoot: 'C:\\repo\\.gen',
+    frameworkSources: '\\\\buildhost\\cache', bootstrapBase: 'C:\\repo\\base.json',
   }, path.win32);
   assert.equal(unc.extends, '//buildhost/cache/modules/_configs/base.tsconfig.json');
   assert.ok(!JSON.stringify(unc).includes('./D:/'));
@@ -352,6 +439,97 @@ test('physical and symlink config entry paths resolve identical JSX types, own/s
   put(path.join(f.own.dir, 'src/invalid.tsx'), 'export const invalid = <view unknownProperty={1} />;\n');
   const config = parsed({ ...f.own, dir: path.join(alias, 'own') }).config;
   assert.ok(ts.getPreEmitDiagnostics(ts.createProgram(config.fileNames, config.options)).some(d => d.code === 2322));
+});
+
+test('canonical generated Strings imports retain type checking without rootDirs through physical and symlink module entries', async t => {
+  const f = await fixture(t);
+  const sources = prepare(f);
+  put(path.join(sources, 'src/valdi_modules/src/valdi/valdi_core/src/LocalizableStrings.ts'),
+    'export declare function buildInlineModule(...args: unknown[]): unknown;\n');
+  for (const module of f.modules) {
+    put(path.join(module.dir, 'strings/strings-en.json'),
+      JSON.stringify({ welcome: { defaultMessage: 'Hello {name}' } }));
+    put(path.join(module.dir, 'src/services/localization.ts'), `
+import Strings from '${module.name}/src/Strings';
+export const welcome = (name: string): string => Strings.welcome(name);
+`);
+    f.pipeline.writeTsconfig(module, f.modules);
+  }
+  put(path.join(f.own.dir, 'src/index.tsx'), `
+import { welcome } from './services/localization';
+import { welcome as siblingWelcome } from 'sibling/src/services/localization';
+export const message: string = welcome('Ada') + siblingWelcome('Bob');
+`);
+  const alias = path.join(f.directory, 'module-build/modules');
+  mkdirSync(path.dirname(alias), { recursive: true });
+  symlinkSync(path.join(f.directory, 'valdi/modules'), alias, 'dir');
+  for (const dir of [f.own.dir, path.join(alias, 'own')]) {
+    const { config } = parsed({ ...f.own, dir });
+    assert.equal(config.options.rootDirs, undefined);
+    assert.ok(config.fileNames.includes(path.join(dir, 'src/services/localization.ts')),
+      'the configured project must include the opened source');
+    const program = ts.createProgram(config.fileNames, config.options);
+    assert.deepEqual(ts.getPreEmitDiagnostics(program).map(d => ({
+      code: d.code, text: ts.flattenDiagnosticMessageText(d.messageText, '\n'),
+    })), [], dir);
+    for (const module of f.modules) {
+      assert.ok(program.getSourceFile(path.join(module.generatedDirs[0], 'src/Strings.ts')),
+        'both local and imported sibling sources resolve their generated Strings');
+    }
+  }
+  put(path.join(f.own.dir, 'src/services/invalid.ts'), `
+import Strings from 'own/src/Strings';
+Strings.welcome(123);
+Strings.unknownKey();
+`);
+  for (const dir of [f.own.dir, path.join(alias, 'own')]) {
+    const { config } = parsed({ ...f.own, dir });
+    const diagnostics = ts.getPreEmitDiagnostics(ts.createProgram(config.fileNames, config.options));
+    assert.deepEqual(diagnostics.map(d => d.code).sort(), [2339, 2345], dir);
+    const file = path.join(dir, 'src/services/invalid.ts');
+    const requests = [
+      { seq: 1, type: 'request', command: 'open', arguments: { file } },
+      { seq: 2, type: 'request', command: 'projectInfo', arguments: { file, needFileNameList: true } },
+      { seq: 3, type: 'request', command: 'semanticDiagnosticsSync', arguments: { file } },
+    ];
+    const responses = await new Promise<any[]>((resolve, reject) => {
+      const server = spawn(process.execPath, [path.join(tools, 'node_modules/typescript/lib/tsserver.js')]);
+      const responses: any[] = [];
+      let stderr = '';
+      const timeout = setTimeout(() => {
+        server.kill();
+        reject(new Error(`tsserver timed out: ${stderr}`));
+      }, 30_000);
+      server.stderr.on('data', data => { stderr += data.toString(); });
+      const lines = createInterface({ input: server.stdout });
+      lines.on('line', line => {
+        if (!line.startsWith('{')) return;
+        const response = JSON.parse(line);
+        responses.push(response);
+        if (response.type === 'response' && response.request_seq === 3) {
+          server.stdin.end(JSON.stringify({ seq: 4, type: 'request', command: 'exit' }) + '\n');
+        }
+      });
+      server.on('error', error => {
+        clearTimeout(timeout);
+        reject(error);
+      });
+      server.on('close', code => {
+        clearTimeout(timeout);
+        lines.close();
+        if (code !== 0) reject(new Error(`tsserver exited ${code}: ${stderr}`));
+        else resolve(responses);
+      });
+      server.stdin.write(requests.map(request => JSON.stringify(request)).join('\n') + '\n');
+    });
+    const project = responses.find(response => response.type === 'response' && response.request_seq === 2);
+    assert.equal(project?.success, true, JSON.stringify(responses));
+    assert.equal(realpathSync(project.body.configFileName), realpathSync(path.join(dir, 'tsconfig.json')));
+    assert.ok(project.body.fileNames.includes(file), 'tsserver must own the opened source in the configured project');
+    const semantic = responses.find(response => response.type === 'response' && response.request_seq === 3);
+    assert.equal(semantic?.success, true, JSON.stringify(responses));
+    assert.deepEqual(semantic.body.map((diagnostic: { code: number }) => diagnostic.code).sort(), [2339, 2345]);
+  }
 });
 
 test('real CalculatorComponent gets Valdi IntrinsicElements and dayjs types through either module entry', async t => {
@@ -397,7 +575,9 @@ test('real CalculatorComponent gets Valdi IntrinsicElements and dayjs types thro
   }
   put(path.join(calculator.dir, 'invalid.tsx'), 'export const invalid = <view definitelyInvalidValdiProp={1} />;\n');
   const invalid = parsed({ ...calculator, dir: path.join(alias, 'own') }).config;
-  assert.ok(ts.getPreEmitDiagnostics(ts.createProgram(invalid.fileNames, invalid.options)).some(d => d.code === 2322));
+  assert.ok(ts.getPreEmitDiagnostics(ts.createProgram([
+    ...invalid.fileNames, path.join(calculator.dir, 'invalid.tsx'),
+  ], invalid.options)).some(d => d.code === 2322));
 });
 
 test('absolute editor aliases keep sibling modules external and ordinary/scoped npm packages bundled', async t => {
@@ -436,7 +616,6 @@ test('real WheelPickers resolves shared valibot types through physical and logic
   const configJson = createEditorConfig(module, live.appModules(), {
     frameworkSources: live.valdiSourceRoot(),
     bootstrapBase: path.join(root, 'valdi/tsconfig.editor-base.json'),
-    generatedRoot: path.join(tools, '.gen'),
   });
   const alias = path.join(f.directory, 'module-build/modules');
   mkdirSync(path.dirname(alias), { recursive: true });

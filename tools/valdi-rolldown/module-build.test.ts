@@ -116,7 +116,7 @@ test('localized module compilation packages Inline JSON and supplies typed Strin
   writeFileSync(path.join(dep.dir, 'strings/strings-en.json'), JSON.stringify(english));
   writeFileSync(path.join(dep.dir, 'strings/strings-ja.json'), JSON.stringify(japanese));
   writeFileSync(path.join(dep.dir, 'src/index.ts'), `
-import Strings from './Strings';
+import Strings from 'messages/src/Strings';
 export const greet = (name: string) => Strings.greeting(name);
 `);
 
@@ -138,7 +138,7 @@ export const greet = (name: string) => Strings.greeting(name);
   writeFileSync(path.join(consumer.dir, 'strings/strings-en.json'),
     JSON.stringify({ own_title: { defaultMessage: 'Consumer' } }));
   writeFileSync(index, `
-import Strings from './Strings';
+import Strings from 'fixture/src/Strings';
 import { greet } from 'messages/src/index';
 export const message = [Strings.ownTitle(), greet('Ada')];
 `);

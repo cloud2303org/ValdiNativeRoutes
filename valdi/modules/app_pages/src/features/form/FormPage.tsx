@@ -4,8 +4,6 @@ import { systemFont } from 'valdi_core/src/SystemFont';
 import { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
 import { Button } from '../../components/Button';
 import { color, tokens } from '../../components/theme';
-import { api } from '../../services/api';
-import { getAppDb } from '../../services/database';
 import { FocusScroller } from '../../components/FocusScroller';
 import { FormField } from '../../components/FormField';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
@@ -142,15 +140,10 @@ export class FormPage extends Page<PageViewModel, State, PageContext> {
     this.router.back();
   };
 
-  private handleSubmit = async () => {
+  private handleSubmit = () => {
     const filled = Object.values(this.state.values).filter(value => value.trim().length > 0).length;
     const summary = `表单提交了 ${filled} 项`;
-    try {
-      await getAppDb().insertSubmission(summary, Date.now());
-      this.router.finish<'form'>({ summary });
-    } catch (error) {
-      await api.showToast({ title: `保存失败：${error instanceof Error ? error.message : String(error)}`, icon: 'error' });
-    }
+    this.router.finish<'form'>({ summary });
   };
 }
 

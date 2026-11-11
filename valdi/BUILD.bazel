@@ -29,7 +29,6 @@ valdi_exported_library(
     # libvaldi_runtime.so); bzl/patches/valdi/export_native_deps.patch adds the parameter.
     native_deps = CPP_IMPLEMENTATIONS,
     deps = [
-        "@valdi//src/valdi_modules/src/valdi/client_sql",
         "@valdi//src/valdi_modules/src/valdi/native_web",
         "@valdi//src/valdi_modules/src/valdi/valdi_core",
         "@valdi//src/valdi_modules/src/valdi/valdi_tsx",

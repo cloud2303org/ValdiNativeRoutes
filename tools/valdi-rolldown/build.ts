@@ -5,24 +5,19 @@
 // resources, otherwise left as it is).
 // Fonts are bundled in the .valdimodule as res/<name>.ttf on both platforms.
 //
-//   pnpm build [--release] [--minify] [--compare] [--out <dir>] [--res <dir>] [--ios-res <dir>]
+//   pnpm build [--release] [--minify] [--out <dir>] [--res <dir>] [--ios-res <dir>]
 //              [--module <name>] [--hermes-base <previous.valdimodule>]
 //
 // Debug builds are JavaScript with each file's source map inline. --release: Hermes bytecode, as Valdi's release
 // builds ship (and minified), with the maps in <module>.map.json next to the archive.
 //
 // Images use prebuilt sharp, bytecode uses pinned prebuilt hermesc; no native host build tool is required.
-// Type errors fail the build, after it is written. --compare also emits each file as the Valdi
-// compiler would (CommonJS straight from TypeScript) and diffs the render code against its web output.
-import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+// Type errors fail before a module archive is written.
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import ts from 'typescript';
-import { pack, unpack, type ArchiveEntries } from './archive';
+import { pack, setArchiveHash, unpack } from './archive';
 import {
-  appModule,
   appModules,
-  bin,
   buildModule,
   genDir,
   inlineSourceMaps,
@@ -33,7 +28,7 @@ import {
   type Built,
 } from './pipeline';
 import { addFontEntries, assetCatalog, findFonts, findImages, writeAndroidResources, writeIosResources, writeResTs } from './resources';
-import { sourceFiles, valdiTs } from './valdiTs';
+import { valdiTs } from './valdiTs';
 import { buildNodeModules, copyModuleTree, stagedModuleOutputs } from '../../scripts/node-modules.mjs';
 import { availableModuleNames, pruneDisabledModuleOutputs } from './modules.mjs';
 
@@ -45,6 +40,16 @@ const value = (name: string) => {
   }
   return process.argv[index + 1];
 };
+const valueOptions = new Set(['--out', '--res', '--ios-res', '--module', '--hermes-base', '--native-platform']);
+for (let index = 2; index < process.argv.length; index++) {
+  const argument = process.argv[index];
+  if (valueOptions.has(argument)) {
+    value(argument);
+    index++;
+  } else if (argument !== '--release' && argument !== '--minify') {
+    throw new Error(`Unknown build option: ${argument}`);
+  }
+}
 const option = (name: string) => {
   const argument = value(name);
   return argument === undefined ? undefined : path.resolve(argument);
@@ -137,11 +142,7 @@ for (const module of modules) {
     await writeIosResources(module, images ?? [], iosRes);
   }
 
-  const errors = plugin.diagnostics();
-  if (errors) {
-    process.exitCode = 1;
-    console.error(errors);
-  }
+  plugin.dispose();
 }
 
 /** The archive (and in release builds the source maps) of one module into `out`. */
@@ -152,34 +153,6 @@ async function write(name: string, built: Built) {
   } else {
     inlineSourceMaps(built);
   }
-  setHash(built.entries);
+  setArchiveHash(built.entries);
   writeFileSync(path.join(out, `${name}.valdimodule`), pack(built.entries));
-}
-
-/** The archive's `hash` entry, which the runtime only reports (Bundle::getHash). */
-function setHash(entries: ArchiveEntries) {
-  const hash = createHash('sha256');
-  for (const [name, content] of [...entries].sort(([a], [b]) => a.localeCompare(b))) hash.update(name).update(content);
-  entries.set('hash', Buffer.from(hash.digest('hex')));
-}
-
-if (process.argv.includes('--compare')) {
-  const module = appModule('app_pages');
-  // The same program emitting CommonJS is what the Valdi compiler emits before minifying; its web output isn't
-  // minified, so the render code can be compared line by line.
-  const reference = valdiTs(module, ts.ModuleKind.CommonJS);
-  const web = path.join(bin, 'web/release/assets/app_pages');
-  const renderLines = (js: string) => js.split('\n').map(line => line.trim()).filter(line => /__Renderer|__node\w+ =/.test(line));
-  let same = 0;
-  const differ: string[] = [];
-  for (const file of sourceFiles(module).filter(file => file.endsWith('.tsx'))) {
-    const relative = path.relative(module.dir, file).replace(/\.tsx$/, '.js');
-    const webFile = path.join(web, relative);
-    if (!existsSync(webFile)) continue;
-    const ours = renderLines(reference.emit(file));
-    const theirs = renderLines(readFileSync(webFile, 'utf8'));
-    if (ours.join('\n') === theirs.join('\n')) same++;
-    else differ.push(`${relative} (${ours.length} vs ${theirs.length} render lines)`);
-  }
-  console.log(`render code identical to the Valdi compiler's in ${same} files${differ.length ? `; differs in ${differ.join(', ')}` : ''}`);
 }

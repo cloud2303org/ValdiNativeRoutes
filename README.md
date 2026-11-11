@@ -64,7 +64,8 @@ pnpm build:android                 # 只构建 Android Debug APK，不安装/启
 pnpm build:ios                     # 只构建 iOS Simulator Debug App（自动 XcodeGen）
 pnpm build                         # TS 模块、图片和字体；输出 tools/valdi-rolldown/out/
 pnpm build:web                     # 打包固定框架版本的官方 Web HelloWorld 示例
-pnpm test                          # 构建前置检查测试 + Kotlin / Objective-C / C++ golden 对比
+pnpm typecheck                     # Node 工具和所有已启用运行时模块的严格类型检查
+pnpm test                          # 类型检查、管线测试 + Kotlin / Objective-C / C++ golden 对比
 pnpm test:e2e:android          # 已安装 Android App 的 UI 测试
 pnpm test:e2e:ios              # 已安装 iOS App 的 UI 测试
 ```
@@ -123,7 +124,7 @@ Windows 使用 `scripts/windows/export-android.ps1 -Config debug`，详见 Windo
 
 只构建 TS 模块时，不必导出 Android/iOS 运行时：首次运行 `node scripts/prepare-valdi.mjs` 获取类型声明，
 之后使用根目录 `pnpm build`。图片处理使用预编译 `sharp`，Release 字节码使用固定版本的官方 `hermes-compiler`；
-应用构建不再需要 toolbox、ClientSQL Python 生成器或 SQLite 3.16 校验器。
+应用构建不再需要 toolbox。
 `pnpm test` 包含图片与 Hermes 适配测试和绑定 golden 对比，只需要类型源码与 npm 依赖。
 
 `pnpm build:web` 使用同一份已准备的框架源码和官方 Web 实现，输出
@@ -288,22 +289,6 @@ this.router.push('detail', { id: 1, from: 'home' }, {
 - **iOS**：只有 `default`（`UINavigationController` 自带的 push、pop 和边缘侧滑）和 `none`；写别的名字会报错。`ios.presentation: 'fullScreen'` 全屏盖住整个导航栈，里面有自己的栈，再 push 的页面留在里面，关掉时一起取消；它不能侧滑关闭。一次只有一层全屏。
 - 示例页是首页“更多示例”里的“路由动画”（`RouteAnimationPage.tsx`）。
 
-## SQLite 与 Drizzle
-
-表结构在 `valdi/modules/app_pages/src/database/schema.ts`，查询使用 Drizzle，官方 ClientSQL 原生执行层通过 Valdi
-对象接口执行参数化 SQL。结果按列顺序传递，SQL 参数和二进制数据不经过 JSON 字符串。
-ClientSQL 负责连接、调度和事务协调；业务表和迁移记录只由 Drizzle 管理，旧 `sqlgen/` 过渡代码已删除。
-使用全新的 `valdiroutes_app_drizzle.sqlite`，不导入旧数据库。
-
-修改 schema 后运行 `pnpm db:generate`，审查并提交 SQL、Kit journal/snapshot 和生成的迁移常量。
-`pnpm db:check` 检查打包输入；模块构建、两端宿主构建和测试都会执行它。运行时在同一事务中执行迁移与
-迁移记录写入，拒绝变化的历史和未知的新版本。重新发布旧业务内容也不会撤销数据库迁移，具体限制见
-[数据库接口和迁移](docs/drizzle-database.md)。
-
-连接由 `startApp()` 调用 `initializeAppDb()` 在应用作用域创建。页面持有可取消的查询订阅，数据库操作等待
-迁移完成；原生回调注册使用明确归属的全局引用作用域，避免返回页面时回调已被销毁。
-新增的 `queryRows` / `run` 原生接口需要匹配的 AAR / XCFramework，旧运行时会明确拒绝接入。
-
 ## 页面生命周期和状态栏
 
 **生命周期**：页面继承 `Page`（`app_foundation/src/page/PageComponent.ts`），写法 `class XxxPage extends Page<PageViewModel, State, PageContext>`。类型参数跟 `StatefulComponent` 一样，因为 `@Component` 注解点名的类型要在页面文件里当类型用到，Valdi 编译器才找得到。
@@ -341,7 +326,7 @@ Valdi 的 Kotlin 代码用 rules_kotlin 2.3.10 编译；宿主 Gradle 是 Kotlin
 
 **Bazel 8 和 Valdi 命令行工具的补丁。** Valdi 0.2.1 本身用 Bazel 8.2.1（`valdi/.bazelversion`），但命令行工具 1.2.1 的 `bootstrap` 模板还停在 Valdi 0.1.x：Bazel 7.2.1、protobuf 27.0、rules_java 7.4.0、rules_kotlin 1.9.0、rules_jvm_external 6.2，`projectsync` 也只认 Bazel 7 的外部仓库名（`valdi~`），不认 Bazel 8 的（`valdi+`）。`valdi/patches/@snap__valdi@1.2.1.patch`（`pnpm patch`，登记在 `pnpm-workspace.yaml`）把模板改成和 Valdi 0.2.1 一致，并让 `projectsync` 认 `+`。这个项目自己的 `.bazelversion`、`MODULE.bazel`、`.bazelrc` 也按同样的版本改过（另加 `platforms` 依赖和两个 Bazel 8 参数）。升级命令行工具时先看上游是否已修复，修复了就删掉补丁。Bazel 的磁盘缓存在 `~/.cache/bazel-disk-cache`，空闲时自动清理到 30 GB 以内（`.bazelrc` 的 `--experimental_disk_cache_gc_max_size`）。
 
-框架源码保留未使用的上游模块；应用复用 ClientSQL 原生执行层，不使用旧 SQL API 生成器。
+框架源码保留未使用的上游模块；应用按运行时配置选择需要打包的模块。
 
 ### Hermes V1
 
@@ -441,7 +426,6 @@ Debug 和空更新地址均只使用安装包。签名、协议、目录、版�
 - **编译**：TypeScript LanguageService 做类型检查（有错构建就失败），`.tsx` 用 Valdi 自己的 JSX 转换（`vendor/companion/`，MIT），再由 rolldown 输出 CommonJS：每个源文件是一个入口，输出一个 Valdi 模块文件，懒加载和内存警告时卸载都和原来一样；npm 代码按引用关系拆分（见“npm 依赖”）。
 - **打包**：`.valdimodule`（zstd 压缩的 ValdiPacket）。debug 是 JS 加内联 source map；release 用官方预编译 `hermes-compiler` 编成 Hermes 字节码，由 Node 补齐 Valdi 模块包装和文件头，source map 单独放 `<module>.map.json`。
 - **图片**：`res/` 生成 `res.ts` 和 `res.assetcatalog`；Android 输出 5 种密度的 webp 和 keep.xml，iOS 输出 `app_pages.bundle`（@2x/@3x）。
-- **数据库**：Drizzle 管理 schema、类型化查询和 SQL 迁移；原生 SQLite 执行参数绑定和事务。迁移常量在构建时校验，手机端不运行 Drizzle Kit。
 - **原生绑定**：`codegen.ts` 是 Valdi 编译器绑定生成的 TS 移植，从 `@ExportModel`、`@ExportProxy`、`@ExportFunction`、`@ExportModule`、`@ExportEnum` 生成 Kotlin、Objective-C 和 C++，结果提交进 git。`npx tsx codegen/goldens.ts` 拿 Valdi 源码里的编译器 golden（`tools/ci/compiler_goldens`）逐字节对比三种语言；app_pages 的输出也和 Valdi 的 Bazel 构建一致。构建只跑 `--check`，过期就失败并给出命令；改了导出给原生的接口后手动重新生成：
 
   ```sh

@@ -243,7 +243,7 @@ androidComponents {
             dependsOn(nativeModules)
             val tool = repo.resolve("tools/valdi-rolldown")
             sources.from(
-                fileTree(repo.resolve("valdi/modules")) { include("*/src/**", "*/res/**", "*/strings/strings-*.json", "*/sql/**", "*/tsconfig.json", "*/module.json", "*/BUILD.bazel") },
+                fileTree(repo.resolve("valdi/modules")) { include("*/src/**", "*/res/**", "*/strings/strings-*.json", "*/tsconfig.json", "*/module.json", "*/BUILD.bazel") },
                 fileTree(tool) { include("*.ts", "*.mjs", "vendor/**", "package.json", "pnpm-lock.yaml") },
                 repo.resolve("package.json"),
                 repo.resolve("scripts/node-modules.mjs"),

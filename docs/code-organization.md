@@ -7,10 +7,10 @@
 ## 基础、能力与业务
 
 - `app_foundation`：通用导航契约与配置机制、页面生命周期、同步 Splash、
-  首内容绘制钩子、Drizzle 通用驱动和原生连接类型。
-  它不导入业务页面、业务路由、业务表结构或认证跳转策略。
-- `app_pages`：业务页面、具体路由声明、业务数据库和启动组合。
-  页面在 `src/features/<功能>/`，业务 API、网络和数据库服务在 `src/services/`，
+  首内容绘制钩子。
+  它不导入业务页面、业务路由或认证跳转策略。
+- `app_pages`：业务页面、具体路由声明和启动组合。
+  页面在 `src/features/<功能>/`，业务 API 和网络服务在 `src/services/`，
   应用主题及共享页面组件在 `src/components/`。
 - `app_vision`：Vision 的类型、生成 getter、调用封装、Polyglot C++ 绑定和手写 C++ 适配器。
   `module.json` 使用 `nativeBuild: "cpp"`，将 VisionCore 和静态 OpenCV/ncnn 链接进 ValdiRuntime；
@@ -46,21 +46,18 @@
 `src/router.ts` 根据具体 routes 推导业务路由名、参数和结果类型；
 通用的 host、options、数据快照及声明工具在 `app_foundation/src/navigation/`。
 表单的 `FormLayout` 类型归 `src/features/form/types.ts`，路由声明和页面直接引用，
-不通过 router 反向引用业务类型。`app.ts` 直接初始化数据库，以副作用导入保留 API
+不通过 router 反向引用业务类型。`app.ts` 以副作用导入保留 API
 模块依赖；开发环境通过模块加载器读取更新后的路由声明，首次直接进入首页 Tab。
 有参页面使用 `RouteViewModel<'路由名'>` 绑定参数类型，直接读取 `viewModel.params`。
 Native Web 原生模块注册由 runtime 完成；`services/nativeWeb.ts` 只安装 JS 全局，
 应用入口先导入它，再加载业务服务。
 
-数据库也遵守这个边界：通用 `driver.ts` 和 `native-types.ts` 在 foundation；
-`app_pages/src/database/` 保留 schema、生成迁移和应用迁移流程；
-`app_pages/src/services/database.ts` 才绑定数据库名称、ClientSQL 和业务查询。
-它不会改变数据库文件名、历史或迁移内容。
+生成的字符串与资源使用 `app_pages/src/Strings`、`app_pages/res` 这样的模块入口，
+通过模块映射查找 `.gen` 下的文件。手写源码之间可以相对导入。
 
 ```text
 valdi/modules/
   app_foundation/src/
-    database/           通用 Drizzle 驱动
     host/               AppContext 原生契约
     navigation/         通用导航
     page/               页面契约和生命周期
@@ -70,9 +67,8 @@ valdi/modules/
     routes.ts           具体业务路由
     router.ts           绑定业务 routes 的类型安全 router
     components/         应用主题、按钮、表单和导航 UI
-    database/           业务表结构和迁移
     features/           home、form、video、vision 等页面
-    services/           应用 API、网络和数据库服务
+    services/           应用 API 和网络服务
     cpp/                当前应用的 C++ 调用示例
   app_ui/src/wheels/    可复用滚轮组件、模型和校验
   app_vision/src/       Vision 能力接口和延迟调用

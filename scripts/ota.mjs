@@ -118,6 +118,7 @@ export function createManifest({ platform, appVersion, version, modules = ['app_
     if (bases.has(delta.baseVersion) || delta.baseVersion === version) throw new Error('Invalid or duplicate delta base version');
     bases.add(delta.baseVersion);
   }
+  /** @type {Record<string, { sha256: string, size: number }>} */
   const files = {};
   let total = 0;
   for (const [name, bytes] of [...entries].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) {

@@ -82,7 +82,7 @@ object ValdiHost {
                 try {
                     StartupTrace.section("hosts.js_callback") {
                         hostScope = js
-                        // App-wide objects (the SQLite connection, api, the router) belong in this retained scope, not in a page.
+                        // App-wide objects (api and the router) belong in this retained scope, not in a page.
                         val debug = (app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
                         val startApp = StartupTrace.section("hosts.StartApp.resolve") { StartApp.create(js) }
                         val declaration = StartupTrace.section("hosts.StartApp.invoke") {

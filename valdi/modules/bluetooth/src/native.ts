@@ -36,7 +36,7 @@ export type PeripheralWriteRequest = Omit<BlePeripheralWriteRequest, 'value'> & 
 export type BinaryInput = ArrayBuffer | Uint8Array;
 
 /** Snapshot exactly the caller's byte range at public admission, before any asynchronous dispatch. */
-export const bytes = (input: BinaryInput): Uint8Array => {
+export const bytes = (input: BinaryInput): Uint8Array<ArrayBuffer> => {
   const view = input instanceof Uint8Array ? input : new Uint8Array(input);
   return new Uint8Array(view);
 };

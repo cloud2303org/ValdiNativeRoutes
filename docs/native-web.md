@@ -32,10 +32,8 @@ also works in a new template project. Keep these root-local patch copies and
 their `single_version_override` entries together when updating build rules.
 
 For local fork development, add `--override_module=valdi=$VALDI_WEB_FORK`.
-Local overrides bypass the archive patches in `valdi/MODULE.bazel`, so use an
-integration copy with `valdi/bzl/patches/clientsql-drizzle.patch` applied.
-That patch preserves the application's existing ClientSQL ABI and remains
-separate from the native Web framework changes.
+Both workspaces consume the pinned fork without application-level archive
+patches. A local override can use the fork checkout directly.
 
 These are native runtime builds. An OTA package cannot add the native
 implementation to an existing binary. Runtime artifacts must be re-exported

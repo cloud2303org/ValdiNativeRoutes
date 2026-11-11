@@ -29,7 +29,6 @@ async function fixture(t: TestContext, dev = false) {
   assert.ok(writeTsconfig(module, [module, ...appModules().filter(other => other.name !== module.name)]));
   const config = JSON.parse(readFileSync(path.join(dir, 'tsconfig.json'), 'utf8'));
   config.compilerOptions.baseUrl = dir;
-  config.compilerOptions.rootDirs = [dir, generated];
   config.compilerOptions.paths['app_pages/*'] = [path.join(dir, '*'), path.join(generated, '*')];
   symlinkSync(original.nodeModules!, path.join(dir, 'node_modules'), 'junction');
   writeFileSync(path.join(dir, 'tsconfig.json'), JSON.stringify(config));

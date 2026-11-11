@@ -17,9 +17,8 @@
 - 原生导出路径排除模块的 `test/`、`.spec.` 源码和 `test_deps`；上游测试工具不进入发布 runtime。
 
 覆盖的内置模块是 `valdi_core`、`valdi_tsx`、`coreutils`、`source_map`、`jasmine`、
-`drawing`、`client_sql`、`native_web`。
-应用数据库复用 ClientSQL 原生执行层，上层 schema、查询和业务迁移由 Drizzle 管理。
-两个 Bazel workspace 应用同一份 `clientsql-drizzle.patch`，补充 `queryRows` 和 `run`。
+`drawing`、`native_web`。应用不链接 ClientSQL，也不集成 Drizzle 或替代 SQL 引擎；
+两个 Bazel workspace 直接使用固定 fork，不再应用 ClientSQL 原生扩展补丁。
 calculator 的独立自定义规则见 [custom-modules.md](custom-modules.md)，它不经过这里的 `valdi_compiled` 适配。
 
 `valdi_core` 上游的 `ValdiRuntime.d.ts` 私有导入了自身源码使用的 `ElementFrame`，但没有导出；
@@ -38,14 +37,13 @@ pnpm test:e2e:ios calculator-module
 pnpm test:e2e:android calculator-module
 ```
 
-`runtime-module.test.ts` 编译七个内置模块，验证声明、原始启动 JS、模块归档和 Release Hermes 文件头。
+`runtime-module.test.ts` 编译六个历史 ABI 内置模块，并单独验证 `native_web` 的声明重导出、模块归档和 Release Hermes 文件头。
 `runtime-native-golden.json` 保存固定 fork 旧编译器的历史输出 SHA256；测试要求选中模块的新生成文件逐字节一致。
-ClientSQL 的扩展绑定另由 `runtime-native-drizzle-golden.json` 校验，升级 fork 时需要审查这些输出，
-不能直接跳过 golden。
+golden 仅保留当前仍测试的模块，升级 fork 时需要审查这些输出，不能直接跳过 golden。
 已有 codegen golden 测试继续覆盖 Kotlin / Objective-C / C++ 语法和 ABI 生成。
 原生导出验证链接；模拟器回放验证启动、TSX 和实际原生调用，两者不能由 golden 测试代替。
 `scripts/verify-runtime-actions.mjs` 审查 aquery JSON 构建图，要求内置模块的 Node action 存在，
-并拒绝旧编译器和 toolbox action，包括缓存中的动作。`compiler/compiler:valdi_proto*` 是运行时协议定义，保留其 C++ 生成。
+并拒绝 ClientSQL、旧编译器和 toolbox action，包括缓存中的动作。`compiler/compiler:valdi_proto*` 是运行时协议定义，保留其 C++ 生成。
 
 运行时 Node 编译器、转换器、绑定生成器或其依赖锁变化后，需要手动重新导出 runtime。
 构建只检查运行时产物存在及平台/配置元数据，不比较源码哈希，也不自动重导出。
@@ -56,7 +54,6 @@ ClientSQL 的扩展绑定另由 `runtime-native-drizzle-golden.json` 校验，�
 当前适配面向本仓库的原生 runtime 导出，不是对官方编译器所有功能的完整替代。
 不支持上游测试编译、代码覆盖率、Web 输出、旧 Vue / CSS、SQL 源码生成、protodecl、本地化资源、ids.yaml、
 Swift 绑定生成、TSN 原生编译、远程可下载资源等；遇到相关配置会明确失败。
-应用使用 ClientSQL 对象绑定，不使用 `.sq` → SQL API 代码生成或 ClientSQL 调试器。
 原生 workspace 关闭 Web 输出；App 模块的 npm / 图片仍走已有 Node 管线。
 
 旧 Swift Valdi 编译器及其回退已直接从 fork 的 `valdiroutes` 分支删除：

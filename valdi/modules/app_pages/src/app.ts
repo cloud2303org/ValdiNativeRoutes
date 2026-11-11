@@ -3,7 +3,6 @@ import { setCatchAllUncaughtErrorHandler, UncaughtErrorHandlerResult } from 'val
 import { getModuleLoader } from 'valdi_core/src/ModuleLoaderGlobal';
 // Keep the application's stateful API module in the retained app's dependency graph.
 import './services/api';
-import { initializeAppDb } from './services/database';
 import type { RouteDeclaration } from 'app_foundation/src/navigation/models';
 import { installTheme } from './components/theme';
 
@@ -20,7 +19,6 @@ import { installTheme } from './components/theme';
 export function startApp(debug: boolean): RouteDeclaration {
   installErrorHandler(debug);
   installTheme();
-  initializeAppDb();
   if (debug && !disposeRouteReload) {
     // The observer belongs to this app module; ModuleLoader disposes it when the
     // observing module unloads. Load fresh exports after doUnload has completed.

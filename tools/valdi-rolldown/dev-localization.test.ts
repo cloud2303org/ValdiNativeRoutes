@@ -44,10 +44,9 @@ function fixture(t: TestContext, names = ['fixture']) {
       extends: path.join(upstream, 'modules/_configs/base.tsconfig.json'),
       compilerOptions: {
         paths,
-        rootDirs: [directory, path.join(temporary, '.gen')],
         types: [path.join(upstream, 'modules/types/Long'), path.join(upstream, 'modules/types/globals')],
       },
-      include: ['src/**/*.ts'],
+      include: ['src/**/*.ts', path.join(module.generatedDirs[0], '**/*.ts')],
     }));
     write(module.dir, 'src/index.ts', 'export const ready = true;\n');
   }
@@ -171,7 +170,7 @@ test('translation-only changes refresh cached Inline strings through updated_res
   const [module] = f.modules;
   strings(module, 'en', { greeting: 'Hello' });
   strings(module, 'fr', { greeting: 'Bonjour' });
-  write(module.dir, 'src/index.ts', "import strings from './Strings';\nexport function message() { return strings.greeting(); }\n");
+  write(module.dir, 'src/index.ts', "import strings from 'fixture/src/Strings';\nexport function message() { return strings.greeting(); }\n");
   const initial = await f.start();
   const h = runtimeHost(initial);
   assert.equal(h.loader.load('fixture/src/index', true).message(), 'Bonjour');
@@ -265,17 +264,17 @@ test('removing strings/ removes generated accessors and current archive entries,
   const f = fixture(t);
   const [module] = f.modules;
   strings(module, 'en', { greeting: 'Hello' });
-  write(module.dir, 'src/index.ts', "import strings from './Strings';\nexport const message = strings.greeting();\n");
+  write(module.dir, 'src/index.ts', "import strings from 'fixture/src/Strings';\nexport const message = strings.greeting();\n");
   await f.start();
   rmSync(path.join(module.dir, 'strings'), { recursive: true });
-  await assert.rejects(f.session.rebuild(f.batch('fixture/strings')), /Cannot find module '.\/Strings'/);
+  await assert.rejects(f.session.rebuild(f.batch('fixture/strings')), /Cannot find module 'fixture\/src\/Strings'/);
   assert.equal(existsSync(path.join(module.generatedDirs[0], 'src/Strings.ts')), false);
   write(module.dir, 'src/index.ts', "export const message = 'No strings';\n");
   const changed = await f.session.rebuild(f.batch('fixture/src/index.ts'));
   assert.deepEqual(changed.map(resource => resource.file), ['src/index.js']);
   assert.equal(f.session.allResources().some(resource => resource.file === 'src/Strings.js' || resource.file.startsWith('strings/')), false);
   strings(module, 'en', { greeting: 'Restored' });
-  write(module.dir, 'src/index.ts', "import strings from './Strings';\nexport const message = strings.greeting();\n");
+  write(module.dir, 'src/index.ts', "import strings from 'fixture/src/Strings';\nexport const message = strings.greeting();\n");
   const restored = await f.session.rebuild(f.batch('fixture/strings', 'fixture/src/index.ts'));
   assert.ok(restored.some(resource => resource.file === 'src/Strings.js'));
   assert.ok(restored.some(resource => resource.file === 'strings/strings-en.json'));

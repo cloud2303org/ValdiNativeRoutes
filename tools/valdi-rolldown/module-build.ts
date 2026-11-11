@@ -1,10 +1,9 @@
 // Bazel's module action. It invokes only our Node compiler/codegen, stages its
 // inputs in a temporary module, and writes only declared Bazel outputs.
-import { createHash } from 'node:crypto';
 import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { pack } from './archive';
+import { pack, setArchiveHash } from './archive';
 import { VALDI_PROJECT_CONFIG, generateNativeCode, nativeSourceFiles } from './codegen/index';
 import {
   appModule,
@@ -77,18 +76,13 @@ export async function compileNodeModule(
     writeResTs(module, images, module.generatedDirs[0], fonts);
     const plugin = valdiTs(module);
     const built = await buildModule(module, plugin, mode === 'release');
-    const diagnostics = plugin.diagnostics();
-    if (diagnostics) throw new Error(diagnostics);
     if (images || fonts.length) built.entries.set('res.assetcatalog', assetCatalog(images ?? [], fonts));
     addFontEntries(built.entries, fonts);
     mkdirSync(out, { recursive: true });
     writeFileSync(path.join(out, `${name}.map.json`), sourceMapJson(name, built));
     if (mode === 'release') await precompile(built.entries);
     else inlineSourceMaps(built);
-    const hash = createHash('sha256');
-    for (const [file, bytes] of [...built.entries].sort(([a], [b]) => a.localeCompare(b)))
-      hash.update(file).update(bytes);
-    built.entries.set('hash', Buffer.from(hash.digest('hex')));
+    setArchiveHash(built.entries);
     writeFileSync(path.join(out, `${name}.valdimodule`), pack(built.entries));
     const target = {
       module,

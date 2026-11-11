@@ -41,7 +41,9 @@ Vision 的生成绑定、手写 C++ 适配器、VisionCore 和静态 vendor 链�
 详见 [Vision 构建与打包](vision-build.md)。该静态方案尚无本轮导出、App 构建或设备验证结果。
 首次导出先运行 `scripts/prepare-valdi.mjs`，通过 Bazel 的 `fetch --repo=@valdi` 获取类型声明，再生成绑定。
 只获取已固定的 fork 源码，不解析应用模块、旧 TS 编译器或 C++ 工具链目标。仅构建 TS 模块时无需编译原生 host 工具或导出 Android/iOS 运行时。图片由预编译 sharp 处理，
-Release 字节码由官方 hermes-compiler 生成，应用 Node 管线不再依赖 toolbox、ClientSQL Python 生成器或 SQLite 3.16 校验器。
+Release 字节码由官方 hermes-compiler 生成，应用 Node 管线不再依赖 toolbox 或 SQL 生成/校验工具。
+共享 runtime 不选择或链接 ClientSQL，应用不集成 Drizzle，也不提供替代 SQL 引擎。
+移除原生模块后仍需手动重新导出 runtime；已有 AAR / XCFramework 不能证明新的链接清单已生效。
 
 已清理 `valdi/package.json` 中无应用引用的旧 ESLint/Jasmine/ts-node/esbuild 直接开发依赖；保留
 `@snap/valdi` 和 TypeScript。Valdi CLI 自己的 peer / transitive 依赖仍由它的依赖关系安装，不把它们当作前端规范工具。
@@ -126,16 +128,13 @@ Git Bash、CMake/Ninja/curl。日常入口检查运行时产物及平台/配置�
 
 - **Valdi + Hermes + 应用 C++ 运行时**：由 `scripts/export-android.sh` / `export-ios.sh` 导出
   AAR / XCFramework；模块 `cpp/` 中的实现和生成绑定也链接在其中。
-- **Valdi 自带的模块**：`valdi/BUILD.bazel` 依赖 `valdi_core`、`valdi_tsx` 和作为数据库原生执行层的 `client_sql`。
+- **Valdi 自带的模块**：`valdi/BUILD.bazel` 依赖 `valdi_core`、`valdi_tsx` 和 `native_web`。
   它们及传递依赖现在默认使用 Node 编译后端，保留原生库与导出规则。
   [接入范围、测试和源码清理](node-runtime-compiler.md)。
 - **应用图片**：pnpm 的预编译 `sharp`，保留尺寸、density、命名、透明度和 catalog 协议，编码字节可变化。
 - **应用 Release 字节码**：固定的官方 `hermes-compiler`，启动时检查版本与 `hermes.BUILD` 一致，
   Node 保留当前 Valdi 的模块函数包装和文件头；上游协议变化会明确报错。
 - **导出头文件**：fork 内的 `bzl/valdi/node_tools/rewrite_header.mjs` 由 Bazel Node 工具链执行，无 npm 依赖。C++ toolbox 源码、构建目标和入口已删除。
-- **数据库**：Drizzle schema、查询和迁移使用 npm 工具链；ClientSQL 原生执行层通过 Valdi 对象接口随运行时导出，
-  两个 Bazel workspace 应用同一份 `clientsql-drizzle.patch`，补充位置行数组和执行元数据。
-  `pnpm db:generate` 生成迁移，`pnpm db:check` 校验打包常量；`.sq`、旧 `sqlgen` 和 Python 生成器不再使用。
 - **宿主**：Android Gradle / SDK / NDK / CMake；iOS Xcode / XcodeGen / SwiftPM。
 - **视觉依赖**：`vision/scripts/prepare-native.cjs` 按 `vision/vendor-lock.json` 准备 OpenCV Mobile / ncnn。
 
@@ -162,7 +161,9 @@ vendor 或启用的 cpp 模块名单时手动重新导出。
 共享 `home.yaml` 直接启动 Home 并等待「push 详情页」，不需要登录 fixture 或 secret。
 Home 的可见时计时器持续更新，等待下一个实际控件，不以整屏 idle 作为启动就绪条件。
 Android 当前只打包 arm64，届时需要选择相应设备或明确增加测试 ABI。
-`pnpm test` 包含前置检查、升级脚本测试、图片/字节码适配测试和绑定 golden 对比；构建通过也不代表 UI、热重载或 Release 字节码验证通过。
+`pnpm typecheck` 先检查三个 Node 工程，再检查所有已启用的运行时模块。编辑器、命令行与构建读取同一份模块 tsconfig 和生成输入，源码检查采用 Valdi 的 CommonJS 配置。命令行与构建还检查实际打包文件是否符合 ESNext 输出要求；不支持的 `import = require` / `export =` 写法在输出前报错，运行时 bootstrap 继续直接输出 CommonJS。所有可达依赖声明也参与源码检查，不使用 `skipLibCheck` 或文件归属过滤。
+
+`pnpm test` 包含上述类型检查、前置检查、升级脚本测试、图片/字节码适配测试和绑定 golden 对比；构建通过也不代表 UI、热重载或 Release 字节码验证通过。
 
 ### 真机输入测试
 

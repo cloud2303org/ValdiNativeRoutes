@@ -35,7 +35,7 @@ final class ValdiHost {
         let runtime = self.runtime
         videoService.registerModules { VRRegisterNativeModules(runtime) }
         AppNativeModules.register(runtime, navigationHost: navigationHost)
-        // App-wide objects (the SQLite connection, api, the router) are created here, not in a page.
+        // App-wide objects (api and the router) are created here, not in a page.
         #if DEBUG
         let debug = true
         #else

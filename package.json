@@ -1,6 +1,6 @@
 {
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "packageManager": "pnpm@10.32.1",
   "valdi": {
     "app": {
@@ -46,9 +46,6 @@
     "dev": "node scripts/cli.mjs dev",
     "build": "node scripts/project.mjs modules",
     "build:web": "node tools/valdi-rolldown/node_modules/tsx/dist/cli.mjs tools/valdi-rolldown/web/build.ts",
-    "db:generate": "node scripts/database.mjs generate",
-    "db:check": "node scripts/database.mjs check",
-    "db:test:native": "node scripts/database.mjs test-native",
     "build:android": "node scripts/project.mjs android",
     "build:ios": "node scripts/project.mjs ios",
     "test": "node scripts/project.mjs test",
@@ -56,6 +53,7 @@
     "release:pack": "node scripts/release.mjs",
     "new-module": "node tools/valdi-rolldown/node_modules/tsx/dist/cli.mjs tools/valdi-rolldown/new-module.ts",
     "tsconfig": "node tools/valdi-rolldown/node_modules/tsx/dist/cli.mjs tools/valdi-rolldown/tsconfig.ts",
+    "typecheck": "node scripts/project.mjs typecheck",
     "test:e2e:android": "sh scripts/e2e.sh android",
     "test:e2e:ios": "sh scripts/e2e.sh ios",
     "check": "biome check valdi/modules",

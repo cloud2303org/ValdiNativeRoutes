@@ -1,7 +1,7 @@
 import { overrideLocales, removeOverrideLocales } from 'valdi_core/src/LocalizableStrings';
 import { Locale } from 'valdi_core/src/localization/Locale';
 import { createStore } from 'zustand/vanilla';
-import Strings from '../Strings';
+import Strings from 'app_pages/src/Strings';
 
 export type AppLanguage = 'en' | 'zh-CN' | undefined;
 

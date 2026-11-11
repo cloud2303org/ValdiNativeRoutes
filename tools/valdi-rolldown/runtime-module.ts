@@ -1,13 +1,12 @@
 // Node implementation of the native runtime's ValdiModuleInfo output contract.
 // The Bazel adapter declares the same files as the official compiler rule;
 // unknown outputs fail instead of publishing placeholders for unsupported work.
-import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
-import { pack } from './archive';
+import { pack, setArchiveHash } from './archive';
 import { VALDI_PROJECT_CONFIG, generateNativeCode, nativeSourceFiles, type CodegenModule, type NativeCode } from './codegen/index';
 import { combineNativeSources } from './codegen/CombineNativeSourcesProcessor';
 import { inlineSourceMaps, precompile, sourceMapJson, type Built } from './pipeline';
@@ -143,9 +142,7 @@ export async function compileRuntimeModule(spec: RuntimeModuleSpec, execroot = p
       const entries = new Map(built.entries);
       if (mode === 'release' && spec.compilationMode === 'js_bytecode') await precompile(entries);
       else inlineSourceMaps({ ...built, entries });
-      const hash = createHash('sha256');
-      for (const [file, content] of [...entries].sort(([a], [b]) => a.localeCompare(b))) hash.update(file).update(content);
-      entries.set('hash', Buffer.from(hash.digest('hex')));
+      setArchiveHash(entries);
       archives.set(mode, pack(entries));
     }
     for (const output of spec.outputs) {

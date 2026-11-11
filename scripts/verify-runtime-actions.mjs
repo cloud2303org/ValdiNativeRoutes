@@ -17,7 +17,9 @@ assert.equal(legacy.length, 0, 'The runtime graph still contains legacy compiler
   [...new Set(legacy.map(action => `${action.mnemonic} ${action.label}`))].slice(0, 10).join(', '));
 const modules = [...new Set(actions.filter(action => action.mnemonic === 'NodeValdiRuntimeModule')
   .map(action => action.label?.split(':').pop()))].sort();
-for (const module of ['client_sql', 'coreutils', 'jasmine', 'source_map', 'valdi_core', 'valdi_tsx']) {
+const clientSqlActions = actions.filter(action => /\/\/src\/valdi_modules\/src\/valdi\/client_sql(?:[/:]|$)/.test(action.label ?? ''));
+assert.equal(clientSqlActions.length, 0, 'The runtime graph still contains ClientSQL actions');
+for (const module of ['coreutils', 'jasmine', 'source_map', 'valdi_core', 'valdi_tsx']) {
   assert.ok(modules.includes(module), `Missing Node runtime module ${module}`);
 }
 const cppHeaderToolboxActions = actions.filter(action => /\/\/valdi\/compiler\/toolbox:/.test(action.label ?? '')).length;

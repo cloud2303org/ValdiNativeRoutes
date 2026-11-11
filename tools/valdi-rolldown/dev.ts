@@ -25,10 +25,9 @@ import { appModules, modulesDir } from './pipeline';
 import { startDevControls } from '../../scripts/dev-controls.mjs';
 import { DevBuild, ModuleBuild, recordChange, type Pending } from './dev-build';
 
-import { DEVICE_PORT, encodeDevPacket, updatedResources, type DevResource } from './dev-protocol';
+import { DEVICE_PORT, DevPacketReader, encodeDevPacket, updatedResources, type DevResource } from './dev-protocol';
 /** The name the booted iOS simulator goes by here; it is reached at 127.0.0.1:DEVICE_PORT, without a forward. */
 const IOS_SIMULATOR = 'ios-simulator';
-const MAGIC = 0x0100c633;
 
 type Resource = DevResource;
 
@@ -41,7 +40,6 @@ const builds = new DevBuild(modules);
 
 class DeviceConnection {
   private socket?: net.Socket;
-  private buffer = Buffer.alloc(0);
   private configured = false;
   private localPort?: number;
 
@@ -61,13 +59,20 @@ class DeviceConnection {
     }
     const socket = net.connect(this.localPort, '127.0.0.1');
     this.socket = socket;
-    socket.on('data', (data: Buffer) => this.receive(data));
+    const reader = new DevPacketReader();
+    socket.on('data', (data: Buffer) => {
+      try {
+        reader.receive(data, payload => this.handle(payload));
+      } catch (error) {
+        console.error(`[${this.serial}] Dev packet error: ${error instanceof Error ? error.message : error}; disconnecting`);
+        socket.destroy();
+      }
+    });
     socket.on('error', () => {});
     socket.on('close', () => {
       if (this.configured) console.log(`[${this.serial}] Disconnected`);
       this.socket = undefined;
       this.configured = false;
-      this.buffer = Buffer.alloc(0);
     });
   }
 
@@ -88,22 +93,6 @@ class DeviceConnection {
 
   private write(payload: object) {
     this.socket?.write(encodeDevPacket(payload));
-  }
-
-  private receive(data: Buffer) {
-    this.buffer = Buffer.concat([this.buffer, data]);
-    while (this.buffer.length >= 8) {
-      if (this.buffer.readUInt32LE(0) !== MAGIC) {
-        console.error(`[${this.serial}] Bad packet, disconnecting`);
-        this.socket?.destroy();
-        return;
-      }
-      const end = 8 + this.buffer.readUInt32LE(4);
-      if (this.buffer.length < end) return;
-      const payload = JSON.parse(this.buffer.subarray(8, end).toString('utf8'));
-      this.buffer = this.buffer.subarray(end);
-      this.handle(payload);
-    }
   }
 
   private handle(payload: { request?: any; event?: any }) {

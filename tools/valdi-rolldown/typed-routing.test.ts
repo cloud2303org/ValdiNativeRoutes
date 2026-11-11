@@ -341,7 +341,6 @@ test('startup installs native Web globals before service imports and synchronous
         setCatchAllUncaughtErrorHandler: () => events.push('handler'),
       },
       './services/api': { api: {} },
-      './services/database': { initializeAppDb: () => events.push('db') },
       './routes': { routes: { home: '$tabs', toHost: (root = '$tabs') => { events.push('declaration'); return { root }; } } },
       './components/theme': { installTheme: () => events.push('theme') },
     };
@@ -366,7 +365,7 @@ test('startup installs native Web globals before service imports and synchronous
           events.push('web');
           return {};
         }
-        if (name === './services/api' || name === './services/database') {
+        if (name === './services/api') {
           for (const [key, value] of Object.entries(nativeExports)) {
             assert.equal(vm.runInContext(`globalThis.${key}`, context), value,
               `${key} must be installed before ${name} evaluates`);
@@ -379,7 +378,7 @@ test('startup installs native Web globals before service imports and synchronous
     const result = module.exports.startApp(debug);
     assert.equal(result.root, '$tabs');
     assert.equal(typeof result.then, 'undefined');
-    assert.deepEqual(events, ['web', 'handler', 'theme', 'db', 'declaration']);
+    assert.deepEqual(events, ['web', 'handler', 'theme', 'declaration']);
   }
 });
 
@@ -423,7 +422,6 @@ test('pinned lazy ModuleLoader publishes fresh routes after hot unload and dispo
     ['valdi_core/src/NativeReferences', `exports.withGlobalNativeRefs = (_name, body) => body();`],
     ['app_foundation/src/host/AppContext', `exports.getHost = () => ({ getNavigationHost: () => globalThis.navigation });`],
     ['app_pages/src/services/api', `exports.api = {};`],
-    ['app_pages/src/services/database', `exports.initializeAppDb = () => events.push('db');`],
     ['app_pages/src/components/theme', `exports.installTheme = () => events.push('theme');`],
   ]);
   const routeSource = (title: string) => `

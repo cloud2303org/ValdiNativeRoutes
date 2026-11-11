@@ -259,6 +259,23 @@ test('native adapter forwards the admitted byte snapshot without copying it agai
   await sent;
 });
 
+test('shared-backed input views retain admission snapshots and forward the owned bytes directly', async t => {
+  const f = fixture(t);
+  await f.api.openBluetoothAdapter();
+  const source = new Uint8Array(new SharedArrayBuffer(4));
+  source.set([99, 1, 2, 88]);
+  const write = f.api.writeBLECharacteristicValue({ ...characteristic, value: source.subarray(1, 3) });
+  source.fill(0);
+  await flush();
+  const owned = f.admitted[0].params.value;
+  assert.deepEqual([...owned], [1, 2]);
+  assert.ok(owned.buffer instanceof ArrayBuffer);
+  assert.notEqual(owned.buffer, source.buffer);
+  assert.equal(f.active.get('a')!.params.value, owned);
+  f.finish('A');
+  await write;
+});
+
 test('whole-buffer receive reuses native storage and preserves bytes retained by JS', async t => {
   const f = fixture(t);
   await f.api.openBluetoothAdapter();

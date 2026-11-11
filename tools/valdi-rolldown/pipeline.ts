@@ -6,17 +6,15 @@ import { rolldown, RolldownMagicString, type Plugin, type PreRenderedChunk } fro
 import ts from 'typescript';
 import type { ArchiveEntries } from './archive';
 import { sourceFiles, type ValdiModule, type ValdiTsPlugin } from './valdiTs';
-import { availableModuleNames, enabledModuleNames } from './modules.mjs';
+import { availableModuleNames, enabledModuleNames, findValdiSourceRoot } from './modules.mjs';
 import { assertEnabledImports } from './module-selection';
 import { createEditorConfig } from './editor-config';
 import { addStringEntries, prepareStrings } from './localization';
+import { findFonts, findImages, writeResTs } from './resources';
 
 
 export const root = path.resolve(import.meta.dirname, '../..');
 const valdi = path.join(root, 'valdi');
-/** app_pages' last Bazel build, which build.ts --compare reads (the Valdi compiler's web output). */
-export const bin = path.join(valdi, 'bazel-out/darwin_arm64-fastbuild/bin/modules/app_pages');
-
 /** Where the modules' generated sources go (res.ts), one directory per module. */
 const genRoot = path.join(import.meta.dirname, '.gen');
 export const genDir = (name: string) => path.join(genRoot, name);
@@ -108,22 +106,7 @@ function tsSourceFiles(module: ValdiModule): string[] {
 
 /** Find prepared Valdi sources; a bootstrap editor config does not establish readiness. */
 export function valdiSourceRoot(): string | undefined {
-  // `.valdi-sources` is prepare-valdi's link to the output base and is the only one Bazel
-  // does not repoint while it runs, so configs written from it stay valid for the job.
-  const candidates = [
-    process.env.VALDI_SOURCE_ROOT,
-    path.join(valdi, '.valdi-sources/external/valdi+'),
-    path.join(valdi, 'bazel-valdi/external/valdi+'),
-  ].filter((candidate): candidate is string => Boolean(candidate));
-  // Bazel names each convenience link after its workspace and repoints it as it runs
-  // (prepare-valdi's output_base link, then the execroot), so take the first link that
-  // really holds the fetched sources instead of trusting one name.
-  if (existsSync(valdi)) {
-    for (const entry of readdirSync(valdi)) {
-      if (entry.startsWith('bazel-')) candidates.push(path.join(valdi, entry, 'external/valdi+'));
-    }
-  }
-  return candidates.find(root => existsSync(path.join(root, 'modules/_configs/base.tsconfig.json')));
+  return findValdiSourceRoot(root);
 }
 
 /**
@@ -149,13 +132,20 @@ export function writeTsconfig(module: ValdiModule, modules: ValdiModule[]): bool
   const config = createEditorConfig(canonicalModule(module), modules.map(canonicalModule), {
     frameworkSources: framework && canonical(framework),
     bootstrapBase: canonical(bootstrapBase),
-    generatedRoot: canonical(module.generatedDirs[0] ? path.dirname(module.generatedDirs[0]) : genRoot),
   });
   const file = path.join(module.dir, 'tsconfig.json');
   const content = `${JSON.stringify(config, null, 4)}\n`;
   if (existsSync(file) && readFileSync(file, 'utf8') === content) return false;
   writeFileSync(file, content);
   return true;
+}
+
+/** Prepare every generated editor input before a consumer TypeScript program starts. */
+export async function prepareEditorProject(module: ValdiModule, modules: ValdiModule[]): Promise<boolean> {
+  if (module.generatedDirs[0]) {
+    writeResTs(module, await findImages(module), module.generatedDirs[0], findFonts(module) ?? []);
+  }
+  return writeTsconfig(module, modules);
 }
 
 /** A module's JavaScript by archive entry (`src/routes.js`), and each file's source map. */
@@ -215,7 +205,6 @@ const nodePackageResolver = (): Plugin => ({
   name: 'valdi-node-package-resolver',
   resolveId(source, importer) {
     if (!importer || !/^[A-Za-z@]/.test(source) || source.startsWith('node:')) return null;
-    if (source.startsWith('.') || source.startsWith('/')) return null;
     try {
       return createRequire(importer).resolve(source);
     } catch {
@@ -289,6 +278,8 @@ function eagerStarReexports(plugin: ValdiTsPlugin): Plugin {
  * what several import goes into a shared chunk (`npm/dayjs.js`) they require.
  */
 export async function buildModule(module: ValdiModule, plugin: ValdiTsPlugin, minify: boolean): Promise<Built> {
+  const diagnostics = plugin.diagnostics();
+  if (diagnostics) throw new Error(diagnostics);
   // Archive and require names are Valdi's (`src/routes`), so they stay forward-slashed on
   // Windows: rolldown writes every file name and inter-file require from this entry name.
   const input = Object.fromEntries(

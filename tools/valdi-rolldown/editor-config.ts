@@ -1,17 +1,17 @@
 import path from 'node:path';
 import type { ValdiModule } from './valdiTs';
+import { moduleImportPaths, RUNTIME_SOURCE_PATTERNS } from './typescript-project';
 
 /** Builtin declaration aliases, including optional modules not linked into every runtime. */
-const RUNTIME_MODULES = ['client_sql', 'coreutils', 'jasmine', 'native_web', 'source_map', 'valdi_core', 'valdi_tsx'];
+const RUNTIME_MODULES = ['coreutils', 'jasmine', 'native_web', 'source_map', 'valdi_core', 'valdi_tsx'];
 
 export interface EditorConfigSources {
   frameworkSources?: string;
   bootstrapBase: string;
-  generatedRoot: string;
 }
 
 /**
- * These ignored configs are local to a checkout. Absolute paths let TypeScript
+ * These ignored configs are local to a checkout. Absolute aliases let TypeScript
  * read one through either valdi/modules or the module-build/modules symlink.
  * Accept a path implementation so cross-platform callers can generate configs
  * for Windows too, including framework caches on another drive or UNC share.
@@ -25,7 +25,7 @@ export function createEditorConfig(
   const absolute = (file: string) => paths.resolve(file).split(paths.sep).join('/');
   const aliases: Record<string, string[]> = {};
   for (const other of modules) {
-    aliases[`${other.name}/*`] = [other.dir, ...other.generatedDirs].map(dir => absolute(paths.join(dir, '*')));
+    aliases[`${other.name}/*`] = moduleImportPaths(other, paths);
   }
   const framework = sources.frameworkSources;
   if (framework) {
@@ -47,11 +47,16 @@ export function createEditorConfig(
     compilerOptions: {
       // Match the Valdi TypeScript compiler's treatment of export= npm packages.
       allowSyntheticDefaultImports: true,
+      module: 'commonjs',
+      moduleResolution: 'node10',
       paths: aliases,
       types: framework
         ? ['Long', 'globals'].map(name => absolute(paths.join(framework, 'modules/types', name)))
         : [],
-      rootDirs: [absolute(paths.dirname(module.dir)), absolute(sources.generatedRoot)],
     },
+    include: [
+      ...RUNTIME_SOURCE_PATTERNS,
+      ...module.generatedDirs.map(directory => absolute(paths.join(directory, '**/*.ts'))),
+    ],
   };
 }

@@ -20,7 +20,7 @@ test('runtime module names and normalized variants are rejected before writes fo
       t.after(() => rmSync(fixture, { recursive: true, force: true }));
       for (const name of [
         'native_web', 'native-web', 'native.web', 'NativeWeb', 'NATIVE_WEB', 'native_Web',
-        'client_sql', 'coreutils', 'drawing', 'jasmine', 'source_map', 'valdi_core', 'valdi_tsx',
+        'coreutils', 'drawing', 'jasmine', 'source_map', 'valdi_core', 'valdi_tsx',
       ]) {
         assert.throws(() => createModule({ root: fixture, sources, name, template }), /runtime module/, name);
         assert.equal(existsSync(path.join(fixture, 'valdi')), false, `${template}: ${name} must write nothing`);
@@ -173,7 +173,7 @@ test('new-module CLI prepares C++ bindings and selection without modifying the h
     cpSync(path.join(import.meta.dirname, name), path.join(tool, name), { recursive: true });
   }
   for (const name of ['package.json', 'node_modules', 'modules.mjs', 'valdiTs.ts', 'module-selection.ts',
-    'editor-config.ts', 'localization.ts', 'scaffold.ts', 'scaffold-cpp.ts', 'runtime-module-ids.ts', 'vendor']) {
+    'editor-config.ts', 'localization.ts', 'resources.ts', 'scaffold.ts', 'scaffold-cpp.ts', 'runtime-module-ids.ts', 'vendor']) {
     symlinkSync(path.join(import.meta.dirname, name), path.join(tool, name));
   }
   symlinkSync(path.join(root, 'scripts'), path.join(fixture, 'scripts'));

@@ -274,7 +274,7 @@ test('Android NFC retain discovery, host tech strings, byte copying and stale ha
   }
 });
 
-for (const inputType of ['ArrayBuffer', 'Uint8Array subview']) {
+for (const inputType of ['ArrayBuffer', 'Uint8Array subview', 'shared-backed Uint8Array subview']) {
   test(`Android NFC snapshots ${inputType} before awaiting transceive`, async () => {
     const f = runtime('android');
     let events: any;
@@ -291,7 +291,10 @@ for (const inputType of ['ArrayBuffer', 'Uint8Array subview']) {
     const adapter = f.load(service('nfc/adapter')).createNFCAdapter();
     await adapter.startDiscovery();
     events.discovered({ tagHandle: 'tag', id: Uint8Array.of(1), techs: ['NfcA'], messages: [] });
-    const source = inputType === 'ArrayBuffer' ? Uint8Array.of(0x30, 0) : Uint8Array.of(99, 0x30, 0, 88);
+    const source = inputType === 'ArrayBuffer' ? Uint8Array.of(0x30, 0)
+      : inputType === 'Uint8Array subview' ? Uint8Array.of(99, 0x30, 0, 88)
+        : new Uint8Array(new SharedArrayBuffer(4));
+    if (inputType === 'shared-backed Uint8Array subview') source.set([99, 0x30, 0, 88]);
     const data = inputType === 'ArrayBuffer' ? source.buffer : source.subarray(1, 3);
     const response = adapter.getNfcA().transceive({ data });
     void response.catch(() => {});
@@ -322,6 +325,35 @@ test('NFC native adapter forwards owned command and record bytes without another
   await native.writeNdefMessage(handle, [{ id: owned, type: owned, payload: owned, tnf: 1 }], [], []);
   assert.equal(sent.length, 4);
   for (const value of sent) assert.equal(value, owned);
+});
+
+test('NFC native replies and record fields reuse whole buffers and preserve exact subview bounds', async () => {
+  const f = runtime('android');
+  let events: any;
+  const whole = Uint8Array.of(1, 2);
+  const backing = Uint8Array.of(99, 3, 4, 88);
+  f.nativeModules['./Nfc'].getHost = () => ({
+    setEvents(value: any) { events = value; },
+    async getAtqa() { return whole; },
+    async getHistoricalBytes() { return whole; },
+    async transceive() { return backing.subarray(1, 3); },
+  });
+  const native = f.load(service('nfc/native')).nativeNFC;
+  let discovered: any;
+  native.onDiscovered((event: any) => { discovered = event; });
+  events.discovered({
+    tagHandle: 'tag', id: whole, techs: ['NfcA'],
+    messages: [{ id: whole, type: whole, payload: whole, tnf: 1 }],
+  });
+  assert.equal(discovered.id, whole.buffer);
+  for (const field of ['id', 'type', 'payload']) assert.equal(discovered.messages[0][field], whole.buffer);
+  const handle = { tagHandle: 'tag', tech: 'NfcA' };
+  assert.equal(await native.getAtqa(handle), whole.buffer);
+  assert.equal(await native.getHistoricalBytes(handle), whole.buffer);
+  const reply = await native.transceive(handle, whole);
+  assert.deepEqual([...new Uint8Array(reply)], [3, 4]);
+  assert.equal(reply.byteLength, 2);
+  assert.notEqual(reply, backing.buffer);
 });
 
 test('Android NDEF snapshots nested byte views and strings before asynchronous work', async () => {

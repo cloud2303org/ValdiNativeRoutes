@@ -1,42 +1,44 @@
 // Root build commands only build; installing/launching an app belongs to the device workflow.
-import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkDependencies, checkRuntime, checkSources, run, runPnpm } from './prerequisites.mjs';
 import { appBuildPaths, syncAppConfig } from './app-config.mjs';
 import { generateIosProject } from './ios-project.mjs';
+import { findValdiSourceRoot } from '../tools/valdi-rolldown/modules.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const [platform, ...forwarded] = process.argv.slice(2);
 if (forwarded[0] === '--') forwarded.shift();
 
 function main() {
-  if (platform === 'modules' || platform === 'test') {
+  if (platform === 'modules' || platform === 'test' || platform === 'typecheck') {
     checkDependencies(root);
-    run(process.execPath, ['scripts/database.mjs', 'check'], root);
     const sourceOption = forwarded.indexOf('--valdi');
     if (sourceOption >= 0 && !forwarded[sourceOption + 1]) throw new Error('--valdi requires a source directory.');
     if (platform === 'test' && sourceOption >= 0) forwarded[sourceOption + 1] = path.resolve(forwarded[sourceOption + 1]);
-    checkSources(root, platform === 'test' && sourceOption >= 0 ? forwarded[sourceOption + 1] : undefined);
-    if (platform === 'modules') {
+    const valdiSource = platform === 'test' && sourceOption >= 0
+      ? forwarded[sourceOption + 1] : findValdiSourceRoot(root);
+    checkSources(root, valdiSource);
+    if (platform === 'typecheck') {
+      const tools = path.join(root, 'tools/valdi-rolldown');
+      run(process.execPath, [path.join(tools, 'typecheck-node.mjs')], root);
+      run(process.execPath, [path.join(tools, 'node_modules/tsx/dist/cli.mjs'), path.join(tools, 'typecheck.ts')], root);
+    } else if (platform === 'modules') {
       runPnpm(['--dir', 'tools/valdi-rolldown', 'build', ...forwarded], root);
     } else {
       run(process.execPath, ['--test', 'scripts/tests/app-config.test.mjs', 'scripts/tests/app-icons.test.mjs', 'scripts/tests/ota.test.mjs', 'scripts/tests/ota-delta.test.mjs', 'scripts/tests/hdiff-tool.test.mjs', 'scripts/tests/generate-lottie-demo.test.mjs', 'scripts/tests/release.test.mjs', 'scripts/tests/prerequisites.test.mjs', 'scripts/tests/upstream.test.mjs', 'scripts/tests/cli.test.mjs', 'scripts/tests/ci.test.mjs', 'scripts/tests/dev-controls.test.mjs', 'scripts/tests/native-modules.test.mjs', 'scripts/tests/native-dependencies.test.mjs', 'scripts/tests/localization-inputs.test.mjs', 'scripts/tests/module-selection.test.mjs', 'scripts/tests/swift-runtime.test.mjs'], root);
-      const valdiSource = sourceOption >= 0 ? forwarded[sourceOption + 1] : [
-        path.join(root, 'valdi/.valdi-sources/external/valdi+'),
-        path.join(root, 'valdi/bazel-valdi/external/valdi+'),
-      ].find(dir => existsSync(path.join(dir, 'modules/_configs/base.tsconfig.json'))) ?? path.join(root, 'valdi/bazel-valdi/external/valdi+');
       // runtime-module.test.ts and the declaration fixtures read the Valdi sources from here;
       // the workspace's bazel-valdi link can point at an execroot that no longer has them.
-      process.env.VALDI_SOURCE_ROOT ||= valdiSource;
+      process.env.VALDI_SOURCE_ROOT = valdiSource;
       // Compiler fixtures read the app's tsconfigs, which must use this same source tree.
       const rolldownDir = path.join(root, 'tools/valdi-rolldown');
       const tsx = path.join(rolldownDir, 'node_modules/tsx/dist/cli.mjs');
-      run(process.execPath, [tsx, 'tsconfig.ts'], rolldownDir);
+      run(process.execPath, [path.join(rolldownDir, 'typecheck-node.mjs')], rolldownDir);
+      run(process.execPath, [tsx, 'typecheck.ts'], rolldownDir);
       run(process.execPath, ['--test', path.join(valdiSource, 'bzl/valdi/node_tools/rewrite_header.test.mjs')], root);
       // Run tsx's launcher with Node directly: `pnpm exec` resolves the binary differently on
       // Windows and can report `Command "tsx" not found` for the same install.
-      run(process.execPath, [tsx, '--test', 'routes.test.ts', 'navigation-options.test.ts', 'mobile-services.test.ts', 'typed-routing.test.ts', 'wifi-ble-validation.test.ts', 'native-enums.test.ts', 'video.test.ts', 'native-module-access.test.ts', 'host-extension.test.ts', 'cpp-modules.test.ts', 'codegen-ownership.test.ts', 'organization-boundary.test.ts', 'splash-screen.test.ts', 'ota-module.test.ts', 'editor-config.test.ts', 'typed-storage.test.ts', 'theme-tokens.test.ts', 'appui-promise.test.ts', 'service-modules.test.ts', 'route-animation-parity.test.ts', 'dev-protocol.test.ts', 'wheel-platform-compat.test.ts', 'webview-module.test.ts', 'webview-page.test.ts', 'resources.test.ts', 'localization.test.ts', 'localization-build.test.ts', 'dev-localization.test.ts', 'hermes.test.ts', 'archive.test.ts', 'build-cli.test.ts', 'module-build.test.ts', 'runtime-module.test.ts', 'scaffold.test.ts', 'swift.test.ts', 'objc-selector.test.ts', 'bluetooth.test.ts', 'bluetooth-execution.test.ts', 'drizzle-driver.test.ts', 'drizzle-migrations.test.ts', 'module-selection.test.ts', 'jsx-upstream.test.ts', 'lazy-import.test.ts', 'upstream-runtime.test.ts'], rolldownDir);
+      run(process.execPath, [tsx, '--test', 'routes.test.ts', 'navigation-options.test.ts', 'mobile-services.test.ts', 'typed-routing.test.ts', 'wifi-ble-validation.test.ts', 'native-enums.test.ts', 'video.test.ts', 'native-module-access.test.ts', 'host-extension.test.ts', 'cpp-modules.test.ts', 'codegen-ownership.test.ts', 'organization-boundary.test.ts', 'splash-screen.test.ts', 'ota-module.test.ts', 'editor-config.test.ts', 'node-project.test.ts', 'typed-storage.test.ts', 'theme-tokens.test.ts', 'appui-promise.test.ts', 'service-modules.test.ts', 'route-animation-parity.test.ts', 'dev-protocol.test.ts', 'wheel-platform-compat.test.ts', 'webview-module.test.ts', 'webview-page.test.ts', 'resources.test.ts', 'localization.test.ts', 'localization-build.test.ts', 'dev-localization.test.ts', 'hermes.test.ts', 'archive.test.ts', 'build-cli.test.ts', 'module-build.test.ts', 'runtime-module.test.ts', 'scaffold.test.ts', 'swift.test.ts', 'objc-selector.test.ts', 'bluetooth.test.ts', 'bluetooth-execution.test.ts', 'module-selection.test.ts', 'jsx-upstream.test.ts', 'lazy-import.test.ts', 'upstream-runtime.test.ts'], rolldownDir);
       run(process.execPath, [tsx, '--test', '../../valdi/modules/native_common/tests/module-split.test.mts'], rolldownDir);
       // The goldens compare against the same sources the tests used, whatever link holds them.
       const goldensArgs = ['codegen/goldens.ts', ...forwarded];
@@ -46,7 +48,7 @@ function main() {
     return;
   }
   if (!['android', 'ios'].includes(platform)) {
-    throw new Error('Usage: node scripts/project.mjs modules|test|android|ios [options]');
+    throw new Error('Usage: node scripts/project.mjs modules|test|typecheck|android|ios [options]');
   }
   if (forwarded.includes('--help')) {
     console.log(platform === 'android'
@@ -56,7 +58,6 @@ function main() {
   }
   if (platform === 'ios' && process.platform !== 'darwin') throw new Error('build:ios requires macOS and Xcode.');
   checkDependencies(root);
-  run(process.execPath, ['scripts/database.mjs', 'check'], root);
   syncAppConfig(root);
   checkRuntime(root, platform);
   checkSources(root);

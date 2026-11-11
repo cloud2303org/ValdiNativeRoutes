@@ -15,6 +15,7 @@ import { createConsoleLogTransformer } from './vendor/companion/ConsoleLogTransf
 import { JSXProcessor } from './vendor/companion/JSXProcessor';
 import { routeTransformer } from './routes-transform';
 import { prepareStrings } from './localization';
+import { formatDiagnostics, projectDiagnostics, readModuleProject } from './typescript-project';
 
 export interface ValdiModule {
   /** The Valdi module name, the first segment of its import paths (`app_pages`). */
@@ -52,9 +53,9 @@ export interface ValdiTsPlugin extends Plugin {
   emitWithMap(file: string): { code: string; map: string };
   /** Called when `file` (anywhere on disk) changed, was added or was removed: the next build reads it again. */
   invalidate(file: string): void;
-  /** The module's type errors, formatted; empty when there are none. */
+  /** All source errors and emitted-file format errors, formatted; empty when there are none. */
   diagnostics(): string;
-  /** The module's program, as the plugin compiles it: codegen reads its declarations. */
+  /** The source-checking program shared with the editor: codegen reads its declarations. */
   program(): ts.Program;
   /** Release the language service when the module's compilation lifetime ends. */
   dispose(): void;
@@ -119,39 +120,23 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
     );
   };
 
-  const configPath = path.join(module.dir, 'tsconfig.json');
-  const config = ts.parseJsonConfigFileContent(
-    ts.readConfigFile(configPath, ts.sys.readFile).config,
-    ts.sys,
-    module.dir,
-    {
-      module: moduleKind,
-      moduleResolution: ts.ModuleResolutionKind.Node10,
-      noEmit: false,
-      noEmitOnError: false,
-      declaration: false,
-      sourceMap: true,
-      inlineSourceMap: false,
-      inlineSources: false,
-    },
-    configPath,
-  );
-  // `<module>/…` imports also find the generated files (tsconfig.json only knows the compiler's).
-  const key = `${module.name}/*`;
-  const paths = { ...config.options.paths };
-  paths[key] = [...(paths[key] ?? []), ...module.generatedDirs.map(dir => `${dir}/*`)];
-  config.options.paths = paths;
-  // `import dayjs from 'dayjs'` of a CommonJS package's `export =`, which rolldown's interop gives as the default.
-  config.options.allowSyntheticDefaultImports = true;
-  const findRootNames = () => [...new Set([...config.fileNames, ...sourceFiles(module).map(file => locate(file)!)])];
-  let rootNames = findRootNames();
+  const emitOptions: ts.CompilerOptions = {
+    module: moduleKind,
+    noEmit: false,
+    noEmitOnError: false,
+    declaration: false,
+    sourceMap: true,
+    inlineSourceMap: false,
+    inlineSources: false,
+  };
+  let config = readModuleProject(module);
   /** Bumped per changed file, so the language service reads it again and keeps the rest of the program. */
   const versions = new Map<string, number>();
 
   let service: ts.LanguageService;
   const host: ts.LanguageServiceHost = {
-    getCompilationSettings: () => config.options,
-    getScriptFileNames: () => rootNames,
+    getCompilationSettings: () => ({ ...config.options, ...emitOptions }),
+    getScriptFileNames: () => config.fileNames,
     getScriptVersion: file => String(versions.get(file) ?? 0),
     getScriptSnapshot: file => {
       const text = ts.sys.readFile(file);
@@ -175,11 +160,30 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
       after: [requireExternals],
     }),
   };
-  service = ts.createLanguageService(host, ts.createDocumentRegistry());
+  // Check the authoritative project, including CommonJS import assignments in
+  // framework sources. Rolldown needs ESNext emission to see module edges, while
+  // runtime bootstrap emits CommonJS directly. Both use identical inputs and
+  // resolution; changing the output format must not change source diagnostics.
+  const registry = ts.createDocumentRegistry();
+  const sourceService = ts.createLanguageService({
+    ...host,
+    getCompilationSettings: () => config.options,
+    getCustomTransformers: undefined,
+  }, registry);
+  service = ts.createLanguageService(host, registry);
   let emitting = '';
+
+  // CommonJS syntax in external framework sources is valid and is emitted by
+  // that framework's compiler. Our own ESNext inputs must also satisfy the
+  // emitter: otherwise TS can silently erase import assignments or export=.
+  const emissionDiagnostics = (file: string) => config.options.module === moduleKind
+    ? ''
+    : formatDiagnostics(service.getSemanticDiagnostics(file), module.dir);
 
   /** The JavaScript and its source map, whose sources are relative to the file (rolldown chains it). */
   const emitWithMap = (real: string): { code: string; map: string } => {
+    const diagnostics = emissionDiagnostics(real);
+    if (diagnostics) throw new Error(diagnostics);
     emitting = real;
     const output = service.getEmitOutput(real);
     // jsx: preserve names .tsx output .jsx, though JSXProcessor leaves no JSX in it.
@@ -201,37 +205,22 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
       versions.set(file, (versions.get(file) ?? 0) + 1);
       // A file may have been added or removed: where files are, and which ones the program has, are found again.
       located.clear();
-      rootNames = findRootNames();
+      config = readModuleProject(module);
     },
 
     diagnostics() {
-      const program = service.getProgram()!;
-      const roots = [module.dir, ...module.generatedDirs];
-      // A module may install/symlink npm packages inside its directory. Those
-      // declarations remain dependencies, just as when pnpm puts them outside.
-      const own = program.getSourceFiles().filter(file => roots.some(root => {
-        const relative = path.relative(root, file.fileName);
-        return !relative.startsWith('..') && !path.isAbsolute(relative) &&
-          !relative.split(path.sep).includes('node_modules');
-      }));
-      const found = [...program.getOptionsDiagnostics(), ...own.flatMap(file => [
-        ...program.getSyntacticDiagnostics(file),
-        ...program.getSemanticDiagnostics(file),
-      ])];
-      return ts.formatDiagnosticsWithColorAndContext(found, {
-        getCanonicalFileName: file => file,
-        getCurrentDirectory: () => module.dir,
-        getNewLine: () => '\n',
-      });
+      const diagnostics = projectDiagnostics(sourceService.getProgram()!, module.dir);
+      if (diagnostics) return diagnostics;
+      return sourceFiles(module).map(file => emissionDiagnostics(locate(file)!)).join('');
     },
 
-    program: () => service.getProgram()!,
+    program: () => sourceService.getProgram()!,
 
     dispose() {
       service.dispose();
+      sourceService.dispose();
       located.clear();
       versions.clear();
-      rootNames = [];
     },
 
     resolveId(source, importer) {

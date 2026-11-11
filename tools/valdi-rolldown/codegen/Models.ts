@@ -190,7 +190,6 @@ export function includesGenericType(type: ValdiModelPropertyType): boolean {
 
 /** The Swift enum's case constructors for the payload-less cases. */
 export const STRING: ValdiModelPropertyType = { kind: 'string' };
-export const DOUBLE: ValdiModelPropertyType = { kind: 'double' };
 export const ANY: ValdiModelPropertyType = { kind: 'any' };
 export const UNTYPED_MAP: ValdiModelPropertyType = { kind: 'map', keyType: STRING, valueType: ANY };
 

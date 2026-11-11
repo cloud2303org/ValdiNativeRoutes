@@ -40,7 +40,8 @@ valdi/modules/example/
 }
 ```
 
-在业务 TS / TSX 中使用默认导出。跨模块导入沿用模块路径，模块内也可使用相对路径：
+在业务 TS / TSX 中使用默认导出。生成的 `Strings` 统一使用模块路径导入，
+模块内部也遵循同一规则；手写源码之间仍可相对导入：
 
 ```ts
 import Strings from 'example/src/Strings';
@@ -58,6 +59,7 @@ Strings.itemCount(3);           // number 参数
 
 生成文件位于 `tools/valdi-rolldown/.gen/<module>/src/Strings.ts`，通过模块的生成目录映射为
 `<module>/src/Strings`；不要在模块的手写 `src/` 下再放同名 `Strings.ts` / `Strings.d.ts`。
+编辑器与构建器通过相同的模块映射查找生成文件，不依赖 `rootDirs` 叠加源码和生成目录。
 没有约定 JSON 的模块不生成访问器；删除最后一个 JSON 会清理本工具拥有的旧生成文件，
 仍然引用它的代码需要同步修改。
 

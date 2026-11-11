@@ -63,7 +63,7 @@ test('all mobile branches are strictly validated on every platform', () => {
   ];
   for (const platform of ['android', 'ios']) {
     const resolve = resolver(platform);
-    for (const options of bad) assert.throws(() => resolve(options as NavigationOptions), undefined,
+    for (const options of bad) assert.throws(() => resolve(options as NavigationOptions),
       `${platform} must reject ${JSON.stringify(options)}`);
   }
 });

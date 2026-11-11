@@ -1,0 +1,5 @@
+{
+  "extends": ["./tsconfig.json", "./.gen/tsconfig.framework.json"],
+  "include": ["**/*.test.ts", "**/*.test.mts"],
+  "exclude": ["node_modules", ".gen"]
+}

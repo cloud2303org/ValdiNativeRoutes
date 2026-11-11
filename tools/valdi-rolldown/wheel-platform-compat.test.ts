@@ -39,6 +39,8 @@ function fixture(typesRoot: string, source?: string) {
   writeFileSync(path.join(dir, 'tsconfig.json'), JSON.stringify({
     extends: path.join(typesRoot, 'modules/_configs/base.tsconfig.json'),
     compilerOptions: {
+      allowSyntheticDefaultImports: true,
+      moduleResolution: 'node10',
       baseUrl: dir, paths: { ...paths, 'wheel_fixture/*': [path.join(dir, '*')], tslib: [path.join(modules, 'valdi_core/src/tslib')] },
       types: [path.join(typesRoot, 'modules/types/Long'), path.join(typesRoot, 'modules/types/globals')],
     }, include: ['src/**/*'],

@@ -33,8 +33,13 @@ function fixture(t: { after: (fn: () => void) => void }) {
   put('package.json', JSON.stringify({ type: 'module', valdi: { modules: ['app_pages'] } }));
   put('valdi/modules/app_pages/src/index.ts', `
 import Strings from 'app_pages/src/Strings';
+import res from 'app_pages/res';
 export const message = () => Strings.welcome('Ada');
+export const badge = res.badge;
 `);
+  const images = path.join(directory, 'valdi/modules/app_pages/res');
+  mkdirSync(images, { recursive: true });
+  copyFileSync(path.resolve(tools, '../../valdi/modules/app_pages/res/tab_home@3x.png'), path.join(images, 'badge@3x.png'));
   put('valdi/modules/app_pages/strings/strings-en.json',
     JSON.stringify({ welcome: { defaultMessage: 'Hello {name}' } }));
   put('valdi/modules/app_pages/strings/strings-zh-Hans.json',
@@ -48,12 +53,14 @@ export const message = () => Strings.welcome('Ada');
   return { directory, put, run };
 }
 
-test('editor sync generates Strings before the first build, and Debug/Release OTA archives retain language JSON', t => {
+test('editor sync prepares Strings and resources before the first build, and Debug/Release OTA retains both', t => {
   const f = fixture(t);
   const synced = f.run('tsconfig.ts');
   assert.equal(synced.status, 0, synced.stderr);
   const accessor = path.join(f.directory, 'tools/valdi-rolldown/.gen/app_pages/src/Strings.ts');
   assert.ok(existsSync(accessor), 'editor completion must not depend on a previous bundle build');
+  const resources = path.join(f.directory, 'tools/valdi-rolldown/.gen/app_pages/res.ts');
+  assert.match(readFileSync(resources, 'utf8'), /readonly badge: Asset/);
 
   for (const mode of ['debug', 'release']) {
     const out = path.join(f.directory, mode);
@@ -66,6 +73,8 @@ test('editor sync generates Strings before the first build, and Debug/Release OT
     assert.deepEqual(JSON.parse(entries.get('strings/strings-zh-Hans.json')!.toString()),
       { welcome: { defaultMessage: '你好，{name}' } });
     assert.ok(entries.get('src/Strings.js')!.length > 0);
+    assert.ok(entries.has('res.js'));
+    assert.ok(entries.has('res.assetcatalog'));
     const manifest = createManifest({
       platform: 'android', appVersion: '1.0.0', version: 'localized-1',
       entries: [['modules/app_pages.valdimodule', archive]],

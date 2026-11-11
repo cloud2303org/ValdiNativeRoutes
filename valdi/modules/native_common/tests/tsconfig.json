@@ -1,0 +1,8 @@
+{
+  "extends": "../../../../tools/valdi-rolldown/tsconfig.json",
+  "compilerOptions": {
+    "typeRoots": ["../../../../tools/valdi-rolldown/node_modules/@types"]
+  },
+  "include": ["**/*.mts", "**/*.ts"],
+  "exclude": ["node_modules"]
+}

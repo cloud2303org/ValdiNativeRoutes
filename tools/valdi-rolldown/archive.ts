@@ -2,12 +2,22 @@
 // (magic 0x0100C633, then the data length) whose data is a run of entries, each a file name then its content. Both
 // fields are a little-endian uint32 length followed by the bytes; the length's top bit says the bytes are padded with
 // zeros to a multiple of 4.
+import { createHash } from 'node:crypto';
 import { zstdCompressSync, zstdDecompressSync } from 'node:zlib';
 
 const MAGIC = 0x0100c633;
 const PADDED = 0x80000000;
 
 export type ArchiveEntries = Map<string, Buffer>;
+
+/** Set Bundle::getHash after source maps or bytecode, excluding any previous hash. */
+export function setArchiveHash(entries: ArchiveEntries): void {
+  const hash = createHash('sha256');
+  for (const [name, content] of [...entries].sort(([a], [b]) => a.localeCompare(b))) {
+    if (name !== 'hash') hash.update(name).update(content);
+  }
+  entries.set('hash', Buffer.from(hash.digest('hex')));
+}
 
 export function unpack(file: Buffer, maxBytes = 64 * 1024 * 1024): ArchiveEntries {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 8) throw new Error('Invalid archive output limit');

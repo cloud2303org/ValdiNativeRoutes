@@ -4,12 +4,11 @@ import { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
 import { ApiError, api } from '../../services/api';
 import { Button } from '../../components/Button';
 import { color, tokens } from '../../components/theme';
-import { getAppDb } from '../../services/database';
 import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { HideReason, Page, ShowReason } from 'app_foundation/src/page/PageComponent';
 import { PageHeader } from '../../components/PageHeader';
 import { Router } from '../../router';
-import Strings from '../../Strings';
+import Strings from 'app_pages/src/Strings';
 import { AppLanguage, languageStore, selectLanguage } from '../../services/localization';
 import type { FormLayout } from '../form/types';
 
@@ -30,8 +29,6 @@ interface State {
   /** Survives while the page is covered; a remount would reset it. */
   taps: number;
   lastResult: string;
-  /** Rows in the SQLite submission table, kept live by a watch query. */
-  savedCount: number;
   /** How many times a home page was created, kept in api storage (MMKV) across launches. */
   opens: number;
   /** onShow / onHide calls, with the latest reason of each. */
@@ -56,13 +53,10 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
     language: languageStore.getState().language,
     taps: 0,
     lastResult: '还没有结果',
-    savedCount: 0,
     opens: 0,
     lifecycle: { shows: 0, hides: 0, lastShow: '-', lastHide: '-' },
     visibleSeconds: 0,
   };
-
-  private stopSavedCount?: () => void;
 
   onCreate(): void {
     this.registerDisposable(
@@ -75,10 +69,6 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
       const timer = setInterval(() => this.setState({ visibleSeconds: this.state.visibleSeconds + 1 }), 1000);
       return () => clearInterval(timer);
     });
-    this.stopSavedCount = getAppDb().watchSubmissionCount(
-      count => this.setState({ savedCount: count }),
-      error => this.setState({ lastResult: `数据库读取失败：${error.message}` }),
-    );
   }
 
   onShow(reason: ShowReason): void {
@@ -91,17 +81,13 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
     this.setState({ lifecycle: { ...lifecycle, hides: lifecycle.hides + 1, lastHide: reason } });
   }
 
-  onDestroy(): void {
-    this.stopSavedCount?.();
-  }
-
   private get router(): Router {
     return new Router(this.context);
   }
 
   onRender(): void {
     const { insets } = this.viewModel;
-    const { language, taps, lastResult, savedCount, opens, lifecycle, visibleSeconds } = this.state;
+    const { language, taps, lastResult, opens, lifecycle, visibleSeconds } = this.state;
 
     <view style={styles.page}>
       <scroll style={styles.scroll}>
@@ -137,7 +123,6 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
           <Button id="detail" title="push 详情页" onTap={this.handleRoute} />
           <Button id="picker" title="打开原生选择页，等结果" onTap={this.handleRoute} />
           <label key="last-result" style={styles.result} value={`结果：${lastResult}`} />
-          <label key="saved-count" style={styles.result} value={`SQLite 里已保存 ${savedCount} 次表单提交`} />
 
           <label style={styles.section} value="页面生命周期（Page）" />
           <label

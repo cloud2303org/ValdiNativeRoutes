@@ -17,7 +17,7 @@ const fields = <TEntries extends v.ObjectEntries>(entries: TEntries, message: st
 const bytes = (field: string) =>
   v.pipe(
     v.union(
-      [v.instance(ArrayBuffer), v.instance(Uint8Array)],
+      [v.instance(ArrayBuffer), v.instance<typeof Uint8Array<ArrayBufferLike>>(Uint8Array)],
       `${field} must be an ArrayBuffer or Uint8Array`,
     ),
     v.transform(value => {

@@ -2,13 +2,6 @@
   "commit": "4fb1c1af7aacc8b77d2fdb2fc0c38752ae847ef3",
   "description": "SHA256 of the old Swift compiler native outputs from this pinned fork. Historical ABI baseline. Review native output changes explicitly when upgrading the fork; the old compiler is no longer shipped.",
   "files": {
-    "client_sql/android/release/src/client_sql.kt": "2fe30b56f9cbc439935b3d5b608c22e6dfba4474f9c5a45905d99980cd59f85f",
-    "client_sql/cpp/release/src/valdi_modules/client_sql/client_sql.cpp": "7f925d9b3a7359f16bc97d6125a9614571c6610cb4df3137daed39119357a518",
-    "client_sql/cpp/release/src/valdi_modules/client_sql/client_sql.hpp": "5aa9794fb1d9cf67393d48c7d644adfc28bb33e5513ce0ca8f0b0722e0d484b7",
-    "client_sql/ios/release/src/SCCClientSQL/SCCClientSQL.h": "67792466f6bc39a099004d9c5cc80d7ccd6fa5f5cd9edf26075c467ccd5c9a5e",
-    "client_sql/ios/release/src/SCCClientSQL/SCCClientSQL.m": "5f2a0ed3fcc65e52eff6a33b3c3b1c58ba7ee5258d025fd24c807dc0107f4438",
-    "client_sql/ios/release/src/SCCClientSQLTypes/SCCClientSQLTypes.h": "afd715cee35ecbcd6ee9ae506470858c71fba00ac901131692d22a8025877dea",
-    "client_sql/ios/release/src/SCCClientSQLTypes/SCCClientSQLTypes.m": "1ee3ad37672cd2a068ecf4160a88dfd4650a9f2a965851955b4f2372b9713f76",
     "coreutils/android/release/src/coreutils.kt": "c84e04507cd69c9f8dc42b13db691cfcdd561458b4410a9e44158a3bb79b9186",
     "coreutils/cpp/release/src/valdi_modules/coreutils/coreutils.cpp": "4fda0c76b6b2dca60e724e8664582308aada5ff7cdc0784bd9702b45e83734b4",
     "coreutils/cpp/release/src/valdi_modules/coreutils/coreutils.hpp": "af65b69b36d6b6cdb6da27655fd666e266a733646f663022e19d9a2a8ebc776c",

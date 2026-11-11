@@ -4,11 +4,13 @@
 //
 //   pnpm tsconfig
 import path from 'node:path';
-import { appModules, valdiSourceRoot, writeTsconfig } from './pipeline';
+import { appModules, prepareEditorProject, root, valdiSourceRoot } from './pipeline';
+import { writeNodeFrameworkConfig } from './modules.mjs';
 
+writeNodeFrameworkConfig(root);
 const modules = appModules();
 for (const module of modules) {
-  if (writeTsconfig(module, modules)) console.log(`wrote ${path.relative(process.cwd(), path.join(module.dir, 'tsconfig.json'))}`);
+  if (await prepareEditorProject(module, modules)) console.log(`wrote ${path.relative(process.cwd(), path.join(module.dir, 'tsconfig.json'))}`);
 }
 if (valdiSourceRoot()) {
   console.log('Editor configs use prepared Valdi sources.');

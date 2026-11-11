@@ -3,9 +3,9 @@
 框架源码维护在 [Valdi fork](https://github.com/cloud2303org/Valdi/tree/valdiroutes) 的 `valdiroutes` 分支。
 应用仓库保留页面、原生宿主、Node 编译管线和应用 C++；通过 `valdi/MODULE.bazel` 的
 `VALDI_REPOSITORY` / `VALDI_COMMIT` 获取 fork 的完整源码。同一提交的 registry 在 `valdi/.bazelrc` 中固定。
-不跟随浮动分支。Drizzle 通过生成的 Valdi 对象接口复用框架的 ClientSQL 原生 SQLite 执行层；
-应用在两个 Bazel workspace 应用相同的 `clientsql-drizzle.patch`，添加位置行数组和执行元数据，
-不恢复旧 SQL 生成器或业务迁移。SQLite 版本随固定框架依赖。应用自己的 rules_python
+不跟随浮动分支。应用不选择或链接 ClientSQL，不集成 Drizzle 或替代 SQL 引擎；
+两个 Bazel workspace 直接获取固定 fork，不再应用 ClientSQL 原生扩展补丁。
+fork 中未被应用选择的上游模块源码继续保留。应用自己的 rules_python
 依赖规则补丁和 npm CLI patch 仍在应用仓库，继续计入相应构建输入。
 
 当前上游基线为 `Snapchat/Valdi/main` 的 `b527b091ea98b4952b1a525388d0c0b66ca04940`
@@ -92,8 +92,6 @@ pnpm build
 | `tools/valdi-rolldown/codegen/` | Swift parser、models、Kotlin/ObjC/C++ 生成器和模板 | 移植语义，对比 fork 中提交的 golden |
 | fork 的 `bzl/valdi/`、应用 `valdi/bzl/node_compiler/`、`tools/valdi-rolldown/runtime-module.ts` | Node 规则输出声明、provider、内置模块配置；保留旧编译器源码删除 | 选中模块的真实编译与 golden、两端 runtime 导出、action graph 和设备验证 |
 | `tools/valdi-rolldown/{pipeline,valdiTs,archive,resources}.ts` | 模块归档、运行时加载和资源协议 | 适配测试、Debug/Release 模块与设备检查 |
-| `valdi/modules/app_pages/src/database/`、`valdi/drizzle/` | Drizzle 驱动、schema、事务和迁移记录 | `pnpm db:check`、真实 SQLite 回归和匹配运行时验证 |
-| 两个 workspace 的 `bzl/patches/clientsql-drizzle.patch` | ClientSQL 的 `queryRows`、`run` 和原生回归 | `pnpm db:test:native`、扩展 ABI golden、两端 runtime 导出 |
 | `valdi/patches/@snap__valdi@1.2.1.patch` | npm CLI 的 Bazel 参数和 export 行为 | CLI 独立升级时审查 patch 和 pnpm lock |
 | `android/`、`ios/`、模块 `cpp/` | 框架 API、模块注册、生成绑定 ABI | 匹配运行时编译、设备验证 |
 

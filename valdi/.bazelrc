@@ -37,6 +37,10 @@ build --java_language_version=11
 ## Disable sandboxing for macs, both laptops and in CI; the performance hit is much too high.
 build:macos --spawn_strategy=local
 build:linux --sandbox_writable_path=/var/tmp
+# Runtime Node compilation has declared tools/dependencies and can be isolated
+# without changing the platform's native compiler strategy. Windows has no sandbox.
+build:macos --strategy=NodeValdiRuntimeModule=sandboxed
+build:linux --strategy=NodeValdiRuntimeModule=sandboxed
 
 # common cc configuration
 build --cxxopt=-std=c++20

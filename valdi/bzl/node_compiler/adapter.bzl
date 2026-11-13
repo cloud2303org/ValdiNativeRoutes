@@ -4,9 +4,14 @@ The fork retains the established native library/export rules and their
 output declarations. This adapter does not load the Valdi compiler toolchain.
 """
 
-load("@node_compiler_tools//:environment.bzl", "NODE", "TOOLS")
+load("@aspect_rules_js//js:providers.bzl", "JsInfo")
+load("@rules_nodejs//nodejs:toolchain.bzl", "NodeInfo")
 
-NODE_COMPILER_ATTRS = {"_node_tools": attr.label(default = Label("@node_compiler_tools//:sources"))}
+NODE_COMPILER_ATTRS = {
+    "_node_tools": attr.label(default = Label("@node_compiler_tools//:compiler"), cfg = "exec"),
+    "_node_runtime": attr.label(default = Label("@rules_nodejs//nodejs:current_node_runtime"), cfg = "exec"),
+    "_node_context": attr.label(default = Label("@node_compiler_tools//:framework_inputs")),
+}
 
 def invoke_node_compiler(ctx, name, base, outputs, module_directory, dependencies, dependency_inputs):
     if name not in ["valdi_core", "valdi_tsx", "coreutils", "source_map", "jasmine", "drawing", "native_web"]:
@@ -40,17 +45,32 @@ def invoke_node_compiler(ctx, name, base, outputs, module_directory, dependencie
         "asyncStrictMode": ctx.attr.async_strict_mode,
         "compilationMode": ctx.attr.compilation_mode,
     }
+    context = [file for file in ctx.files._node_context if file.path.endswith("/modules/_configs/base.tsconfig.json")][0]
+    spec["frameworkRoot"] = context.path[:-len("/modules/_configs/base.tsconfig.json")]
     ctx.actions.write(manifest, json.encode(spec))
-    # Run Node directly: Windows MSYS shells crash inside Bazel's exec "$@" pattern.
+    compiler = ctx.attr._node_tools[JsInfo]
+    launchers = [file for file in compiler.sources.to_list() if file.basename == "runtime-launcher.mjs"]
+    if len(launchers) != 1:
+        fail("Expected one runtime-launcher.mjs in the Node compiler inputs")
+    node = ctx.attr._node_runtime[NodeInfo].node
+    if not node:
+        fail("Runtime compilation requires a downloaded Node toolchain, not node_path")
+    # Execute the toolchain's Node directly, including on Windows (no MSYS
+    # shell launcher), with the complete npm store and authored source closure.
     ctx.actions.run(
-        executable = NODE,
-        arguments = [TOOLS + "/node_modules/tsx/dist/cli.mjs", TOOLS + "/runtime-module.ts", manifest.path],
-        inputs = depset(ctx.files.srcs + ctx.files.res + [manifest] + ctx.files._node_tools,
-                        transitive = dependency_inputs),
+        executable = node,
+        arguments = [launchers[0].path, manifest.path],
+        tools = [node],
+        inputs = depset(
+            ctx.files.srcs + ctx.files.res + [manifest] + ctx.files._node_context,
+            transitive = dependency_inputs + [compiler.transitive_sources, compiler.transitive_types, compiler.npm_sources],
+        ),
         outputs = outputs,
-        use_default_shell_env = True,
-        env = {"TSX_DISABLE_CACHE": "1"},
-        execution_requirements = {"local": "1", "no-cache": "1"},
+        use_default_shell_env = False,
+        env = {"TSX_DISABLE_CACHE": "1", "LANG": "C", "LC_ALL": "C", "TZ": "UTC"},
+        # Cache locally/remotely; execution stays local until execution-platform
+        # native npm binaries and a remote executor have been validated.
+        execution_requirements = {"no-remote-exec": "1"},
         mnemonic = "NodeValdiRuntimeModule",
         progress_message = "Node compile runtime module " + name,
     )

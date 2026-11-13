@@ -1,7 +1,7 @@
 // Node implementation of the native runtime's ValdiModuleInfo output contract.
 // The Bazel adapter declares the same files as the official compiler rule;
 // unknown outputs fail instead of publishing placeholders for unsupported work.
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +14,8 @@ import { valdiTs, type ValdiModule } from './valdiTs';
 
 export interface RuntimeModuleSpec {
   name: string;
+  /** Bazel's declared framework context; direct Node callers use the source root. */
+  frameworkRoot?: string;
   moduleDirectory: string;
   sources: string[];
   outputs: { path: string; relative: string; directory: boolean }[];
@@ -33,7 +35,7 @@ export async function compileRuntimeModule(spec: RuntimeModuleSpec, execroot = p
   const marker = '/src/valdi_modules/src/valdi/';
   const index = original.lastIndexOf(marker);
   if (index < 0) throw new Error(`Not a pinned runtime module: ${original}`);
-  const upstream = original.slice(0, index);
+  const upstream = spec.frameworkRoot ? path.resolve(execroot, spec.frameworkRoot) : original.slice(0, index);
   process.env.VALDI_SOURCE_ROOT = upstream;
   const temporary = mkdtempSync(path.join(tmpdir(), `valdi-runtime-${spec.name}-`));
   try {
@@ -45,7 +47,9 @@ export async function compileRuntimeModule(spec: RuntimeModuleSpec, execroot = p
       if (relative.startsWith('..')) throw new Error(`Source outside ${spec.name}: ${source}`);
       const output = path.join(temporary, relative);
       mkdirSync(path.dirname(output), { recursive: true });
-      cpSync(input, output);
+      // Sandbox source inputs are symlinks. Materialize their bytes so symbol
+      // canonicalization keeps each source inside this module's staging root.
+      copyFileSync(input, output);
       return output;
     });
     // Pinned upstream declaration omission: this type is imported from

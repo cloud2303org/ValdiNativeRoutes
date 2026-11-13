@@ -105,6 +105,14 @@ jobs:
       # app builds never decide whether to re-export from runtime source hashes.
       - name: Export runtime
         run: sh "scripts/export-${{ matrix.target }}.sh" debug 2>&1 | tee .ci/export.log
+      - name: Verify Node compiler action inputs
+        run: |
+          (
+            cd valdi
+            bazel aquery 'mnemonic("NodeValdiRuntimeModule", deps(set(@valdi//src/valdi_modules/src/valdi/valdi_core @valdi//src/valdi_modules/src/valdi/native_web @valdi//src/valdi_modules/src/valdi/drawing @valdi//src/valdi_modules/src/valdi/jasmine)))' \
+              --config=stable_exec --output=jsonproto > ../.ci/node-compiler-actions.json
+          )
+          node scripts/verify-node-compiler-actions.mjs .ci/node-compiler-actions.json
       - name: Verify wheels against the exported runtime
         working-directory: tools/valdi-rolldown
         env:

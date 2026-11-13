@@ -64,9 +64,93 @@ Swift 绑定生成、TSN 原生编译、远程可下载资源等；遇到相关�
 - 应用删除 `VALDI_COMPILER_BACKEND` 选择逻辑；设置旧环境变量不会启用其他后端。
 - 原生 workspace 和自定义模块 workspace 都固定同一 fork commit，不再应用本地补丁或获取后裁剪。
 
-内置模块的 Node action 使用本机 Node / pnpm 依赖，仍是 local、no-cache，不支持远程执行或密封工具链。
+内置模块的 Node action 使用 Bazel 下载的 Node `24.14.0`，
+以及 `tools/valdi-rolldown/pnpm-lock.yaml` 经 `rules_js` 解析、按 integrity 下载的 npm 依赖。
+编译器源码、传递 npm 包及其原生二进制、七个内置模块的源码上下文、
+框架基础配置和 Hermes 版本 / 模块协议文件均是声明输入。
+不读取开发机安装的 `node_modules`，不通过 `PATH` 选择 Node，不继承默认 shell 环境。
+编译进程仍直接执行 Node，不增加 Windows MSYS shell 启动器。
+
+这些 action 允许磁盘及远程缓存；macOS / Linux 单独对
+`NodeValdiRuntimeModule` 启用 sandbox，不改变原生编译器的执行策略。
+Windows 仍采用本地执行。当前保留 `no-remote-exec`：
+共享构建产物缓存可用，远程执行集群及其平台兼容性尚未验证。
+依赖的 esbuild、Rolldown、Sharp 和 Hermes 原生工具按执行平台使用，
+Android 目标不会让 macOS 构建机改用 Linux 二进制。
+完整 iOS runtime / App 构建仍需 macOS 和 Xcode。
+
+工具依赖关闭 npm lifecycle scripts，使用发布包中已携带的原生二进制。
+编译器复制 sandbox 源码时只复制文件内容，避免保留输入符号链接后漏生成绑定，
+或将临时声明修改写回原始框架文件。
+框架上下文有意包含全部七个已支持内置模块；任一上下文变更都会使相关 action 失效，
+暂未为每个 action 裁剪到最小上下文。
+
+上述变化只覆盖 Bazel 内置模块编译。应用模块、独立 `module-build` 编译、
+导出脚本前后的应用绑定生成仍使用原有的本机 pnpm 入口，仍需安装项目依赖。
 头文件改写独立使用 Bazel 注册的 Node 工具链，脚本和 Node 均是显式 action 输入，不依赖 npm。
 iOS 宿主和平台代码中的 `.swift` 继续由 Xcode 正常编译。
+
+### 检查 action 输入
+
+Application CI 在原生导出后检查真实 action 图：
+
+```sh
+cd valdi
+bazel aquery 'mnemonic("NodeValdiRuntimeModule", deps(set(@valdi//src/valdi_modules/src/valdi/valdi_core @valdi//src/valdi_modules/src/valdi/native_web @valdi//src/valdi_modules/src/valdi/drawing @valdi//src/valdi_modules/src/valdi/jasmine)))' \
+  --config=stable_exec --output=jsonproto > ../.ci/node-compiler-actions.json
+cd ..
+node scripts/verify-node-compiler-actions.mjs .ci/node-compiler-actions.json
+```
+
+检查要求 Node 是声明输入、命令不含机器绝对路径、框架上下文与 npm 依赖完整，
+并拒绝 `local`、`no-cache`、`no-sandbox`、`no-remote-cache`。
+这是构建图检查；实际 sandbox 执行、缓存恢复和不同构建目录的产物一致性应另行验证。
+检查缓存恢复的全部输出时，使用 `--remote_download_outputs=all`，
+避免将 Bazel 尚未物化的非顶层文件误判为缺失。
+
+### 2026-11-13 隔离与缓存验证
+
+本轮原始日志、action 图、执行记录及哈希位于
+`/tmp/valdi-node-hermetic-20261113/`：
+
+- 原 action 图检查先失败，指出 `local` 禁止隔离 / 缓存；改造后的七个 action 均通过。
+- 源码符号链接回归先复现空绑定；修复后 coreutils 和 valdi_core 的历史 ABI
+  golden 及输入文件不被修改的检查通过。
+- 屏蔽开发机 compiler `node_modules` 和 NVM Node 目录，七个内置模块实际通过
+  `darwin-sandbox` 执行。与改造前保留的 236 个已有输出相比，文件内容完全相同。
+- 删除仅由这些 Node action 生成的 332 项文件 / 目录输出，
+  重建时七个 action 全部命中磁盘缓存；物化后的 874 个文件哈希全部一致。
+- 使用独立 `output_base`，关闭磁盘与远程缓存，七个 action 重新在 sandbox 执行；
+  两套输出目录的全部 874 个文件哈希一致。
+- 分别临时修改编译器源码、依赖锁文件、独立框架副本的基础配置：
+  每次七个 action 均重新执行；恢复输入后七个 action 均命中缓存，
+  全部输出恢复为相同的 874 个文件。探测输入已恢复。
+- 完整 `pnpm test` 通过：510 个 Node 测试、172 个嵌套上游 Jasmine 用例、
+  50 项 Unicode 检查、类型检查与 10 组绑定 golden。
+- Android Debug runtime 导出通过，AAR 为 51,293,541 字节，
+  整个 AAR 与改造前导出逐字节一致，三个 ABI 的共享库 SHA-256 也完全相同。
+- iOS Debug XCFramework 和 Swift 包装导出通过，包含真机 arm64、
+  模拟器 arm64 / x86_64。其 Mach-O 文件哈希与旧导出不同：
+  节区比较发现 arm64 的 `__text`、`__stubs`、`__objc_stubs` 有变化，
+  其余文件节区一致，模拟器 x86_64 节区一致。
+  本轮未追溯链接差异原因，也不据此声称 iOS 原生二进制等价；
+  前述 874 文件一致性结论仅针对 Node action 的输出。
+- 两轮独立只读源码复核未发现具体新增 P1/P2；这不是另一轮构建或运行验证。
+
+对应证据为 `verify-red.log`、`symlink-red.log`、`symlink-green.log`、
+`actions-final.json`、`sandbox-execution.json`、`output-comparison.json`、
+`cache-verification.json`、`determinism-verification.json`、
+`invalidation-results.json`、`pnpm-test.log`、`export-android.log`
+以及 `android-artifacts.json`、`export-ios.log`、
+`ios-artifacts.json` 和 `ios-section-comparison.json`。
+首次 sandbox 试跑暴露的空绑定输出及输入写穿问题已修复；
+`build-first-execution.json` 保留该轮输出记录，`source-restoration.json`
+记录下载源码恢复到固定 Git blob，后续检查确认原始声明未再变化。
+
+上述执行证据来自 macOS；没有 Linux / Windows 执行、远程执行服务、
+远程缓存端点互通或设备 UI / 性能验证结论。
+CI 规则已接入现有 macOS Android / iOS 和 Linux Android 任务，
+上述结果来自本地验证；CI 结果以对应提交的 GitHub Actions run 为准。
 
 ## 2026-10-29 本地验收
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -17,6 +17,49 @@ const iosNames: Record<string, string> = {
   coreutils: 'SCCCoreutils', drawing: 'SCCDrawing',
   jasmine: 'SCCJasmine', source_map: 'SCCSourceMap', valdi_core: 'SCCValdiCore', valdi_tsx: 'SCCValdiTsx',
 };
+
+for (const name of ['coreutils', 'valdi_core']) test(`sandbox source symlinks retain ${name} bindings and leave inputs unchanged`, async t => {
+  const temporary = mkdtempSync(path.join(tmpdir(), 'runtime-symlink-test-'));
+  const previousSourceRoot = process.env.VALDI_SOURCE_ROOT;
+  t.after(() => {
+    if (previousSourceRoot === undefined) delete process.env.VALDI_SOURCE_ROOT;
+    else process.env.VALDI_SOURCE_ROOT = previousSourceRoot;
+    rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  });
+  const framework = previousSourceRoot ?? valdiSourceRoot()!;
+  const original = path.join(framework, 'src/valdi_modules/src/valdi', name);
+  const moduleDirectory = path.join(temporary, 'src/valdi_modules/src/valdi', name);
+  const snapshots = new Map<string, Buffer>();
+  const sources = ['src', 'types'].flatMap(folder =>
+    ts.sys.readDirectory(path.join(original, folder), ['.ts', '.tsx', '.js'])).map(file => {
+    const relative = path.relative(original, file);
+    const input = path.join(temporary, 'inputs', relative);
+    const bytes = readFileSync(file);
+    mkdirSync(path.dirname(input), { recursive: true });
+    writeFileSync(input, bytes);
+    snapshots.set(input, bytes);
+    const link = path.join(moduleDirectory, relative);
+    mkdirSync(path.dirname(link), { recursive: true });
+    symlinkSync(input, link);
+    return link;
+  });
+  const expected = Object.entries(golden.files as Record<string, string>)
+    .filter(([file]) => file.startsWith(`${name}/`));
+  await compileRuntimeModule({
+    name, frameworkRoot: framework, moduleDirectory, sources,
+    outputs: expected.map(([file]) => ({
+      relative: file.slice(name.length + 1), path: path.join(temporary, 'out', file), directory: false,
+    })),
+    dependencies: Object.keys(iosNames).map(module_name => ({ module_name, module_path: '', module_content: '' })),
+    iosModuleName: iosNames[name], iosClassPrefix: '__valdi_unset_ios_class_prefix__',
+    androidClassPath: `com.snap.modules.${name}`,
+    disableAnnotations: false, asyncStrictMode: false, compilationMode: 'js',
+  });
+  for (const [file, hash] of expected) {
+    assert.equal(createHash('sha256').update(readFileSync(path.join(temporary, 'out', file))).digest('hex'), hash, file);
+  }
+  for (const [file, bytes] of snapshots) assert.deepEqual(readFileSync(file), bytes, `Compiler changed input ${file}`);
+});
 
 test('runtime modules match the historical ABI and produce usable Node assets', async t => {
   // The hashes retain their original compiler provenance across source-only

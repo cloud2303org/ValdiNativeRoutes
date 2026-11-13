@@ -27,6 +27,23 @@ archive_override(
 node_compiler_tools = use_repo_rule("//bzl/node_compiler:repositories.bzl", "node_compiler_tools")
 node_compiler_tools(name = "node_compiler_tools", project = "//:MODULE.bazel")
 
+# Runtime compilation uses downloaded tools and lockfile-derived npm inputs,
+# independently of the developer's PATH and installed node_modules.
+bazel_dep(name = "aspect_rules_js", version = "2.9.2")
+bazel_dep(name = "rules_nodejs", version = "6.7.5")
+node = use_extension("@rules_nodejs//nodejs:extensions.bzl", "node")
+node.toolchain(node_version = "24.14.0")
+use_repo(node, "nodejs_toolchains")
+register_toolchains("@nodejs_toolchains//:all")
+
+npm = use_extension("@aspect_rules_js//npm:extensions.bzl", "npm")
+npm.npm_translate_lock(
+    name = "runtime_compiler_npm",
+    pnpm_lock = "@node_compiler_tools//:pnpm-lock.yaml",
+    lifecycle_hooks = {"*": []},
+)
+use_repo(npm, "runtime_compiler_npm")
+
 # Valdi internal sub-modules: local_path_override in Valdi's own MODULE.bazel
 # only takes effect when Valdi is the root module. Consumers must provide
 # archive_override entries that point into the Valdi release archive.

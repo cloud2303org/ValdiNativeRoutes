@@ -14,8 +14,11 @@ const upstream = process.env.VALDI_SOURCE_ROOT
 const modulesRoot = path.join(upstream, 'src/valdi_modules/src/valdi');
 const suites = [
   ['valdi_core/test/ElementLayoutDispatcher.spec.ts', 'valdi_core/src/ElementLayoutDispatcher.ts'],
+  ['valdi_core/test/PropertyList.spec.ts', 'valdi_core/src/utils/PropertyList.ts'],
   ['valdi_test/test/Renderer.spec.ts', 'valdi_core/src/Renderer.ts'],
+  ['valdi_test/test/ModuleLoader.spec.ts', 'valdi_core/src/ModuleLoader.ts'],
   ['valdi_core/test/ModuleLoaderUnloadTest.ts', 'valdi_core/src/ModuleLoader.ts'],
+  ['valdi_test/test/DebuggerInputMessageHandler.spec.ts', 'valdi_core/src/debugging/DebuggerInputMessageHandler.ts'],
 ] as const;
 
 type JasmineResult = {
@@ -26,7 +29,7 @@ type JasmineResult = {
   failedExpectations?: { message: string; stack?: string }[];
 };
 
-function sandbox() {
+function sandbox(globals: Record<string, unknown> = {}) {
   const timers = new Set<ReturnType<typeof setTimeout>>();
   const schedule = (callback: (...args: any[]) => void, delay?: number, ...args: any[]) => {
     const timer = setTimeout(() => {
@@ -50,6 +53,7 @@ function sandbox() {
       getCurrentPlatform: () => 1, // Native path normalization (not Web's './').
       getCurrentContext: () => 'node-upstream-test',
     },
+    ...globals,
   });
   // Deliberately do not inject process: Jasmine must not remove node:test's
   // uncaughtException/unhandledRejection listeners. Node's runner fails on both.
@@ -113,6 +117,23 @@ function sandbox() {
       timers.clear();
     },
   };
+}
+
+for (const { name, globals, expected } of [
+  { name: 'native bootstrap', globals: { runtime: undefined }, expected: 'fixture/src/value' },
+  { name: 'native worker location', globals: { location: { href: 'worker://fixture' } }, expected: 'fixture/src/value' },
+  { name: 'browser page', globals: { runtime: undefined, window: { document: {} } }, expected: 'fixture/./src/value' },
+  { name: 'browser worker', globals: { runtime: undefined, importScripts() {} }, expected: 'fixture/./src/value' },
+]) {
+  test(`actual ModuleLoader resolves ${name} paths before platform runtime initialization`, t => {
+    const host = sandbox(globals);
+    t.after(() => host.dispose());
+    const { ModuleLoader } = host.load('valdi_core/src/ModuleLoader');
+    const requested: string[] = [];
+    const loader = new ModuleLoader((path: string) => { requested.push(path); }, undefined, undefined, true);
+    loader.load('fixture/./src/value');
+    assert.deepEqual(requested, [expected]);
+  });
 }
 
 for (const [spec, algorithm] of suites) {

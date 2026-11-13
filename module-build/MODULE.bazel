@@ -12,11 +12,11 @@ single_version_override(
     patch_strip = 1,
 )
 
-# -- Maintained Valdi fork (upstream main: 9b7a20d5) -----------------------
+# -- Maintained Valdi fork (upstream main: aed1249d) -----------------------
 # Framework customizations and Hermes build inputs live in the pinned Valdi fork source.
 # Pin immutable commits; scripts/upstream.mjs updates this and the matching registry together.
 VALDI_REPOSITORY = "cloud2303org/Valdi"
-VALDI_COMMIT = "662bb860f78bbafd4a56a4fefa1050c0ebf255c2"
+VALDI_COMMIT = "70fa9c63a04fbbaa2ddafb53400c0eea6fd5ca27"
 VALDI_URL = "https://github.com/" + VALDI_REPOSITORY + "/archive/" + VALDI_COMMIT + ".tar.gz"
 VALDI_PREFIX = "Valdi-" + VALDI_COMMIT
 

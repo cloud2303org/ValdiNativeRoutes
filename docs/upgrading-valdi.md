@@ -8,13 +8,22 @@
 fork 中未被应用选择的上游模块源码继续保留。应用自己的 rules_python
 依赖规则补丁和 npm CLI patch 仍在应用仓库，继续计入相应构建输入。
 
-当前上游基线为 `Snapchat/Valdi/main` 的 `b527b091ea98b4952b1a525388d0c0b66ca04940`
-（2026-11-08）；应用使用的 fork 提交以两个 workspace 的 `VALDI_COMMIT` 为准。
-本次通过 `git pull --no-rebase` 完整合入上一基线 `9b7a20d5` 之后的 32 项提交，
-包括实验性 SDL3 Linux 宿主和计算器、Protobuf 单字段读取与解码配置、
-Android 手势和日期格式更新、iOS worker 枚举、Promise 回调归因，以及 ClientSQL
-关闭最后一个连接后重新打开时的 schema 缓存修复。
+当前上游基线为 `Snapchat/Valdi/main` 的 `aed1249d5614cd9afb2c8d43d8177794e28789f0`
+（2026-11-13）；应用使用的 fork 提交以两个 workspace 的 `VALDI_COMMIT` 为准。
+本次完整合入上一基线 `b527b091` 之后的 32 项提交，包括视图池分批释放、
+Android 圆角重置动画安全转换、Swift 代理缓存加锁、双向文本排版、
+模块/source map 加载和调试输入错误修复。Node 编译器的 vendored 日志转换器同步上游：
+通过 `ValdiRuntimeProvider.getValdiRuntime()` 动态读取日志开关；ModuleLoader 的
+引导日志保持独立，避免引导时引入 provider 的 require 循环。
+11 月 8 日合入的 SDL3 Linux 宿主、Protobuf 解码配置、Worker 枚举和回调归因继续保留。
 此前合入的官方 Web renderer、浏览器开发工具和 Web 测试继续保留。
+上游已移除的 foundation/valdi_test 旧 Web 测试实现跟随移除，测试依赖使用新的
+`test_deps` 分离；不会恢复 fork 已删除的旧编译器和热重载入口。
+原先位于生产目录的 `PropertyListTest.ts` 已迁移为 `valdi_core/test/PropertyList.spec.ts`，
+保留原断言并纳入应用的上游源码测试入口，避免生产模块依赖 Jasmine。
+后续还修复了 Web Unicode 的 TypeScript 返回类型推断、SnapDrawing 的 Bazel runfiles 资源定位，
+并将聚焦回调归因测试接入 Node 模块归档及幂等注册；结果见
+[三个验证入口修复](upstream-20261113-fixes.md)。
 框架继续使用 Hermes `260318099.0.4`，保留原生 Promise/字节码边界、OTA 资源钩子和 Windows 工具链修复。
 旧 Swift Valdi 编译器、回退实现及 C++ toolbox 继续删除；模块编译和导出头文件使用应用的 Node 后端。
 TGFX 实验单独保存在 fork 的 `experiment/tgfx-prototype-20261104` 分支，未合入维护分支。
@@ -107,7 +116,7 @@ golden 使用 fork 中已提交的编译器输出，不运行 Swift 编译器。
 输出位于 `tools/valdi-rolldown/web/.local/dist/`。入口、官方 renderer 测试及通用 Bazel Web
 导出尚未接通的边界见 `tools/valdi-rolldown/web/README.md`。
 
-本次上游新增 `runtime.withCallbackAttribution`，并要求
+此前合入的上游接口 `runtime.withCallbackAttribution` 要求
 `withGlobalNativeRefs(attribution, callback)` 提供来源标记。更新后的模块必须与本次原生运行库一起发布；
 旧 AAR/XCFramework 不能作为新模块的兼容性验证。
 `ValdiRuntimeProvider` 的 Web 引导保留原生 runtime 检测，带 `location` 的原生 worker 不会因此误启浏览器运行时。

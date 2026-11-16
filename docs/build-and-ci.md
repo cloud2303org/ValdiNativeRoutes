@@ -9,9 +9,9 @@
 Bazel / Gradle 声明字符串输入，iOS 沿用每次执行的模块构建阶段。
 文件格式、Release / OTA 行为与验证边界见[本地化](localization.md)。
 
-统一开发入口由 `scripts/cli.mjs` 用 Node 分发（Windows / macOS / Linux 一致）：
+统一开发入口由 `scripts/cli.mjs` 用 Node 分发（macOS / Linux 一致）：
 首次 checkout 执行 `pnpm install`，再手动运行 `scripts/maintainer/export-android.sh debug` 或
-`scripts/maintainer/export-ios.sh debug`（Windows 使用 `scripts/windows/export-android.ps1 -Config debug`）。
+`scripts/maintainer/export-ios.sh debug`。
 导出获取固定 Valdi 源码并生成绑定。`pnpm android` / `pnpm ios` 执行正常原生构建、安装，
 并在唯一模拟器（或显式 `--device`）上启动；
 `pnpm dev` 仍是现有热重载；`pnpm build:android` / `pnpm build:ios` 保持纯构建；`pnpm test` 不变。
@@ -79,7 +79,7 @@ Bazel 仍使用自身固定的 NDK，清理及缓存配置需保留静态 vendor
 3 GB 是 Bazel 空闲 GC 的目标，不是缓存恢复或运行中磁盘占用的硬上限。
 
 三条任务先跑测试和 golden，尽早发现 Node 绑定生成与上游语义的差异。
-此阶段的滚轮 Renderer 测试读取已固定的 Valdi 源码，不要求本地已有 AAR 或 XCFramework。
+此阶段的滚轮与 BottomSheet Renderer 测试基于已固定的 Valdi 源码运行，不要求本地已有 AAR 或 XCFramework。
 原生任务显式导出运行时，由 Bazel 自身缓存复用构建结果；不再单独编译应用 host 工具或 SQL 校验器。
 随后设置 `WHEEL_RUNTIME=android|ios`，用相同滚轮断言验证该任务平台实际导出的运行时模块；
 缺少产物或所需模块会直接失败，不回退到源码，也不要求另一个平台的导出产物。
@@ -110,19 +110,6 @@ artifact 上传是可选步骤：账号存储额度不足时会在日志和任�
 因此，本应用 CI 不需要照搬上游 Swift 编译器单测、CLI bootstrap / 发布、旧热重载 smoke、
 helloworld / Widgets / Web 示例构建、Snap 发布和 GCP 缓存认证。这些是上游项目自己的职责，
 并非都已经获得本项目的等价覆盖；特别是新 Node 热重载路径还没有专门的自动 delivery smoke。
-
-## Windows 构建与冷启动检查
-
-Windows 使用与其他平台相同的顺序：`pnpm install`，手动运行
-`scripts/windows/export-android.ps1 -Config debug`，再 `pnpm android` 或 `pnpm build:android`。
-新机器仍需预装 Node 24、pnpm 启动器、Bazel 8.2.1、JDK 17、Android SDK/NDK/CMake、
-Git Bash、CMake/Ninja/curl。日常入口检查运行时产物及平台/配置元数据；不会根据源码变化决定重新导出。
-
-`scripts/windows/build-android.ps1` 配置 Windows 工具与缓存后调用正常宿主构建；
-它要求先手动导出运行时。`scripts/windows/test-cold-build.ps1` 在空的隔离目录克隆指定提交，
-安装依赖、显式导出运行时，再构建 App、检查绑定和运行管线测试，验证正常构建没有改写导出的 AAR。
-旧源码指纹失效 runner 已移除，历史报告不代表当前流程已通过；此次文档更新没有运行 Windows 构建。
-命令与证据路径见 [Windows 原生构建](windows-native-build.md)。
 
 ## 仍然需要的原生工具与产物
 

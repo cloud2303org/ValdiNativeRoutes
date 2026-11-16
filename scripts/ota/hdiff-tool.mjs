@@ -21,7 +21,7 @@ function installDirectory(root, platform, arch) {
 }
 
 export function cachedHdiffzPath(root, platform = process.platform, arch = process.arch) {
-  return path.join(installDirectory(root, platform, arch), platform === 'win32' ? 'hdiffz.exe' : 'hdiffz');
+  return path.join(installDirectory(root, platform, arch), 'hdiffz');
 }
 
 function readCache(root, platform, arch, plan) {
@@ -51,33 +51,23 @@ async function download(url, destination, expected, fetchImpl) {
   writeFileSync(destination, bytes);
 }
 
-function tarCommand(platform) {
-  return platform === 'win32'
-    ? path.win32.join(process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows', 'System32', 'tar.exe')
-    : 'tar';
-}
-
-function extractBinary(archive, work, plan, platform) {
-  if (platform === 'win32') {
-    execFileSync(tarCommand(platform), ['-xf', archive, '-C', work, plan.member], { stdio: 'pipe' });
-    return path.join(work, ...plan.member.split('/'));
-  }
+function extractBinary(archive, work, plan) {
   const file = path.join(work, 'hdiffz');
   writeFileSync(file, execFileSync('unzip', ['-p', archive, plan.member], { maxBuffer: 32 * 1024 * 1024 }));
   return file;
 }
 
 function buildSource(archive, work, platform) {
-  execFileSync(tarCommand(platform), ['-xzf', archive, '-C', work], { stdio: 'pipe' });
+  execFileSync('tar', ['-xzf', archive, '-C', work], { stdio: 'pipe' });
   const source = path.join(work, `HDiffPatch-${lock.version}`);
   try {
     execFileSync('make', ['-j2', 'hdiffz', 'DIR_DIFF=0', 'MT=1', 'LDEF=0', 'ZLIB=2',
       'LZMA=0', 'ZSTD=0', 'MD5=0', 'XXH=0', 'VCD=0', 'BSD=0', 'BZIP2=0',
       ...(platform === 'darwin' ? ['CL=1'] : [])], { cwd: source, stdio: 'pipe', maxBuffer: 8 * 1024 * 1024 });
   } catch (cause) {
-    throw new Error('HDiff source build failed. Install make, a C/C++ compiler and zlib development headers (MinGW on Windows), or set VALDI_HDIFFZ.', { cause });
+    throw new Error('HDiff source build failed. Install make, a C/C++ compiler and zlib development headers, or set VALDI_HDIFFZ.', { cause });
   }
-  return path.join(source, platform === 'win32' ? 'hdiffz.exe' : 'hdiffz');
+  return path.join(source, 'hdiffz');
 }
 
 export async function prepareHdiffz({ root = repository, platform = process.platform, arch = process.arch,
@@ -91,10 +81,10 @@ export async function prepareHdiffz({ root = repository, platform = process.plat
     const archive = path.join(work, plan.kind === 'binary' ? 'download.zip' : 'source.tar.gz');
     console.error(`Preparing HDiffPatch ${lock.version} (${platform}/${arch}, ${plan.kind})`);
     await download(plan.url, archive, plan.sha256, fetchImpl);
-    const executable = plan.kind === 'binary' ? extractBinary(archive, work, plan, platform) : buildSource(archive, work, platform);
+    const executable = plan.kind === 'binary' ? extractBinary(archive, work, plan) : buildSource(archive, work, platform);
     const install = path.join(work, 'install');
     mkdirSync(install);
-    const filename = platform === 'win32' ? 'hdiffz.exe' : 'hdiffz';
+    const filename = 'hdiffz';
     copyFileSync(executable, path.join(install, filename));
     chmodSync(path.join(install, filename), 0o755);
     writeFileSync(path.join(install, 'receipt.json'), `${JSON.stringify({

@@ -110,8 +110,6 @@ function main() {
         run(process.execPath, [tsx, 'tests/web-unicode.test.ts', valdiSource], rolldownDir);
       }
       run(process.execPath, ['--test', path.join(valdiSource, 'bzl/valdi/node_tools/rewrite_header.test.mjs')], root);
-      // Run tsx's launcher with Node directly: `pnpm exec` resolves the binary differently on
-      // Windows and can report `Command "tsx" not found` for the same install.
       const rolldownTests = ROLLDOWN_TESTS.filter(file => existsSync(path.join(rolldownDir, file)));
       if (rolldownTests.length) run(process.execPath, [tsx, '--test', ...rolldownTests], rolldownDir);
       const moduleSplitTest = path.join(root, 'valdi/modules/native_common/tests/module-split.test.mts');
@@ -140,9 +138,7 @@ function main() {
   checkRuntime(root, platform);
   checkSources(root);
   if (platform === 'android') {
-    // Node 24 refuses to execute Gradle's .cmd wrapper directly, so route through cmd.exe on Windows.
-    if (process.platform === 'win32') run('cmd.exe', ['/d', '/s', '/c', 'gradlew.bat', ':app:assembleDebug', ...forwarded], path.join(root, 'android'));
-    else run('./gradlew', [':app:assembleDebug', ...forwarded], path.join(root, 'android'));
+    run('./gradlew', [':app:assembleDebug', ...forwarded], path.join(root, 'android'));
     return;
   }
   const cwd = path.join(root, 'ios');

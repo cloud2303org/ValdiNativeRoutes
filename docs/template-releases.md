@@ -36,12 +36,11 @@ pnpm android
 pnpm ios
 ```
 
-需要 Node 24 和项目固定的 pnpm。Android 还需要 JDK 17、Android SDK
+需要 Node 24 和项目固定的 pnpm（支持 macOS 与 Linux）。Android 还需要 JDK 17、Android SDK
 和 Bazel；iOS 还需要 macOS、Xcode、XcodeGen。
 运行时由上述脚本手动导出；原生构建自动准备已启用模块声明的依赖并编译模块库和宿主源码。
-Windows 使用 `scripts/windows/export-android.ps1 -Config debug`。
 HDiff 桌面工具仅差分发布时需要；可提前运行 `pnpm ota:tool`。
-平台详细前置条件见 `build-and-ci.md` 和 `windows-native-build.md`。
+平台详细前置条件见 `build-and-ci.md`。
 
 源码包可直接用于开发，但不包含依赖缓存、OTA 私钥、APK / IPA
 或预编译运行时。下载后仍需安装依赖和首次原生构建。

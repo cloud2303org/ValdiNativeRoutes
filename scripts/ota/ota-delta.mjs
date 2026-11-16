@@ -99,16 +99,13 @@ export function findHdiffz({ root, env = process.env } = {}) {
     if (!executable(env.VALDI_HDIFFZ)) throw new Error('VALDI_HDIFFZ must name an executable hdiffz file');
     return path.resolve(env.VALDI_HDIFFZ);
   }
-  const suffixes = process.platform === 'win32' ? ['.exe', ''] : ['', '.exe'];
   for (const directory of [root && path.join(root, 'ota/tools'), ...(env.PATH ?? '').split(path.delimiter)].filter(Boolean)) {
-    for (const suffix of suffixes) {
-      const file = path.resolve(directory, `hdiffz${suffix}`);
-      if (executable(file)) return file;
-    }
+    const file = path.resolve(directory, 'hdiffz');
+    if (executable(file)) return file;
   }
   const cached = root && cachedHdiffz(root);
   if (cached) return cached;
-  throw new Error('Delta base requires hdiffz: run pnpm ota:tool, set VALDI_HDIFFZ, install ota/tools/hdiffz(.exe), or add hdiffz to PATH.');
+  throw new Error('Delta base requires hdiffz: run pnpm ota:tool, set VALDI_HDIFFZ, install ota/tools/hdiffz, or add hdiffz to PATH.');
 }
 
 export async function ensureHdiffz({ root, env = process.env } = {}) {

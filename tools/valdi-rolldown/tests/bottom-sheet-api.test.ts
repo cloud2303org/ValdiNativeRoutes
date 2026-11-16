@@ -1,19 +1,91 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
 import { unpack } from '../archive';
 import { appModule, buildModule, root, valdiSourceRoot } from '../pipeline';
+import { compileRuntimeModule } from '../runtime-module';
 import { valdiTs } from '../valdiTs';
 
 const sourceRoot = valdiSourceRoot();
 assert.ok(sourceRoot, 'Prepare Valdi sources or set VALDI_SOURCE_ROOT');
 const modulePrefix = 'src/valdi_modules/src/valdi';
 
-function unpackRuntimeModules(platform: 1 | 2): Map<string, Buffer> {
+const runtimeMode = process.env.BOTTOM_SHEET_RUNTIME ?? 'source';
+assert.ok(
+  ['source', 'android', 'ios'].includes(runtimeMode),
+  'BOTTOM_SHEET_RUNTIME must be source, android or ios',
+);
+
+let sourceRuntimePromise: Promise<Map<string, Buffer>> | undefined;
+
+function buildSourceRuntimeModules(): Promise<Map<string, Buffer>> {
+  if (sourceRuntimePromise) return sourceRuntimePromise;
+  sourceRuntimePromise = (async () => {
+    const out = new Map<string, Buffer>();
+    const temporary = mkdtempSync(path.join(tmpdir(), 'bottom-sheet-runtime-'));
+    try {
+      const modules: [string, string][] = [
+        ['coreutils', 'SCCCoreutils'],
+        ['valdi_tsx', 'SCCValdiTsx'],
+        ['valdi_core', 'SCCValdiCore'],
+      ];
+      for (const [name, iosModuleName] of modules) {
+        const moduleDirectory = path.join(sourceRoot!, modulePrefix, name);
+        const sources = ['src', 'types']
+          .map(folder => path.join(moduleDirectory, folder))
+          .filter(existsSync)
+          .flatMap(folder => ts.sys.readDirectory(folder, ['.ts', '.tsx', '.js']));
+        const archivePath = path.join(temporary, `${name}.valdimodule`);
+        await compileRuntimeModule({
+          name,
+          frameworkRoot: sourceRoot!,
+          moduleDirectory,
+          sources,
+          outputs: [
+            {
+              relative: `android/debug/assets/${name}.valdimodule`,
+              path: archivePath,
+              directory: false,
+            },
+          ],
+          dependencies: [
+            'coreutils',
+            'drawing',
+            'jasmine',
+            'source_map',
+            'valdi_core',
+            'valdi_tsx',
+          ].map(module_name => ({
+            module_name,
+            module_path: '',
+            module_content: '',
+          })),
+          iosModuleName,
+          iosClassPrefix: '__valdi_unset_ios_class_prefix__',
+          androidClassPath: `com.snap.modules.${name}`,
+          disableAnnotations: false,
+          asyncStrictMode: false,
+          compilationMode: 'js',
+        });
+        for (const [file, content] of unpack(readFileSync(archivePath))) {
+          out.set(`${name}/${file}`, content);
+        }
+      }
+      return out;
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  })();
+  return sourceRuntimePromise;
+}
+
+async function loadRuntimeModules(platform: 1 | 2): Promise<Map<string, Buffer>> {
+  if (runtimeMode === 'source') return buildSourceRuntimeModules();
   const out = new Map<string, Buffer>();
   for (const name of ['valdi_core', 'coreutils', 'valdi_tsx']) {
     const bytes =
@@ -37,8 +109,7 @@ function unpackRuntimeModules(platform: 1 | 2): Map<string, Buffer> {
   return out;
 }
 
-function createHost(platform: 1 | 2, entries: Map<string, Buffer>) {
-  const runtimeEntries = unpackRuntimeModules(platform);
+function createHost(platform: 1 | 2, entries: Map<string, Buffer>, runtimeEntries: Map<string, Buffer>) {
   const modulesRoot = path.join(sourceRoot!, modulePrefix);
   const cache = new Map<string, { exports: any }>();
   const context = vm.createContext({
@@ -176,8 +247,11 @@ test('app_ui bottom_sheet aligns with @swmansion/react-native-bottom-sheet v1.0.
     foundationPlugin.dispose();
   }
 
-  for (const platform of [1, 2] as const) {
-    const h = createHost(platform, allEntries);
+  const platforms: (1 | 2)[] =
+    runtimeMode === 'android' ? [1] : runtimeMode === 'ios' ? [2] : [1, 2];
+  for (const platform of platforms) {
+    const runtimeEntries = await loadRuntimeModules(platform);
+    const h = createHost(platform, allEntries, runtimeEntries);
     const api = h.load('app_ui/src/index');
     const utils = h.load('app_ui/src/bottom_sheet/bottomSheetUtils');
 
@@ -388,10 +462,13 @@ test('AppSheetOverlay renders actionSheet, picker, and datePicker exclusively vi
     return tapAttr.value;
   }
 
-  for (const platform of [1, 2] as const) {
+  const platforms: (1 | 2)[] =
+    runtimeMode === 'android' ? [1] : runtimeMode === 'ios' ? [2] : [1, 2];
+  for (const platform of platforms) {
+    const runtimeEntries = await loadRuntimeModules(platform);
     // 1. ActionSheet inline (<=6 items) + selection -> close -> onDismissed
     {
-      const h = createHost(platform, allEntries);
+      const h = createHost(platform, allEntries, runtimeEntries);
       const jsxRuntime = h.load('valdi_core/src/JSX').jsx;
       const { AppSheetOverlay } = h.load('app_ui/src/sheet_presenter/AppSheetOverlay');
       const proto = jsxRuntime.makeComponentPrototype();
@@ -449,7 +526,7 @@ test('AppSheetOverlay renders actionSheet, picker, and datePicker exclusively vi
 
     // 2. ActionSheet >6 items mounts Valdi <scroll>
     {
-      const h = createHost(platform, allEntries);
+      const h = createHost(platform, allEntries, runtimeEntries);
       const jsxRuntime = h.load('valdi_core/src/JSX').jsx;
       const { AppSheetOverlay } = h.load('app_ui/src/sheet_presenter/AppSheetOverlay');
       const proto = jsxRuntime.makeComponentPrototype();
@@ -487,7 +564,7 @@ test('AppSheetOverlay renders actionSheet, picker, and datePicker exclusively vi
 
     // 3. ColumnPicker sheet: wheel change + confirm -> onConfirm(value, index) -> onDismissed
     {
-      const h = createHost(platform, allEntries);
+      const h = createHost(platform, allEntries, runtimeEntries);
       const jsxRuntime = h.load('valdi_core/src/JSX').jsx;
       const { AppSheetOverlay } = h.load('app_ui/src/sheet_presenter/AppSheetOverlay');
       const proto = jsxRuntime.makeComponentPrototype();
@@ -554,7 +631,7 @@ test('AppSheetOverlay renders actionSheet, picker, and datePicker exclusively vi
 
     // 4. DatePicker sheet + host external cancellation (`open: false`) + pre-render `open: false`
     {
-      const h = createHost(platform, allEntries);
+      const h = createHost(platform, allEntries, runtimeEntries);
       const jsxRuntime = h.load('valdi_core/src/JSX').jsx;
       const { AppSheetOverlay } = h.load('app_ui/src/sheet_presenter/AppSheetOverlay');
       const proto = jsxRuntime.makeComponentPrototype();
@@ -608,7 +685,7 @@ test('AppSheetOverlay renders actionSheet, picker, and datePicker exclusively vi
       assert.equal(dismissed, 1);
 
       // Pre-render open: false dispatches onDismissed immediately without hanging
-      const h2 = createHost(platform, allEntries);
+      const h2 = createHost(platform, allEntries, runtimeEntries);
       const jsx2 = h2.load('valdi_core/src/JSX').jsx;
       const { AppSheetOverlay: Overlay2 } = h2.load('app_ui/src/sheet_presenter/AppSheetOverlay');
       let preRenderDismissed = 0;

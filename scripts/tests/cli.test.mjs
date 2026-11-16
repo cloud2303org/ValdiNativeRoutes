@@ -6,7 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { parseAdbDevices, parseIosSimulators, selectAndroidDevice, selectIosSimulator } from '../lib/device.mjs';
-import { ensureBazelShell, extraBazelFlags } from '../lib/node-modules.mjs';
+import { extraBazelFlags } from '../lib/node-modules.mjs';
 import { sampleApp } from './fixtures/app-config.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -30,9 +30,6 @@ function freshIconProject(t) {
   writeFileSync(path.join(root, 'package.json'), JSON.stringify({
     valdi: { app: { ...sampleApp(), icon: 'assets/app-icon.png' }, modules: [] },
   }));
-  // Stop at the dependency-install boundary; this fixture never invokes a package manager.
-  writeFileSync(path.join(root, 'scripts/lib/pnpm.mjs'),
-    'console.log("fixture dependency installer reached"); process.exit(23);\n');
   return {
     root,
     run: args => spawnSync(process.execPath, [path.join(root, 'scripts/cli.mjs'), ...args], {
@@ -157,14 +154,9 @@ test('the template exposes native builds and hot reload without a prebuild lifec
 test('Bazel startup/build flags from the environment are split and may be empty', () => {
   assert.deepEqual(extraBazelFlags(undefined), []);
   assert.deepEqual(extraBazelFlags('  '), []);
-  assert.deepEqual(extraBazelFlags('--output_user_root=C:/vc/bazel-out'), ['--output_user_root=C:/vc/bazel-out']);
-  assert.deepEqual(extraBazelFlags('--repository_cache=C:/vc/repos  --noshow_progress'), [
-    '--repository_cache=C:/vc/repos',
+  assert.deepEqual(extraBazelFlags('--output_user_root=/tmp/vc/bazel-out'), ['--output_user_root=/tmp/vc/bazel-out']);
+  assert.deepEqual(extraBazelFlags('--repository_cache=/tmp/vc/repos  --noshow_progress'), [
+    '--repository_cache=/tmp/vc/repos',
     '--noshow_progress',
   ]);
-});
-
-test('an explicit BAZEL_SH is never replaced', () => {
-  const env = { BAZEL_SH: 'C:/Program Files/Git/bin/bash.exe' };
-  assert.equal(ensureBazelShell(env), env.BAZEL_SH);
 });

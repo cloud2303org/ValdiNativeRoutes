@@ -612,8 +612,7 @@ function runRolldownStep(root, args) {
 }
 
 function hasCommand(binary) {
-  const check = process.platform === 'win32' ? ['where', [binary]] : ['which', [binary]];
-  return spawnSync(check[0], check[1], { stdio: 'ignore' }).status === 0;
+  return spawnSync('which', [binary], { stdio: 'ignore' }).status === 0;
 }
 
 export function initApp(options = {}) {

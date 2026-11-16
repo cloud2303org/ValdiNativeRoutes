@@ -36,7 +36,6 @@ pnpm build:android
 # or pnpm build:ios
 ```
 
-Windows uses `scripts/windows/export-android.ps1 -Config debug`.
 Use the corresponding `release` export before building a Release App.
 
 For enabled `nativeBuild: "cpp"` modules, `nativeDependencies` runs only during

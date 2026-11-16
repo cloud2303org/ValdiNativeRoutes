@@ -1,6 +1,6 @@
 // Module-only Bazel workspace. App packaging remains Gradle/Xcode.
 import { spawnSync } from 'node:child_process';
-import { chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { nativeModules, syncNativeModuleRegistration } from './native-modules.mjs';
@@ -16,30 +16,6 @@ export function extraBazelFlags(value) {
     .split(/\s+/)
     .map(flag => flag.trim())
     .filter(Boolean);
-}
-
-/**
- * Bazel on Windows falls back to `C:\Windows\System32\bash.exe` (WSL) for genrules when BAZEL_SH is unset,
- * which fails on machines without a WSL distribution. The unified entry points do not run through the
- * PowerShell wrapper that sets it, so resolve Git Bash here too.
- */
-export function ensureBazelShell(env = process.env) {
-  if (process.platform !== 'win32' || env.BAZEL_SH) return env.BAZEL_SH;
-  const programFiles = env.ProgramFiles ?? 'C:/Program Files';
-  const candidates = [
-    `${programFiles}/Git/bin/bash.exe`,
-    `${programFiles}/Git/usr/bin/bash.exe`,
-    `${env.ProgramW6432 ?? programFiles}/Git/bin/bash.exe`,
-    'C:/Program Files (x86)/Git/bin/bash.exe',
-  ];
-  const shell = candidates.find(candidate => existsSync(candidate));
-  if (!shell) {
-    throw new Error(
-      'Bazel needs a POSIX shell on Windows: install Git for Windows or set BAZEL_SH to ...\\Git\\bin\\bash.exe.',
-    );
-  }
-  env.BAZEL_SH = shell;
-  return shell;
 }
 
 // Bazel marks output directories read-only. Keep the host's staging tree writable
@@ -99,41 +75,17 @@ export function buildNodeModules(platform = 'ios', release = false, native = fal
       'module-build and valdi must pin the same Valdi commit; synchronize module-build before building modules',
     );
   }
-  // module-build/modules is a tracked symlink. A Windows checkout without symlink support (a limited
-  // runner account) writes it as a text file, and Bazel cannot follow that; a junction needs no
-  // privilege. Restore the tracked content afterwards so the checkout stays as git expects.
-  const modulesLink = path.join(workspace, 'modules');
-  const modulesTarget = path.join(root, 'valdi/modules');
-  let restoreText;
-  const linkState = lstatSync(modulesLink, { throwIfNoEntry: false });
-  if (linkState && !linkState.isSymbolicLink() && linkState.isFile()) {
-    restoreText = readFileSync(modulesLink);
-    rmSync(modulesLink, { force: true });
-  }
-  if (!existsSync(modulesLink)) symlinkSync(modulesTarget, modulesLink, 'junction');
-  try {
-    return buildWithJunction(platform, release, native, names);
-  } finally {
-    if (restoreText !== undefined) {
-      rmSync(modulesLink, { recursive: true, force: true });
-      writeFileSync(modulesLink, restoreText);
-    }
-  }
-}
-
-function buildWithJunction(platform, release, native, names) {
   const configs = new Map(nativeModules(root).map(config => [config.name, config]));
   const command = process.env.BAZEL_BIN ?? 'bazel';
-  ensureBazelShell();
   // Startup flags must precede the command, and explicit ones beat every rc file (a user-level
   // ~/.bazelrc can otherwise redirect the output base or repository cache of an isolated build).
   // --max_idle_secs bounds the server's lifetime: a server that outlives this process inherits its
-  // stdout, which keeps a caller's pipe (Tee-Object, the CI runner) open after the build is done.
+  // stdout, which keeps a caller's pipe open after the build is done.
   const startup = [...extraBazelFlags(process.env.VALDI_BAZEL_STARTUP_ARGS), '--max_idle_secs=60'];
   const isolatedBaseRoot = process.env.VALDI_BAZEL_OUTPUT_BASE_ROOT;
   if (isolatedBaseRoot) {
     // valdi and module-build are different workspaces; they must not share one output base.
-    startup.push(`--output_base=${isolatedBaseRoot.replace(/\\/g, '/')}/module-build`);
+    startup.push(`--output_base=${isolatedBaseRoot}/module-build`);
   }
   const extra = extraBazelFlags(process.env.VALDI_BAZEL_ARGS);
   const iosDevice = process.env.VALDI_IOS_PLATFORM === 'device' ||

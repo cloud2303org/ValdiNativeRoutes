@@ -300,8 +300,8 @@ test('real pinned Hermes bytecode uses a real HDiff patch and default-ZSTD recon
   const { createDelta } = await import('../ota/ota-delta.mjs');
   const require = createRequire(new URL('../../tools/valdi-rolldown/package.json', import.meta.url));
   const packageFile = require.resolve('hermes-compiler/package.json');
-  const platform = process.platform === 'darwin' ? 'osx-bin' : process.platform === 'win32' ? 'win64-bin' : 'linux64-bin';
-  const hermesc = path.join(path.dirname(packageFile), 'hermesc', platform, process.platform === 'win32' ? 'hermesc.exe' : 'hermesc');
+  const platform = process.platform === 'darwin' ? 'osx-bin' : 'linux64-bin';
+  const hermesc = path.join(path.dirname(packageFile), 'hermesc', platform, 'hermesc');
   const work = temporary(t);
   const compile = (label, value, base) => {
     const input = path.join(work, `${label}.js`), output = path.join(work, `${label}.hbc`);

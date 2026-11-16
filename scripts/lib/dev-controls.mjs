@@ -14,7 +14,7 @@ export function startDevControls({
   iosDevices = listIosSimulators,
   launch = (platform, id) => spawn(process.execPath, [cli, platform, '--device', id], {
     stdio: ['ignore', 'inherit', 'inherit'],
-    detached: process.platform !== 'win32',
+    detached: true,
   }),
   selectAndroid = serial => { process.env.ANDROID_SERIAL = serial; },
   quit = () => process.emit('SIGINT'),
@@ -122,7 +122,7 @@ export function startDevControls({
     if (wasPaused) input.pause();
     if (child) {
       try {
-        if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, 'SIGTERM');
+        if (child.pid) process.kill(-child.pid, 'SIGTERM');
         else child.kill('SIGTERM');
       } catch {}
     }

@@ -14,7 +14,7 @@ function temporary(t) {
 }
 
 function binaryFixturePlan() {
-  return process.platform === 'win32' ? tools.toolPlan('win32', 'x64') : tools.toolPlan('darwin', 'arm64');
+  return tools.toolPlan('darwin', 'arm64');
 }
 
 // A real, single-entry ZIP exercises the system extractor without a network call.
@@ -41,14 +41,13 @@ test('fixed release plans cover the supported development and CI platforms', () 
   for (const [platform, arch, directory] of [
     ['darwin', 'arm64', 'macos'], ['darwin', 'x64', 'macos'],
     ['linux', 'x64', 'linux64'], ['linux', 'arm64', 'linux_arm64'],
-    ['win32', 'x64', 'windows64'], ['win32', 'arm64', 'windows_arm64'],
   ]) {
     const plan = tools.toolPlan(platform, arch);
     assert.equal(plan.version, '5.1.3');
     assert.equal(plan.kind, 'binary');
     assert.match(plan.url, new RegExp(`/v5\\.1\\.3/hdiffpatch_v5\\.1\\.3_bin_${directory}\\.zip$`));
     assert.match(plan.sha256, /^[0-9a-f]{64}$/);
-    assert.equal(plan.member, `${directory}/hdiffz${platform === 'win32' ? '.exe' : ''}`);
+    assert.equal(plan.member, `${directory}/hdiffz`);
   }
   assert.equal(tools.toolPlan('linux', 'ppc64').kind, 'source');
   assert.equal(tools.toolPlan('darwin', 'arm64', true).kind, 'source');

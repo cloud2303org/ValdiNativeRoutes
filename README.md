@@ -91,7 +91,7 @@ iOS 列出可用 iPhone 模拟器，选中后由 `pnpm ios --device` 自动启�
 原生构建在子进程执行，Node 热重载继续运行；构建期间不会重复启动第二个构建，失败后可以再次按 a/i 重试。
 输出重定向或非交互终端不启用快捷键，仍可另开终端执行 `pnpm android` / `pnpm ios`。
 
-统一入口都是 Node 分发，Windows / macOS / Linux 用法一致；`android`/`ios` 执行正常原生构建、安装和启动。
+统一入口都是 Node 分发，macOS / Linux 用法一致；`android`/`ios` 执行正常原生构建、安装和启动。
 已启用 host 模块的原生依赖在正常原生构建中检查并按需准备；宿主模块库、CMake、iOS 源码和 framework
 由 Gradle / Xcode 构建并链接。`nativeBuild: "cpp"` 模块的依赖只在显式手动导出 runtime 时准备，
 并随 C++ 实现静态链接进 runtime；Vision 使用这一模式。根入口不提前重复编译宿主模块库。设备选择是显式的：唯一运行中的
@@ -99,7 +99,7 @@ iOS 列出可用 iPhone 模拟器，选中后由 `pnpm ios --device` 自动启�
 物理设备（物理设备只在使用 `--device` 时安装）。常用选项：`--no-install`（只构建）、`--no-launch`（安装不启动）。
 `--` 之后的参数原样传给 Gradle / `xcodebuild`，例如
 `pnpm android -- --stacktrace`。`pnpm android`/`pnpm ios` 目前只做 Debug，Release OTA 构建仍需手动导出与签名，
-见 [构建与 CI 边界](docs/build-and-ci.md)。iOS 的导出、构建、安装只在 macOS + Xcode 下可用；
+见 [构建与 CI 边界](docs/build-and-ci.md)。支持 macOS 与 Linux 开发宿主；iOS 的导出、构建、安装只在 macOS + Xcode 下可用，
 Linux 支持手动导出 Android 运行时与 `pnpm android`（需要 adb/模拟器）。
 
 直接构建时 Android 的 Gradle 参数、iOS 的 `xcodebuild` 参数可跟在命令后面，例如 `pnpm build:android --stacktrace`。
@@ -111,7 +111,6 @@ UI 测试沿用现有设备配置（可用
 GitHub Actions 运行 golden、TS 构建、Android Debug APK 和 iOS 模拟器 App 构建。
 CI 的范围和缓存规则见 [构建与 CI 边界](docs/build-and-ci.md)，
 框架 fork 同步、版本试跑及 vendored 代码的维护步骤见 [同步 Valdi 上游](docs/upgrading-valdi.md)。
-Windows 原生 Android 构建入口见 [Native Windows Android builds](docs/windows-native-build.md)。
 
 首次 checkout 先安装依赖，再手动导出所需平台的原生运行时：
 
@@ -130,7 +129,6 @@ scripts/maintainer/export-ios.sh debug
 构建只检查运行时产物存在及平台/配置元数据，不计算源码指纹，也不自动重新导出运行时。
 更新 Valdi、运行时工具链、链接进 runtime 的 C++、vendor 或启用的 C++ 模块名单后，开发者需手动重新导出；
 绑定生成结果检查继续保留。仅修改 TS 页面继续使用正常热重载。
-Windows 使用 `scripts/windows/export-android.ps1 -Config debug`，详见 Windows 构建说明。
 
 `app_vision/module.json` 使用 `nativeBuild: "cpp"` 声明视觉库依赖；启用时由手动 runtime 导出检查缓存，
 缺失或不兼容时准备静态 OpenCV/ncnn，再编译链接。正常 App 构建不执行 Vision 的依赖 hook，也不自动导出 runtime。

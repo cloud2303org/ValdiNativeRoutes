@@ -135,8 +135,7 @@ kotlin {
 /**
  * The Valdi modules tools/valdi-rolldown builds (app_pages, and the npm packages it bundles) as assets: JavaScript with
  * inline source maps in debug builds, Hermes bytecode and <module>.map.json in release builds, as Valdi ships them;
- * and app_pages' res/ images as drawables. scripts/maintainer/export-android.sh leaves the modules out of the aar. Runs `pnpm`
- * through scripts/lib/pnpm.mjs on Windows, or pnpm from the PATH elsewhere.
+ * and app_pages' res/ images as drawables. scripts/maintainer/export-android.sh leaves the modules out of the aar.
  */
 abstract class ValdiModules : DefaultTask() {
     @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE) abstract val sources: ConfigurableFileCollection
@@ -217,13 +216,7 @@ val valdiCodegenCheck = tasks.register<ValdiCodegenCheck>("valdiCodegenCheck") {
         fileTree(repo.resolve("valdi/bzl/module_cpp")),
         repo.resolve("scripts/ota/ota.mjs"),
     )
-    pnpm = providers.gradleProperty("valdiPnpm").map { listOf(it) }.orElse(
-        if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
-            listOf("node", repo.resolve("scripts/lib/pnpm.mjs").path)
-        } else {
-            listOf("pnpm")
-        },
-    )
+    pnpm = providers.gradleProperty("valdiPnpm").map { listOf(it) }.orElse(listOf("pnpm"))
     repoDir = repo
     generatedDir = file("generated/valdi")
     stamp = layout.buildDirectory.file("valdi/codegen-check")
@@ -256,13 +249,7 @@ androidComponents {
             )
             release = variant.buildType == "release"
             mapDir = layout.buildDirectory.dir("outputs/valdi-maps/${variant.name}")
-            pnpm = providers.gradleProperty("valdiPnpm").map { listOf(it) }.orElse(
-                if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
-                    listOf("node", repo.resolve("scripts/lib/pnpm.mjs").path)
-                } else {
-                    listOf("pnpm")
-                },
-            )
+            pnpm = providers.gradleProperty("valdiPnpm").map { listOf(it) }.orElse(listOf("pnpm"))
             toolDir = tool
         }
         variant.sources.assets?.addGeneratedSourceDirectory(modules, ValdiModules::outputDir)

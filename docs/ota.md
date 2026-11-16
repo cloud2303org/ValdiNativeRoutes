@@ -307,7 +307,7 @@ pnpm ota pack ios 1.0 pages-002 \
 ```
 
 Delta packing (`node scripts/ota/ota.mjs pack ...`) discovers `hdiffz` in order from
-`VALDI_HDIFFZ`, repository `ota/tools/hdiffz` (or `hdiffz.exe`), `PATH`, then the
+`VALDI_HDIFFZ`, repository `ota/tools/hdiffz`, `PATH`, then the
 prepared cache. When no tool exists, packing with `--base` automatically downloads
 the official **HDiffPatch 5.1.3** binary for the host and verifies its pinned
 SHA256. Downloads and executable receipts are cached under
@@ -322,10 +322,9 @@ pnpm ota:tool
 pnpm ota:tool --source
 ```
 
-macOS (Intel/Apple Silicon), Linux and Windows use official host binaries.
+macOS (Intel/Apple Silicon) and Linux use official host binaries.
 Hosts without a matching binary build the pinned source archive automatically.
-Source builds require `make`, a C/C++ compiler and zlib development headers
-(MinGW on Windows). A failed binary download or checksum does not silently
+Source builds require `make`, a C/C++ compiler and zlib development headers. A failed binary download or checksum does not silently
 switch to source: fix connectivity and retry, or explicitly choose `--source`.
 `scripts/ota/hdiff-tool.json` pins release assets and source hashes. Explicit invalid
 `VALDI_HDIFFZ` overrides still fail instead of installing a different tool.

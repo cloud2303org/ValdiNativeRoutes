@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { checkRuntime, checkSources, runPnpm } from '../lib/prerequisites.mjs';
+import { checkRuntime, checkSources } from '../lib/prerequisites.mjs';
 import { runtimeInfo } from '../maintainer/runtime-info.mjs';
 import { checkVision } from '../../valdi/modules/app_vision/scripts/check-dependencies.mjs';
 
@@ -62,21 +62,6 @@ test('invalid runtime metadata and wrong platform are rejected without source ha
 test('a clean checkout reports missing sources with a preparation command', t => {
   const { root } = fixture(t);
   assert.throws(() => checkSources(root), /Valdi sources are not prepared.*\n.*prepare-valdi\.mjs/);
-});
-
-test('Windows routes pnpm through bundled Corepack without invoking a batch shim', t => {
-  const platform = process.platform;
-  const executable = process.env.npm_execpath;
-  t.after(() => {
-    if (executable === undefined) delete process.env.npm_execpath;
-    else process.env.npm_execpath = executable;
-  });
-  delete process.env.npm_execpath;
-  if (platform !== 'win32') {
-    Object.defineProperty(process, 'platform', { value: 'win32' });
-    t.after(() => Object.defineProperty(process, 'platform', { value: platform }));
-  }
-  runPnpm(['--version'], repository);
 });
 
 test('Android Vision requires static archives built for the runtime toolchain and verifies their contents', t => {

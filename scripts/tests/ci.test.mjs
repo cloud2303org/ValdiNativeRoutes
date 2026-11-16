@@ -64,28 +64,27 @@ test('CI reports invalid platform metadata and rejects the removed runtime-key c
 });
 
 test('native CI exports explicitly before builds and saves dependencies after native builds', () => {
-  for (const [file, job] of [['ci.yml', 'build'], ['windows.yml', 'windows-android']]) {
-    const document = parseDocument(readFileSync(path.join(repository, '.github/workflows', file), 'utf8'), {
-      uniqueKeys: true,
-    });
-    assert.deepEqual(document.errors, [], file);
-    const steps = document.toJS().jobs[job].steps;
-    const exportIndex = steps.findIndex(step => /scripts\/(?:maintainer\/|windows\/)?export-[^\r\n]*\.(sh|ps1)\b/.test(step.run ?? ''));
-    const buildIndices = steps.flatMap((step, index) =>
-      /pnpm build:(android|ios)|-File scripts\/windows\/build-android\.ps1/.test(step.run ?? '') ? [index] : []);
-    assert.ok(exportIndex >= 0, `${file}: missing explicit export`);
-    assert.equal(steps[exportIndex].if, undefined, `${file}: export must not depend on runtime freshness`);
-    assert.ok(buildIndices.length > 0, `${file}: missing native build`);
-    for (const index of buildIndices) assert.ok(index > exportIndex, `${file}: build precedes export`);
-    const saveIndex = steps.findIndex(step => step.name === 'Save prepared vision dependencies');
-    assert.ok(saveIndex > Math.max(...buildIndices), `${file}: dependency cache saved before native builds`);
-    const restoreIndex = steps.findIndex(step => step.name === 'Restore vision dependencies');
-    assert.ok(restoreIndex >= 0 && restoreIndex < exportIndex,
-      `${file}: runtime export must consume the restored Vision dependency cache`);
-    for (const step of steps) {
-      assert.doesNotMatch(step.run ?? '', /\bprebuild\b|valdi-hash|check-export|runtime-key|node vision\/scripts\/prepare-native/);
-      if (step.uses?.startsWith('actions/cache/'))
-        assert.doesNotMatch(step.with.path, /valdi_runtime\.aar|ValdiRuntime\.xcframework|valdi_ota\.json/);
-    }
+  const [file, job] = ['ci.yml', 'build'];
+  const document = parseDocument(readFileSync(path.join(repository, '.github/workflows', file), 'utf8'), {
+    uniqueKeys: true,
+  });
+  assert.deepEqual(document.errors, [], file);
+  const steps = document.toJS().jobs[job].steps;
+  const exportIndex = steps.findIndex(step => /scripts\/maintainer\/export-[^\r\n]*\.sh\b/.test(step.run ?? ''));
+  const buildIndices = steps.flatMap((step, index) =>
+    /pnpm build:(android|ios)/.test(step.run ?? '') ? [index] : []);
+  assert.ok(exportIndex >= 0, `${file}: missing explicit export`);
+  assert.equal(steps[exportIndex].if, undefined, `${file}: export must not depend on runtime freshness`);
+  assert.ok(buildIndices.length > 0, `${file}: missing native build`);
+  for (const index of buildIndices) assert.ok(index > exportIndex, `${file}: build precedes export`);
+  const saveIndex = steps.findIndex(step => step.name === 'Save prepared vision dependencies');
+  assert.ok(saveIndex > Math.max(...buildIndices), `${file}: dependency cache saved before native builds`);
+  const restoreIndex = steps.findIndex(step => step.name === 'Restore vision dependencies');
+  assert.ok(restoreIndex >= 0 && restoreIndex < exportIndex,
+    `${file}: runtime export must consume the restored Vision dependency cache`);
+  for (const step of steps) {
+    assert.doesNotMatch(step.run ?? '', /\bprebuild\b|valdi-hash|check-export|runtime-key|node vision\/scripts\/prepare-native/);
+    if (step.uses?.startsWith('actions/cache/'))
+      assert.doesNotMatch(step.with.path, /valdi_runtime\.aar|ValdiRuntime\.xcframework|valdi_ota\.json/);
   }
 });

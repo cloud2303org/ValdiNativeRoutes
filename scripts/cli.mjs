@@ -104,11 +104,11 @@ function applyProxy(options) {
 function applyCaches(options) {
   if (options.bazelPath) process.env.BAZEL_BIN = path.resolve(options.bazelPath);
   if (options.gradleUserHome) process.env.GRADLE_USER_HOME = path.resolve(options.gradleUserHome);
-  // Every child (the PowerShell export, prepare-valdi, the module-build Bazel workspace) reads these, and a
+  // Every child (export scripts, prepare-valdi, the module-build Bazel workspace) reads these, and a
   // command-line startup/build flag is the only thing that beats a user-level ~/.bazelrc. An isolated build
   // must not inherit the host's output base or repository cache.
   if (options.outputBase) {
-    const root = path.resolve(options.outputBase).replace(/\\/g, '/');
+    const root = path.resolve(options.outputBase);
     // A host rc that sets `startup --output_base` beats `--output_user_root`, so every workspace must name
     // its own base. Two workspaces (valdi, module-build) cannot share one base, so only the root travels in
     // the environment and each workspace appends its own suffix.
@@ -116,7 +116,7 @@ function applyCaches(options) {
     process.env.VALDI_BAZEL_STARTUP_ARGS = `--output_user_root=${root}`;
   }
   if (options.repositoryCache) {
-    process.env.VALDI_BAZEL_ARGS = `--repository_cache=${path.resolve(options.repositoryCache).replace(/\\/g, '/')}`;
+    process.env.VALDI_BAZEL_ARGS = `--repository_cache=${path.resolve(options.repositoryCache)}`;
   }
   if (options.goModCache) {
     process.env.GOMODCACHE = path.resolve(options.goModCache);
@@ -198,15 +198,11 @@ function devicePlan(platform, options) {
 }
 
 function dev(options) {
-  const bash = process.platform === 'win32'
-    ? [path.join(process.env.ProgramFiles ?? 'C:/Program Files', 'Git/bin/bash.exe'), 'bash'].find(candidate => existsSync(candidate))
-    : 'bash';
-  if (!bash) throw new Error('pnpm dev needs Git Bash on Windows (install Git for Windows) or bash on macOS/Linux.');
   if (options.dryRun) {
-    console.log(`Hot reload plan: ${bash} ${path.join(root, 'scripts/lib/hotreload.sh')} ${options.passthrough.join(' ')}`.trim());
+    console.log(`Hot reload plan: bash ${path.join(root, 'scripts/lib/hotreload.sh')} ${options.passthrough.join(' ')}`.trim());
     return 0;
   }
-  run(bash, [path.join(root, 'scripts/lib/hotreload.sh'), ...options.passthrough], root);
+  run('bash', [path.join(root, 'scripts/lib/hotreload.sh'), ...options.passthrough], root);
   return 0;
 }
 

@@ -1,5 +1,3 @@
-try-import %workspace%/win.local.bazelrc
-
 # Parent module targets are built in module-build/. Keep their nested cpp packages
 # available to this runtime workspace without loading the platform-host rules.
 try-import %workspace%/modules/runtime-packages.bazelrc
@@ -123,7 +121,3 @@ build --@valdi//bzl/valdi:js_bytecode_format=hermes
 
 # Valdi Open Source Flags
 build --define=open_source_build=true
-
-# The Windows entry points (scripts/windows/lib.ps1) write win.cache.bazelrc to redirect shared caches for an
-# isolated build. Imported last so its options win over the defaults above.
-try-import %workspace%/win.cache.bazelrc

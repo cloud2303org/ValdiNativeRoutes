@@ -45,10 +45,10 @@ export function validateRuntimeContract(directory = root): string {
 export function compilerBytecodeVersion(info: string, expectedRelease: string, platform = process.platform): number {
   const release = /Hermes release version:\s*(\S+)/.exec(info)?.[1];
   const bytecodeVersion = Number(/HBC bytecode version:\s*(\d+)/.exec(info)?.[1]);
-  // This exact pinned npm release ships Linux and Windows binaries with the upstream banner.
+  // This exact pinned npm release ships the Linux binary with the upstream banner.
   // Package/runtime version equality is still checked by hermesCompiler(); do
   // not silently accept other mismatches when upgrading the compiler.
-  const knownPinnedBanner = ['linux', 'win32'].includes(platform) && expectedRelease === '260318099.0.4'
+  const knownPinnedBanner = platform === 'linux' && expectedRelease === '260318099.0.4'
     && release === '1.0.0' && bytecodeVersion === 99;
   if ((release !== expectedRelease && !knownPinnedBanner)
     || !Number.isSafeInteger(bytecodeVersion) || bytecodeVersion <= 0) {
@@ -63,10 +63,9 @@ export function hermesCompiler(directory = root): { executable: string; bytecode
   const expected = validateRuntimeContract(directory);
   if (version !== expected) throw new Error(`Hermes compiler ${version} does not match runtime ${expected}. Pin hermes-compiler to ${expected} and reinstall.`);
   const platform = process.platform === 'darwin' && ['arm64', 'x64'].includes(process.arch) ? 'osx-bin'
-    : process.platform === 'linux' && process.arch === 'x64' ? 'linux64-bin'
-      : process.platform === 'win32' && process.arch === 'x64' ? 'win64-bin' : undefined;
+    : process.platform === 'linux' && process.arch === 'x64' ? 'linux64-bin' : undefined;
   if (!platform) throw new Error(`hermes-compiler ${version} has no prebuilt binary for ${process.platform}/${process.arch}`);
-  const executable = path.join(path.dirname(packageFile), 'hermesc', platform, process.platform === 'win32' ? 'hermesc.exe' : 'hermesc');
+  const executable = path.join(path.dirname(packageFile), 'hermesc', platform, 'hermesc');
   if (!existsSync(executable)) throw new Error(`Missing prebuilt Hermes compiler: ${executable}. Run pnpm install.`);
   const info = execFileSync(executable, ['-version'], { encoding: 'utf8' });
   const bytecodeVersion = compilerBytecodeVersion(info, expected);

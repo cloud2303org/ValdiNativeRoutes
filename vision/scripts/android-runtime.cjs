@@ -24,15 +24,14 @@ function resolveRuntimeNdk(root = path.resolve(__dirname, '../..'), env = proces
     return path.resolve(explicit);
   }
   const sdk = env.ANDROID_SDK_ROOT || env.ANDROID_HOME
-    || (process.platform === 'win32' ? path.join(env.LOCALAPPDATA || os.homedir(), 'Android/sdk')
-      : process.platform === 'darwin' ? path.join(os.homedir(), 'Library/Android/sdk') : path.join(os.homedir(), 'Android/Sdk'));
+    || (process.platform === 'darwin' ? path.join(os.homedir(), 'Library/Android/sdk') : path.join(os.homedir(), 'Android/Sdk'));
   const candidates = [path.join(sdk, 'ndk', config.ndkRevision)];
   // Bazel's already-resolved hermetic NDK can be reused without downloading or
   // invoking another Bazel command while the parent exports the runtime.
   const externals = new Set();
   for (const workspace of ['valdi', 'module-build']) {
     if (env.VALDI_BAZEL_OUTPUT_BASE_ROOT) {
-      // Windows/CLI isolated builds map each workspace below this base root.
+      // CLI isolated builds map each workspace below this base root.
       // Do not fall back to convenience links pointing into a shared cache.
       externals.add(path.join(env.VALDI_BAZEL_OUTPUT_BASE_ROOT, workspace, 'external'));
       continue;

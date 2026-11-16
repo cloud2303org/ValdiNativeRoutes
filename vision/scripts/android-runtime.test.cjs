@@ -19,7 +19,7 @@ function ndk(directory, revision = config.ndkRevision) {
 
 function link(target, file) {
   mkdirSync(path.dirname(file), {recursive: true});
-  symlinkSync(target, file, process.platform === 'win32' ? 'junction' : 'dir');
+  symlinkSync(target, file, 'dir');
 }
 
 for (const linkName of ['.valdi-sources', 'bazel-valdi']) {

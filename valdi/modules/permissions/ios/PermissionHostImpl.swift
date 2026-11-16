@@ -13,8 +13,6 @@ final class PermissionHostImpl: NSObject, VRPermissionHost {
         Self.resolved(permissions.map { VRPermissionGrant(permission: $0, result: .denied) } as NSArray)
     }
 
-    /// A promise already settled with `value`. Written when the Valdi framework didn't export SCValdiPromise's class
-    /// symbol; ValdiRuntime exports valdi_core's Objective-C API (valdi/.bazelrc), so Swift could name it now.
     private static func resolved<T: AnyObject>(_ value: T) -> SCValdiPromise<T> {
         let promise = SCValdiResolvablePromise<T>()
         promise.fulfill(withSuccessValue: value)
@@ -23,11 +21,22 @@ final class PermissionHostImpl: NSObject, VRPermissionHost {
 
     /// A native Promise, so the answer outlives the page that asked.
     func openSettings() -> SCValdiPromise<SCValdiUndefinedValue> {
-        VRPermissionsVoidPromise.make { settle in
-            DispatchQueue.main.async {
-                guard let url = URL(string: UIApplication.openSettingsURLString) else { return settle("no settings URL") }
-                UIApplication.shared.open(url) { opened in settle(opened ? nil : "could not open Settings") }
+        let promise = SCValdiResolvablePromise<SCValdiUndefinedValue>()
+        DispatchQueue.main.async {
+            guard let url = URL(string: UIApplication.openSettingsURLString) else {
+                promise.fulfillWithError(NSError(domain: "PermissionHost", code: 0,
+                                                 userInfo: [NSLocalizedDescriptionKey: "no settings URL"]))
+                return
+            }
+            UIApplication.shared.open(url) { opened in
+                if opened {
+                    promise.fulfill(withSuccessValue: SCValdiUndefinedValue.undefined()!)
+                } else {
+                    promise.fulfillWithError(NSError(domain: "PermissionHost", code: 0,
+                                                     userInfo: [NSLocalizedDescriptionKey: "could not open Settings"]))
+                }
             }
         }
+        return promise
     }
 }

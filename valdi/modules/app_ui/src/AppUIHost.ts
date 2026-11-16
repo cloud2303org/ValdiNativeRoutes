@@ -57,7 +57,7 @@ export interface LoadingRequest {
 }
 
 /**
- * Shared reply of the action sheet, pickers, bottom sheet and image preview, as in ExpoNativeRoutes' AppUIAdapter.
+ * Shared reply of the action sheet, pickers and image preview, as in ExpoNativeRoutes' AppUIAdapter.
  * Exactly one of confirm/cancel is true; `value` and `index` are the selection (or the image shown last).
  *
  * @ExportModel({ios: 'VRPresentationReply', android: 'io.valdiroutes.app_ui.PresentationReply'})
@@ -122,18 +122,6 @@ export interface DatePickerRequest {
 }
 
 /**
- * @ExportModel({ios: 'VRBottomSheetRequest', android: 'io.valdiroutes.app_ui.BottomSheetRequest'})
- */
-export interface BottomSheetRequest {
-  title: string;
-  content: string;
-  confirmText: string;
-  cancelText: string;
-  showCancel: boolean;
-  dismissible: boolean;
-}
-
-/**
  * @ExportModel({ios: 'VRImagePreviewRequest', android: 'io.valdiroutes.app_ui.ImagePreviewRequest'})
  */
 export interface ImagePreviewRequest {
@@ -190,7 +178,6 @@ export interface AppUIHost {
   showActionSheet: (request: ActionSheetRequest) => Promise<PresentationReply>;
   showPicker: (request: PickerRequest) => Promise<PresentationReply>;
   showDatePicker: (request: DatePickerRequest) => Promise<PresentationReply>;
-  showBottomSheet: (request: BottomSheetRequest) => Promise<PresentationReply>;
   previewImage: (request: ImagePreviewRequest) => Promise<PresentationReply>;
   /** Native camera scanner over the whole app, not a route; closing it rejects with 'cancel'. */
   scanCode: () => Promise<ScanCodeReply>;

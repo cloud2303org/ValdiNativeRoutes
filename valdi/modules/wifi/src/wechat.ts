@@ -131,7 +131,7 @@ export class WifiRuntime implements WechatWifiApi {
   connectWifi(options: ConnectWifiOptions): Promise<WifiResult<{ wifi?: WifiInfo }>> {
     return this.run('connectWifi', options, async generation => {
       this.requireStarted();
-      const params = schema.parseOptions(schema.connectWifiOptions, options);
+      const params = schema.connectWifiOptions(options);
       if (isAndroid() && !params.maunal) await this.ensurePermission('connect', generation, params.partialInfo);
       this.check(generation);
       const wifi = await serializePermissionRequest(
@@ -155,7 +155,7 @@ export class WifiRuntime implements WechatWifiApi {
   getConnectedWifi(options?: GetConnectedWifiOptions): Promise<WifiResult<{ wifi: WifiInfo }>> {
     return this.run('getConnectedWifi', options, async generation => {
       this.requireStarted();
-      const { partialInfo } = schema.parseOptions(schema.getConnectedWifiOptions, options);
+      const { partialInfo } = schema.getConnectedWifiOptions(options);
       if (isAndroid() && !partialInfo) await this.ensurePermission('info', generation);
       this.check(generation);
       let wifi: WifiInfo;
@@ -172,14 +172,13 @@ export class WifiRuntime implements WechatWifiApi {
   setWifiList(options: SetWifiListOptions): Promise<WifiResult> {
     return this.run('setWifiList', options, async () => {
       this.requireStarted();
-      const { wifiList } = schema.parseOptions(schema.setWifiListOptions, options);
+      const { wifiList } = schema.setWifiListOptions(options);
       await this.native.setWifiList(wifiList);
       return {};
     });
   }
   onWifiConnected(callback: WifiConnectedCallback): void {
     this.check();
-    schema.parseOptions(schema.callback, callback, TypeError);
     if (this.connected.has(callback)) return;
     const id = this.native.onWifiConnected(wifi => {
       if (this.started && this.connected.has(callback)) invoke(callback, { wifi });
@@ -191,7 +190,6 @@ export class WifiRuntime implements WechatWifiApi {
   }
   onWifiConnectedWithPartialInfo(callback: WifiConnectedWithPartialInfoCallback): void {
     this.check();
-    schema.parseOptions(schema.callback, callback, TypeError);
     if (this.partialConnected.has(callback)) return;
     const id = this.native.onWifiConnected(wifi => {
       if (this.started && this.partialConnected.has(callback)) invoke(callback, { wifi: { SSID: wifi.SSID } });
@@ -203,7 +201,6 @@ export class WifiRuntime implements WechatWifiApi {
   }
   onGetWifiList(callback: GetWifiListCallback): void {
     this.check();
-    schema.parseOptions(schema.callback, callback, TypeError);
     if (this.lists.has(callback)) return;
     const id = this.native.onGetWifiList(wifiList => {
       if (this.started && this.lists.has(callback)) invoke(callback, { wifiList });
@@ -223,14 +220,14 @@ export class WifiRuntime implements WechatWifiApi {
   async getWifiPermissionState(options: WifiPermissionOptions): Promise<WifiPermissionResult> {
     const generation = this.generation;
     this.check(generation);
-    const result = await readWifiPermission(schema.parseOptions(schema.wifiPermissionOptions, options));
+    const result = await readWifiPermission(schema.wifiPermissionOptions(options));
     this.check(generation);
     return result;
   }
   async requestWifiPermission(options: WifiPermissionOptions): Promise<WifiPermissionResult> {
     const generation = this.generation;
     this.check(generation);
-    const result = await askWifiPermission(schema.parseOptions(schema.wifiPermissionOptions, options), () =>
+    const result = await askWifiPermission(schema.wifiPermissionOptions(options), () =>
       this.check(generation),
     );
     this.check(generation);

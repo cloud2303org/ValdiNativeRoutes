@@ -1,6 +1,7 @@
 import { Style } from 'valdi_core/src/Style';
 import { systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
 import { ImageView, Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
+import { BottomSheetProvider, ModalBottomSheet } from 'app_ui/src/bottom_sheet';
 import { ApiError, api } from '../../services/api';
 import { Button } from '../../components/Button';
 import { color, tokens } from '../../components/theme';
@@ -21,92 +22,138 @@ interface State {
   result: string;
   /** Picked by chooseImage; shown below and previewed on tap. */
   chosen: string[];
+  sheetOpen: boolean;
 }
 
 /**
- * After ExpoNativeRoutes' app-api "选择与展示" section: every call goes through `api` to the host's native
- * presentation (Compose on Android, UIKit on iOS), queued with showModal.
+ * After ExpoNativeRoutes' app-api "选择与展示" section: native presentations go through `api`
+ * (queued with showModal), while custom bottom sheets mount declaratively via `ModalBottomSheet`.
  *
  * @Component({viewModel: 'PageViewModel', context: 'PageContext'})
  * @ExportModel({ios: 'VRPresentationPage', android: 'io.valdiroutes.pages.PresentationPage'})
  */
 export class PresentationPage extends Page<PageViewModel, State, PageContext> {
-  state: State = { location: 'inlet', sampleDate: '2026-10-02', result: '还没有结果', chosen: [] };
+  state: State = {
+    location: 'inlet',
+    sampleDate: '2026-10-02',
+    result: '还没有结果',
+    chosen: [],
+    sheetOpen: false,
+  };
 
+  private _router?: Router;
   private get router(): Router {
-    return new Router(this.context);
+    return (this._router ??= new Router(this.context));
   }
 
   onRender(): void {
     const { insets } = this.viewModel;
-    const { location, sampleDate, result, chosen } = this.state;
+    const { location, sampleDate, result, chosen, sheetOpen } = this.state;
 
-    <view style={styles.page}>
-      <scroll style={styles.scroll}>
-        <view
-          paddingTop={insets.top + 12}
-          paddingBottom={insets.bottom + 32}
-          paddingLeft={insets.left + 20}
-          paddingRight={insets.right + 20}
+    <BottomSheetProvider>
+      <view style={styles.page}>
+        <scroll style={styles.scroll}>
+          <view
+            paddingTop={insets.top + 12}
+            paddingBottom={insets.bottom + 32}
+            paddingLeft={insets.left + 20}
+            paddingRight={insets.right + 20}
+          >
+            <PageHeader
+              title="选择与展示"
+              subtitle="api.showPicker / showDatePicker / ModalBottomSheet …"
+              onBack={this.handleBack}
+            />
+            <label style={styles.result} numberOfLines={0} value={`结果：${result}`} />
+
+            <Button id="action-sheet" title="操作菜单 showActionSheet" onTap={this.handleTap} />
+            <Button
+              id="picker"
+              title={`采样位置：${location === 'inlet' ? '进水口' : '出水口'}`}
+              onTap={this.handleTap}
+            />
+            <Button id="date" title={`采样日期：${sampleDate}`} onTap={this.handleTap} />
+            <Button id="datetime" title="采样时间（datetime）" onTap={this.handleTap} />
+            <Button id="sheet" title="底部弹层 ModalBottomSheet" secondary={true} onTap={this.handleTap} />
+            <Button id="preview" title="图片预览（从第二张开始）" secondary={true} onTap={this.handleTap} />
+            <Button id="mixed" title="连续不同弹层（排队）" secondary={true} onTap={this.handleTap} />
+
+            <label style={styles.section} value="点缩略图预览" />
+            <view style={styles.thumbs}>
+              {PHOTOS.forEach((url, index) => (
+                <image
+                  key={`photo-${index}`}
+                  accessibilityId={`photo-${index}`}
+                  accessibilityLabel={`照片 ${index + 1}，点开预览`}
+                  style={styles.thumb}
+                  src={url}
+                  onTap={() => this.handlePhoto(url)}
+                />
+              ))}
+            </view>
+
+            <label style={styles.section} value="附件与扫码" />
+            <Button id="choose-image" title="chooseImage（相册或拍照，最多 3 张）" onTap={this.handleTap} />
+            <Button id="choose-file" title="chooseFile（PDF 或图片，最多 2 个）" onTap={this.handleTap} />
+            <Button id="scan" title="scanCode 扫码" onTap={this.handleTap} />
+            <Button id="clear-cache" title="clearAttachmentCache" secondary={true} onTap={this.handleTap} />
+            <view style={styles.chosen}>
+              {chosen.forEach((uri, index) => (
+                <image
+                  key={`chosen-${index}`}
+                  accessibilityId={`chosen-${index}`}
+                  accessibilityLabel={`选中的第 ${index + 1} 项，点开预览`}
+                  style={styles.thumb}
+                  src={uri}
+                  onTap={() => this.handleChosen(uri)}
+                />
+              ))}
+            </view>
+          </view>
+        </scroll>
+
+        <ModalBottomSheet
+          index={sheetOpen ? 0 : -1}
+          detents={['content']}
+          surfaceStyle={{
+            backgroundColor: color.surface,
+            borderTopLeftRadius: tokens.radius.sheet,
+            borderTopRightRadius: tokens.radius.sheet,
+          }}
+          onCloseRequest={this.handleSheetCancel}
         >
-          <PageHeader
-            title="选择与展示"
-            subtitle="api.showPicker / showDatePicker / previewImage …"
-            onBack={this.handleBack}
-          />
-          <label style={styles.result} numberOfLines={0} value={`结果：${result}`} />
-
-          <Button id="action-sheet" title="操作菜单 showActionSheet" onTap={this.handleTap} />
-          <Button
-            id="picker"
-            title={`采样位置：${location === 'inlet' ? '进水口' : '出水口'}`}
-            onTap={this.handleTap}
-          />
-          <Button id="date" title={`采样日期：${sampleDate}`} onTap={this.handleTap} />
-          <Button id="datetime" title="采样时间（datetime）" onTap={this.handleTap} />
-          <Button id="sheet" title="文本底部弹层 showBottomSheet" secondary={true} onTap={this.handleTap} />
-          <Button id="preview" title="图片预览（从第二张开始）" secondary={true} onTap={this.handleTap} />
-          <Button id="mixed" title="连续不同弹层（排队）" secondary={true} onTap={this.handleTap} />
-          <Button id="invalid" title="参数校验（valibot，错误在入口给出）" secondary={true} onTap={this.handleTap} />
-
-          <label style={styles.section} value="点缩略图预览" />
-          <view style={styles.thumbs}>
-            {PHOTOS.forEach((url, index) => (
-              <image
-                key={`photo-${index}`}
-                accessibilityId={`photo-${index}`}
-                accessibilityLabel={`照片 ${index + 1}，点开预览`}
-                style={styles.thumb}
-                src={url}
-                onTap={() => this.handlePhoto(url)}
-              />
-            ))}
+          <view
+            paddingTop={12}
+            paddingBottom={Math.max(insets.bottom, 16) + 8}
+            paddingLeft={20}
+            paddingRight={20}
+          >
+            <view style={styles.sheetHandle} />
+            <label style={styles.sheetTitle} value="采样说明" />
+            <label
+              style={styles.sheetBody}
+              numberOfLines={0}
+              value="请在固定采样点收集水样，记录采样时间并检查设备状态。"
+            />
+            <Button id="sheet-confirm" title="我知道了" onTap={this.handleSheetConfirm} />
           </view>
-
-          <label style={styles.section} value="附件与扫码" />
-          <Button id="choose-image" title="chooseImage（相册或拍照，最多 3 张）" onTap={this.handleTap} />
-          <Button id="choose-file" title="chooseFile（PDF 或图片，最多 2 个）" onTap={this.handleTap} />
-          <Button id="scan" title="scanCode 扫码" onTap={this.handleTap} />
-          <Button id="clear-cache" title="clearAttachmentCache" secondary={true} onTap={this.handleTap} />
-          <view style={styles.chosen}>
-            {chosen.forEach((uri, index) => (
-              <image
-                key={`chosen-${index}`}
-                accessibilityId={`chosen-${index}`}
-                accessibilityLabel={`选中的第 ${index + 1} 项，点开预览`}
-                style={styles.thumb}
-                src={uri}
-                onTap={() => this.handleChosen(uri)}
-              />
-            ))}
-          </view>
-        </view>
-      </scroll>
-    </view>;
+        </ModalBottomSheet>
+      </view>
+    </BottomSheetProvider>;
   }
 
   private handleBack = () => {
     this.router.back();
+  };
+
+  private handleSheetCancel = () => {
+    this.setState({ sheetOpen: false });
+    this.show({ confirm: false, cancel: true });
+  };
+
+  private handleSheetConfirm = () => {
+    this.setState({ sheetOpen: false });
+    this.show({ confirm: true, cancel: false });
   };
 
   private show(result: unknown) {
@@ -173,37 +220,11 @@ export class PresentationPage extends Page<PageViewModel, State, PageContext> {
           );
           break;
         case 'sheet':
-          this.show(
-            await api.showBottomSheet({
-              title: '采样说明',
-              content: '请在固定采样点收集水样，记录采样时间并检查设备状态。',
-              confirmText: '我知道了',
-            }),
-          );
+          this.setState({ sheetOpen: true });
           break;
         case 'preview':
           this.show(await api.previewImage({ urls: PHOTOS.slice(0, 2), current: PHOTOS[1] }));
           break;
-        case 'invalid': {
-          // Each is rejected by api's valibot schema (schemas.ts) before the host is called; the same on both platforms.
-          const calls: (() => Promise<unknown>)[] = [
-            () => api.showActionSheet({ itemList: ['1', '2', '3', '4', '5', '6', '7'] }),
-            () => api.showPicker({ options: ['进水口', '进水口'] }),
-            () => api.previewImage({ urls: [PHOTOS[0]], current: PHOTOS[1] }),
-            () => api.showToast({ title: ' ' }),
-          ];
-          const messages: string[] = [];
-          for (const run of calls) {
-            try {
-              await run();
-              messages.push('ok?');
-            } catch (error) {
-              messages.push((error as ApiError).errMsg ?? String(error));
-            }
-          }
-          this.setState({ result: messages.join(' | ') });
-          break;
-        }
         case 'choose-image': {
           const reply = await api.chooseImage({ count: 3 });
           this.setState({ chosen: reply.tempFilePaths });
@@ -225,7 +246,7 @@ export class PresentationPage extends Page<PageViewModel, State, PageContext> {
             await Promise.all([
               api.showModal({ title: '开始采样', content: '确认后选择采样位置。' }),
               api.showPicker({ title: '采样位置', options: ['进水口', '出水口'] }),
-              api.showBottomSheet({ title: '完成记录', content: '采样步骤已结束，请检查记录。' }),
+              api.showModal({ title: '完成记录', content: '采样步骤已结束，请检查记录。', showCancel: false }),
             ]),
           );
           break;
@@ -239,7 +260,11 @@ export class PresentationPage extends Page<PageViewModel, State, PageContext> {
 const styles = {
   page: new Style<View>({ width: '100%', height: '100%', backgroundColor: color.canvas }),
   scroll: new Style<ScrollView>({ width: '100%', height: '100%' }),
-  result: new Style<Label>({ color: color.success, font: systemFont(tokens.font.section), marginBottom: tokens.space.md }),
+  result: new Style<Label>({
+    color: color.success,
+    font: systemFont(tokens.font.section),
+    marginBottom: tokens.space.md,
+  }),
   section: new Style<Label>({ color: color.muted, font: systemSemiboldFont(tokens.font.section), margin: '12 0 8 0' }),
   thumbs: new Style<View>({ flexDirection: 'row', justifyContent: 'space-between' }),
   chosen: new Style<View>({ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }),
@@ -249,5 +274,23 @@ const styles = {
     borderRadius: tokens.radius.control,
     objectFit: 'cover',
     backgroundColor: color.handle,
+  }),
+  sheetHandle: new Style<View>({
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: color.handle,
+    alignSelf: 'center',
+    marginBottom: 14,
+  }),
+  sheetTitle: new Style<Label>({
+    color: color.title,
+    font: systemSemiboldFont(tokens.font.title),
+    marginBottom: 8,
+  }),
+  sheetBody: new Style<Label>({
+    color: color.muted,
+    font: systemFont(tokens.font.body),
+    marginBottom: 20,
   }),
 };

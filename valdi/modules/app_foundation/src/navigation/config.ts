@@ -45,10 +45,25 @@ export interface TabItem<N extends string = string> {
   readonly selectedIcon?: Asset;
 }
 
+export const DEFAULT_CUSTOM_TAB_BAR_HEIGHT = 64;
+
 /** Custom components are compiled to canonical class paths, just like valdiPage.component. */
 export type TabBarDefinition =
   | { readonly type: 'default' }
-  | { readonly type: 'custom'; readonly component: PageComponent };
+  | {
+      readonly type: 'custom';
+      readonly component: PageComponent;
+      /** Docked bar height in dp/pt (default 64); added with safeAreaBottom to page insets. */
+      readonly height?: number;
+      readonly overlay?: false;
+    }
+  | {
+      readonly type: 'custom';
+      readonly component: PageComponent;
+      /** Full-viewport overlay when true; requires custom hitTest and passes system-only insets. */
+      readonly overlay: true;
+      readonly height?: undefined;
+    };
 
 type NoInfer<T> = [T][T extends any ? 0 : never];
 
@@ -71,13 +86,15 @@ function imageReference(asset: Asset): ImageReference {
   return ref;
 }
 
-function tabBarReference(bar: TabBarDefinition | undefined): { mode: string; component?: string } {
+function tabBarReference(bar: TabBarDefinition | undefined): { mode: string; component?: string; height?: number } {
   if (bar === undefined) return { mode: 'default' };
   if (!bar || (bar.type !== 'default' && bar.type !== 'custom')) {
     throw new Error('tabs.bar.type must be default or custom');
   }
   if (bar.type === 'default') {
-    if ('component' in bar) throw new Error('tabs.bar.component is only allowed for custom bars');
+    if ('component' in bar || 'height' in bar || 'overlay' in bar) {
+      throw new Error('tabs.bar.component, height and overlay are only allowed for custom bars');
+    }
     return { mode: 'default' };
   }
   // The transformer consumes the class reference; no component implementation is loaded here.
@@ -87,7 +104,18 @@ function tabBarReference(bar: TabBarDefinition | undefined): { mode: string; com
       'tabs.bar.component must be compiled to an exported @Component class path by the Node Valdi route transformer',
     );
   }
-  return { mode: 'custom', component };
+  if (bar.overlay !== undefined && typeof bar.overlay !== 'boolean') {
+    throw new Error('tabs.bar.overlay must be a boolean');
+  }
+  if (bar.height !== undefined && (typeof bar.height !== 'number' || !Number.isFinite(bar.height) || bar.height <= 0)) {
+    throw new Error('tabs.bar.height must be a positive finite number');
+  }
+  if (bar.overlay && bar.height !== undefined) {
+    throw new Error('tabs.bar.height cannot be combined with overlay: true');
+  }
+  return bar.overlay
+    ? { mode: 'custom', component }
+    : { mode: 'custom', component, height: bar.height ?? DEFAULT_CUSTOM_TAB_BAR_HEIGHT };
 }
 
 export function defineRoutes<

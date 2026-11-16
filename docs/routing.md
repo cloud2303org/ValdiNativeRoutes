@@ -100,10 +100,8 @@ export class DetailPage extends Page<PageViewModel, State, PageContext> {
 - 启动声明、路由更新、导航选项、参数、返回值和当前页面栈通过 Valdi 生成模型与字典
   marshaller 传递，路由协议不再编码/解析 JSON 字符串。公开 router 保留页面特定泛型，
   它约束调用方，不替代 Kotlin/Swift 编译或原生返回字段的业务校验。
-- 参数/结果保持原有对象身份交给原生 marshaller。路由根必须是普通字典，
-  JS 在发送前递归检查允许值域：拒绝非有限数、环引用、函数、symbol、访问器、
-  不支持的容器和稀疏/undefined 数组项；允许非循环的共享引用和可选字典字段。
-  验证不序列化为 JSON，也不深拷贝业务对象；原生仍对保存的参数/结果取值快照。
+- 参数/结果保持原有对象身份交给原生 marshaller：JS 仅检查路由根为普通字典，嵌套数据与类型封送直接由 Valdi 原生 marshaller 处理，不序列化为 JSON，也不深拷贝业务对象。
+- 自定义 TabBar（`bar: { type: 'custom', component: AppTabBar, height?: number }`）默认以底部停靠模式挂载（默认高度 `64`，自动把 `height + safeAreaBottom` 注入各 Tab 页面的 `insets.bottom`，无需页面硬编码避让或手写全屏 `hitTest`）；仅在显式声明 `overlay: true` 时使用全屏透传悬浮层。`TabBarViewModel` 与 `TabBarContext` 定义于 `app_foundation/src/navigation/models.ts`（`app_pages/src/components/TabBar.ts` 保留兼容重导出）。
 
 组件引用在 Node 编译时转成 canonical 路径，消费引用后移除无用的组件导入。
 路由表不会为了注册页面提前执行所有页面，页面仍由 Valdi loader 按需加载。

@@ -4,8 +4,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { checkRuntime, checkSources, runPnpm } from '../prerequisites.mjs';
-import { runtimeInfo } from '../runtime-info.mjs';
+import { checkRuntime, checkSources, runPnpm } from '../lib/prerequisites.mjs';
+import { runtimeInfo } from '../maintainer/runtime-info.mjs';
 import { checkVision } from '../../valdi/modules/app_vision/scripts/check-dependencies.mjs';
 
 const repository = path.resolve(import.meta.dirname, '../..');
@@ -38,7 +38,7 @@ test('native builds accept a manual runtime after source changes without fingerp
     write('tools/valdi-rolldown/runtime-module.ts', 'a changed compiler');
     assert.doesNotThrow(() => checkRuntime(root, platform));
     assert.equal(existsSync(path.join(root, 'ota/fingerprint.json')), false);
-    assert.equal(existsSync(path.join(root, 'scripts/ota.mjs')), false);
+    assert.equal(existsSync(path.join(root, 'scripts/ota/ota.mjs')), false);
   }
 });
 

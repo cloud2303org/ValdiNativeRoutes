@@ -254,7 +254,7 @@ $bindingsLog = Join-Path $logDir 'cold-bindings.log'
 Push-Location $app
 try {
     $installCode = Invoke-LoggedCommand -FilePath 'node' -LogPath $installLog `
-        -Arguments @('scripts/pnpm.mjs', 'install', '--frozen-lockfile')
+        -Arguments @('scripts/lib/pnpm.mjs', 'install', '--frozen-lockfile')
     if ($installCode -ne 0) { throw "Cold dependency installation failed (exit $installCode): $installLog" }
     $exportArguments = @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $app 'scripts/windows/export-android.ps1'),

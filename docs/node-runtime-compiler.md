@@ -1,6 +1,6 @@
 # Runtime 内置模块的 Node 编译后端
 
-`scripts/export-ios.sh` / `scripts/export-android.sh` 固定使用自己的 Node 管线。
+`scripts/maintainer/export-ios.sh` / `scripts/maintainer/export-android.sh` 固定使用自己的 Node 管线。
 替换的是用 Swift 编写的旧 Valdi 编译器；Valdi C++ runtime、布局引擎、Kotlin / Objective-C 平台实现和宿主 Swift 保留。
 
 ## 接入方式
@@ -29,8 +29,8 @@ Node 后端只在临时目录追加类型导出。`valdi_tsx` 使用自己的全
 
 ```sh
 pnpm test
-scripts/export-ios.sh debug
-scripts/export-android.sh debug
+scripts/maintainer/export-ios.sh debug
+scripts/maintainer/export-android.sh debug
 pnpm build:ios
 pnpm build:android
 pnpm test:e2e:ios calculator-module
@@ -42,7 +42,7 @@ pnpm test:e2e:android calculator-module
 golden 仅保留当前仍测试的模块，升级 fork 时需要审查这些输出，不能直接跳过 golden。
 已有 codegen golden 测试继续覆盖 Kotlin / Objective-C / C++ 语法和 ABI 生成。
 原生导出验证链接；模拟器回放验证启动、TSX 和实际原生调用，两者不能由 golden 测试代替。
-`scripts/verify-runtime-actions.mjs` 审查 aquery JSON 构建图，要求内置模块的 Node action 存在，
+`scripts/maintainer/verify-runtime-actions.mjs` 审查 aquery JSON 构建图，要求内置模块的 Node action 存在，
 并拒绝 ClientSQL、旧编译器和 toolbox action，包括缓存中的动作。`compiler/compiler:valdi_proto*` 是运行时协议定义，保留其 C++ 生成。
 
 运行时 Node 编译器、转换器、绑定生成器或其依赖锁变化后，需要手动重新导出 runtime。
@@ -99,7 +99,7 @@ cd valdi
 bazel aquery 'mnemonic("NodeValdiRuntimeModule", deps(set(@valdi//src/valdi_modules/src/valdi/valdi_core @valdi//src/valdi_modules/src/valdi/native_web @valdi//src/valdi_modules/src/valdi/drawing @valdi//src/valdi_modules/src/valdi/jasmine)))' \
   --config=stable_exec --output=jsonproto > ../.ci/node-compiler-actions.json
 cd ..
-node scripts/verify-node-compiler-actions.mjs .ci/node-compiler-actions.json
+node scripts/maintainer/verify-node-compiler-actions.mjs .ci/node-compiler-actions.json
 ```
 
 检查要求 Node 是声明输入、命令不含机器绝对路径、框架上下文与 npm 依赖完整，
@@ -155,7 +155,7 @@ CI 规则已接入现有 macOS Android / iOS 和 Linux Android 任务，
 ## 2026-10-29 本地验收
 
 - `pnpm test`：15 个脚本测试、20 个管线测试（含七模块及启动回归），以及全部绑定 golden 通过。
-- `scripts/export-ios.sh debug`、`scripts/export-android.sh debug`、`pnpm build:ios`、`pnpm build:android` 通过。
+- `scripts/maintainer/export-ios.sh debug`、`scripts/maintainer/export-android.sh debug`、`pnpm build:ios`、`pnpm build:android` 通过。
 - aquery 构建图：iOS 22,364 个动作中七模块使用 Node；Android 18,565 个动作中六个内置模块使用 Node。
   两端旧 Swift 编译器和 companion 动作数为 0。此轮仍有 C++ toolbox，后续替换见下节。drawing 是 iOS 原生依赖，Android 导出图不包含它。
 - 44 个生成原生文件与旧编译器基线逐字节一致。重新导出的 iOS 两个 slice 和 Android 三个 ABI 原生 runtime 二进制也逐字节不变。

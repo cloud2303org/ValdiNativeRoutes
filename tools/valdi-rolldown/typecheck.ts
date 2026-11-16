@@ -2,7 +2,7 @@ import { appModules, prepareEditorProject, valdiSourceRoot } from './pipeline';
 import { valdiTs } from './valdiTs';
 
 if (!valdiSourceRoot()) {
-  throw new Error('Prepare Valdi sources before checking runtime types: node scripts/prepare-valdi.mjs');
+  throw new Error('Prepare Valdi sources before checking runtime types: node scripts/lib/prepare-valdi.mjs');
 }
 const modules = appModules();
 for (const module of modules) await prepareEditorProject(module, modules);

@@ -27,11 +27,16 @@ struct RouteTable {
     static func tabBarError(_ bar: TabBar) -> String? {
         switch bar.mode ?? "default" {
         case "default":
-            return bar.component == nil ? nil : "Default tab bar cannot have a custom component"
+            if bar.component != nil { return "Default tab bar cannot have a custom component" }
+            if bar.height != nil { return "Default tab bar cannot specify a height" }
+            return nil
         case "custom":
             guard let component = bar.component,
                   component.range(of: #"^[^@\s]+@[^/\s]+/src/[^\s]+$"#, options: .regularExpression) != nil else {
                 return "Custom tab bar requires a canonical Valdi component path"
+            }
+            if let height = bar.height?.doubleValue, (!height.isFinite || height <= 0) {
+                return "Custom tab bar height must be a positive finite number"
             }
             return nil
         default:

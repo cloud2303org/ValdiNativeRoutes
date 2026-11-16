@@ -28,8 +28,6 @@ def main():
     sources = [
         root / "valdi/modules/app_ui/ios/AppUIPromise.swift",
         tests / "AppUIPromiseTests.swift",
-        root / "valdi/modules/app_ui/ios/VRAppUIVoidPromise.h",
-        root / "valdi/modules/app_ui/ios/VRAppUIVoidPromise.m",
         root / "ios/Generated/valdi/AppUI",
         root / "ios/Generated/valdi/AppUITypes",
     ]
@@ -39,7 +37,6 @@ def main():
     bridge = output / "Bridge.h"
     bridge.write_text(
         '#import <ValdiRuntime/ValdiObjC.h>\n'
-        f'#import "{sources[2]}"\n'
         '#import <AppUI/AppUI.h>\n'
         '#import <AppUITypes/AppUITypes.h>\n'
     )

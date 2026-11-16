@@ -22,21 +22,21 @@ def main():
     modules = root / "module-build/out/ios"
     theme_library = modules / "theme_bridge/libtheme_bridge_ios.a"
     if not (modules / "swift/ThemeBridge.swiftmodule").is_file() or not theme_library.is_file():
-        parser.error("Prepare the iOS modules first: node scripts/node-modules.mjs ios")
+        parser.error("Prepare the iOS modules first: node scripts/lib/node-modules.mjs ios")
     framework = root / "ios/Frameworks/ValdiRuntime.xcframework"
     if not framework.exists():
         parser.error("Export the iOS runtime before preparing these tests")
     output = args.output.resolve() if args.output else Path(tempfile.mkdtemp(prefix="sheet-host-tests-"))
     if args.output:
         output.mkdir(parents=True, exist_ok=False)
-    ui = root / "valdi/modules/app_ui/ios/ui"
-    sources = [tests / "SheetHostMigrationTests.swift",
-               tests / "ActionSheetMigrationTests.swift"]
-    sources += [ui / (name + ".swift") for name in (
-        "BottomSheet", "OverlayScope", "OverlayActions", "PopupActionButtons",
-        "ActionButton", "UiTheme", "UiDesign", "Picker", "MenuControls", "AppUISheetHostView")]
+    bottomsheet = root / "valdi/modules/app_ui/ios/bottomsheet"
+    sources = [tests / "VRBottomSheetTests.swift"]
+    sources += [bottomsheet / (name + ".swift") for name in (
+        "VRBottomSheetTypes", "VRBottomSheetHostingView")]
+    bridge = output / "Bridge.h"
+    bridge.write_text("#import <ValdiRuntime/ValdiRuntime.h>\n")
     # UIKit control dispatch needs UIApplicationMain, even though the test bundle
-    # compiles production UI sources and links ThemeBridge plus its Valdi dependency.
+    # compiles production UI sources and links ValdiRuntime.
     host_source = output / "SheetHostTestApp.swift"
     host_source.write_text("""import UIKit
 
@@ -71,6 +71,7 @@ final class SheetHostTestApp: UIResponder, UIApplicationDelegate {
         "        embed: false", "        link: false",
         "    settings:", "      base:", "        PRODUCT_BUNDLE_IDENTIFIER: io.valdiroutes.sheet.tests",
         "        GENERATE_INFOPLIST_FILE: YES", '        SWIFT_VERSION: "5.0"',
+        "        SWIFT_OBJC_BRIDGING_HEADER: " + json.dumps(str(bridge)),
         '        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/SheetHostTestApp.app/SheetHostTestApp"',
         '        BUNDLE_LOADER: "$(TEST_HOST)"',
         '        SWIFT_INCLUDE_PATHS: ["$(inherited)", ' + json.dumps(str(modules / "swift")) + "]",

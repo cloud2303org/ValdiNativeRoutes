@@ -67,25 +67,6 @@ FOUNDATION_EXPORT NSInteger VRCppMarshall(SCValdiMarshallerRef  _Nonnull marshal
 
 
 //
-// VRTabBarContext.h
-//
-
-#import <ValdiRuntime/SCValdiMarshaller.h>
-
-#import <app_pagesTypes/app_pagesTypes.h>
-
-
-//
-// VRTabBarViewModel.h
-//
-
-#import <app_foundation/app_foundation.h>
-#import <ValdiRuntime/SCValdiMarshaller.h>
-
-#import <app_pagesTypes/app_pagesTypes.h>
-
-
-//
 // VRBlePage.h
 //
 

@@ -29,9 +29,13 @@ ios/                    UIKit 工程（XcodeGen 的 project.yml）
   Frameworks/           ValdiRuntime.xcframework（导出产物，不进 git）
   Generated/valdi/      各启用模块的 Objective-C 绑定（codegen.ts 生成，进 git）
 scripts/
-  export-android.sh     重新导出 Valdi 运行时 aar
-  export-ios.sh         重新导出 Valdi 运行时 xcframework
-  hotreload.sh          热重载（tools/valdi-rolldown 的 pnpm dev）
+  cli.mjs               日常开发统一入口（pnpm android / ios / dev）
+  project.mjs           项目级构建、类型检查与全量测试入口
+  init-app.mjs          新项目初始化与裁剪工具（pnpm init-app [--minimal]）
+  lib/                  应用配置、XcodeGen、原生模块注册与热重载内部库
+  ota/                  OTA 密钥生成、差分与签名打包工具（pnpm ota）
+  e2e/                  Argent UI 自动化测试入口与配置编排
+  maintainer/           Valdi 运行时导出（export-android.sh / export-ios.sh）及模板维护脚本
 ```
 
 模块和两端宿主的职责、共享实现与生成代码边界见[代码组织](docs/code-organization.md)。
@@ -42,11 +46,20 @@ AppUI 保持整包，包含扫码、附件等能力。原生消费者与宿主�
 [原生模块入口](docs/native-module-access.md#native-consumers-and-application-composition)，
 源码、测试和启停说明见 [AppUI](valdi/modules/app_ui/README.md)。
 
-## 发行模板
+## 发行模板与新项目初始化
 
 模板版本由根 `package.json` 的 `version` 标识。可从 GitHub Releases 下载固定版本源码包，
-修改应用配置后执行 `pnpm install --frozen-lockfile`，手动导出目标平台运行时，再执行 `pnpm android` 或 `pnpm ios`。
-首次仍需本机原生工具链和构建；不是免编译的 APK / IPA。
+执行 `pnpm install --frozen-lockfile` 后，通过 `pnpm init-app` 一键同步应用名、包名、Android 宿主命名空间与 iOS Target 目录；若不需要硬件/多媒体演示页，可附带 `--minimal` 裁剪为仅保留 6 个核心模块（`app_foundation`、`app_ota`、`app_pages`、`app_ui`、`native_common`、`theme_bridge`）的纯净业务骨架：
+
+```sh
+# 交互式向导（在终端直接运行）
+pnpm init-app
+
+# 或通过参数一键重命名并裁剪为纯净业务模板
+pnpm init-app --name AcmeApp --display-name "Acme 应用" --app-id com.acme.app --minimal
+```
+
+首次仍需手动导出目标平台运行时，再执行 `pnpm android` 或 `pnpm ios`；不是免编译的 APK / IPA。
 下载、版本含义、后续同步及发布步骤见[模板发行说明](docs/template-releases.md)。
 
 ## 运行
@@ -57,6 +70,7 @@ AppUI 保持整包，包含扫码、附件等能力。原生消费者与宿主�
 日常构建和测试从仓库根目录运行：
 
 ```sh
+pnpm init-app                      # 新项目一键改名/改包名（加 --minimal 裁剪可选演示模块）
 pnpm android                       # 构建 + 安装 + 启动（先按下文手动导出运行时）
 pnpm ios                           # 同上，iOS 模拟器（仅 macOS）
 pnpm dev                           # Node 热重载；按 a / i 选择设备并构建、安装、启动 App
@@ -103,9 +117,9 @@ Windows 原生 Android 构建入口见 [Native Windows Android builds](docs/wind
 
 ```sh
 pnpm install                       # 安装根目录、页面和构建工具的锁定依赖，生成 tsconfig
-scripts/export-android.sh debug     # 获取固定框架源码、生成绑定并导出 Android 运行时
+scripts/maintainer/export-android.sh debug  # 获取固定框架源码、生成绑定并导出 Android 运行时
 # macOS 下需要 iOS 时：
-scripts/export-ios.sh debug
+scripts/maintainer/export-ios.sh debug
 # 随后按目标平台执行 pnpm android / pnpm ios，或只构建的 pnpm build:android / pnpm build:ios
 ```
 
@@ -122,7 +136,7 @@ Windows 使用 `scripts/windows/export-android.ps1 -Config debug`，详见 Windo
 缺失或不兼容时准备静态 OpenCV/ncnn，再编译链接。正常 App 构建不执行 Vision 的依赖 hook，也不自动导出 runtime。
 停用 Vision 后也需手动重新导出，才能从 runtime 移除已链接代码。iOS 构建需要 macOS、Xcode 和 XcodeGen。
 
-只构建 TS 模块时，不必导出 Android/iOS 运行时：首次运行 `node scripts/prepare-valdi.mjs` 获取类型声明，
+只构建 TS 模块时，不必导出 Android/iOS 运行时：首次运行 `node scripts/lib/prepare-valdi.mjs` 获取类型声明，
 之后使用根目录 `pnpm build`。图片处理使用预编译 `sharp`，Release 字节码使用固定版本的官方 `hermes-compiler`；
 应用构建不再需要 toolbox。
 `pnpm test` 包含图片与 Hermes 适配测试和绑定 golden 对比，只需要类型源码与 npm 依赖。
@@ -131,24 +145,24 @@ Windows 使用 `scripts/windows/export-android.ps1 -Config debug`，详见 Windo
 `tools/valdi-rolldown/web/.local/dist/`。这是官方示例的浏览器入口；当前业务 App 的硬件服务仍由原生宿主提供。
 Web 测试、浏览器验证与通用 Bazel Web 导出的接入边界见 [Node Web 入口](tools/valdi-rolldown/web/README.md)。
 
-改 TS、图片不用再导出：Gradle 和 Xcode 构建时调用 `tools/valdi-rolldown` 编译页面（见“构建”）。开发时 `scripts/hotreload.sh` 把改动直接推到正在运行的 debug 包。
+改 TS、图片不用再导出：Gradle 和 Xcode 构建时调用 `tools/valdi-rolldown` 编译页面（见“构建”）。开发时 `scripts/lib/hotreload.sh` 把改动直接推到正在运行的 debug 包。
 
 iOS：
 
 ```sh
-scripts/export-ios.sh                # 开发用 debug 运行时；发版加 release，同样只在首次或运行时变化后执行
-node scripts/ios-project.mjs         # brew install xcodegen；按 valdi.app 配置生成工程
+scripts/maintainer/export-ios.sh     # 开发用 debug 运行时；发版加 release，同样只在首次或运行时变化后执行
+node scripts/lib/ios-project.mjs     # brew install xcodegen；按 valdi.app 配置生成工程
 ```
 
 真机运行要在 `project.yml` 里填 `DEVELOPMENT_TEAM`。
 
-**UI 测试**用 [argent](https://www.npmjs.com/package/@swmansion/argent)（`npm i -g @swmansion/argent`）：`.argent/e2e/*.yaml` 是测试流程，按页面上的文字找元素、点击、断言，同一份在 iOS 模拟器和 Android 模拟器上跑，不经过 AI。`scripts/e2e.sh [ios|android]` 依次在两个平台上跑全部流程，设备由 `IOS_DEVICE` / `ANDROID_DEVICE` 指定，只用这两台（Android 默认是远程模拟器 `100.78.189.64:5555`，先 `adb connect`）。跑之前它会打开 iOS 模拟器的 `ApplicationAccessibilityEnabled`（不开的话 argent 读不到 UILabel 的文字），在 Android 上预先授予 app 的运行时权限（否则系统授权框会挡住后面所有测试），并放一张测试照片（`.argent/fixtures/e2e-photo.jpg`）给相册选图用。`.argent/e2e/` 覆盖路由、输入和 AppUI 等行为；移除路由 Sheet 后，相应的五个专用流程已删除。平台限定流程保留各自的条件。共享 `home.yaml` 启动 App 后等待「push 详情页」，无需账号、密码或登录 secret；Home 的计时器持续更新，后续等待实际控件而非整屏静止。iOS 页面开了 Valdi 的无障碍树（`ValdiHost.swift` 的 `enableAccessibility`），argent 和 VoiceOver 才读得到 Valdi 页面的内容。
+**UI 测试**用 [argent](https://www.npmjs.com/package/@swmansion/argent)（`npm i -g @swmansion/argent`）：`.argent/e2e/*.yaml` 是测试流程，按页面上的文字找元素、点击、断言，同一份在 iOS 模拟器和 Android 模拟器上跑，不经过 AI。`scripts/e2e/e2e.sh [ios|android]` 依次在两个平台上跑全部流程，默认自动发现当前 booted 的 iOS 模拟器和在线 Android 设备（也可由 `IOS_DEVICE` / `ANDROID_DEVICE` 显式覆盖）。跑之前它会打开 iOS 模拟器的 `ApplicationAccessibilityEnabled`（不开的话 argent 读不到 UILabel 的文字），在 Android 上预先授予 app 的运行时权限（否则系统授权框会挡住后面所有测试），并放一张测试照片（`.argent/fixtures/e2e-photo.jpg`）给相册选图用。`.argent/e2e/` 覆盖路由、输入和 AppUI 等行为；移除路由 Sheet 后，相应的五个专用流程已删除。平台限定流程保留各自的条件。共享 `home.yaml` 启动 App 后等待「push 详情页」，无需账号、密码或登录 secret；Home 的计时器持续更新，后续等待实际控件而非整屏静止。iOS 页面开了 Valdi 的无障碍树（`ValdiHost.swift` 的 `enableAccessibility`），argent 和 VoiceOver 才读得到 Valdi 页面的内容。
 
 ## 设计
 
 **路由表在 TS 里。** `routes.ts` 声明每个路由是 Valdi 页面还是原生页面，以及组件路径。原生启动时调用生成的 `StartApp(debug)`，接收结构化的路由声明，不需要生成清单文件。路由支持普通页面、tab 和 iOS 的 `fullScreen` 导航选项，不支持 `sheet` 或 `compactSheet` 展示方式。
 
-**参数和返回值用结构化数据传递。** `router.push` 和 `finish` 直接跨原生绑定传对象，不经过 JSON 字符串。TS 的 `RouteParams` / `RouteResults` 检查路由对应的入参和结果类型；运行时还会快照数据并拒绝函数、循环引用等非法载荷，避免调用后修改原对象影响已提交的导航。
+**参数和返回值用结构化数据传递。** `router.push` 和 `finish` 直接跨原生绑定传对象，不经过 JSON 字符串。TS 的 `RouteParams` / `RouteResults` 检查路由对应的入参和结果类型；JS 仅校验根字典，值转换与序列化交由 Valdi 原生 marshaller 处理。
 
 **每个页面一个 Valdi 根 view，由宿主持有。** `PageEntry` 持有 `ValdiRootView`。Nav3 会释放被覆盖页面的 composition，所以根 view 不能放在 Compose 里；`AndroidView` 释放时只把它摘下来，页面真正出栈后才 `destroy()`。
 
@@ -156,13 +170,13 @@ node scripts/ios-project.mjs         # brew install xcodegen；按 valdi.app 配
 
 **inset 由宿主算好放进 viewModel。** 开了 edge-to-edge，页面按 `viewModel.insets` 自己留边。Valdi 自带的 `Device.getDisplayTopInset()` 在 Android 上一直是 0，不用它。
 
-**页面键盘只由宿主处理一次，页面不读键盘高度。** Android 宿主读 `WindowInsets.ime`，给页面容器底部加键盘高度的 padding。窗口开了 edge-to-edge，系统不会再缩窗口；页面在变矮后的范围内布局，`FocusScroller` 将输入框滚到可见区域。AppUI 弹层独立处理自己的键盘避让。
+**页面键盘只由宿主处理一次，页面不读键盘高度。** Android 宿主读 `WindowInsets.ime`，在普通页面与 Tab 容器统一给页面容器底部加键盘高度的 padding，并扣减已被键盘遮住的底栏/系统安全区高度。窗口开了 edge-to-edge，系统不会再缩窗口；页面在变矮后的范围内布局，`FocusScroller` 将输入框滚到可见区域。AppUI 弹层独立处理自己的键盘避让。
 
-**Sheet 仅作为 AppUI 弹层组件保留。** `app_ui` 模块里的 `SheetHostView`（Android）和 `AppUISheetHostView`（iOS）从 Software Mansion 的 react-native-bottom-sheet（MIT）移植，供 BottomSheet、选择器等内容使用。它不再承载路由页面；路由层不再有独立 Sheet 状态、尺寸公式或关闭回调。
+**Sheet 统一使用 `app_ui` 的 `@swmansion/react-native-bottom-sheet` v1.0.0 对齐宿主。** `app_ui` 模块里的 `BottomSheetHostView`（Android）和 `VRBottomSheetHostingView`（iOS）同时支撑声明式 `<BottomSheet>` / `<ModalBottomSheet>` 与原生 `ActionSheet`、`Picker`、`TimePicker`、`TreePicker` 等弹层组件。它不再承载路由页面；旧版 `0.16.2` 宿主与命令式 `api.showBottomSheet` 已移除。
 
 ## 弹窗与提示 API
 
-小程序风格的接口：`api.showModal`、`showToast`、`hideToast`、`showLoading`、`hideLoading`（`app_pages/src/services/api.ts`）。每个方法只返回 Promise，不接受 `success` / `fail` / `complete`（蓝牙、Wi-Fi、NFC 也一样）。成功结果带 `errMsg: 'showModal:ok'` 这类字段，失败抛 `ApiError`（`errMsg` 形如 `showModal:fail …`）。参数只在入口校验一次：各能力模块的 valibot schema（和 ExpoNativeRoutes 同一套规则）检查类型和取值约束（选项个数、选择器的值必须在选项里、年份范围、日期用 dayjs 校验等），并补默认值（按钮文字“确定”“取消”、Toast 图标 `success`、时长 1500 ms 等）。之后不再检查：原生 AppUI 只负责展示，原生回传的结果也不校验，所以原生页面直接调 `NativeApp.ui` / `app.ui` 时要自己传合法参数。蓝牙、Wi-Fi、NFC 同样在入口用 valibot 校验（`ble/`、`wifi/`、`nfc/` 下的 `schemas.ts`），错误码不变。valibot 1.5.0 是 npm 包，`import * as v from 'valibot'`（见“npm 依赖”）。没人 catch 的错误（比如参数错了又没处理 `fail`）由 `startAppServices` 装的全局处理器接住：debug 包直接崩溃，release 包只记日志。
+小程序风格的接口：`api.showModal`、`showToast`、`hideToast`、`showLoading`、`hideLoading`（`app_pages/src/services/api.ts`）。每个方法只返回 Promise，不接受 `success` / `fail` / `complete`（蓝牙、Wi-Fi、NFC 也一样）。成功结果带 `errMsg: 'showModal:ok'` 这类字段，失败抛 `ApiError`（`errMsg` 形如 `showModal:fail …`）。参数只在入口收敛一次：静态类型由 TypeScript 保证，各能力模块仅用轻量运行时检查处理默认值补齐（按钮文字“确定”“取消”、Toast 图标 `success`、时长 1500 ms 等）与语义不变量（选项个数、选择器的值必须在选项里、年份范围、日期用 dayjs 校验、BLE/Wi-Fi 标识等），无需第三方 schema 库。原生 AppUI 只负责展示，原生页面直接调 `NativeApp.ui` / `app.ui` 时按原生类型传参即可。没人 catch 的错误由 `startAppServices` 装的全局处理器接住：debug 包直接崩溃，release 包只记日志。
 
 ```ts
 import { api } from 'app_pages/src/services/api';
@@ -182,8 +196,8 @@ NativeApp.ui.showToast(ToastOptions("已同步", icon = "none"))
 ```
 
 ```swift
-let answer = try await app.ui.showModal(ModalOptions(title: "确认操作", content: "同步设置？"))
-_ = try await app.ui.showToast(ToastOptions(title: "已同步", icon: "none"))
+let answer = try await app.ui.showModal(ModalOptions(title: "确认操作", content = "同步设置？"))
+_ = try await app.ui.showToast(ToastOptions(title: "已同步", icon = "none"))
 ```
 
 - **桥接**：`AppUIHost.ts` 里的 `AppUIHost` 是一组回调（`@ExportModel`），宿主用 Kotlin/Swift 实现，通过生成的 `@ExportModule` / `getHost()` 获取；业务无需手动安装。
@@ -194,12 +208,11 @@ _ = try await app.ui.showToast(ToastOptions(title: "已同步", icon: "none"))
 
 ## 选择与展示 API
 
-`api.showActionSheet`、`showPicker`、`showDatePicker`、`showBottomSheet`、`previewImage` 与小程序同名同参（不含回调）：类型检查和默认值在 `api.ts`，取值约束在原生 AppUI（见上一节）。它们和 `showModal` 共用一个串行队列，归属弹出时最上层的页面，关闭动画结束后才返回结果。
+`api.showActionSheet`、`showPicker`、`showDatePicker`、`previewImage` 与小程序同名同参（不含回调）：类型检查和默认值在 `api.ts`，取值约束在原生 AppUI（见上一节）。它们和 `showModal` 共用一个串行队列，归属弹出时最上层的页面，关闭动画结束后才返回结果；声明式底部抽屉使用 `app_ui/src/bottomSheet`（`<BottomSheet>` / `<ModalBottomSheet>` / `<BottomSheetProvider>`）。
 
 - 操作菜单：1–6 个非空选项，返回 `tapIndex`，取消走 `fail`（`showActionSheet:fail cancel`）。
 - 选择器：返回 `confirm/cancel/value/index`；`options` 可以是字符串或 `{value, label}`，值必须唯一，初始值必须在选项里。取消（包括页面被盖住或关掉）时 `value` 为空、`index` 为 -1，日期选择器同样返回空 `value`。
 - 日期选择器：`mode` 为 `year`、`year-month`、`date`、`time`、`datetime`，年份范围默认当前年上下 5 年，按日历校验值。
-- 文本底部弹层：返回 `confirm/cancel`。
 - 图片预览：`current` 必须是 `urls` 之一，关闭后完成。
 - 日期：解析、校验和默认年份用 dayjs 1.11.23（`customParseFormat`、`utc` 插件），和 ExpoNativeRoutes 一样，不依赖 `Intl`。dayjs 同样是 npm 包，`import dayjs from 'dayjs'`。
 - 选图 `chooseImage`：`count` 1–9（默认 9），`sourceType` 是不重复的 `album` / `camera`，两种都给时先弹“从相册选择 / 拍照”，拍照只返回一张；返回 `tempFilePaths` 和 `tempFiles{path,size}`。
@@ -257,13 +270,13 @@ Valdi 把页面传给原生的 JS 函数登记在当时的页面名下（根 Con
 - **异步调用返回原生 Promise。** `BleHost`、`WifiHost`、`NfcHost`、`PermissionHost` 的方法都返回 `Promise<T>`，由 `nativeCall.ts` 调用，页面不再给原生任何函数。原生 Promise 不登记在页面名下，页面关了照样完成。
 - **事件只有一个出口。** 蓝牙、Wi-Fi、NFC 在首次使用时于 `withGlobalNativeRefs` 内获取 host 并执行一次 `setEvents`，原生持有这一份出口；页面监听登记在各模块的 JS 分发器中，单独取消。
 - **错误信息**：Android 会把失败包成 `类名: '…'`，`nativeCall` 去掉这层，`E_BLE_…`、`E_WIFI_…` 等错误码照常解析。
-- **iOS 的符号**：当前 `ValdiRuntime.xcframework` 导出 valdi_core 的 Objective-C API。宿主图片加载器位于 `Images/AppImages.swift`，直接使用 `SCValdiImage`；旧宿主 `ValdiImageBridge` / `ValdiVoidPromise` 已删除。AppUI 的原生 Promise 由模块自身的 `AppUIPromise` / `VRAppUIVoidPromise` 管理。
+- **iOS 的符号**：当前 `ValdiRuntime.xcframework` 导出 valdi_core 的 Objective-C API。宿主图片加载器位于 `Images/AppImages.swift`，直接使用 `SCValdiImage`；原生 Promise 直接使用运行时导出的 `SCValdiPromise` / `SCValdiPromiseCallback`。
 - **模块不被卸载**：内存警告时 Valdi 会卸载既不被活着的页面、也不被原生 import 的 JS 模块。`api` 里放着这些状态，所以由原生持有的 `startApp` 模块引用；创建 JS 门面本身不触发原生 host 初始化。
 - toast、modal、选择器这类 UI 调用通过原生 Promise 返回；展示归属仍由原生页面生命周期管理。
 
 ## Native Fetch、SSE 与 WebSocket
 
-模板的默认 runtime 已包含 `native_web`：Rust 网络与 Web API 实现、C++/Hermes 绑定，以及 JS 全局安装入口。常规 `scripts/export-android.sh` / `scripts/export-ios.sh` 就会导出它。应用入口已在业务服务加载前安装全局 API，页面直接使用：
+模板的默认 runtime 已包含 `native_web`：Rust 网络与 Web API 实现、C++/Hermes 绑定，以及 JS 全局安装入口。常规 `scripts/maintainer/export-android.sh` / `scripts/maintainer/export-ios.sh` 就会导出它。应用入口已在业务服务加载前安装全局 API，页面直接使用：
 
 ```ts
 const response = await fetch('https://example.com/data');
@@ -311,7 +324,7 @@ this.router.push('detail', { id: 1, from: 'home' }, {
 
 - **一般数据：** `api.getStorageSync(key)`、`setStorageSync(key, data)`、`removeStorageSync(key)`、`clearStorageSync()`（`src/storage.ts`），接口照小程序，但只有同步版本。
   - 值按 JSON 存：Date 读回来是字符串，`undefined` 成员会丢掉；没有的 key 读出 `undefined`（小程序是 `''`）。
-  - 入参用 valibot 在入口校验，错了抛 `ApiError`，比如 `setStorageSync:fail data must be JSON, …`。
+  - 入参在入口检查非空 `key` 并直接用 `JSON.stringify` 校验可序列化性，非法值（如 `undefined`、函数、循环引用、非有限数）抛 `ApiError`，比如 `setStorageSync:fail data must be JSON`。
   - 底层是一个 MMKV 实例 `app`，和 ExpoNativeRoutes 一样。目录：iOS `Documents/mmkv`，安卓 `files/mmkv`。iOS 用 SPM，钉在 v2.4.3 的 commit 上（它的包用了 `unsafeFlags`，SPM 只允许按 revision 引用这种包）；安卓用 `com.tencent:mmkv:2.4.3`。
   - MMKV 的文件没加密，拿到 app 文件的人能读，所以不放机密。
 - **应用状态：** 示例直接进入首页，已移除演示登录页、认证服务和会话 store。业务需要的用户模型、认证和持久化策略由应用自己实现，基础模块不提供 TokenStore。普通 JS 状态不需要生成原生代理。
@@ -348,7 +361,7 @@ iOS 宿主和 Android 结构一样：`ValdiHost.swift` 读路由表、按组件�
 iOS 的页面键盘和 AppUI Sheet 各自独立：
 
 - **键盘**：`KeyboardObserver.swift` 移植自 react-native-keyboard-controller 1.22.6（MIT）。每帧读键盘在屏幕上的真实位置（iOS 26+ 用 `keyboardLayoutGuide` 上的零高度 view，更早的系统找系统键盘 view），再按系统键盘动画的曲线往前预测两帧；交互式收起用 KVO 跟。它只报高度。SwiftUI 的键盘避让全部关掉（`.ignoresSafeArea(.keyboard)`），只有 `PageContainerView` 处理键盘：根 view 底部让出键盘高度，bottom inset 减去被键盘盖住的部分。跟踪 view 要在键盘出现前就挂进窗口，键盘弹出时才挂上去的 view 会直接排到终点，跟不上动画。
-- **AppUI Sheet**：`app_ui/ios/ui/AppUISheetHostView.swift` 保留弹簧动画、遮罩、拖动和滚动手势协调，由 AppUI 组件按自己的内容和可用空间测量，不创建路由页面。App 目录中的旧路由 Sheet 容器已删除。
+- **AppUI Sheet**：`app_ui/ios/bottomsheet/VRBottomSheetHostingView.swift` 统一提供临界阻尼弹簧动画、遮罩、多档位拖动与滚动手势双向协调，同时服务声明式 `<BottomSheet>` / `<ModalBottomSheet>` 与原生 `ActionSheet`、`Picker` 等组件，不创建路由页面。旧版 `0.16.2` Sheet 宿主已删除。
 
 Android release 开了 R8（`isMinifyEnabled`、`isShrinkResources`），APK 从约 66 MB 降到约 32 MB（dex 从 39 MB 到 5 MB）。Valdi 运行时和生成的绑定类（`generated/valdi/`，现在是 app 自己的源码，按 Valdi 的注解保留）由 aar 自带的 `proguard.txt` 保留，`app/proguard-rules.pro` 只补它没覆盖的：Valdi 的 `JNI_OnLoad` 按名字注册 native 方法（包括 Java 不调用的），删掉一个加载 so 就崩；ML Kit 用反射创建 `ComponentRegistrar`，R8 full mode 会删掉它们的无参构造。我们自己的 native 代码按名字找的类用 `@Keep`（`VisionNative.Result`）。只写不读的字段也会被删：`ValdiHost.hostScope` 只是为了让常驻 JS 作用域不被回收，所以加了 `@Keep`，否则 release 里 host 全部失效（`Cannot unwrap native function … reference was disposed`）。以后新增"只为持有"的字段、或者被 JNI / 反射按名字访问的类，都要同样处理。iOS 不需要：`ValdiRuntime.xcframework` 是动态库，按名字查类在运行时到库里找，App 的 release 构建不会裁掉它。
 
@@ -391,21 +404,20 @@ copy、full（raw / default-ZSTD）或仅限 HBC 的 HDIFFSF20/zlib patch。客�
 调用方式见 [OTA 接口说明](docs/ota.md#javascript-and-native-access)。
 
 ```sh
-# 已有的签名密钥继续使用；只有首次没有密钥时运行 node scripts/ota.mjs keygen。
+# 已有的签名密钥继续使用；只有首次没有密钥时运行 pnpm ota keygen。
 # 先手动导出 Release runtime；OTA 打包检查导出产物和平台/配置元数据。
-scripts/export-android.sh release
+scripts/maintainer/export-android.sh release
 (cd android && ./gradlew :app:assembleRelease -PvaldiOtaUrl=https://ota.example.com)
 # 在仓库根目录手动指定接收更新的 App 版本和不可重复使用的更新版本。
-node scripts/ota.mjs pack android 0.1 pages-002
+pnpm ota pack android 0.1 pages-002
 # 可选：旧 package 目录推导 base 版本并校验平台/App 版本。
-node scripts/ota.mjs pack android 0.1 pages-002 --base ota/dist/android/0.1/pages-001
+pnpm ota pack android 0.1 pages-002 --base ota/dist/android/0.1/pages-001
 # 或指定旧归档及其业务版本；两种 base 形式均需本地 hdiffz。
-VALDI_HDIFFZ=/path/to/hdiffz node scripts/ota.mjs pack android 0.1 pages-002 \
+VALDI_HDIFFZ=/path/to/hdiffz pnpm ota pack android 0.1 pages-002 \
   --base /path/to/old.valdimodule --base-version pages-001
 ```
 
-iOS 通过 Release 构建设置 `VALDI_OTA_URL`，打包命令为 `node scripts/ota.mjs pack ios 1.0 pages-002`；
-两端 `scripts/ota-pack-*.sh` 支持相同 base 参数。工具依次从 `VALDI_HDIFFZ`、
+iOS 通过 Release 构建设置 `VALDI_OTA_URL`，打包命令为 `pnpm ota pack ios 1.0 pages-002`（或 `node scripts/ota/ota.mjs pack ios ...`），同样支持 `--base` / `--base-version` 参数。工具依次从 `VALDI_HDIFFZ`、
 `ota/tools/hdiffz(.exe)`、`PATH` 查找；没有工具时显式 base 报错，不联网安装，full-only 无此依赖。
 编译器以 `--module app_pages --hermes-base <旧归档>` 构建，通过 Hermes `-base-bytecode` 复用旧 HBC，
 不使用 `deltaprep`。仅当完整 delta 元数据和 payload 总量小于目标归档时才附带 delta。
@@ -434,8 +446,8 @@ Debug 和空更新地址均只使用安装包。签名、协议、目录、版�
     --objc-out ../../ios/Generated/valdi --objc-framework ValdiRuntime --cpp-modules-out ../../valdi/modules
   ```
 
-- **接入**：Android 是 Gradle 的 `<variant>ValdiModules`（产物进 assets 和 res）和 `valdiCodegenCheck`（挂在 preBuild）；iOS 是 `project.yml` 的 “Valdi bindings check” 和 “Valdi modules” 两个构建脚本（产物进 app 的资源目录，Valdi 先在这里找模块）。改了 `project.yml` 要重新运行 `node scripts/ios-project.mjs`。
-- **命令行**：`pnpm build [--release] [--minify] [--out <dir>] [--res <dir>] [--ios-res <dir>]`；`pnpm dev` 是热重载（`scripts/hotreload.sh`），监听 `src/`、`res/`、`sql/`，把改动推给 Android 模拟器和启动着的 iOS 模拟器（端口 13592，Valdi daemon 的协议），代替 `valdi hotreload`。真机只在 `ANDROID_SERIAL` 指定时才推，因为装着别的构建的 app 收到推送会出问题。
+- **接入**：Android 是 Gradle 的 `<variant>ValdiModules`（产物进 assets 和 res）和 `valdiCodegenCheck`（挂在 preBuild）；iOS 是 `project.yml` 的 “Valdi bindings check” 和 “Valdi modules” 两个构建脚本（产物进 app 的资源目录，Valdi 先在这里找模块）。改了 `project.yml` 要重新运行 `node scripts/lib/ios-project.mjs`。
+- **命令行**：`pnpm build [--release] [--minify] [--out <dir>] [--res <dir>] [--ios-res <dir>]`；`pnpm dev` 是热重载（`scripts/lib/hotreload.sh`），监听 `src/`、`res/`、`sql/`，把改动推给 Android 模拟器和启动着的 iOS 模拟器（端口 13592，Valdi daemon 的协议），代替 `valdi hotreload`。真机只在 `ANDROID_SERIAL` 指定时才推，因为装着别的构建的 app 收到推送会出问题。
 - **模块**：`valdi/modules/` 下的模块由根 `package.json` 的 `valdi.modules` 选择，各自打成 `<模块>.valdimodule`（自己的图片、npm 代码），绑定也按模块生成到同一组目录。模块之间按路径导入（`import { X } from 'other/src/X'`），运行时 Valdi 加载对方的模块。新建：`pnpm new-module <名字>`，交互选择官方 `ui_component`、`polyglot_bridge_module`、`polyglot_view_module`，或仓库的 `cpp_bridge_module` 模板，也可用 `--template` 指定。名字规范为 snake_case；原生模板自动接入库链接、工厂和 View Binder 注册；C++ 模板自动生成模块自己的实现与 Bazel 规则，启用后生成绑定和 runtime 链接清单，无需手改宿主 BUILD。链接进 runtime 的 C++、vendor 或启用的 C++ 模块名单变更需手动导出运行时，再运行 `pnpm android` / `pnpm ios`；宿主模块的原生源码和依赖则随正常原生构建处理。详见 [自定义模块](docs/custom-modules.md)。删掉一个模块后，删它在 `android/app/generated/valdi`、`ios/Generated/valdi` 里的绑定，再跑 `pnpm tsconfig`。
 - **IDE**：各模块的 `tsconfig.json` 由 `pnpm tsconfig` 生成（`new-module` 会跑），代替 `valdi projectsync`：Valdi 的基础配置、运行时带的 Valdi 模块（只有这些能导入）、所有 app 模块，生成的资源声明（`res.ts`）在 `tools/valdi-rolldown/.gen/`。`valdi/modules/app_pages/BUILD.bazel` 已经用不到了。
 
@@ -455,13 +467,13 @@ TS 声明一个 `@ExportModule` 的 `.d.ts`，C++ 实现它，JS 像普通模块
 
 ## npm 依赖
 
-页面直接按包名导入 npm 包：`import dayjs from 'dayjs'`、`import * as v from 'valibot'`。
+页面直接按包名导入 npm 包，例如 `import dayjs from 'dayjs'`。
 
 - **版本**写在 `valdi/package.json` 的 `dependencies`，`pnpm-lock.yaml` 锁版本和 integrity；`node_modules` 在 `valdi/` 下。pnpm 只把直接声明的包放在顶层，没声明的包导入不到。用新包就是 `pnpm add` 再 `import`，不用登记。
-- **打包**：npm 代码打进使用它的各个模块里，按 rolldown 的代码分割走（类似 webpack 的 splitChunks）：只有一个文件用的包直接打进那个文件（例如 AppUI 滚轮的 dayjs），多个文件共用的提成公共 chunk（`npm/valibot.js`），按包名命名，每次构建名字不变。CommonJS 包的互操作在 chunk 里由 rolldown 处理，不经过 Valdi 的懒加载代理。
+- **打包**：npm 代码打进使用它的各个模块里，按 rolldown 的代码分割走（类似 webpack 的 splitChunks）：只有一个文件用的包直接打进那个文件（例如 AppUI 滚轮的 dayjs），多个文件共用的包自动提成公共 chunk（`npm/<pkg>.js`），按包名命名，每次构建名字不变。CommonJS 包的互操作在 chunk 里由 rolldown 处理，不经过 Valdi 的懒加载代理。
 - **类型**直接用包自带的。
 
-升级：改 `package.json` 的版本，`pnpm install`，然后重新构建。`@tanstack/query-core` 已经装了，还没有页面用它。
+升级：改 `valdi/package.json` 的版本，执行 `pnpm install`，然后重新构建。
 
 **Valdi 的懒加载代理。** Valdi 的 `require` 返回一个代理，第一次读属性时才执行那个文件。文件之间的引用都是读属性，所以照常懒加载。只为副作用的导入（`import './x'`）编出来是一句单独的 `require("./x")`，没人读属性就永远不执行，所以构建把它改成 `require("./x", true)`，立即加载（`pipeline.ts` 的 `eagerSideEffectRequires`）。互相 import 的文件（`nfc/NfcHost.ts` ↔ `nfc/native.ts`）会被 rolldown 合成一块 `chunks/src/nfc/NfcHost.js`，原来的文件只转发导出；转发的是加载时的值，所以循环依赖里不要用会重新赋值的 `export let`。
 

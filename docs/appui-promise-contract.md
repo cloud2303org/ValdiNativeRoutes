@@ -15,7 +15,6 @@ showModal: (request: ModalRequest) => Promise<ModalReply>;
 showActionSheet: (request: ActionSheetRequest) => Promise<PresentationReply>;
 showPicker: (request: PickerRequest) => Promise<PresentationReply>;
 showDatePicker: (request: DatePickerRequest) => Promise<PresentationReply>;
-showBottomSheet: (request: BottomSheetRequest) => Promise<PresentationReply>;
 previewImage: (request: ImagePreviewRequest) => Promise<PresentationReply>;
 scanCode: () => Promise<ScanCodeReply>;
 pickAttachments: (source: string, limit: number, mimeTypes: string[]) => Promise<AttachmentSelection>;
@@ -39,7 +38,7 @@ with undefined and becomes the existing `{ errMsg: '<method>:ok' }` public resul
 - Modal cancellation resolves its `ModalReply`, including `confirm: false`, `cancel: true` and the existing content
   behavior.
 - Picker cancellation resolves publicly with `confirm: false`, `cancel: true`, `value: ''`, `index: -1`, regardless
-  of a highlighted selection. Date picker cancellation clears `value`; bottom sheet cancellation retains its flags.
+  of a highlighted selection. Date picker cancellation clears `value`.
 - Preview close, including page removal, fulfills and returns `previewImage:ok`.
 - Action sheet cancellation resolves a native `PresentationReply`, which the public API converts into
   `showActionSheet:fail cancel`. Cancellation of the image-source action sheet becomes `chooseImage:fail cancel`.
@@ -76,8 +75,8 @@ iOS implements generated `VRAppUIHost <NSObject, SCValdiMarshallable>`. Objectiv
 these same imported `SCValdiPromise` types. The compiler imports `showModalWithRequest:` as
 `showModal(with:)` and similarly shortens the other request methods; attachment selection imports as
 `pickAttachments(withSource:limit:mimeTypes:)`. It explicitly settles
-`SCValdiResolvablePromise<Reply>` from the native completion, retaining that owner until completion. Void uses
-the module-owned `VRAppUIVoidPromise` helper, which fulfills with `SCValdiUndefinedValue`; failures call the native
+`SCValdiResolvablePromise<Reply>` from the native completion, retaining that owner until completion. Void fulfills
+directly in Swift via `SCValdiUndefinedValue.undefined()!`; failures call the native
 rejection API. Arrays inside attachment results remain part of the generated typed model.
 
 The BLE module's separate Swift generator emits `ValdiPromise<Reply>` / `ValdiPromise<Void>` and uses explicit

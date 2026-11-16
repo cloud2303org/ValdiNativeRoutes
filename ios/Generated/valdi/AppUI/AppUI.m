@@ -59,6 +59,24 @@
 
 
 //
+// VRAppSheetOverlayContext.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "AppUI.h"
+
+
+//
+// VRAppSheetOverlayViewModel.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "AppUI.h"
+
+
+//
 // VRAppUINativeModule.m
 //
 
@@ -110,15 +128,6 @@ NSInteger VRAppUINativeModuleMarshall(SCValdiMarshallerRef  _Nonnull marshaller,
 
 //
 // VRAttachmentSelection.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "AppUI.h"
-
-
-//
-// VRBottomSheetRequest.m
 //
 
 #import <ValdiRuntime/SCValdiJSConversionUtils.h>
@@ -288,14 +297,13 @@ static id SCValdiBlockCreateOOODO_o(SCValdiBlockTrampoline trampoline) {
         {.name = "showActionSheet", .selName = "showActionSheetWithRequest:", .type = "f|m|(r:'[2]'): p<r:'[3]'>"},
         {.name = "showPicker", .selName = "showPickerWithRequest:", .type = "f|m|(r:'[4]'): p<r:'[3]'>"},
         {.name = "showDatePicker", .selName = "showDatePickerWithRequest:", .type = "f|m|(r:'[5]'): p<r:'[3]'>"},
-        {.name = "showBottomSheet", .selName = "showBottomSheetWithRequest:", .type = "f|m|(r:'[6]'): p<r:'[3]'>"},
-        {.name = "previewImage", .selName = "previewImageWithRequest:", .type = "f|m|(r:'[7]'): p<r:'[3]'>"},
-        {.name = "scanCode", .selName = "scanCode", .type = "f|m|(): p<r:'[8]'>"},
-        {.name = "pickAttachments", .selName = "pickAttachmentsWithSource:limit:mimeTypes:", .type = "f|m|(r:'[9]', d, a<s>): p<r:'[10]'>"},
+        {.name = "previewImage", .selName = "previewImageWithRequest:", .type = "f|m|(r:'[6]'): p<r:'[3]'>"},
+        {.name = "scanCode", .selName = "scanCode", .type = "f|m|(): p<r:'[7]'>"},
+        {.name = "pickAttachments", .selName = "pickAttachmentsWithSource:limit:mimeTypes:", .type = "f|m|(r:'[8]', d, a<s>): p<r:'[9]'>"},
         {.name = "clearAttachmentCache", .selName = "clearAttachmentCache", .type = "f|m|(): p<v>"},
-        {.name = "showToast", .selName = "showToastWithRequest:", .type = "f|m|(r:'[11]'): p<v>"},
+        {.name = "showToast", .selName = "showToastWithRequest:", .type = "f|m|(r:'[10]'): p<v>"},
         {.name = "hideToast", .selName = "hideToast", .type = "f|m|(): p<v>"},
-        {.name = "showLoading", .selName = "showLoadingWithRequest:", .type = "f|m|(r:'[12]'): p<v>"},
+        {.name = "showLoading", .selName = "showLoadingWithRequest:", .type = "f|m|(r:'[11]'): p<v>"},
         {.name = "hideLoading", .selName = "hideLoading", .type = "f|m|(): p<v>"},
         {.name = nil},
     };
@@ -306,7 +314,6 @@ static id SCValdiBlockCreateOOODO_o(SCValdiBlockTrampoline trampoline) {
         "VRPresentationReply",
         "VRPickerRequest",
         "VRDatePickerRequest",
-        "VRBottomSheetRequest",
         "VRImagePreviewRequest",
         "VRScanCodeReply",
         "VRAttachmentSource",

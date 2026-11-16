@@ -118,24 +118,6 @@ static id SCValdiBlockCreateOB_o(SCValdiBlockTrampoline trampoline) {
 
 
 //
-// VRTabBarContext.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
-// VRTabBarViewModel.m
-//
-
-#import <ValdiRuntime/SCValdiJSConversionUtils.h>
-
-#import "app_pages.h"
-
-
-//
 // VRBlePage.m
 //
 

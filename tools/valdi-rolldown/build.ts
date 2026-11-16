@@ -29,7 +29,7 @@ import {
 } from './pipeline';
 import { addFontEntries, assetCatalog, findFonts, findImages, writeAndroidResources, writeIosResources, writeResTs } from './resources';
 import { valdiTs } from './valdiTs';
-import { buildNodeModules, copyModuleTree, stagedModuleOutputs } from '../../scripts/node-modules.mjs';
+import { buildNodeModules, copyModuleTree, stagedModuleOutputs } from '../../scripts/lib/node-modules.mjs';
 import { availableModuleNames, pruneDisabledModuleOutputs } from './modules.mjs';
 
 const value = (name: string) => {
@@ -40,7 +40,7 @@ const value = (name: string) => {
   }
   return process.argv[index + 1];
 };
-const valueOptions = new Set(['--out', '--res', '--ios-res', '--module', '--hermes-base', '--native-platform']);
+const valueOptions = new Set(['--out', '--map-out', '--res', '--ios-res', '--module', '--hermes-base', '--native-platform']);
 for (let index = 2; index < process.argv.length; index++) {
   const argument = process.argv[index];
   if (valueOptions.has(argument)) {
@@ -56,6 +56,7 @@ const option = (name: string) => {
 };
 const archivesOnly = option('--out');
 const out = archivesOnly ?? path.join(import.meta.dirname, 'out');
+const mapOut = option('--map-out') ?? out;
 const androidRes = option('--res');
 const iosRes = option('--ios-res');
 const release = process.argv.includes('--release');
@@ -81,6 +82,7 @@ const baseArchive = baseFile ? unpack(readFileSync(baseFile)) : undefined;
 const available = availableModuleNames(path.resolve(import.meta.dirname, '../..'));
 if (!selected) {
   pruneDisabledModuleOutputs(out, available, allModules.map(module => module.name));
+  if (mapOut !== out) pruneDisabledModuleOutputs(mapOut, available, allModules.map(module => module.name));
   if (iosRes) pruneDisabledModuleOutputs(iosRes, available, allModules.map(module => module.name));
 }
 
@@ -90,6 +92,7 @@ if (archivesOnly) {
   rmSync(selected ? path.join(out, selected) : out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
 }
+if (release && mapOut !== out) mkdirSync(mapOut, { recursive: true });
 
 if (androidRes && !selected) rmSync(androidRes, { recursive: true, force: true });
 const bazelOutputs = !selected || moduleConfig(selected).nativeBuild === 'bazel'
@@ -108,7 +111,7 @@ for (const module of modules) {
   const compiled = bazelOutputs.get(module.name);
   if (compiled) {
     cpSync(path.join(compiled, `${module.name}.valdimodule`), path.join(out, `${module.name}.valdimodule`));
-    if (release) cpSync(path.join(compiled, `${module.name}.map.json`), path.join(out, `${module.name}.map.json`));
+    if (release) cpSync(path.join(compiled, `${module.name}.map.json`), path.join(mapOut, `${module.name}.map.json`));
     if (androidRes) copyModuleTree(path.join(compiled, 'resources/android'), androidRes);
     if (iosRes) {
       rmSync(path.join(iosRes, `${module.name}.bundle`), { recursive: true, force: true });
@@ -145,10 +148,10 @@ for (const module of modules) {
   plugin.dispose();
 }
 
-/** The archive (and in release builds the source maps) of one module into `out`. */
+/** The archive (and in release builds the source maps) of one module into `out` / `mapOut`. */
 async function write(name: string, built: Built) {
   if (release) {
-    writeFileSync(path.join(out, `${name}.map.json`), sourceMapJson(name, built));
+    writeFileSync(path.join(mapOut, `${name}.map.json`), sourceMapJson(name, built));
     await precompile(built.entries, { baseArchive });
   } else {
     inlineSourceMaps(built);

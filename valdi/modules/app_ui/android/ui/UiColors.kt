@@ -183,6 +183,8 @@ private val darkColors = UiColors(
     buttonOnDanger = UiDesign.dark.color.buttonOnDanger,
 )
 
+internal fun uiColors(dark: Boolean): UiColors = if (dark) darkColors else lightColors
+
 @Composable
 fun uiColors(): UiColors = when (LocalUiAppearance.current ?: if (isSystemInDarkTheme()) UiAppearance.Dark else UiAppearance.Light) {
     UiAppearance.Light -> lightColors

@@ -30,7 +30,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
-import io.valdiroutes.app.R
+import io.valdiroutes.generated.HostDrawable
 
 /** Presentation is borrowed from the existing Compose Activity, never from another Activity or JS runtime. */
 @OptIn(UnstableApi::class)
@@ -80,10 +80,12 @@ internal class VideoPresentation(
         check(!disposed && !activity.isFinishing && !activity.isDestroyed) { "Video Activity is unavailable" }
         check(!activity.isInPictureInPictureMode && !pipPending) { "Activity is already in picture-in-picture" }
         if (active === session && session.mode == VideoSession.FULLSCREEN) return
+        val carriedBars = if (active != null) savedBars else null
         active?.let { previous ->
             check(previous.mode != VideoSession.PIP) { "Another video owns picture-in-picture" }
             remove(previous)
         }
+        if (carriedBars != null) savedBars = carriedBars
         active = session
         session.mode = VideoSession.FULLSCREEN
         val content = FrameLayout(activity).apply {
@@ -237,10 +239,10 @@ internal class VideoPresentation(
         // Publish explicit commands: an old "Play" PendingIntent must never toggle into a pause.
         val playing = session.player.playWhenReady && session.player.playbackState != Player.STATE_ENDED
         val actions = listOf(
-            action(session, "back", "Back 10 seconds", R.drawable.valdi_video_pip_back),
+            action(session, "back", "Back 10 seconds", HostDrawable.valdi_video_pip_back),
             action(session, if (playing) "pause" else "play", if (playing) "Pause" else "Play",
-                if (playing) R.drawable.valdi_video_pip_pause else R.drawable.valdi_video_pip_play),
-            action(session, "forward", "Forward 10 seconds", R.drawable.valdi_video_pip_forward),
+                if (playing) HostDrawable.valdi_video_pip_pause else HostDrawable.valdi_video_pip_play),
+            action(session, "forward", "Forward 10 seconds", HostDrawable.valdi_video_pip_forward),
         )
         return PictureInPictureParams.Builder()
             .setAspectRatio(Rational((aspect * 1000).toInt().coerceIn(419, 2390), 1000))
@@ -284,13 +286,15 @@ internal class VideoPresentation(
     private fun saveAndHideBars() {
         val decor = activity.window.decorView
         val controller = WindowCompat.getInsetsController(activity.window, decor)
-        val insets = ViewCompat.getRootWindowInsets(decor)
-        savedBars = Bars(
-            controller.isAppearanceLightStatusBars, controller.isAppearanceLightNavigationBars,
-            controller.systemBarsBehavior,
-            insets?.isVisible(WindowInsetsCompat.Type.statusBars()) ?: true,
-            insets?.isVisible(WindowInsetsCompat.Type.navigationBars()) ?: true,
-        )
+        if (savedBars == null) {
+            val insets = ViewCompat.getRootWindowInsets(decor)
+            savedBars = Bars(
+                controller.isAppearanceLightStatusBars, controller.isAppearanceLightNavigationBars,
+                controller.systemBarsBehavior,
+                insets?.isVisible(WindowInsetsCompat.Type.statusBars()) ?: true,
+                insets?.isVisible(WindowInsetsCompat.Type.navigationBars()) ?: true,
+            )
+        }
         controller.isAppearanceLightStatusBars = false
         controller.isAppearanceLightNavigationBars = false
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE

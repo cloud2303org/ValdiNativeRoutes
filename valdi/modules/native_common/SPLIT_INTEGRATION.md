@@ -13,7 +13,7 @@ Enable each module explicitly in `package.json` when its imports remain in the a
 
 The app API remains a composition in `app_pages/src/api.ts`; it supplies its existing `ApiError` constructor to `appUIApi` and `storageApi`, preserving public error identity. Bluetooth is still composed from its existing independent module. The original app storage, permission, Wi-Fi, NFC, AppUIHost, nativeCall and structuredData forwarding paths have been deleted. Business and test consumers import the owning modules directly. Services use factory-backed `getHost()` and permissions' `getAndroidSdk()` directly, with no manual TS installation overrides. Wi-Fi, NFC and Bluetooth cache their native proxies and bind events under `withGlobalNativeRefs`.
 
-`native_common/src/pickerSchemas.ts` contains pure validation shared by AppUI and inline wheel schemas. `app_pages/src/schemas.ts` keeps only the app-owned wheel schema logic; consumers import common request schemas directly. AppUI also imports the common schema module directly. Inline wheel schema imports do not import a native service. `native_common` owns the shared `bindMethods` and `nativeCall` helpers, including Bluetooth's imports; the unused app `bindMethods` and duplicate Bluetooth helpers are removed.
+`native_common/src/pickerSchemas.ts` contains lightweight request normalizers shared by AppUI and inline wheel normalizers. `app_pages/src/schemas.ts` keeps only the app-owned wheel schema logic; consumers import common request normalizers directly. AppUI also imports the common module directly. Inline wheel normalizer imports do not import a native service. `native_common` owns the shared `bindMethods` and `nativeCall` helpers, including Bluetooth's imports; the unused app `bindMethods` and duplicate Bluetooth helpers are removed.
 
 The `Permissions.d.ts` type import is deliberately after the module declarations. The symbol dumper uses the first root node's `@ExportModule` annotation to include every exported function. This is necessary to export both `getHost` and `getAndroidSdk`.
 
@@ -26,7 +26,7 @@ Android:
 - `io/valdiroutes/app/WifiHostImpl.kt` and `io/nativeroutes/wifi/*.kt` -> `wifi/android/` and `wifi/android/core/`, packages `io.valdiroutes.wifi` and `io.valdiroutes.wifi.core`.
 - `io/valdiroutes/app/NfcHostImpl.kt` and `io/nativeroutes/nfc/*.kt` -> `nfc/android/` and `nfc/android/core/`, packages `io.valdiroutes.nfc` and `io.valdiroutes.nfc.core`.
 - `io/valdiroutes/app/AppUIHostImpl.kt`, `io/valdiroutes/app/appui/*.kt`, and `io/nativeroutes/ui/*.kt` -> `app_ui/android/`, `app_ui/android/appui/`, `app_ui/android/ui/`, packages `io.valdiroutes.app_ui`, `io.valdiroutes.app_ui.appui`, `io.valdiroutes.app_ui.ui`.
-- AppUI owns `NativeWheelBody`, `NativeWheelColumn`, `NativeWheelLogic`, and `SheetHostView`. The app's `WheelViews.kt` imports the shared wheel implementation and supplies only Valdi model conversion, input forwarding, recycling, and callbacks. The duplicate app wheel implementations and obsolete app `SheetHostView.kt` have been removed.
+- AppUI owns `NativeWheelBody`, `NativeWheelColumn`, `NativeWheelLogic`, and the unified v1.0.0 `BottomSheetHostView` (`app_ui/android/bottomsheet/`). The app's `WheelViews.kt` imports the shared wheel implementation and supplies only Valdi model conversion, input forwarding, recycling, and callbacks. The duplicate app wheel implementations and legacy `SheetHostView.kt` have been removed.
 - `android/app/src/main/res/xml/ui_attachment_paths.xml` -> `app_ui/android/res/xml/ui_attachment_paths.xml`.
 - The provider fragment is `app_ui/android/AndroidManifest.xml`, class `io.valdiroutes.app_ui.ui.AttachmentFileProvider`, authority `${applicationId}.ui.attachments`, unchanged cache directory.
 - `ic_refresh.xml` lives in `app_ui/android/res/drawable`; the duplicate app copy is removed. Image preview resolves the host resource by name/package rather than importing app-owned `R`.
@@ -40,9 +40,9 @@ iOS:
 - `ios/ValdiRoutes/Wifi/**` -> `wifi/ios/`.
 - `ios/ValdiRoutes/AppUIHostImpl.swift`, `AppUIPromise.swift`, and `AppUI/{AppUI,AppPresenters,AppDialogView}.swift` -> `app_ui/ios/`.
 - `ios/ValdiRoutes/NativeRoutesUI/**` -> `app_ui/ios/ui/` under the extended scope approved by the parent. App inline wheels consume those selected native controls.
-- The app retains `KeyboardObserver.swift` for page insets; the obsolete app `SheetHostView.swift` has been removed. AppUI owns `AppUIKeyboardObserver` and `AppUISheetHostView` to avoid app-class dependencies. Factory registration prepares the module keyboard observer before text input; the module implementations preserve the existing keyboard/sheet algorithms.
+- The app retains `KeyboardObserver.swift` for page insets; the legacy sheet hosts have been removed. AppUI owns `AppUIKeyboardObserver` and the unified v1.0.0 `VRBottomSheetHostingView` (`app_ui/ios/bottomsheet/`). Factory registration prepares the module keyboard observer before text input.
 - `ios/ValdiRoutes/Images/AppImages.swift` remains app-owned, supporting the shared image cache and Valdi image loader. It calls exported `SCValdiImage` directly; the old app image/void-promise bridge is removed.
-- Each independent module that needs Promise<void> has a tiny unique helper: `permissions/ios/VRPermissionsVoidPromise.{h,m}`, `wifi/ios/VRWifiVoidPromise.{h,m}`, `app_ui/ios/VRAppUIVoidPromise.{h,m}`. Their implementations preserve the existing void promise bridge behavior.
+- Modules returning `Promise<void>` (`permissions`, `wifi`, `app_ui`) fulfill promises directly in Swift via `SCValdiUndefinedValue.undefined()!` exported by `ValdiRuntime`, requiring no per-module Objective-C void-promise shim headers.
 - NFC gets a small iOS rejecting host. Public NFC remains Android-only and rejects before loading it, as before; direct typed host users get NOT_SUPPORTED.
 
 Existing iOS `VR…` transport names are retained. New module protocol/factory names are unique. MMKV uses generated module name `MMKVStorage` to avoid collision with the SwiftPM `MMKV` module.
@@ -86,7 +86,7 @@ AppUI.imageLoader = AppImages.load
 
 The port's type is `NativeImageLoading.Loader?`. `AppPresenters` passes the supplied loader directly to `ImagePreview`; success/failure completion and cancellation closures are unchanged. An unset loader rejects preview immediately with `E_NO_IMAGE_LOADER` before entering the page queue. Clearing the loader while a request waits also rejects at presentation time and advances the queue.
 
-Generated protocols/factory headers belong in the parent's `ValdiModuleImports.h`. Include the three module-owned void promise helper headers as well, so Swift sees their interfaces. The app image loader imports `SCValdiImage` through ValdiRuntime; no app image-bridge header remains.
+Generated protocols/factory headers belong in the parent's `ValdiModuleImports.h`. The app image loader and void promises use `SCValdiImage` and `SCValdiUndefinedValue` directly through `ValdiRuntime`; no Objective-C shim headers remain.
 
 ## Platform contributions
 

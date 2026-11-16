@@ -160,6 +160,24 @@ FOUNDATION_EXPORT NSInteger VRSplashScreenNativeModuleMarshall(SCValdiMarshaller
 
 
 //
+// VRTabBarContext.h
+//
+
+#import <ValdiRuntime/SCValdiMarshaller.h>
+
+#import <app_foundationTypes/app_foundationTypes.h>
+
+
+//
+// VRTabBarViewModel.h
+//
+
+#import <ValdiRuntime/SCValdiMarshaller.h>
+
+#import <app_foundationTypes/app_foundationTypes.h>
+
+
+//
 // VRAppContextHost.h
 //
 

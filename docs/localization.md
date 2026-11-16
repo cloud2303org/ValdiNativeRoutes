@@ -77,7 +77,7 @@ pnpm dev         # 首次构建自动生成 Strings，随后监听 src/、res/�
 pnpm build       # 类型检查并打包 TS 与 Inline JSON，也会自动生成 Strings
 ```
 
-完整 Valdi 类型和实际编译仍要求先运行 `node scripts/prepare-valdi.mjs`。
+完整 Valdi 类型和实际编译仍要求先运行 `node scripts/lib/prepare-valdi.mjs`。
 仅修改文案或占位符不需要重新导出原生运行时。
 
 dev 监听 JSON 的新增、修改、删除以及 `strings/` 目录变化；重建前更新生成文件，

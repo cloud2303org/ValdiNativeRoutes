@@ -1,4 +1,4 @@
-# Generate with node scripts/ios-project.mjs; application identity comes from package.json.
+# Generate with node scripts/lib/ios-project.mjs; application identity comes from package.json.
 name: ${VALDI_APP_NAME}
 include:
   - Generated/Modules.yml
@@ -28,7 +28,7 @@ targets:
       - path: Generated/valdi
         group: ValdiBindings
     dependencies:
-      # The Valdi runtime and Valdi's own modules, produced by scripts/export-ios.sh; app_pages comes from the "Valdi
+      # The Valdi runtime and Valdi's own modules, produced by scripts/maintainer/export-ios.sh; app_pages comes from the "Valdi
       # modules" phase below, its Objective-C bindings from Generated/valdi.
       - framework: Frameworks/ValdiRuntime.xcframework
         embed: true
@@ -50,7 +50,7 @@ targets:
           command -v node >/dev/null || . "$HOME/.nvm/nvm.sh"
           mode=debug
           if [ "$CONFIGURATION" = "Release" ]; then mode=release; fi
-          node "$SRCROOT/../scripts/node-modules.mjs" ios "$mode"
+          node "$SRCROOT/../scripts/lib/node-modules.mjs" ios "$mode"
       # Check generated contracts; the runtime is exported manually after runtime/C++ changes.
       - name: Valdi bindings check
         basedOnDependencyAnalysis: false
@@ -72,12 +72,16 @@ targets:
           export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
           command -v node >/dev/null || . "$HOME/.nvm/nvm.sh"
           resources="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
-          release=""
-          if [ "$CONFIGURATION" = "Release" ]; then release="--release"; fi
+          maps="$BUILT_PRODUCTS_DIR/ValdiMaps"
+          release_args=()
+          if [ "$CONFIGURATION" = "Release" ]; then
+            mkdir -p "$maps"
+            release_args=(--release --map-out "$maps")
+          fi
           # Only ours are here (Valdi's own are in its framework): modules an earlier build wrote and this one doesn't.
           rm -f "$resources"/*.valdimodule "$resources"/*.map.json
           cd "$SRCROOT/../tools/valdi-rolldown"
-          ./node_modules/.bin/tsx build.ts --native-platform ios --out "$resources" --ios-res "$resources" $release
+          ./node_modules/.bin/tsx build.ts --native-platform ios --out "$resources" --ios-res "$resources" "${release_args[@]}"
     settings:
       base:
         MARKETING_VERSION: "1.0"

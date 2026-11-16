@@ -33,6 +33,7 @@ final class PageEntry: Equatable {
 
     /// Owned here, not by its container, so a page outlives the views that show it.
     var rootView: SCValdiRootView?
+    var pageContext: VRPageContext?
     var appliedInsets: UIEdgeInsets?
     weak var nativeContentView: UIView?
     var nativeContentReady = false
@@ -87,6 +88,7 @@ final class PageEntry: Equatable {
     func destroy() {
         rootView?.valdiContext?.destroy()
         rootView = nil
+        pageContext = nil
         tabBarContext = nil
     }
 
@@ -205,6 +207,7 @@ final class Navigator {
 
     private var routes: RouteTable
     private weak var host: UIViewController?
+    private var observers: [NSObjectProtocol] = []
     private var nextId = 1
 
     init(routes: RouteTable, host: UIViewController) {
@@ -214,12 +217,18 @@ final class Navigator {
         stack = StackController(root: PageController(entry: entry(routes.root), navigator: self))
         stack.onChange = { [weak self] in self?.updateVisibility() }
         updateVisibility()
-        NotificationCenter.default.addObserver(forName: UIScene.didEnterBackgroundNotification, object: nil, queue: .main) {
-            [weak self] _ in self?.setForeground(false)
-        }
-        NotificationCenter.default.addObserver(forName: UIScene.willEnterForegroundNotification, object: nil, queue: .main) {
-            [weak self] _ in self?.setForeground(true)
-        }
+        observers = [
+            NotificationCenter.default.addObserver(forName: UIScene.didEnterBackgroundNotification, object: nil, queue: .main) {
+                [weak self] _ in self?.setForeground(false)
+            },
+            NotificationCenter.default.addObserver(forName: UIScene.willEnterForegroundNotification, object: nil, queue: .main) {
+                [weak self] _ in self?.setForeground(true)
+            },
+        ]
+    }
+
+    deinit {
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
     func reloadRoutes(_ table: RouteTable) {
@@ -366,6 +375,16 @@ final class Navigator {
         }
     }
 
+    private func whenHostIdle(_ action: @escaping () -> Void) {
+        if let coordinator = (host?.presentedViewController ?? host)?.transitionCoordinator {
+            coordinator.animate(alongsideTransition: nil) { [weak self] _ in
+                DispatchQueue.main.async { self?.whenHostIdle(action) }
+            }
+            return
+        }
+        action()
+    }
+
     private func showCover(_ entry: PageEntry) {
         let cover = StackController(root: PageController(entry: entry, navigator: self))
         cover.onChange = { [weak self] in self?.updateVisibility() }
@@ -373,7 +392,11 @@ final class Navigator {
         coverHost.modalPresentationStyle = .fullScreen
         self.cover = cover
         self.coverHost = coverHost
-        host?.present(coverHost, animated: entry.navigation.animated)
+        let animated = entry.navigation.animated
+        whenHostIdle { [weak self] in
+            guard let self, self.coverHost === coverHost else { return }
+            self.host?.present(coverHost, animated: animated)
+        }
         updateVisibility()
     }
 
@@ -399,9 +422,12 @@ final class Navigator {
 
     private func closeCover(animated: Bool) {
         guard let cover else { return }
+        let dismissing = coverHost
         self.cover = nil
-        coverHost?.dismiss(animated: animated)
         coverHost = nil
+        whenHostIdle {
+            dismissing?.dismiss(animated: animated)
+        }
         // Pages pushed inside go with it, cancelled.
         cover.entries.reversed().forEach { $0.remove() }
         updateVisibility()

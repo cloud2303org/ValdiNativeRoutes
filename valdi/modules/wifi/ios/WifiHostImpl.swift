@@ -37,11 +37,7 @@ final class WifiHostImpl: NSObject, VRWifiHost {
     }
 
     private func promise(_ future: WifiFuture<Void>) -> SCValdiPromise<SCValdiUndefinedValue> {
-        VRWifiVoidPromise.make { settle in
-            future.observe { result in
-                if case let .failure(error) = result { settle(Self.message(error)) } else { settle(nil) }
-            }
-        }
+        promise(future) { SCValdiUndefinedValue.undefined()! }
     }
 
     func startWifi() -> SCValdiPromise<SCValdiUndefinedValue> {

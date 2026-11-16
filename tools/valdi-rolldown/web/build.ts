@@ -277,7 +277,7 @@ export async function buildWeb(framework: string, output = DEFAULT_OUTPUT, apiVe
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const framework = process.argv[2] ?? path.resolve(OWN, '../../../valdi/.valdi-sources/external/valdi+');
   if (!existsSync(path.join(framework, 'modules/_configs/base.tsconfig.json'))) {
-    throw new Error('Prepare the pinned framework first: node scripts/prepare-valdi.mjs. Alternatively pass FRAMEWORK_ROOT [OUTPUT] [API_VERSION].');
+    throw new Error('Prepare the pinned framework first: node scripts/lib/prepare-valdi.mjs. Alternatively pass FRAMEWORK_ROOT [OUTPUT] [API_VERSION].');
   }
   await buildWeb(framework, process.argv[3], process.argv[4] === undefined ? 0 : Number(process.argv[4]));
 }

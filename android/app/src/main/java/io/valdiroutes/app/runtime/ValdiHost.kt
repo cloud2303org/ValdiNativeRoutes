@@ -16,10 +16,6 @@ import com.snap.valdi.modules.ModuleFactoryRegistry
 import com.snap.valdi.support.SupportValdiRuntimeManager
 import com.snap.valdi.views.ValdiRootView
 import io.valdiroutes.pages.NavigationHost
-import io.valdiroutes.permissions.PermissionHostImpl
-import io.valdiroutes.permissions.PermissionModuleFactoryImpl
-import io.valdiroutes.video.VideoHostImpl
-import io.valdiroutes.video.VideoModuleFactoryImpl
 import io.valdiroutes.pages.StartApp
 import io.valdiroutes.pages.PageContext
 import io.valdiroutes.pages.PageInsets
@@ -53,10 +49,8 @@ object ValdiHost {
         runtimeManager = StartupTrace.section("runtime.manager.create") {
             ValdiRuntimeManager(app, tweaks = tweaks, customModuleProvider = moduleProvider, customLogger = StartupTrace.pageLogger())
         }
-        // Only valdi-video:// session URLs use this loader. The generated native module factory and loader
-        // explicitly share one resource registry; ordinary images and media URL resolution stay independent.
         StartupTrace.section("runtime.video_asset_loader.register") {
-            runtimeManager.registerAssetLoader(videoHost.loader)
+            io.valdiroutes.generated.ValdiNativeModules.registerAssetLoaders(runtimeManager)
         }
         StartupTrace.section("runtime.context_global_binders.register") {
             runtimeManager.registerGlobalAttributesBindersFromContext(app)
@@ -74,6 +68,8 @@ object ValdiHost {
             runtimeManager.registerGlobalAttributesBinder(ValdiWheelBinder(ColumnWheelView::class.java))
             runtimeManager.registerGlobalAttributesBinder(ValdiWheelBinder(TimeWheelView::class.java))
             runtimeManager.registerGlobalAttributesBinder(ValdiWheelBinder(TreeWheelView::class.java))
+            BottomSheetBinders.register(runtimeManager)
+            io.valdiroutes.app_ui.appui.AppUI.runtime = runtimeManager.mainRuntime
         }
         val scopeRequest = StartupTrace.start("hosts.request_to_js_callback")
         StartupTrace.section("hosts.createScopedJSRuntime.call") {
@@ -183,13 +179,6 @@ object ValdiHost {
     @Keep
     private var hostScope: ValdiScopedJSRuntime? = null
 
-    /** Runtime permissions for permissions/index.ts; the activity lends it the permission prompt. */
-    val permissionHost: PermissionHostImpl
-        get() = PermissionModuleFactoryImpl.requireHost()
-
-    val videoHost: VideoHostImpl
-        get() = VideoModuleFactoryImpl.requireHost()
-
     /** The route table, tab bar and first page, from startApp (app.ts); on the main thread, once JS has started. */
     fun start(onFailure: (Exception) -> Unit, completion: (RouteTable) -> Unit): () -> Unit {
         val callback: (Result<RouteTable>) -> Unit = { result ->
@@ -243,10 +232,11 @@ object ValdiHost {
                     setRetainsLayoutSpecsOnInvalidateLayout(true)
                 }
             }
+            val contextObj = pageContext(entry, navigator).also { entry.pageContext = it }
             val completion = StartupTrace.renderCompletion(rootView, details)
             StartupTrace.section("page.inflateViewAsync.call", details) {
                 runtimeManager.mainRuntime.inflateViewAsync(
-                    rootView, component, viewModel(entry, insets), pageContext(entry, navigator), null, completion, null,
+                    rootView, component, viewModel(entry, insets), contextObj, null, completion, null,
                 )
             }
             rootView
@@ -263,6 +253,7 @@ object ValdiHost {
     internal fun createTabBar(
         context: Context, shell: PageEntry, bar: TabBar, selected: String, safeAreaBottom: Double, navigator: Navigator,
     ): CustomTabBar {
+        val docked = bar.height != null
         val selection = TabBarSelection(bar.tabs.map { it.route }) { navigator.selectTab(shell, it) }
         val tabContext = TabBarContext { route -> main.post { selection.select(route) } }
         val details = StartupTrace.pageDetails("tab_bar", shell.id, shell.route)
@@ -271,15 +262,18 @@ object ValdiHost {
             isFocusable = false
             isFocusableInTouchMode = false
             setRetainsLayoutSpecsOnInvalidateLayout(true)
-            // The legacy dispatcher returns false for empty space; the newer dispatcher always consumes DOWN.
-            useNewMultiTouchExperience = false
+            if (!docked) {
+                // Full-viewport overlays need the legacy dispatcher, which returns false for empty space.
+                useNewMultiTouchExperience = false
+            }
         }
         val owner = CustomTabBar(root, tabContext, selection)
         val completion = StartupTrace.renderCompletion(root, details)
+        val configuration = if (docked) null else ValdiContextConfiguration(renderBackend = RenderBackend.ANDROID)
         StartupTrace.section("tab_bar.inflateViewAsync.call", details) {
             runtimeManager.mainRuntime.inflateViewAsync(
                 root, requireNotNull(bar.component), TabBarViewModel(bar.tabs, selected, safeAreaBottom), tabContext,
-                null, completion, ValdiContextConfiguration(renderBackend = RenderBackend.ANDROID),
+                null, completion, configuration,
             )
         }
         return owner

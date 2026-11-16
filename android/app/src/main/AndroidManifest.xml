@@ -18,7 +18,7 @@
         <activity
             android:name=".MainActivity"
             android:theme="@style/Theme.ValdiNativeRoutes.Starting"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|locale|layoutDirection|fontScale|mcc|mnc"
             android:exported="true"
             android:supportsPictureInPicture="true"
             android:resizeableActivity="true"

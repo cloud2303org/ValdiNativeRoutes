@@ -1,5 +1,4 @@
 import { getHost } from './MMKV';
-import * as v from 'valibot';
 
 /**
  * The app's key-value store: one MMKV instance, synchronous, on the JS thread. The bridge carries strings only;
@@ -39,7 +38,10 @@ export interface StorageReadReply {
   value: string;
 }
 
-const storageKey = v.pipe(v.string('key must be a string'), v.regex(/\S/, 'key must not be empty'));
+function checkKey(key: string): string {
+  if (typeof key !== 'string' || !/\S/.test(key)) throw new Error('key must not be empty');
+  return key;
+}
 
 /** Synchronous storage of JSON-serializable values. Missing keys return undefined; invalid data throws ApiError. */
 export function storageApi(fail: (method: string, cause: unknown) => Error) {
@@ -53,7 +55,7 @@ export function storageApi(fail: (method: string, cause: unknown) => Error) {
   return {
     getStorageSync<T = unknown>(key: string): T | undefined {
       return sync('getStorageSync', () => {
-        const reply = getHost().get(v.parse(storageKey, key));
+        const reply = getHost().get(checkKey(key));
         if (!reply.found) return undefined;
         try {
           return JSON.parse(reply.value) as T;
@@ -67,14 +69,14 @@ export function storageApi(fail: (method: string, cause: unknown) => Error) {
       sync('setStorageSync', () => {
         const value = JSON.stringify(data);
         if (value === undefined) throw new Error('the value is not JSON-serializable');
-        if (!getHost().set({ key: v.parse(storageKey, key), value })) {
+        if (!getHost().set({ key: checkKey(key), value })) {
           throw new Error('the store could not write it');
         }
       });
     },
 
     removeStorageSync(key: string): void {
-      sync('removeStorageSync', () => getHost().remove(v.parse(storageKey, key)));
+      sync('removeStorageSync', () => getHost().remove(checkKey(key)));
     },
 
     clearStorageSync(): void {

@@ -18,11 +18,12 @@
 // created while it runs is picked up on the next start.
 // strings/ JSON changes regenerate the typed src/Strings accessor before checking consumers. Text-only edits
 // also change Strings.js, so normal module unloading clears the Inline resolver's cached translation.
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { watch } from 'node:fs';
 import net from 'node:net';
+import { promisify } from 'node:util';
 import { appModules, modulesDir } from './pipeline';
-import { startDevControls } from '../../scripts/dev-controls.mjs';
+import { startDevControls } from '../../scripts/lib/dev-controls.mjs';
 import { DevBuild, ModuleBuild, recordChange, type Pending } from './dev-build';
 
 import { DEVICE_PORT, DevPacketReader, encodeDevPacket, updatedResources, type DevResource } from './dev-protocol';
@@ -110,42 +111,50 @@ class DeviceConnection {
   }
 }
 
+const execFileAsync = promisify(execFile);
 const devices = new Map<string, DeviceConnection>();
+let polling = false;
 
-function iosSimulatorBooted(): boolean {
+async function iosSimulatorBooted(): Promise<boolean> {
   if (process.platform !== 'darwin') return false;
   try {
-    return execFileSync('xcrun', ['simctl', 'list', 'devices', 'booted'], { encoding: 'utf8' }).includes('(Booted)');
+    const { stdout } = await execFileAsync('xcrun', ['simctl', 'list', 'devices', 'booted'], { encoding: 'utf8' });
+    return stdout.includes('(Booted)');
   } catch {
     return false;
   }
 }
 
-function pollDevices() {
-  let serials: string[];
+async function pollDevices() {
+  if (polling) return;
+  polling = true;
   try {
-    serials = execFileSync('adb', ['devices'], { encoding: 'utf8' })
+    const [adbResult, simBooted] = await Promise.all([
+      execFileAsync('adb', ['devices'], { encoding: 'utf8' }).then(r => r.stdout, () => ''),
+      iosSimulatorBooted(),
+    ]);
+    let serials = adbResult
       .split('\n')
       .slice(1)
       .map(line => line.split('\t'))
       .filter(([, state]) => state?.trim() === 'device')
       .map(([serial]) => serial);
-  } catch {
-    serials = [];
-  }
-  serials = process.env.ANDROID_SERIAL
-    ? serials.filter(serial => serial === process.env.ANDROID_SERIAL)
-    : serials.filter(serial => serial.startsWith('emulator-'));
-  if (iosSimulatorBooted()) serials.push(IOS_SIMULATOR);
-  for (const [serial, device] of devices) {
-    if (!serials.includes(serial)) {
-      device.close();
-      devices.delete(serial);
+    serials = process.env.ANDROID_SERIAL
+      ? serials.filter(serial => serial === process.env.ANDROID_SERIAL)
+      : serials.filter(serial => serial.startsWith('emulator-'));
+    if (simBooted) serials.push(IOS_SIMULATOR);
+    for (const [serial, device] of devices) {
+      if (!serials.includes(serial)) {
+        device.close();
+        devices.delete(serial);
+      }
     }
-  }
-  for (const serial of serials) {
-    if (!devices.has(serial)) devices.set(serial, new DeviceConnection(serial));
-    devices.get(serial)!.connect();
+    for (const serial of serials) {
+      if (!devices.has(serial)) devices.set(serial, new DeviceConnection(serial));
+      devices.get(serial)!.connect();
+    }
+  } finally {
+    polling = false;
   }
 }
 

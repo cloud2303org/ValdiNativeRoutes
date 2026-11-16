@@ -37,24 +37,24 @@ runs:
         mkdir -p .ci
         pnpm install --frozen-lockfile
         echo "BAZEL_BIN=$(command -v bazelisk)" >> "$GITHUB_ENV"
-        BAZEL_BIN="$(command -v bazelisk)" node scripts/prepare-valdi.mjs 2>&1 | tee .ci/prepare.log
-        node scripts/upstream.mjs report .ci/upstream
+        BAZEL_BIN="$(command -v bazelisk)" node scripts/lib/prepare-valdi.mjs 2>&1 | tee .ci/prepare.log
+        node scripts/maintainer/upstream.mjs report .ci/upstream
     - name: Identify native toolchain
       id: toolchain
       shell: bash
-      run: node scripts/ci.mjs toolchain
+      run: node scripts/maintainer/ci.mjs toolchain
     - name: Restore publisher HDiff tool
       id: hdiff
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: .tools/hdiffpatch
-        key: hdiff-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/hdiff-tool.json', 'scripts/hdiff-tool.mjs') }}
+        key: hdiff-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/ota/hdiff-tool.json', 'scripts/ota/hdiff-tool.mjs') }}
     - name: Prepare pinned HDiff publisher tool
       shell: bash
-      run: node scripts/hdiff-tool.mjs
+      run: node scripts/ota/hdiff-tool.mjs
     - name: Save publisher HDiff tool
       if: steps.hdiff.outputs.cache-hit != 'true'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: .tools/hdiffpatch
-        key: hdiff-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/hdiff-tool.json', 'scripts/hdiff-tool.mjs') }}
+        key: hdiff-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/ota/hdiff-tool.json', 'scripts/ota/hdiff-tool.mjs') }}

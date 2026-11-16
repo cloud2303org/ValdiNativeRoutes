@@ -40,13 +40,6 @@ final class AppUIHostImpl: NSObject, VRAppUIHost {
         )))
     }
 
-    func showBottomSheet(with request: VRBottomSheetRequest) -> SCValdiPromise<VRPresentationReply> {
-        present(.bottomSheet(BottomSheetOptions(
-            title: request.title, content: request.content, confirmText: request.confirmText,
-            cancelText: request.cancelText, showCancel: request.showCancel, dismissible: request.dismissible
-        )))
-    }
-
     func previewImage(with request: VRImagePreviewRequest) -> SCValdiPromise<VRPresentationReply> {
         present(.imagePreview(ImagePreviewOptions(urls: request.urls, current: request.current)))
     }

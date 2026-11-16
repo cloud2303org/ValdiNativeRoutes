@@ -34,10 +34,8 @@ export function createEditorConfig(
     }
     aliases.tslib = [absolute(paths.join(framework, 'src/valdi_modules/src/valdi/valdi_core/src/tslib'))];
   }
-  // A logical module-build entry has no valdi/node_modules ancestor. Exact and
-  // module-specific aliases win over this fallback; ordinary npm types still
-  // resolve from the declared package root without adding npm files as roots.
-  if (module.nodeModules) aliases['*'] = [absolute(paths.join(module.nodeModules, '*'))];
+  // npm packages use normal node_modules lookup. A wildcard paths mapping to
+  // node_modules would bypass package exports, including private subpaths.
   return {
     // Prepared compilation keeps the authoritative upstream diagnostics/options.
     // It does not depend on the bootstrap JSON being present in a Bazel sandbox.
@@ -45,10 +43,11 @@ export function createEditorConfig(
       ? paths.join(framework, 'modules/_configs/base.tsconfig.json')
       : sources.bootstrapBase),
     compilerOptions: {
-      // Match the Valdi TypeScript compiler's treatment of export= npm packages.
+      // Check both ESM and framework import=/export= syntax while resolving
+      // modern package exports with the same import conditions as Rolldown.
       allowSyntheticDefaultImports: true,
-      module: 'commonjs',
-      moduleResolution: 'node10',
+      module: 'preserve',
+      moduleResolution: 'bundler',
       paths: aliases,
       types: framework
         ? ['Long', 'globals'].map(name => absolute(paths.join(framework, 'modules/types', name)))

@@ -1,9 +1,10 @@
 # Typed routing ABI
 
 The shared TypeScript contract is in `app_foundation/src/navigation/models.ts`.
-All listed interfaces are pure data `@ExportModel`s. Android names use
+All listed interfaces are `@ExportModel`s in `app_foundation` (`app_pages/src/components/TabBar.ts`
+re-exports `TabBarViewModel` and `TabBarContext` for convenience). Android names use
 `io.valdiroutes.pages.<Name>`; Objective-C names use `VR<Name>`; C++ names
-use `snap::valdi_modules::app_pages::<Name>`.
+use `snap::valdi_modules::app_foundation::<Name>`.
 
 ```ts
 interface ResolvedNavigation {
@@ -32,6 +33,7 @@ interface RouteTabBar {
   tabs: RouteTab[];
   mode?: string; // default | custom; omitted normalizes to default
   component?: string; // required only for custom: AppTabBar@app_pages/src/AppTabBar
+  height?: number; // positive dp/pt height for docked custom bars; omitted for default or overlay: true
 }
 interface RouteDeclaration {
   routes: RouteEntry[];
@@ -55,45 +57,42 @@ defineRoutes({
   tabs: {
     initial: 'home', // optional; defaults to the first item
     items: [/* existing route/text/icon/selectedIcon items */],
-    bar: { type: 'custom', component: AppTabBar },
+    bar: { type: 'custom', component: AppTabBar, height: 64 }, // height defaults to 64; or overlay: true
   },
 });
 ```
 
 Omitting `bar`, or specifying `{ type: 'default' }`, selects the official
 platform tab component and retains its container-managed insets.
-`{ type: 'custom', component: AppTabBar }` selects a business-authored Valdi
-component. It does not select a preset native bar. The real route transformer
-resolves the exported `@Component` class to its canonical module class path,
-including named/default exports, and removes imports consumed only as metadata,
-exactly as for `valdiPage.component`. Evaluating routes never eagerly loads the
-custom component. Arbitrary UI callbacks and raw class-path strings are rejected
-in business declarations.
+`{ type: 'custom', component: AppTabBar, height?: number, overlay?: boolean }`
+selects a business-authored Valdi component. It does not select a preset native
+bar. The real route transformer resolves the exported `@Component` class to its
+canonical module class path, including named/default exports, and removes imports
+consumed only as metadata, exactly as for `valdiPage.component`. Evaluating
+routes never eagerly loads the custom component. Arbitrary UI callbacks and raw
+class-path strings are rejected in business declarations.
 
 `toHost()` always emits `mode: 'default'` or `mode: 'custom'`; a custom declaration
-also emits the compiled `component`. Both the transformer and runtime helper
-reject invalid modes, a component on a default bar, and a missing/invalid custom
-component. For host input, missing `mode` normalizes to `default` for older
-declarations; unknown modes and mismatched component/mode combinations must be
-rejected before constructing the tab shell.
+also emits the compiled `component` and, unless `overlay: true` is specified,
+`height` (default `64`). Both the transformer and runtime helper reject invalid
+modes, `component`/`height`/`overlay` on a default bar, non-positive `height`,
+combining `overlay: true` with `height`, and a missing/invalid custom component.
+For host input, missing `mode` normalizes to `default` for older declarations;
+unknown modes, non-positive heights, and mismatched component/mode combinations
+must be rejected before constructing the tab shell.
 
-The custom root **absolutely overlays pages**. The host **does not measure its
-intrinsic height** and **does not add its bar height to page insets**. Only system
-safe area goes to pages. Business code shares its chosen bar height and padding
-between its custom component and page layouts. There is no host height callback,
-automatic custom-bar content avoidance, or JSON ABI.
+By default (`overlay` omitted or `false`), the custom root is **docked at the
+bottom** with height `height + safeAreaBottom`, using standard Valdi rendering
+and multi-touch dispatch, and the host automatically includes `height` in tab
+pages' `insets.bottom` (no full-viewport `hitTest` needed).
 
-Business code must keep the full-viewport custom root and layout ancestors
-free of gesture handlers and full-viewport touch targets. Only the visible bar's
-children own gestures. A business-authored bounded `hitTest` on the root is
-allowed: the approved smoke component uses its own `onLayout` viewport height
-and accepts only `y >= viewportHeight - barHeight - safeAreaBottom` once laid
-out, rejecting the empty page area above the bar. This predicate filters hit
-testing; it does not attach a full-root `onTap` or claim the empty area as a
-gesture target. The layout measurement stays in business code; the host still
-does not measure bar height or add it to page insets.
+When `{ type: 'custom', component: AppTabBar, overlay: true }` is explicitly
+configured (`RouteTabBar.height` omitted), the custom root **absolutely overlays
+pages** as an escape hatch for floating/curved bars: only system safe area goes
+to pages, and business code bounds its touch area via a root `hitTest`.
 
-`app_pages/src/components/TabBar.ts` defines the generated component contract:
+`app_foundation/src/navigation/models.ts` defines the generated component contract
+(re-exported by `app_pages/src/components/TabBar.ts`):
 
 ```ts
 /** @ViewModel; exported as VRTabBarViewModel / io.valdiroutes.pages.TabBarViewModel */
@@ -182,7 +181,7 @@ RouteEntry(route: String, kind: String, title: String,
 RouteTab(route: String, text: String, icon: String, selectedIcon: String,
          iconData: String? = null, selectedIconData: String? = null)
 RouteTabBar(route: String, initial: String, tabs: List<RouteTab>,
-            mode: String? = null, component: String? = null)
+            mode: String? = null, component: String? = null, height: Double? = null)
 RouteDeclaration(routes: List<RouteEntry>, tabBar: RouteTabBar? = null, root: String)
 StackPage(pageId: String, route: String, params: Map<String, Any?>)
 TabBarViewModel(items: List<RouteTab>, selectedRoute: String, safeAreaBottom: Double)
@@ -213,11 +212,11 @@ assigned after construction:
 
 Objective-C maps are nonnull `NSDictionary<NSString *, id> *`, arrays are
 `NSArray<VRRouteEntry *> *`, duration is `double`, and `tabBar`, `component`,
-`nativeName`, `iconData`, `selectedIconData` and `mode` are nullable. Set
-`VRRouteTabBar.mode` and `.component` after its required-field constructor.
-`VRTabBarViewModel.items` is `NSArray<VRRouteTab *> *`, `selectedRoute` is a nonnull
-string, and `safeAreaBottom` is `double`. `VRTabBarContext.selectTab` is a nonnull
-`void (^)(NSString * _Nonnull)` block. Null dictionary
+`height`, `nativeName`, `iconData`, `selectedIconData` and `mode` are nullable.
+Set `VRRouteTabBar.mode`, `.component`, and `.height` after its required-field
+constructor. `VRTabBarViewModel.items` is `NSArray<VRRouteTab *> *`, `selectedRoute`
+is a nonnull string, and `safeAreaBottom` is `double`. `VRTabBarContext.selectTab`
+is a nonnull `void (^)(NSString * _Nonnull)` block. Null dictionary
 values use Foundation's `NSNull`. Cancel with `@{}` and `YES`.
 
 C++ uses `std::vector<RouteEntry>`, nullable `Valdi::Ref<RouteTabBar>`,
@@ -233,7 +232,8 @@ StackPage(const Valdi::StringBox& pageId, const Valdi::StringBox& route,
 RouteTabBar(const Valdi::StringBox& route, const Valdi::StringBox& initial,
             const std::vector<RouteTab>& tabs,
             const std::optional<Valdi::StringBox>& mode,
-            const std::optional<Valdi::StringBox>& component);
+            const std::optional<Valdi::StringBox>& component,
+            std::optional<double> height);
 TabBarViewModel(const std::vector<RouteTab>& items,
                 const Valdi::StringBox& selectedRoute, double safeAreaBottom);
 TabBarContext(const SelectTabFn& selectTab);
@@ -242,8 +242,8 @@ TabBarContext(const SelectTabFn& selectTab);
 The real generated host schema contains:
 
 ```text
-'push':f(s, m<s,u>, s, r:'[0]')
-'pushForResult':f(s, m<s,u>, s, r:'[0]', f(m<s,u>, b@))
+'push':f(s, m<s,u>, r:'[0]')
+'pushForResult':f(s, m<s,u>, r:'[0]', f(m<s,u>, b@))
 'currentPages':f(f(a<r:'[1]'>))
 'updateRoutes':f(r:'[2]')
 ```
@@ -256,7 +256,7 @@ and `RouteTabBar`.
 The appended tab-bar fields and separate component models have schemas:
 
 ```text
-RouteTabBar: 'route':s,'initial':s,'tabs':a<r:'[0]'>,'mode':s?,'component':s?
+RouteTabBar: 'route':s,'initial':s,'tabs':a<r:'[0]'>,'mode':s?,'component':s?,'height':d@?
 TabBarViewModel: 'items':a<r:'[0]'>,'selectedRoute':s,'safeAreaBottom':d
 TabBarContext: 'selectTab':f(s)
 ```

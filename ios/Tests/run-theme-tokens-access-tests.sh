@@ -4,7 +4,7 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 frameworks="$root/ios/Frameworks/ValdiRuntime.xcframework/ios-arm64_x86_64-simulator"
 modules="$root/module-build/out/ios"
 if [ ! -f "$modules/swift/ThemeBridge.swiftmodule" ] || [ ! -f "$modules/theme_bridge/libtheme_bridge_ios.a" ]; then
-    echo "Prepare the iOS modules first: node scripts/node-modules.mjs ios" >&2
+    echo "Prepare the iOS modules first: node scripts/lib/node-modules.mjs ios" >&2
     exit 1
 fi
 work=$(mktemp -d "${TMPDIR:-/tmp}/valdi-theme-access.XXXXXX")

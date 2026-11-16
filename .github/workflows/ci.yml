@@ -59,7 +59,7 @@ jobs:
           CI_RUNNER_ENVIRONMENT: ${{ runner.environment }}
         run: |
           mkdir -p .ci
-          bash scripts/ci-linux-disk.sh prepare 2>&1 | tee .ci/disk-prepare.log
+          bash scripts/maintainer/ci-linux-disk.sh prepare 2>&1 | tee .ci/disk-prepare.log
       - name: Select framework fork commit
         if: inputs.valdi_commit != ''
         env:
@@ -68,7 +68,7 @@ jobs:
         run: |
           args=("$VALDI_COMMIT")
           if [[ -n "$WIDGETS_TAG" ]]; then args+=("$WIDGETS_TAG"); fi
-          node scripts/upstream.mjs pin "${args[@]}"
+          node scripts/maintainer/upstream.mjs pin "${args[@]}"
       - uses: ./.github/actions/prepare
         id: prepare
       - name: Golden and build prerequisite tests
@@ -93,7 +93,7 @@ jobs:
             bazel-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.toolchain }}-${{ matrix.target }}-${{ hashFiles('valdi/.bazelversion') }}-
       - name: Report Linux storage after cache restoration
         if: runner.os == 'Linux'
-        run: bash scripts/ci-linux-disk.sh report 2>&1 | tee .ci/disk-before-export.log
+        run: bash scripts/maintainer/ci-linux-disk.sh report 2>&1 | tee .ci/disk-before-export.log
       - name: Restore vision dependencies
         if: matrix.target != 'npm'
         id: vision
@@ -104,7 +104,7 @@ jobs:
       # Runtime export is an explicit CI operation. Bazel retains its action cache;
       # app builds never decide whether to re-export from runtime source hashes.
       - name: Export runtime
-        run: sh "scripts/export-${{ matrix.target }}.sh" debug 2>&1 | tee .ci/export.log
+        run: sh "scripts/maintainer/export-${{ matrix.target }}.sh" debug 2>&1 | tee .ci/export.log
       - name: Verify Node compiler action inputs
         run: |
           (
@@ -112,12 +112,12 @@ jobs:
             bazel aquery 'mnemonic("NodeValdiRuntimeModule", deps(set(@valdi//src/valdi_modules/src/valdi/valdi_core @valdi//src/valdi_modules/src/valdi/native_web @valdi//src/valdi_modules/src/valdi/drawing @valdi//src/valdi_modules/src/valdi/jasmine)))' \
               --config=stable_exec --output=jsonproto > ../.ci/node-compiler-actions.json
           )
-          node scripts/verify-node-compiler-actions.mjs .ci/node-compiler-actions.json
+          node scripts/maintainer/verify-node-compiler-actions.mjs .ci/node-compiler-actions.json
       - name: Verify wheels against the exported runtime
         working-directory: tools/valdi-rolldown
         env:
           WHEEL_RUNTIME: ${{ matrix.target }}
-        run: node node_modules/tsx/dist/cli.mjs --test wheel-platform-compat.test.ts 2>&1 | tee ../../.ci/wheel-runtime.log
+        run: node node_modules/tsx/dist/cli.mjs --test tests/wheel-platform-compat.test.ts 2>&1 | tee ../../.ci/wheel-runtime.log
       - name: Save Bazel action cache
         if: always() && !cancelled() && steps.bazel-cache.outcome == 'success' && steps.bazel-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -129,7 +129,7 @@ jobs:
         working-directory: tools/valdi-rolldown
         env:
           VALDI_SWIFT_TYPECHECK: '1'
-        run: node node_modules/tsx/dist/cli.mjs --test swift.test.ts 2>&1 | tee ../../.ci/swift-typecheck.log
+        run: node node_modules/tsx/dist/cli.mjs --test tests/swift.test.ts 2>&1 | tee ../../.ci/swift-typecheck.log
       - name: Build Android debug APK
         if: matrix.target == 'android'
         run: pnpm build:android --no-daemon --stacktrace 2>&1 | tee .ci/build.log
@@ -137,7 +137,7 @@ jobs:
         if: matrix.target == 'ios'
         run: |
           pnpm build:ios 2>&1 | tee .ci/build.log
-          app_name=$(node --input-type=module -e 'import { readAppConfig } from "./scripts/app-config.mjs"; console.log(readAppConfig().name)')
+          app_name=$(node --input-type=module -e 'import { readAppConfig } from "./scripts/lib/app-config.mjs"; console.log(readAppConfig().name)')
           tar -czf .ci/ios-simulator.tar.gz -C ios/build/Build/Products/Debug-iphonesimulator "$app_name.app"
       - name: Save prepared vision dependencies
         # Explicit runtime export prepares cpp dependencies; app builds prepare host dependencies.
@@ -154,7 +154,7 @@ jobs:
           if [[ -f .ci/upstream/vendor.md ]]; then cat .ci/upstream/vendor.md >> "$GITHUB_STEP_SUMMARY"; fi
       - name: Report final Linux storage
         if: always() && runner.os == 'Linux'
-        run: bash scripts/ci-linux-disk.sh report 2>&1 | tee .ci/disk-final.log
+        run: bash scripts/maintainer/ci-linux-disk.sh report 2>&1 | tee .ci/disk-final.log
       - name: Upload build evidence
         if: always()
         id: artifacts

@@ -3,7 +3,7 @@
 Prepare the real generated Android models and run the JVM integration check:
 
 ```sh
-node scripts/node-modules.mjs android
+node scripts/lib/node-modules.mjs android
 python3 valdi/modules/theme_bridge/tests/run_theme_tokens_tests.py --evidence /tmp/valdi-theme-tests
 ```
 
@@ -17,7 +17,7 @@ The runner uses cached Kotlin compiler dependencies without downloading them.
 It records input hashes, compiler output, runtime output and a summary under the
 evidence directory. JVM execution does not prove Android packaging or JNI behavior.
 
-For Swift, prepare `node scripts/node-modules.mjs ios`, then run
+For Swift, prepare `node scripts/lib/node-modules.mjs ios`, then run
 `ios/Tests/run-theme-tokens-access-tests.sh`. This compiles and links an independent
 consumer against the actual generated module and checks a type error. It does
 not launch an iOS executable.

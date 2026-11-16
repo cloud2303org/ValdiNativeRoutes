@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import * as release from '../release.mjs';
+import * as release from '../maintainer/release.mjs';
 
 function fixture(t) {
   const root = mkdtempSync(path.join(tmpdir(), 'valdi-release-'));

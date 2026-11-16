@@ -1,7 +1,6 @@
 import { Component } from 'valdi_core/src/Component';
 import { Style } from 'valdi_core/src/Style';
 import { View } from 'valdi_tsx/src/NativeTemplateElements';
-import * as v from 'valibot';
 import type { PickerOption } from '../AppUIHost';
 import type { ColumnWheelConfig, TimeWheelConfig, TreeWheelConfig } from './WheelHost';
 import type { DatePickMode } from 'native_common/src/pickerSchemas';
@@ -17,26 +16,25 @@ export type { TreeNode } from './schemas';
  * moving either.
  *
  * Their native configurations are typed data objects (WheelHost.ts); tree selections return arrays directly.
- * Their view models are checked by the valibot schemas in schemas.ts (columnWheel, timeWheel, treeWheel): invalid
- * options or years throw, as they do for api.showPicker. A value the wheel can't show (empty, not among the options, out
- * of range) is shown as columnPickerValue / timePickerValue / treePickerValue make it, without telling the page: start
- * the page's state from those functions so the two agree. The native wheels show what they are given and call
- * `onChange` only when the user settles them on a new selection.
+ * A value the wheel can't show (empty, not among the options, out of range) is normalized by
+ * columnPickerValue / timePickerValue / treePickerValue without telling the page: start the page's state from those
+ * functions so the two agree. The native wheels show what they are given and call `onChange` only when the user settles
+ * them on a new selection.
  */
 
 /** The value a ColumnPicker shows: `value` if it is one of the options, the first option otherwise. */
 export function columnPickerValue(options: readonly (string | PickerOption)[], value?: string): string {
-  return v.parse(schema.columnWheel, { options, value }).value;
+  return schema.columnWheel({ options, value }).value;
 }
 
 /** The path a TreePicker shows: each level keeps its value if that level has it, the first option otherwise. */
 export function treePickerValue(data: readonly TreeNode[], value?: readonly string[], columns?: number): string[] {
-  return v.parse(schema.treeWheel, { data, value, columns }).value;
+  return schema.treeWheel({ data, value, columns }).value;
 }
 
 /** The value a TimePicker shows: the fields `value` has, now for the rest ('' is now), within the years. */
 export function timePickerValue(mode: DatePickMode, value?: string, minYear?: number, maxYear?: number): string {
-  return v.parse(schema.timeWheel, { mode, value, minYear, maxYear }).value;
+  return schema.timeWheel({ mode, value, minYear, maxYear }).value;
 }
 
 export interface ColumnPickerViewModel {
@@ -48,7 +46,7 @@ export interface ColumnPickerViewModel {
 export class ColumnPicker extends Component<ColumnPickerViewModel> {
   onRender(): void {
     const { options, value } = this.viewModel;
-    const config: ColumnWheelConfig = v.parse(schema.columnWheel, { options, value });
+    const config: ColumnWheelConfig = schema.columnWheel({ options, value });
     <custom-view
       iosClass="VRColumnWheelView"
       androidClass="io.valdiroutes.app.ColumnWheelView"
@@ -75,7 +73,7 @@ export interface TimePickerViewModel {
 export class TimePicker extends Component<TimePickerViewModel> {
   onRender(): void {
     const { mode, value, minYear, maxYear } = this.viewModel;
-    const config: TimeWheelConfig = v.parse(schema.timeWheel, { mode, value, minYear, maxYear });
+    const config: TimeWheelConfig = schema.timeWheel({ mode, value, minYear, maxYear });
     // 'datetime' adds the date / time switch above the wheels.
     <custom-view
       iosClass="VRTimeWheelView"
@@ -102,7 +100,7 @@ export interface TreePickerViewModel {
 export class TreePicker extends Component<TreePickerViewModel> {
   onRender(): void {
     const { data, value, columns } = this.viewModel;
-    const config: TreeWheelConfig = v.parse(schema.treeWheel, { data, value, columns });
+    const config: TreeWheelConfig = schema.treeWheel({ data, value, columns });
     <custom-view
       iosClass="VRTreeWheelView"
       androidClass="io.valdiroutes.app.TreeWheelView"

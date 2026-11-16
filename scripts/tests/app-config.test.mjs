@@ -4,10 +4,10 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { appBuildPaths, iosProjectEnvironment, readAppConfig, syncAppConfig } from '../app-config.mjs';
-import { syncModulePlatformConfig } from '../module-platform-config.mjs';
+import { appBuildPaths, iosProjectEnvironment, readAppConfig, syncAppConfig } from '../lib/app-config.mjs';
+import { syncModulePlatformConfig } from '../lib/module-platform-config.mjs';
 import { sampleApp } from './fixtures/app-config.mjs';
-import { stageE2EFlows } from '../e2e-config.mjs';
+import { stageE2EFlows } from '../e2e/e2e-config.mjs';
 
 function fixture(t, app = sampleApp()) {
   const root = mkdtempSync(path.join(tmpdir(), 'valdi-app-config-'));
@@ -25,7 +25,7 @@ test('absent icon preserves the exact config shape and copied no-icon consumers 
   assert.equal(existsSync(path.join(root, 'ios/Generated/AppAssets.xcassets')), false);
   assert.equal(existsSync(path.join(root, 'android/app/build/generated/valdi-app/res/mipmap-mdpi')), false);
   const copied = path.join(root, 'app-config.mjs');
-  cpSync(new URL('../app-config.mjs', import.meta.url), copied);
+  cpSync(new URL('../lib/app-config.mjs', import.meta.url), copied);
   const isolated = createRequire(import.meta.url)(copied);
   assert.deepEqual(isolated.readAppConfig(root), sampleApp());
   assert.deepEqual(isolated.syncAppConfig(root), sampleApp());

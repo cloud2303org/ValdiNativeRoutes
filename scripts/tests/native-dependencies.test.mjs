@@ -4,8 +4,8 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { checkNativeDependencies, inspectNativeDependencies, prepareNativeDependencies } from '../native-dependencies.mjs';
-import { nativeModuleCmake, nativeModuleInputs, nativeModules, syncNativeModuleRegistration } from '../native-modules.mjs';
+import { checkNativeDependencies, inspectNativeDependencies, prepareNativeDependencies } from '../lib/native-dependencies.mjs';
+import { nativeModuleCmake, nativeModuleInputs, nativeModules, syncNativeModuleRegistration } from '../lib/native-modules.mjs';
 import { sampleApp } from './fixtures/app-config.mjs';
 
 const repository = path.resolve(import.meta.dirname, '../..');
@@ -109,7 +109,7 @@ else if (!existsSync(stamp)) { console.error('missing dependency'); process.exit
 test('dependency CLI selects app or runtime hooks and reports failures without running disabled hooks', t => {
   const { root, write, select } = fixture(t);
   for (const file of ['native-dependencies.mjs', 'native-modules.mjs', 'module-native-config.mjs', 'module-platform-config.mjs', 'app-config.mjs'])
-    write(`scripts/${file}`, readFileSync(path.join(repository, 'scripts', file), 'utf8'));
+    write(`scripts/lib/${file}`, readFileSync(path.join(repository, 'scripts/lib', file), 'utf8'));
   write('tools/valdi-rolldown/modules.mjs', readFileSync(path.join(repository, 'tools/valdi-rolldown/modules.mjs'), 'utf8'));
   for (const [name, nativeBuild] of [['app', 'host'], ['runtime_cpp', 'cpp'], ['disabled_cpp', 'cpp']]) {
     write(`valdi/modules/${name}/src/index.ts`, 'export {};');
@@ -127,7 +127,7 @@ else if (!existsSync(stamp)) { console.error('missing dependency'); process.exit
   }
   select(['app', 'runtime_cpp']);
   const calls = () => readFileSync(path.join(root, 'calls'), 'utf8');
-  const run = (action, platform) => spawnSync(process.execPath, [path.join(root, 'scripts/native-dependencies.mjs'), action, platform],
+  const run = (action, platform) => spawnSync(process.execPath, [path.join(root, 'scripts/lib/native-dependencies.mjs'), action, platform],
     { encoding: 'utf8', timeout: 10_000 });
   for (const platform of ['android', 'ios']) {
     const failed = run('check-runtime', platform);
@@ -270,10 +270,10 @@ add_library(selected_module_probe STATIC Module.cpp)
 
 test('explicit runtime exports prepare cpp dependencies after source setup and before codegen/export', () => {
   for (const platform of ['android', 'ios']) {
-    const source = readFileSync(path.join(repository, `scripts/export-${platform}.sh`), 'utf8');
-    const prepare = source.indexOf(`node "$root/scripts/native-dependencies.mjs" prepare-runtime ${platform}`);
+    const source = readFileSync(path.join(repository, `scripts/maintainer/export-${platform}.sh`), 'utf8');
+    const prepare = source.indexOf(`node "$root/scripts/lib/native-dependencies.mjs" prepare-runtime ${platform}`);
     assert.ok(prepare >= 0, `${platform} export must prepare runtime dependencies`);
-    assert.ok(prepare > source.indexOf('node "$root/scripts/prepare-valdi.mjs"'));
+    assert.ok(prepare > source.indexOf('node "$root/scripts/lib/prepare-valdi.mjs"'));
     assert.ok(prepare < source.indexOf('pnpm exec tsx codegen.ts'));
   }
 });

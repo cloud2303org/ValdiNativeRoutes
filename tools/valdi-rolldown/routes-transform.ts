@@ -136,14 +136,15 @@ export function routeTransformer(
           const bar = property(tabs, 'bar');
           if (bar) {
             if (!ts.isObjectLiteralExpression(bar)) return fail(bar, 'tabs.bar must be an object literal');
+            const allowedBarKeys = new Set(['type', 'component', 'height', 'overlay']);
             const keys = new Set<string>();
             for (const entry of bar.properties) {
               if (!ts.isPropertyAssignment(entry) || !propertyName(entry.name)) {
-                return fail(entry, 'tabs.bar must explicitly declare type and component without spreads');
+                return fail(entry, 'tabs.bar must explicitly declare properties without spreads');
               }
               const key = propertyName(entry.name)!;
               if (keys.has(key)) return fail(entry, `Duplicate tabs.bar property: "${key}"`);
-              if (key !== 'type' && key !== 'component') return fail(entry, `Unknown tabs.bar property: "${key}"`);
+              if (!allowedBarKeys.has(key)) return fail(entry, `Unknown tabs.bar property: "${key}"`);
               keys.add(key);
             }
             const type = property(bar, 'type');
@@ -151,11 +152,27 @@ export function routeTransformer(
               return fail(bar, 'tabs.bar.type must be default or custom');
             }
             const component = property(bar, 'component');
-            if (type.text === 'default' && component) {
-              return fail(component, 'tabs.bar.component is only allowed for custom bars');
+            const height = property(bar, 'height');
+            const overlay = property(bar, 'overlay');
+            if (type.text === 'default') {
+              const forbidden = component ?? height ?? overlay;
+              if (forbidden) {
+                return fail(forbidden, 'tabs.bar.component, height and overlay are only allowed for custom bars');
+              }
             }
             if (type.text === 'custom') {
               if (!component) return fail(bar, 'tabs.bar.component is required for custom bars');
+              if (overlay && overlay.kind !== ts.SyntaxKind.TrueKeyword && overlay.kind !== ts.SyntaxKind.FalseKeyword) {
+                return fail(overlay, 'tabs.bar.overlay must be a boolean literal');
+              }
+              if (height) {
+                if (!ts.isNumericLiteral(height) || Number(height.text) <= 0 || !Number.isFinite(Number(height.text))) {
+                  return fail(height, 'tabs.bar.height must be a positive numeric literal');
+                }
+                if (overlay?.kind === ts.SyntaxKind.TrueKeyword) {
+                  return fail(height, 'tabs.bar.height cannot be combined with overlay: true');
+                }
+              }
               const canonical = componentPath(component, 'tabs.bar.component');
               const transformedBar = f.updateObjectLiteralExpression(bar, bar.properties.map(entry =>
                 ts.isPropertyAssignment(entry) && propertyName(entry.name) === 'component'

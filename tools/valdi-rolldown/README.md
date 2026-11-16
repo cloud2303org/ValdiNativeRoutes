@@ -27,9 +27,14 @@ that module's generated TypeScript. Node tests have separate projects. All
 reachable sources and declarations are checked, including imported siblings and
 npm declarations; no ownership filter or `skipLibCheck` hides their errors.
 
-Source checking uses Valdi's CommonJS module profile, which supports framework
-`import = require(...)` declarations. A separate language service shares the
-same inputs and resolution and changes emission settings for Rolldown's ESNext
+Source checking uses `module: preserve` and `moduleResolution: bundler`, supporting
+framework `import = require(...)` declarations and modern npm conditional exports.
+Module and generated roots link to the declared npm installation for normal package
+lookup; no wildcard `paths` mapping bypasses a package's exports.
+Rolldown uses neutral-platform import/require conditions and the legacy `main`
+fallback, with automatic tsconfig resolution disabled because the Valdi plugin
+already owns source compilation and aliases.
+A separate language service shares the same inputs and resolution and changes emission settings for Rolldown's ESNext
 input. The runtime checker and build also check each emitted file against that
 output format: bundled sources use ES module imports/exports; `import = require`
 and `export =` fail with TypeScript's format diagnostics before emission.

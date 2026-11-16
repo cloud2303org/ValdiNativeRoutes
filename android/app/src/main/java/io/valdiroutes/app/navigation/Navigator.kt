@@ -1,10 +1,12 @@
 package io.valdiroutes.app
 
+import androidx.annotation.Keep
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.snap.valdi.views.ValdiRootView
+import io.valdiroutes.pages.PageContext
 import io.valdiroutes.pages.ResolvedNavigation
 import io.valdiroutes.pages.StackPage
 
@@ -31,6 +33,7 @@ class PageEntry(
 
     /** Owned here, not by Compose: Nav3 disposes covered pages, and a remount would lose their state. */
     var rootView: ValdiRootView? = null
+    @Keep internal var pageContext: PageContext? = null
     var appliedInsets: Insets? = null
     var removed = false
         private set
@@ -77,6 +80,7 @@ class PageEntry(
     fun destroy() {
         rootView?.destroy()
         rootView = null
+        pageContext = null
         tabContentInitialized = false
         customTabBar?.destroy()
         customTabBar = null

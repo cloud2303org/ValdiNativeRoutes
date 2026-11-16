@@ -66,8 +66,8 @@ import { multiply } from 'math_core/src';
 const result = multiply(6, 7);
 ```
 
-首次使用或修改链接进 runtime 的 C++ 后，手动执行 `scripts/export-android.sh debug` 或
-`scripts/export-ios.sh debug`。导出生成 `cpp/generated/` 绑定，并更新 `valdi/modules/runtime-cpp.bzl`：
+首次使用或修改链接进 runtime 的 C++ 后，手动执行 `scripts/maintainer/export-android.sh debug` 或
+`scripts/maintainer/export-ios.sh debug`。导出生成 `cpp/generated/` 绑定，并更新 `valdi/modules/runtime-cpp.bzl`：
 
 - `CPP_IMPLEMENTATIONS` 选择所有启用模块中拥有 `cpp/src` 实现的 `:native` target。
 - `CPP_BINDING_DEPS` 根据生成代码的跨模块 include 声明 `:bindings` 依赖。
@@ -138,7 +138,7 @@ Swift runtime 导出包含 `valdi_core`、`ValdiCoreCPP` 所需的公开头文�
 另加 `import valdi_core`。更新 Xcode/Swift 工具链后应重新导出 runtime。
 
 ```sh
-sh scripts/export-ios.sh debug
+sh scripts/maintainer/export-ios.sh debug
 pnpm ios
 
 # 单独检查真实 Swift ABI（macOS，先导出上述 runtime）
@@ -324,7 +324,7 @@ pnpm build:android
   cpp 模块的 vendor 静态库由模块自己的 C++ Bazel 规则纳入 runtime 链接。
   路径均相对模块目录，可引用仓库内本地依赖包；`nativeInputs` 声明额外手写原生输入，避免纳入 vendor 编译缓存。
   `iosBuildSettings` 贡献 Xcode 设置，`${MODULE_DIR}` 展开为模块路径，数组合并去重，冲突的标量设置报错。
-- Android 由 `scripts/native-modules.mjs` 生成工厂和 AttributesBinder 注册入口，不依赖上游注解处理器。
+- Android 由 `scripts/lib/native-modules.mjs` 生成工厂和 AttributesBinder 注册入口，不依赖上游注解处理器。
 - iOS 保留模板的 factory / protocol 结构。已有 XCFramework 隐藏了
   `VALDI_REGISTER_MODULE()` 调用的 C 注册函数，因此由模块导出工厂创建函数，宿主通过公开的
   `registerNativeModuleFactory` 注册。calculator 接入本身不要求修改 runtime 实现。

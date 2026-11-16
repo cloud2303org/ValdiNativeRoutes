@@ -40,7 +40,7 @@ export async function compileNodeModule(
   if (!valdiSourceRoot()) {
     throw new Error(
       'Valdi sources are not prepared for the Node module compiler: neither VALDI_SOURCE_ROOT nor valdi/bazel-*/external/valdi+ ' +
-        'holds modules/_configs/base.tsconfig.json. Run: node scripts/prepare-valdi.mjs',
+        'holds modules/_configs/base.tsconfig.json. Run: node scripts/lib/prepare-valdi.mjs',
     );
   }
   const name = original.name;

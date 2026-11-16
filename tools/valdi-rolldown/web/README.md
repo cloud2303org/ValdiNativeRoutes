@@ -9,8 +9,8 @@ TGFX, or runtime replacement is involved.
 Run from this worktree's `tools/valdi-rolldown` directory:
 
 ```sh
-W=/Users/cloud/.config/superpowers/worktrees/Valdi-node-only/upstream-20261104
-OUT=/tmp/valdi-upstream-integration-20261104/web/attempt2
+W=../../valdi/.valdi-sources/external/valdi+
+OUT=.local/web
 node --import tsx web/build.ts "$W" "$OUT"
 node --import tsx web/test.ts "$W" "$OUT"
 ```

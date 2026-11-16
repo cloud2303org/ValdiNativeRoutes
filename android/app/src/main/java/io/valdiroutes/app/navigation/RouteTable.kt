@@ -28,7 +28,7 @@ class RouteTable(private val routes: Map<String, RouteDefinition>, val tabBar: T
                 }
             }
             table.tabBar?.let { config ->
-                validateTabBar(config.mode, config.component)
+                validateTabBar(config.mode, config.component, config.height)
                 require(config.tabs.isNotEmpty() && config.tabs.map { it.route }.distinct().size == config.tabs.size) { "Invalid tabs" }
                 require(table[config.route].kind == "tabs")
                 require(config.tabs.any { it.route == config.initial }) { "Unknown initial tab: ${config.initial}" }

@@ -19,7 +19,7 @@ const dependencies: Record<string, string[]> = {
   permissions: ['native_common'],
   wifi: ['native_common', 'permissions'],
   nfc: ['native_common', 'permissions'],
-  app_ui: ['native_common'],
+  app_ui: ['native_common', 'theme_bridge'],
 };
 const moduleFor = (name: string) => ({
   name,
@@ -55,7 +55,7 @@ function runtime(platform = 'android', sdk = 36, hostFactories: Record<string, (
         if (name === 'valdi_core/src/NativeReferences') return { withGlobalNativeRefs: (_name: string, body: () => unknown) => body() };
         if (name === 'valdi_core/src/Device') return { Device: { isAndroid: () => platform === 'android' } };
         if (name === 'bluetooth/src/index') return { bluetoothApi: () => ({}) };
-        if (name === 'valibot' || name.startsWith('dayjs')) return requireNpm(name);
+        if (name.startsWith('dayjs')) return requireNpm(name);
         const target = name.startsWith('.') ? path.resolve(path.dirname(file), name) : path.join(modules, name);
         const factory = factories[path.basename(target)];
         if (factory && target.endsWith(`/src/${path.basename(target)}`))
@@ -121,19 +121,20 @@ test('six independent Node modules compile TS and bindings into temporary output
 });
 
 test('disabled source dependencies fail selection checks without auto-enabling', () => {
+  const available = [...names, 'theme_bridge'];
   for (const name of names.filter(name => name !== 'native_common')) {
-    const files = readdirSync(path.join(modules, name, 'src'))
-      .filter(file => file.endsWith('.ts'))
+    const files = (readdirSync(path.join(modules, name, 'src'), { recursive: true }) as string[])
+      .filter(file => /\.tsx?$/.test(file))
       .map(file => path.join(modules, name, 'src', file));
     for (const missing of dependencies[name]) {
       const enabled = [name, ...dependencies[name].filter(dependency => dependency !== missing)];
       assert.throws(
-        () => assertEnabledImports(files, modules, names, enabled),
+        () => assertEnabledImports(files, modules, available, enabled),
         new RegExp(`disabled module "${missing}"`),
         `${name} must reject a disabled source dependency`,
       );
     }
-    assert.doesNotThrow(() => assertEnabledImports(files, modules, names, [name, ...dependencies[name]]));
+    assert.doesNotThrow(() => assertEnabledImports(files, modules, available, [name, ...dependencies[name]]));
   }
 });
 
@@ -276,5 +277,5 @@ test('AppUI validates requests and keeps the facade error type and cancel replie
     api.showToast({ title: 'hello' }),
     (error: any) => error instanceof ApiError && error.errMsg === 'showToast:fail native presentation failure',
   );
-  await assert.rejects(api.showToast({ title: ' ' }), (error: any) => error instanceof ApiError);
+  await assert.rejects(api.showActionSheet({ itemList: [] }), (error: any) => error instanceof ApiError);
 });

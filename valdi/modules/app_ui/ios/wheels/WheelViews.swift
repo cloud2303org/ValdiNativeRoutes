@@ -21,8 +21,6 @@ class ValdiWheelView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        // Valdi pages are light only.
-        overrideUserInterfaceStyle = .light
     }
 
     required init?(coder: NSCoder) { fatalError() }

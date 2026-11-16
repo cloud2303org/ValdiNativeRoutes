@@ -15,13 +15,13 @@ const legacyOutput = 'valdi/modules/app_pages/src/lottieDemoData.ts';
 function fixture(t) {
   const directory = realpathSync(mkdtempSync(path.join(tmpdir(), 'valdi-lottie-generator-')));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
-  mkdirSync(path.join(directory, 'scripts'));
-  cpSync(path.join(root, 'scripts/generate-lottie-demo.mjs'), path.join(directory, 'scripts/generate-lottie-demo.mjs'));
+  mkdirSync(path.join(directory, 'scripts/maintainer'), { recursive: true });
+  cpSync(path.join(root, 'scripts/maintainer/generate-lottie-demo.mjs'), path.join(directory, 'scripts/maintainer/generate-lottie-demo.mjs'));
   cpSync(path.join(root, assets), path.join(directory, assets), { recursive: true });
   mkdirSync(path.dirname(path.join(directory, output)), { recursive: true });
   cpSync(path.join(root, output), path.join(directory, output));
   const run = (...args) => spawnSync(process.execPath, [
-    path.join(directory, 'scripts/generate-lottie-demo.mjs'), ...args,
+    path.join(directory, 'scripts/maintainer/generate-lottie-demo.mjs'), ...args,
   ], { cwd: tmpdir(), encoding: 'utf8', timeout: 10_000 });
   return { directory, run };
 }

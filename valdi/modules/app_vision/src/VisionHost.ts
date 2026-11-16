@@ -38,11 +38,18 @@ export interface VisionHost {
   runDemo(done: (error: string, result: VisionDemoResult | undefined) => void): void;
 }
 
+let host: VisionHost | undefined;
+
+export function visionHost(): VisionHost {
+  return (host ??= withGlobalNativeRefs('vision', () => getHost()));
+}
+
 /** Same entry as `@native-routes/vision`'s runDemo. */
 export function runDemo(): Promise<VisionDemoResult> {
+  const target = visionHost();
   return new Promise((resolve, reject) => {
     withGlobalNativeRefs('vision.runDemo', () => {
-      getHost().runDemo((error, result) =>
+      target.runDemo((error, result) =>
         error || !result ? reject(new Error(error || 'no result')) : resolve(result),
       );
     });

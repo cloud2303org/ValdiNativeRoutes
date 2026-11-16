@@ -219,6 +219,24 @@ NSInteger VRSplashScreenNativeModuleMarshall(SCValdiMarshallerRef  _Nonnull mars
 
 
 //
+// VRTabBarContext.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "app_foundation.h"
+
+
+//
+// VRTabBarViewModel.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "app_foundation.h"
+
+
+//
 // VRAppContextHost.m
 //
 

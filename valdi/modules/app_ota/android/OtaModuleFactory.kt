@@ -6,7 +6,7 @@ import io.valdiroutes.ota.OtaHost
 import io.valdiroutes.ota.OtaInfo
 import io.valdiroutes.ota.OtaNativeModule
 import io.valdiroutes.ota.OtaNativeModuleFactory
-import kotlin.concurrent.thread
+import java.util.concurrent.Executors
 
 /** Registration and module loading do no OTA IO; each host operation settles from a worker. */
 internal class OtaModuleFactory : OtaNativeModuleFactory() {
@@ -21,6 +21,10 @@ internal class OtaModuleFactory : OtaNativeModuleFactory() {
 }
 
 private class OtaHostImpl : OtaHost {
+    private val worker = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "ValdiOta-js").apply { isDaemon = true }
+    }
+
     override fun getInfo(): Promise<OtaInfo> = onWorker { ValdiOta.getInfo() }
 
     override fun checkForUpdate(): Promise<OtaInfo> = onWorker { ValdiOta.checkForUpdateOrThrow() }
@@ -28,7 +32,7 @@ private class OtaHostImpl : OtaHost {
     private fun onWorker(action: () -> ValdiOtaClient.Info): Promise<OtaInfo> =
         ResolvablePromise<OtaInfo>().also { promise ->
             try {
-                thread(name = "ValdiOta-js") {
+                worker.execute {
                     try {
                         val info = action()
                         promise.fulfillSuccess(OtaInfo(

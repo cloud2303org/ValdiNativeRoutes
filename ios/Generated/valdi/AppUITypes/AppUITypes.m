@@ -100,6 +100,125 @@ NSArray<NSString *> * _Nonnull VRToastRequestIconGetAllCases() {
 
 
 //
+// VRAppSheetOverlayContext.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "AppUITypes.h"
+
+static SCValdiFieldValue SCValdiFunctionInvokeOD_v(const void *function, SCValdiFieldValue* fields) {
+    ((void (*) (const void *, double ))function)(SCValdiFieldValueGetPtr(fields[0]), SCValdiFieldValueGetDouble(fields[1]));
+    return SCValdiFieldValueMakeNull();
+}
+
+static id SCValdiBlockCreateOD_v(SCValdiBlockTrampoline trampoline) {
+    return ^void(double p0) {
+        trampoline(nil, SCValdiFieldValueMakeDouble(p0));
+    };
+}
+
+static SCValdiFieldValue SCValdiFunctionInvokeOOD_v(const void *function, SCValdiFieldValue* fields) {
+    ((void (*) (const void *, const void *, double ))function)(SCValdiFieldValueGetPtr(fields[0]), SCValdiFieldValueGetPtr(fields[1]), SCValdiFieldValueGetDouble(fields[2]));
+    return SCValdiFieldValueMakeNull();
+}
+
+static id SCValdiBlockCreateOOD_v(SCValdiBlockTrampoline trampoline) {
+    return ^void(const void * p0, double p1) {
+        trampoline(nil, SCValdiFieldValueMakePtr(p0), SCValdiFieldValueMakeDouble(p1));
+    };
+}
+
+@implementation VRAppSheetOverlayContext
+
+@dynamic onSelect;
+@dynamic onConfirm;
+@dynamic onCancel;
+@dynamic onDismissed;
+
+- (instancetype _Nonnull)initWithOnSelect:(VRAppSheetOverlayContextOnSelectBlock _Nonnull)onSelect onConfirm:(VRAppSheetOverlayContextOnConfirmBlock _Nonnull)onConfirm onCancel:(VRAppSheetOverlayContextOnCancelBlock _Nonnull)onCancel onDismissed:(VRAppSheetOverlayContextOnDismissedBlock _Nonnull)onDismissed
+{
+    return [super initWithFieldValues:nil, onSelect, onConfirm, onCancel, onDismissed];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectBlockSupport kBlocks[] = {
+        { .typeEncoding = "od:v", .invoker = &SCValdiFunctionInvokeOD_v, .factory = &SCValdiBlockCreateOD_v },
+        { .typeEncoding = "ood:v", .invoker = &SCValdiFunctionInvokeOOD_v, .factory = &SCValdiBlockCreateOOD_v },
+        { .typeEncoding = nil },
+    };
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "onSelect", .selName = nil, .type = "f(d)"},
+        {.name = "onConfirm", .selName = nil, .type = "f(s, d)"},
+        {.name = "onCancel", .selName = nil, .type = "f()"},
+        {.name = "onDismissed", .selName = nil, .type = "f()"},
+        {.name = nil},
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, kBlocks, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRAppSheetOverlayViewModel.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "AppUITypes.h"
+
+@implementation VRAppSheetOverlayViewModel
+
+@dynamic open;
+@dynamic kind;
+@dynamic title;
+@dynamic confirmText;
+@dynamic cancelText;
+@dynamic items;
+@dynamic options;
+@dynamic value;
+@dynamic dateMode;
+@dynamic minYear;
+@dynamic maxYear;
+@dynamic bottomInset;
+
+- (instancetype _Nonnull)initWithOpen:(BOOL)open kind:(NSString * _Nonnull)kind title:(NSString * _Nonnull)title confirmText:(NSString * _Nonnull)confirmText cancelText:(NSString * _Nonnull)cancelText items:(NSArray<NSString *> * _Nonnull)items options:(NSArray<VRPickerOption *> * _Nonnull)options value:(NSString * _Nonnull)value dateMode:(NSString * _Nonnull)dateMode minYear:(double)minYear maxYear:(double)maxYear bottomInset:(double)bottomInset
+{
+    return [super initWithFieldValues:nil, open, kind, title, confirmText, cancelText, items, options, value, dateMode, minYear, maxYear, bottomInset];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "open", .selName = nil, .type = "b"},
+        {.name = "kind", .selName = nil, .type = "s"},
+        {.name = "title", .selName = nil, .type = "s"},
+        {.name = "confirmText", .selName = nil, .type = "s"},
+        {.name = "cancelText", .selName = nil, .type = "s"},
+        {.name = "items", .selName = nil, .type = "a<s>"},
+        {.name = "options", .selName = nil, .type = "a<r:'[0]'>"},
+        {.name = "value", .selName = nil, .type = "s"},
+        {.name = "dateMode", .selName = nil, .type = "s"},
+        {.name = "minYear", .selName = nil, .type = "d"},
+        {.name = "maxYear", .selName = nil, .type = "d"},
+        {.name = "bottomInset", .selName = nil, .type = "d"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRPickerOption",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
 // VRAppUINativeModule.m
 //
 
@@ -203,46 +322,6 @@ NSArray<NSString *> * _Nonnull VRToastRequestIconGetAllCases() {
         nil
     };
     return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
-}
-
-@end
-
-
-//
-// VRBottomSheetRequest.m
-//
-
-#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
-#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
-
-#import "AppUITypes.h"
-
-@implementation VRBottomSheetRequest
-
-@dynamic title;
-@dynamic content;
-@dynamic confirmText;
-@dynamic cancelText;
-@dynamic showCancel;
-@dynamic dismissible;
-
-- (instancetype _Nonnull)initWithTitle:(NSString * _Nonnull)title content:(NSString * _Nonnull)content confirmText:(NSString * _Nonnull)confirmText cancelText:(NSString * _Nonnull)cancelText showCancel:(BOOL)showCancel dismissible:(BOOL)dismissible
-{
-    return [super initWithFieldValues:nil, title, content, confirmText, cancelText, showCancel, dismissible];
-}
-
-+ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
-{
-    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
-        {.name = "title", .selName = nil, .type = "s"},
-        {.name = "content", .selName = nil, .type = "s"},
-        {.name = "confirmText", .selName = nil, .type = "s"},
-        {.name = "cancelText", .selName = nil, .type = "s"},
-        {.name = "showCancel", .selName = nil, .type = "b"},
-        {.name = "dismissible", .selName = nil, .type = "b"},
-        {.name = nil},
-    };
-    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
 }
 
 @end

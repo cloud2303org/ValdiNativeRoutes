@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
@@ -30,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCompositionContext
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
@@ -40,6 +43,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.painterResource
@@ -191,31 +195,54 @@ private fun insetsOf(density: Density, top: Int, bottom: Int, horizontal: Window
 )
 
 /**
- * Default bars use the glass bar's measured footprint (including its system bottom inset). A business Valdi bar is a
- * full-viewport overlay; its page receives only system insets, and the component owns its visible height.
+ * Default bars use the glass bar's measured footprint (including its system bottom inset).
+ * Docked custom bars (`bar.height != null`) anchor at the bottom and add `height + safeAreaBottom` to page insets.
+ * Full-viewport overlay custom bars (`overlay: true`, `bar.height == null`) pass system insets only.
+ * In every mode, the soft keyboard shrinks the tab page container and deducts the covered bottom inset.
  */
 @Composable
 private fun TabsScreen(shell: PageEntry, navigator: Navigator) {
     val bar = requireNotNull(navigator.tabBar) { "No tab bar" }
     val selected = shell.selectedTab ?: bar.tabs.first().route
-    val systemInsets = pageInsets()
-    if (bar.mode == "custom") {
-        CustomTabsScreen(shell, bar, selected, systemInsets, navigator)
-    } else {
-        val hazeState = remember(shell.id) { HazeState() }
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            // The selected Valdi/native page paints its own background, including behind the glass bar.
-            containerColor = Color.Transparent,
-            // Pages already receive all system insets through PageViewModel/NativePage.
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            bottomBar = { OfficialTabBar(bar, selected, hazeState) { navigator.selectTab(shell, it) } },
-        ) { padding ->
-            // Scaffold measures the entire bar, including safe padding, before composing the body.
-            // Do not apply this padding to the source bounds: native pixels must extend behind the glass.
-            val insets = systemInsets.copy(bottom = maxOf(systemInsets.bottom, padding.calculateBottomPadding().value))
-            Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
-                TabPage(shell, selected, insets, navigator)
+    val density = LocalDensity.current
+    val bars = WindowInsets.systemBars.union(WindowInsets.displayCutout)
+    val rawBottomDp = bars.getBottom(density) / density.density
+    val imeBottomDp = WindowInsets.ime.getBottom(density) / density.density
+    val baseInsets = insetsOf(
+        density,
+        top = bars.getTop(density),
+        bottom = bars.getBottom(density),
+        horizontal = bars,
+        layoutDirection = LocalLayoutDirection.current,
+    )
+    val customHeight = bar.height?.toFloat()
+    when {
+        bar.mode == "custom" && customHeight != null -> {
+            val totalBarDp = customHeight + rawBottomDp
+            val insets = baseInsets.copy(bottom = (totalBarDp - imeBottomDp).coerceAtLeast(0f))
+            DockedCustomTabsScreen(shell, bar, selected, totalBarDp.dp, rawBottomDp.toDouble(), insets, navigator)
+        }
+        bar.mode == "custom" -> {
+            val insets = baseInsets.copy(bottom = (rawBottomDp - imeBottomDp).coerceAtLeast(0f))
+            OverlayCustomTabsScreen(shell, bar, selected, rawBottomDp.toDouble(), insets, navigator)
+        }
+        else -> {
+            val hazeState = remember(shell.id) { HazeState() }
+            Scaffold(
+                modifier = Modifier.fillMaxSize(),
+                // The selected Valdi/native page paints its own background, including behind the glass bar.
+                containerColor = Color.Transparent,
+                // Pages already receive all system insets through PageViewModel/NativePage.
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                bottomBar = { OfficialTabBar(bar, selected, hazeState) { navigator.selectTab(shell, it) } },
+            ) { padding ->
+                // Scaffold measures the entire bar, including safe padding, before composing the body.
+                // Do not apply this padding to the source bounds: native pixels must extend behind the glass.
+                val barBottomDp = maxOf(rawBottomDp, padding.calculateBottomPadding().value)
+                val insets = baseInsets.copy(bottom = (barBottomDp - imeBottomDp).coerceAtLeast(0f))
+                Box(Modifier.fillMaxSize().hazeSource(hazeState).padding(bottom = keyboardHeight())) {
+                    TabPage(shell, selected, insets, navigator)
+                }
             }
         }
     }
@@ -298,22 +325,68 @@ private fun OfficialTabBar(bar: TabBar, selected: String, hazeState: HazeState, 
 }
 
 /**
- * Both layers must be native siblings. Separate Compose AndroidViews choose the top pointer target before native
- * dispatch, so returning false from an empty overlay alone cannot offer that touch to the underlying page.
- *
- * Business contract: full-viewport layout ancestors have no gesture recognizers/touch targets; only the visible bar
- * children do. The business root's hitTest gates its own visible region, using its onLayout viewport height and its
- * chosen visual height + safeAreaBottom (false until layout). Android never measures that visual height.
- * The custom root uses Valdi's Android backend and legacy dispatcher, which rejects an empty DOWN.
- * FrameLayout then dispatches to the page ComposeView and preserves that owner for the entire gesture.
+ * Default custom bar layout (`bar.height != null`): the bar is anchored at the bottom with height
+ * `bar.height + safeAreaBottom`, requiring no manual `hitTest` or legacy touch backend.
  */
 @Composable
-private fun CustomTabsScreen(shell: PageEntry, bar: TabBar, selected: String, insets: Insets, navigator: Navigator) {
+private fun DockedCustomTabsScreen(
+    shell: PageEntry,
+    bar: TabBar,
+    selected: String,
+    barHeight: Dp,
+    safeAreaBottom: Double,
+    insets: Insets,
+    navigator: Navigator,
+) {
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().padding(bottom = keyboardHeight())) {
+            TabPage(shell, selected, insets, navigator)
+        }
+        key(shell.id) {
+            AndroidView(
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(barHeight),
+                factory = { context ->
+                    FrameLayout(context).apply {
+                        val owner = shell.customTabBar ?: ValdiHost.createTabBar(
+                            context, shell, bar, selected, safeAreaBottom, navigator,
+                        ).also { shell.customTabBar = it }
+                        (owner.rootView.parent as? ViewGroup)?.removeView(owner.rootView)
+                        addView(owner.rootView, FrameLayout.LayoutParams(-1, -1))
+                    }
+                },
+                update = {
+                    shell.customTabBar?.let { owner ->
+                        ValdiHost.updateTabBar(owner, bar, selected, safeAreaBottom)
+                    }
+                },
+                onRelease = { container ->
+                    container.removeAllViews()
+                    if (shell.removed) shell.destroy()
+                },
+            )
+        }
+    }
+}
+
+/**
+ * Explicit full-viewport overlay custom bar (`overlay: true`, `bar.height == null`).
+ * Both layers are native siblings inside a single FrameLayout so an unhit DOWN falls through to the page.
+ */
+@Composable
+private fun OverlayCustomTabsScreen(
+    shell: PageEntry,
+    bar: TabBar,
+    selected: String,
+    safeAreaBottom: Double,
+    insets: Insets,
+    navigator: Navigator,
+) {
     val composition = rememberCompositionContext()
-    val density = LocalDensity.current
-    val safeAreaBottom = WindowInsets.systemBars.union(WindowInsets.displayCutout).getBottom(density) /
-        density.density.toDouble()
-    val pageContent by rememberUpdatedState<@Composable () -> Unit>({ TabPage(shell, selected, insets, navigator) })
+    val pageContent by rememberUpdatedState<@Composable () -> Unit>({
+        Box(Modifier.fillMaxSize().padding(bottom = keyboardHeight())) {
+            TabPage(shell, selected, insets, navigator)
+        }
+    })
     key(shell.id) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),

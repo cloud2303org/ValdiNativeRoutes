@@ -11,7 +11,6 @@ import io.valdiroutes.app_ui.ui.AttachmentCache
 import io.valdiroutes.app_ui.appui.ActionSheetOptions
 import io.valdiroutes.app_ui.appui.AppPresentationOptions
 import io.valdiroutes.app_ui.appui.AppUI
-import io.valdiroutes.app_ui.appui.BottomSheetOptions
 import io.valdiroutes.app_ui.appui.DatePickerMode as AppDatePickerMode
 import io.valdiroutes.app_ui.appui.DatePickerOptions
 import io.valdiroutes.app_ui.appui.ImagePreviewOptions
@@ -24,7 +23,6 @@ import io.valdiroutes.app_ui.ActionSheetRequest
 import io.valdiroutes.app_ui.AppUIHost
 import io.valdiroutes.app_ui.AttachmentAsset
 import io.valdiroutes.app_ui.AttachmentSelection
-import io.valdiroutes.app_ui.BottomSheetRequest
 import io.valdiroutes.app_ui.DatePickerRequest
 import io.valdiroutes.app_ui.ImagePreviewRequest
 import io.valdiroutes.app_ui.LoadingRequest
@@ -77,13 +75,6 @@ class AppUIHostImpl(context: Context) : AppUIHost {
                 request.confirmText, request.cancelText,
             )
         }
-    }
-
-    override fun showBottomSheet(request: BottomSheetRequest): Promise<PresentationReply> = present {
-        BottomSheetOptions(
-            request.title, request.content, request.confirmText, request.cancelText,
-            request.showCancel, request.dismissible,
-        )
     }
 
     override fun previewImage(request: ImagePreviewRequest): Promise<PresentationReply> =

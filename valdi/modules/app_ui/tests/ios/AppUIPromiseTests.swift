@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 import ValdiRuntime
 
-/// Compile with app_ui AppUIPromise.swift, VRAppUIVoidPromise.m and canonical AppUI bindings.
+/// Compile with app_ui AppUIPromise.swift and canonical AppUI bindings.
 /// These tests use the real runtime's native Promise and marshaller; no Promise stubs or Swift async bridge.
 final class AppUIPromiseTests: XCTestCase {
     func testCompletionRetainsPromiseAfterCallerReleasesIt() {
@@ -134,14 +134,14 @@ final class AppUIPromiseTests: XCTestCase {
                          _ inspect: @escaping (SCValdiMarshallerRef) -> Void) {
         let host = NativePromiseHost()
         host.scan = promise
-        observe(host, field: 6, inspect)
+        observe(host, field: 5, inspect)
     }
 
     private func observe(_ promise: SCValdiPromise<SCValdiUndefinedValue>,
                          _ inspect: @escaping (SCValdiMarshallerRef) -> Void) {
         let host = NativePromiseHost()
         host.void = promise
-        observe(host, field: 10, inspect)
+        observe(host, field: 9, inspect)
     }
 
     /// Invoke the canonical generated protocol bridge so its p<DTO>/p<v> schema marshals the Promise.
@@ -187,7 +187,6 @@ private final class NativePromiseHost: NSObject, VRAppUIHost {
     func showActionSheet(with request: VRActionSheetRequest) -> SCValdiPromise<VRPresentationReply> { fatalError() }
     func showPicker(with request: VRPickerRequest) -> SCValdiPromise<VRPresentationReply> { fatalError() }
     func showDatePicker(with request: VRDatePickerRequest) -> SCValdiPromise<VRPresentationReply> { fatalError() }
-    func showBottomSheet(with request: VRBottomSheetRequest) -> SCValdiPromise<VRPresentationReply> { fatalError() }
     func previewImage(with request: VRImagePreviewRequest) -> SCValdiPromise<VRPresentationReply> { fatalError() }
     func pickAttachments(withSource source: VRAttachmentSource, limit: Double, mimeTypes: [String])
         -> SCValdiPromise<VRAttachmentSelection> { fatalError() }

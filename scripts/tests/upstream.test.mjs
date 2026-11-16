@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { pinValdi, vendorReport } from '../upstream.mjs';
+import { pinValdi, vendorReport } from '../maintainer/upstream.mjs';
 
 function fixture(t) {
   const root = mkdtempSync(path.join(tmpdir(), 'valdiroutes-upstream-'));

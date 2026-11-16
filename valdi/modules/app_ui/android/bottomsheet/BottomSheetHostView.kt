@@ -1,0 +1,960 @@
+package io.valdiroutes.app
+
+import android.content.Context
+import android.graphics.Color
+import android.os.Build
+import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import androidx.core.view.NestedScrollingParent3
+import androidx.core.view.NestedScrollingParentHelper
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.dynamicanimation.animation.DynamicAnimation
+import androidx.dynamicanimation.animation.FloatValueHolder
+import androidx.dynamicanimation.animation.SpringAnimation
+import androidx.dynamicanimation.animation.SpringForce
+import com.snap.valdi.extensions.ViewUtils
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
+
+/**
+ * Core Android sheet engine aligned with `@swmansion/react-native-bottom-sheet` v1.0.0,
+ * adapted idiomatically to Valdi's layout, gesture recognizer, and custom-view lifecycle.
+ */
+internal class BottomSheetHostView(context: Context) : ViewGroup(context), NestedScrollingParent3 {
+
+    // ---- Callbacks wired by BottomSheetView ----
+    var onGeometryChanged: ((widthDp: Double, heightDp: Double, surfaceHeightDp: Double, insetDp: Double) -> Unit)? = null
+    var onIndexChanged: ((Int) -> Unit)? = null
+    var onSettleChanged: ((Int) -> Unit)? = null
+    var onPositionChanged: ((positionDp: Double, fractionalIndex: Double) -> Unit)? = null
+    var onCloseRequest: (() -> Unit)? = null
+    var onPresentationChanged: (() -> Unit)? = null
+
+    // ---- Props ----
+    private var rawDetents: List<RawDetentSpec> = emptyList()
+    private var resolvedDetents: List<DetentSpec> = emptyList()
+    private var requestedIndex: Int = -1
+    private var currentTargetIndex: Int = -1
+    private var lastReportedIndex: Int = -1
+    private var hasInitializedPresentation = false
+    private var sawOpenRequestBeforeInit = false
+
+    var animateIn: Boolean = true
+    var animateContentHeight: Boolean = true
+    var modal: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            syncVisualsForCurrentOffset()
+            syncAccessibility()
+            onPresentationChanged?.invoke()
+        }
+    var hasCloseRequestHandler: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            syncAccessibility()
+            onPresentationChanged?.invoke()
+        }
+    var dismissible: Boolean = true
+        set(value) {
+            if (field == value) return
+            field = value
+            syncAccessibility()
+        }
+    var interactionEnabled: Boolean = true
+    var scrollExpandCoordination: ScrollCoordinationLevel = ScrollCoordinationLevel.HANDOFF
+    var scrollCollapseCoordination: ScrollCoordinationLevel = ScrollCoordinationLevel.HANDOFF
+    var settleDurationSeconds: Float = BottomSheetMath.DEFAULT_SETTLE_DURATION_SECONDS
+    var committedContentRegionInsetDp: Float? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            syncVisualsForCurrentOffset()
+        }
+
+    // ---- Internal state ----
+    private val density: Float
+        get() = resources.displayMetrics.density.coerceAtLeast(0.001f)
+
+    private var containerWidthPx: Int = 0
+    private var containerHeightPx: Int = 0
+    private var statusBarTopInsetPx: Int = 0
+    private var measuredNaturalContentHeightPx: Int = 0
+    private var hasMeasuredContentHeight: Boolean = false
+
+    /** Current vertical offset of the sheet's top edge from container top (`containerHeight` == closed). */
+    private var sheetOffsetY: Float = 0f
+    private var isDraggingSheet: Boolean = false
+    private var isNestedDragging: Boolean = false
+    private var springAnimation: SpringAnimation? = null
+    private val springValueHolder = FloatValueHolder(0f)
+
+    private var lastGeometry: DoubleArray? = null
+    private var lastPosition: DoubleArray? = null
+
+    private var cornerRadiiPx = FloatArray(4)
+    private var cardShadows: List<CardShadow> = emptyList()
+    private var cardElevationPx: Float = 0f
+    private var cardShadowColorArgb: Int = Color.BLACK
+
+    // ---- Child views ----
+    private val scrimCanvas = BottomSheetScrimCanvasView(context)
+    private val scrimDismissView = ScrimDismissView(context) { handleDismissTrigger() }
+    private val topShadowView = BottomSheetCardShadowView(context)
+    private val bottomShadowView = BottomSheetCardShadowView(context)
+    internal val sheetContainer = FrameLayout(context)
+    internal val clipContainer = BottomSheetCardClipLayout(context)
+
+    private var surfaceView: BottomSheetSurfaceView? = null
+    private var contentWrapperView: BottomSheetContentWrapperView? = null
+    private var markerView: BottomSheetMarkerView? = null
+
+    private val sheetGestureRecognizer: SheetValdiGestureRecognizer
+    private val scrimGestureRecognizer: ScrimValdiGestureRecognizer
+    private val nestedScrollingParentHelper = NestedScrollingParentHelper(this)
+
+    init {
+        clipChildren = false
+        clipToPadding = false
+
+        addView(scrimCanvas, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(scrimDismissView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(topShadowView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(bottomShadowView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+
+        sheetContainer.clipChildren = false
+        sheetContainer.clipToPadding = false
+        sheetContainer.addView(
+            clipContainer,
+            FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT),
+        )
+        addView(sheetContainer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+
+        // Hit-test host only when touching presented card or active modal scrim.
+        installValdiHitTest(this) { xPx, yPx -> isPointInteractive(xPx, yPx) }
+        installValdiHitTest(sheetContainer) { xPx, yPx -> isPointInPresentedCard(xPx, yPx) }
+
+        sheetGestureRecognizer = SheetValdiGestureRecognizer(sheetContainer, this)
+        ViewUtils.addGestureRecognizer(sheetContainer, sheetGestureRecognizer)
+
+        scrimGestureRecognizer = ScrimValdiGestureRecognizer(this, this)
+        ViewUtils.addGestureRecognizer(this, scrimGestureRecognizer)
+
+        ViewCompat.setAccessibilityDelegate(
+            sheetContainer,
+            SheetDismissAccessibilityDelegate(
+                canDismiss = { canUserDismissOrRequestClose() },
+                onDismiss = { handleDismissTrigger() },
+            ),
+        )
+
+        ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
+            val top = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+            if (top != statusBarTopInsetPx) {
+                statusBarTopInsetPx = top
+                if (containerHeightPx > 0) {
+                    recomputeDetentsAndSync(animateResize = false)
+                }
+            }
+            insets
+        }
+    }
+
+    // ---- Valdi child mounting ----
+
+    fun attachValdiChild(child: View, index: Int) {
+        if (child.parent === clipContainer) return
+        (child.parent as? ViewGroup)?.removeView(child)
+        val safeIndex = index.coerceIn(0, clipContainer.childCount)
+        clipContainer.addView(child, safeIndex)
+        bindSpecialDescendants(child)
+    }
+
+    fun detachValdiChild(child: View) {
+        unbindSpecialDescendants(child)
+        if (child.parent === clipContainer) {
+            clipContainer.removeView(child)
+        }
+    }
+
+    private fun bindSpecialDescendants(view: View) {
+        when (view) {
+            is BottomSheetSurfaceView -> {
+                surfaceView = view
+            }
+            is BottomSheetContentWrapperView -> {
+                contentWrapperView = view
+                scanForMarker(view)
+                view.setOnHierarchyChangeListener(object : OnHierarchyChangeListener {
+                    override fun onChildViewAdded(parent: View?, child: View?) {
+                        if (child != null) bindSpecialDescendants(child)
+                    }
+
+                    override fun onChildViewRemoved(parent: View?, child: View?) {
+                        if (child != null) unbindSpecialDescendants(child)
+                    }
+                })
+            }
+            is BottomSheetMarkerView -> {
+                markerView = view
+                view.onMarkerTopChanged = { naturalTopPx ->
+                    onNaturalContentHeightMeasured(naturalTopPx)
+                }
+                if (view.top > 0 || view.isLaidOut) {
+                    onNaturalContentHeightMeasured(view.top.coerceAtLeast(0))
+                }
+            }
+        }
+        if (view is ViewGroup && view !is BottomSheetContentWrapperView) {
+            for (i in 0 until view.childCount) {
+                bindSpecialDescendants(view.getChildAt(i))
+            }
+        }
+    }
+
+    private fun scanForMarker(group: ViewGroup) {
+        for (i in 0 until group.childCount) {
+            bindSpecialDescendants(group.getChildAt(i))
+        }
+    }
+
+    private fun unbindSpecialDescendants(view: View) {
+        when (view) {
+            is BottomSheetSurfaceView -> {
+                if (surfaceView === view) surfaceView = null
+            }
+            is BottomSheetContentWrapperView -> {
+                view.setOnHierarchyChangeListener(null)
+                if (contentWrapperView === view) contentWrapperView = null
+            }
+            is BottomSheetMarkerView -> {
+                view.onMarkerTopChanged = null
+                if (markerView === view) markerView = null
+            }
+        }
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                unbindSpecialDescendants(view.getChildAt(i))
+            }
+        }
+    }
+
+    private fun onNaturalContentHeightMeasured(naturalHeightPx: Int) {
+        val hadMeasurement = hasMeasuredContentHeight
+        if (hadMeasurement && naturalHeightPx == measuredNaturalContentHeightPx) return
+        measuredNaturalContentHeightPx = naturalHeightPx.coerceAtLeast(0)
+        hasMeasuredContentHeight = true
+        if (rawDetents.any { it.kind == DetentKind.CONTENT } && containerHeightPx > 0) {
+            recomputeDetentsAndSync(animateResize = hadMeasurement && animateContentHeight && isPresented)
+        }
+    }
+
+    // ---- Configuration setters ----
+
+    fun setRawDetents(specs: List<RawDetentSpec>) {
+        if (specs == rawDetents) return
+        rawDetents = specs
+        if (containerHeightPx > 0) {
+            recomputeDetentsAndSync(animateResize = hasInitializedPresentation && animateContentHeight && isPresented)
+        }
+    }
+
+    fun setRequestedIndex(index: Int) {
+        val clamped = clampRequestedIndex(index)
+        if (!hasInitializedPresentation && clamped >= 0) {
+            sawOpenRequestBeforeInit = true
+        }
+        if (clamped == requestedIndex && hasInitializedPresentation) return
+        requestedIndex = clamped
+        if (containerHeightPx <= 0) return
+
+        if (!hasInitializedPresentation) {
+            recomputeDetentsAndSync(animateResize = false)
+            return
+        }
+
+        if (clamped != currentTargetIndex || (!isAnimating && !isDraggingSheet && targetOffsetForIndex(clamped) != sheetOffsetY)) {
+            snapToIndex(clamped, initialVelocityPxPerSec = 0f, animated = true, emitIndexCallback = false)
+        }
+    }
+
+    fun setScrimColorArgb(colorArgb: Int) {
+        scrimCanvas.setScrimColor(colorArgb)
+    }
+
+    fun setScrimAccessibilityLabel(label: String) {
+        scrimDismissView.label = label
+    }
+
+    fun setSurfaceCornerRadiiDp(radiiDp: FloatArray) {
+        val px = FloatArray(4) { idx -> (radiiDp.getOrElse(idx) { 0f } * density).coerceAtLeast(0f) }
+        if (px.contentEquals(cornerRadiiPx)) return
+        cornerRadiiPx = px
+        clipContainer.setCornerRadii(px)
+        topShadowView.setCornerRadii(px)
+        bottomShadowView.setCornerRadii(px)
+        syncVisualsForCurrentOffset()
+    }
+
+    fun setSurfaceShadows(shadows: List<CardShadow>) {
+        if (shadows == cardShadows) return
+        cardShadows = shadows
+        topShadowView.setShadows(shadows)
+        bottomShadowView.setShadows(shadows)
+        val visible = topShadowView.hasShadows
+        topShadowView.visibility = if (visible) VISIBLE else GONE
+        bottomShadowView.visibility = if (visible) VISIBLE else GONE
+        syncVisualsForCurrentOffset()
+    }
+
+    fun setSurfaceElevationDp(elevationDp: Float) {
+        val px = (elevationDp * density).coerceAtLeast(0f)
+        if (px == cardElevationPx) return
+        cardElevationPx = px
+        clipContainer.setCardElevation(px)
+    }
+
+    fun setSurfaceShadowColorArgb(colorArgb: Int) {
+        if (colorArgb == cardShadowColorArgb) return
+        cardShadowColorArgb = colorArgb
+        clipContainer.setCardShadowColor(colorArgb)
+    }
+
+    // ---- Presentation & hit-testing queries ----
+
+    val openHeightPx: Float
+        get() = (containerHeightPx - sheetOffsetY).coerceAtLeast(0f)
+
+    val isPresented: Boolean
+        get() = containerHeightPx > 0 && (currentTargetIndex >= 0 || openHeightPx > 0.5f)
+
+    val isModalPresented: Boolean
+        get() = modal && isPresented
+
+    private val isAnimating: Boolean
+        get() = springAnimation?.isRunning == true
+
+    fun closeRequestState(): CloseRequestInputState = CloseRequestInputState(
+        isPresented = isPresented,
+        hasCloseRequestHandler = hasCloseRequestHandler,
+        isModal = modal,
+    )
+
+    fun isPointInteractive(xPx: Float, yPx: Float): Boolean {
+        if (!isPresented) return false
+        if (isPointInPresentedCard(xPx, yPx)) return true
+        return modal && scrimCanvas.isScrimVisible
+    }
+
+    fun isPointInPresentedCard(xPx: Float, yPx: Float): Boolean {
+        if (!isPresented) return false
+        val localY = yPx - sheetContainer.translationY
+        val localX = xPx - sheetContainer.translationX
+        return clipContainer.cardContains(localX, localY)
+    }
+
+    fun isScrimInteractiveAt(xPx: Float, yPx: Float): Boolean =
+        modal && isPresented && scrimCanvas.isScrimVisible && !isPointInPresentedCard(xPx, yPx)
+
+    fun canStartSheetGesture(): Boolean = isPresented && resolvedDetents.isNotEmpty()
+
+    fun canSheetExpandFurther(): Boolean {
+        if (resolvedDetents.isEmpty()) return false
+        val maxTotal = resolvedDetents.last().totalHeightPx
+        return openHeightPx < maxTotal - 0.5f
+    }
+
+    fun isAtRestingDetent(): Boolean {
+        if (currentTargetIndex < 0 || currentTargetIndex > resolvedDetents.lastIndex) return false
+        val targetOffset = targetOffsetForIndex(currentTargetIndex)
+        return abs(sheetOffsetY - targetOffset) <= 1f
+    }
+
+    private fun canUserDismissOrRequestClose(): Boolean = dismissible && (modal || hasCloseRequestHandler)
+
+    // ---- Layout & Detent Resolution ----
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val w = MeasureSpec.getSize(widthMeasureSpec)
+        val h = MeasureSpec.getSize(heightMeasureSpec)
+        setMeasuredDimension(w, h)
+
+        val exactW = MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY)
+        val exactH = MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY)
+        scrimCanvas.measure(exactW, exactH)
+        scrimDismissView.measure(exactW, exactH)
+        topShadowView.measure(exactW, exactH)
+        bottomShadowView.measure(exactW, exactH)
+        sheetContainer.measure(exactW, exactH)
+    }
+
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        val w = (r - l).coerceAtLeast(0)
+        val h = (b - t).coerceAtLeast(0)
+
+        scrimCanvas.layout(0, 0, w, h)
+        scrimDismissView.layout(0, 0, w, h)
+        topShadowView.layout(0, 0, w, h)
+        bottomShadowView.layout(0, 0, w, h)
+        sheetContainer.layout(0, 0, w, h)
+
+        val sizeChanged = w != containerWidthPx || h != containerHeightPx
+        containerWidthPx = w
+        containerHeightPx = h
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            rootWindowInsets?.let { rawInsets ->
+                val compat = WindowInsetsCompat.toWindowInsetsCompat(rawInsets, this)
+                statusBarTopInsetPx = compat.getInsets(WindowInsetsCompat.Type.statusBars()).top
+            }
+        }
+
+        if (w > 0 && h > 0 && (sizeChanged || !hasInitializedPresentation)) {
+            recomputeDetentsAndSync(animateResize = false)
+        } else if (sizeChanged) {
+            syncVisualsForCurrentOffset()
+        }
+    }
+
+    private fun recomputeDetentsAndSync(animateResize: Boolean) {
+        if (containerHeightPx <= 0 || containerWidthPx <= 0) return
+
+        val resolved = rawDetents.map { raw ->
+            val topInsetPx = if (raw.usesStatusBarTopInset) {
+                statusBarTopInsetPx.toFloat()
+            } else {
+                raw.insetTopDp * density
+            }
+            val bottomInsetPx = (raw.insetBottomDp * density).coerceAtLeast(0f)
+            val leftInsetPx = (raw.insetLeftDp * density).coerceAtLeast(0f)
+            val rightInsetPx = (raw.insetRightDp * density).coerceAtLeast(0f)
+            val availableCardHeightPx = (containerHeightPx - topInsetPx - bottomInsetPx).coerceAtLeast(0f)
+
+            val rawCardHeightPx = when (raw.kind) {
+                DetentKind.POINTS -> raw.value * density
+                DetentKind.PERCENTAGE -> raw.value * availableCardHeightPx
+                DetentKind.CONTENT -> {
+                    if (hasMeasuredContentHeight) measuredNaturalContentHeightPx.toFloat()
+                    else 0f
+                }
+            }
+            val clampedCardHeightPx = rawCardHeightPx.coerceIn(0f, availableCardHeightPx).roundToInt()
+            DetentSpec(
+                heightPx = clampedCardHeightPx,
+                programmatic = raw.programmatic,
+                insets = DetentInsets(
+                    left = leftInsetPx,
+                    right = rightInsetPx,
+                    bottom = bottomInsetPx,
+                ),
+                scrimOpacity = raw.scrimOpacity,
+            )
+        }
+        resolvedDetents = resolved
+
+        emitGeometryIfNeeded()
+
+        val desiredIndex = clampRequestedIndex(requestedIndex)
+        if (!hasInitializedPresentation) {
+            if (desiredIndex >= 0) {
+                sawOpenRequestBeforeInit = true
+            }
+            // Defer initial open if target detent is a 'content' detent whose marker hasn't laid out yet.
+            val waitingForContent = desiredIndex in rawDetents.indices &&
+                rawDetents[desiredIndex].kind == DetentKind.CONTENT &&
+                !hasMeasuredContentHeight
+
+            if (waitingForContent) {
+                sheetOffsetY = containerHeightPx.toFloat()
+                currentTargetIndex = -1
+                syncVisualsForCurrentOffset()
+                return
+            }
+
+            val notifyPreInitCancel = desiredIndex < 0 && sawOpenRequestBeforeInit
+            sawOpenRequestBeforeInit = false
+            hasInitializedPresentation = true
+            currentTargetIndex = desiredIndex
+            lastReportedIndex = desiredIndex
+
+            if (desiredIndex >= 0 && animateIn) {
+                sheetOffsetY = containerHeightPx.toFloat()
+                syncVisualsForCurrentOffset()
+                syncAccessibility()
+                onPresentationChanged?.invoke()
+                startSpringTo(
+                    targetOffsetPx = targetOffsetForIndex(desiredIndex),
+                    initialVelocityPxPerSec = 0f,
+                    targetIndex = desiredIndex,
+                )
+            } else {
+                sheetOffsetY = targetOffsetForIndex(desiredIndex)
+                syncVisualsForCurrentOffset()
+                syncAccessibility()
+                onPresentationChanged?.invoke()
+                emitPositionIfNeeded()
+                if (notifyPreInitCancel) {
+                    onSettleChanged?.invoke(desiredIndex)
+                }
+            }
+            return
+        }
+
+        // Re-anchor existing presentation after container resize or content height change.
+        currentTargetIndex = desiredIndex
+        val newTargetOffset = targetOffsetForIndex(desiredIndex)
+        if (isDraggingSheet || isNestedDragging) {
+            syncVisualsForCurrentOffset()
+            emitPositionIfNeeded()
+        } else if (animateResize || isAnimating) {
+            startSpringTo(
+                targetOffsetPx = newTargetOffset,
+                initialVelocityPxPerSec = 0f,
+                targetIndex = desiredIndex,
+            )
+        } else {
+            cancelSpring()
+            sheetOffsetY = newTargetOffset
+            syncVisualsForCurrentOffset()
+            emitPositionIfNeeded()
+        }
+    }
+
+    private fun emitGeometryIfNeeded() {
+        if (containerWidthPx <= 0 || containerHeightPx <= 0) return
+
+        // Find widest card detent (matching TS widestCard flag or min horizontal inset).
+        val widestRaw = rawDetents.firstOrNull { it.widestCard } ?: rawDetents.firstOrNull()
+        val widestInsetPx = if (widestRaw != null) {
+            min(widestRaw.insetLeftDp, widestRaw.insetRightDp) * density
+        } else {
+            0f
+        }
+        val widestLeftPx = (widestRaw?.insetLeftDp ?: 0f) * density
+        val widestRightPx = (widestRaw?.insetRightDp ?: 0f) * density
+        val contentRegionWidthPx = (containerWidthPx - widestLeftPx - widestRightPx).coerceAtLeast(0f)
+
+        // Tallest card height across resolved detents (or available height when 'content' detent present).
+        val maxAvailableForContent = rawDetents.maxOfOrNull { raw ->
+            val topPx = if (raw.usesStatusBarTopInset) statusBarTopInsetPx.toFloat() else raw.insetTopDp * density
+            val bottomPx = raw.insetBottomDp * density
+            (containerHeightPx - topPx - bottomPx).coerceAtLeast(0f)
+        } ?: containerHeightPx.toFloat()
+
+        val hasContentDetent = rawDetents.any { it.kind == DetentKind.CONTENT }
+        val maxResolvedCardHeightPx = resolvedDetents.maxOfOrNull { it.heightPx.toFloat() } ?: 0f
+        val contentRegionHeightPx = if (hasContentDetent) {
+            maxAvailableForContent
+        } else {
+            max(maxResolvedCardHeightPx, 0f)
+        }
+
+        val next = doubleArrayOf(
+            (contentRegionWidthPx / density).toDouble(),
+            (contentRegionHeightPx / density).toDouble(),
+            (containerHeightPx / density).toDouble(),
+            (widestInsetPx / density).toDouble(),
+        )
+        if (lastGeometry.contentEquals(next)) return
+        lastGeometry = next
+        onGeometryChanged?.invoke(next[0], next[1], next[2], next[3])
+    }
+
+    // ---- Dragging & Snapping ----
+
+    internal fun onSheetDragBegan() {
+        cancelSpring()
+        isDraggingSheet = true
+    }
+
+    internal fun onSheetDragBy(dyPx: Float) {
+        if (resolvedDetents.isEmpty()) return
+        val maxTotal = resolvedDetents.last().totalHeightPx
+        val minTotal = if (canUserDismissOrRequestClose()) 0f else resolvedDetents.first().totalHeightPx
+
+        val currentUnclampedOpen = containerHeightPx - sheetOffsetY - dyPx
+        val nextOpen = when {
+            currentUnclampedOpen > maxTotal -> {
+                maxTotal + BottomSheetMath.rubberBand(currentUnclampedOpen - maxTotal, containerHeightPx * 0.35f)
+            }
+            currentUnclampedOpen < minTotal -> {
+                if (minTotal <= 0f) 0f
+                else (minTotal - BottomSheetMath.rubberBand(minTotal - currentUnclampedOpen, minTotal.coerceAtLeast(1f)))
+                    .coerceAtLeast(0f)
+            }
+            else -> currentUnclampedOpen
+        }
+        setSheetOffsetYInternal(containerHeightPx - nextOpen)
+    }
+
+    /**
+     * Moves the sheet upward toward the top detent without rubber-banding past `maxTotal`,
+     * returning any unconsumed negative `dyPx` so `HANDOFF` can feed it into `ValdiScrollView`.
+     */
+    internal fun onSheetDragByClampedToTop(dyPx: Float): Float {
+        if (resolvedDetents.isEmpty()) return dyPx
+        val maxTotal = resolvedDetents.last().totalHeightPx
+        val minOffset = containerHeightPx - maxTotal
+        val proposedOffset = sheetOffsetY + dyPx
+        return if (proposedOffset < minOffset) {
+            val leftover = proposedOffset - minOffset
+            setSheetOffsetYInternal(minOffset)
+            leftover
+        } else {
+            setSheetOffsetYInternal(proposedOffset)
+            0f
+        }
+    }
+
+    internal fun onSheetDragEnded(velocityYPxPerSec: Float) {
+        isDraggingSheet = false
+        settleFromRelease(velocityYPxPerSec)
+    }
+
+    internal fun onSheetDragSettledAtRest() {
+        isDraggingSheet = false
+    }
+
+    internal fun onSheetDragCancelled() {
+        isDraggingSheet = false
+        snapToIndex(currentTargetIndex.coerceIn(minAllowedIndex(), resolvedDetents.lastIndex), 0f, animated = true, emitIndexCallback = false)
+    }
+
+    internal fun onScrimTapped() {
+        handleDismissTrigger()
+    }
+
+    fun dismissModalByUser() {
+        if (!modal) return
+        snapToIndex(-1, initialVelocityPxPerSec = 0f, animated = true, emitIndexCallback = true)
+    }
+
+    fun emitCloseRequestFromSystem() {
+        onCloseRequest?.invoke()
+    }
+
+    private fun handleDismissTrigger() {
+        if (!isPresented) return
+        if (hasCloseRequestHandler) {
+            onCloseRequest?.invoke()
+        } else if (modal) {
+            snapToIndex(-1, initialVelocityPxPerSec = 0f, animated = true, emitIndexCallback = true)
+        }
+    }
+
+    private fun settleFromRelease(velocityYPxPerSec: Float) {
+        if (resolvedDetents.isEmpty()) return
+        val releaseIndex = BottomSheetMath.resolveReleaseTargetIndex(
+            detents = resolvedDetents,
+            currentOpenHeightPx = openHeightPx,
+            velocityYPxPerSec = velocityYPxPerSec,
+            canDismissOrClose = canUserDismissOrRequestClose(),
+        )
+
+        if (releaseIndex == -1 && hasCloseRequestHandler) {
+            // Notify caller via onCloseRequest; if it synchronously closed the sheet, continue closing with release velocity.
+            onCloseRequest?.invoke()
+            if (requestedIndex < 0) {
+                snapToIndex(
+                    index = -1,
+                    initialVelocityPxPerSec = velocityYPxPerSec,
+                    animated = true,
+                    emitIndexCallback = false,
+                )
+                return
+            }
+            val bounceIndex = resolvedDetents.indexOfFirst { !it.programmatic }.takeIf { it >= 0 } ?: 0
+            snapToIndex(
+                index = bounceIndex,
+                initialVelocityPxPerSec = velocityYPxPerSec,
+                animated = true,
+                emitIndexCallback = bounceIndex != lastReportedIndex,
+            )
+            return
+        }
+
+        val finalIndex = if (releaseIndex == -1 && !modal) {
+            resolvedDetents.indexOfFirst { !it.programmatic }.takeIf { it >= 0 } ?: 0
+        } else {
+            releaseIndex
+        }
+        snapToIndex(
+            index = finalIndex,
+            initialVelocityPxPerSec = velocityYPxPerSec,
+            animated = true,
+            emitIndexCallback = true,
+        )
+    }
+
+    private fun snapToIndex(
+        index: Int,
+        initialVelocityPxPerSec: Float,
+        animated: Boolean,
+        emitIndexCallback: Boolean,
+    ) {
+        val clamped = clampRequestedIndex(index)
+        val prevPresented = isPresented
+        currentTargetIndex = clamped
+        requestedIndex = clamped
+
+        if (emitIndexCallback && clamped != lastReportedIndex) {
+            lastReportedIndex = clamped
+            onIndexChanged?.invoke(clamped)
+        } else {
+            lastReportedIndex = clamped
+        }
+
+        val targetOffset = targetOffsetForIndex(clamped)
+        if (!animated || abs(targetOffset - sheetOffsetY) < 0.5f) {
+            cancelSpring()
+            setSheetOffsetYInternal(targetOffset)
+            if (isPresented != prevPresented) {
+                syncAccessibility()
+                onPresentationChanged?.invoke()
+            }
+            onSettleChanged?.invoke(clamped)
+            return
+        }
+
+        if (isPresented != prevPresented) {
+            syncAccessibility()
+            onPresentationChanged?.invoke()
+        }
+        startSpringTo(targetOffset, initialVelocityPxPerSec, clamped)
+    }
+
+    private fun startSpringTo(
+        targetOffsetPx: Float,
+        initialVelocityPxPerSec: Float,
+        targetIndex: Int,
+    ) {
+        cancelSpring()
+        val distance = targetOffsetPx - sheetOffsetY
+        val omega = BottomSheetMath.computeCriticalSpringOmega(
+            distancePx = distance,
+            initialVelocityPxPerSec = initialVelocityPxPerSec,
+            settleDurationSeconds = settleDurationSeconds,
+        )
+        val stiffness = (omega * omega).coerceAtLeast(1f)
+
+        springValueHolder.value = sheetOffsetY
+        val spring = SpringAnimation(springValueHolder).apply {
+            setStartVelocity(initialVelocityPxPerSec)
+            minimumVisibleChange = DynamicAnimation.MIN_VISIBLE_CHANGE_PIXELS
+            spring = SpringForce(targetOffsetPx).apply {
+                this.stiffness = stiffness
+                this.dampingRatio = SpringForce.DAMPING_RATIO_NO_BOUNCY
+            }
+            addUpdateListener { _, value, _ ->
+                setSheetOffsetYInternal(value)
+            }
+            addEndListener { _, canceled, _, _ ->
+                if (!canceled) {
+                    springAnimation = null
+                    setSheetOffsetYInternal(targetOffsetPx)
+                    syncAccessibility()
+                    onPresentationChanged?.invoke()
+                    onSettleChanged?.invoke(targetIndex)
+                }
+            }
+        }
+        springAnimation = spring
+        spring.start()
+    }
+
+    private fun cancelSpring() {
+        val running = springAnimation ?: return
+        springAnimation = null
+        running.cancel()
+    }
+
+    private fun setSheetOffsetYInternal(nextOffsetPx: Float) {
+        sheetOffsetY = nextOffsetPx
+        syncVisualsForCurrentOffset()
+        emitPositionIfNeeded()
+    }
+
+    private fun syncVisualsForCurrentOffset() {
+        if (containerHeightPx <= 0 || containerWidthPx <= 0) return
+
+        val openPx = openHeightPx
+        val insets = BottomSheetMath.interpolateInsets(resolvedDetents, openPx)
+        val cardLeft = insets.left
+        val cardRight = (containerWidthPx - insets.right).coerceAtLeast(cardLeft)
+        val cardHeight = (openPx - insets.bottom).coerceAtLeast(0f)
+
+        sheetContainer.translationY = sheetOffsetY
+        clipContainer.setClipsToCard(insets.isInset || cardShadows.isNotEmpty() || cardElevationPx > 0f)
+        clipContainer.setCard(cardLeft, 0f, cardRight, cardHeight)
+
+        // Position surface and content wrapper at committedContentRegionInset so content doesn't reflow horizontally during drag.
+        val horizontalDelta = if (committedContentRegionInsetDp != null) {
+            cardLeft - committedContentRegionInsetDp!! * density
+        } else {
+            0f
+        }
+        surfaceView?.translationX = horizontalDelta
+        contentWrapperView?.translationX = horizontalDelta
+
+        // Stitch top and bottom RenderNode shadow halves without redrawing blurred paths!
+        if (topShadowView.hasShadows && openPx > 0.5f && cardHeight > 0.5f) {
+            topShadowView.visibility = VISIBLE
+            bottomShadowView.visibility = VISIBLE
+            val maxDetentCardHeight = resolvedDetents.maxOfOrNull { it.heightPx.toFloat() } ?: cardHeight
+            val refHeight = max(cardHeight, max(maxDetentCardHeight, topShadowView.edgeBand * 2f))
+            val splitY = sheetOffsetY + cardHeight * 0.5f
+            topShadowView.place(
+                shapeLeft = cardLeft,
+                shapeRight = cardRight,
+                shapeHeight = refHeight,
+                offsetY = sheetOffsetY,
+                clipTop = Float.NEGATIVE_INFINITY,
+                clipBottom = splitY,
+            )
+            bottomShadowView.place(
+                shapeLeft = cardLeft,
+                shapeRight = cardRight,
+                shapeHeight = refHeight,
+                offsetY = sheetOffsetY + cardHeight - refHeight,
+                clipTop = splitY,
+                clipBottom = Float.POSITIVE_INFINITY,
+            )
+        } else {
+            topShadowView.visibility = GONE
+            bottomShadowView.visibility = GONE
+        }
+
+        // Update modal scrim opacity.
+        if (modal) {
+            val scrimProgress = BottomSheetMath.interpolateScrimOpacity(resolvedDetents, openPx)
+            scrimCanvas.setOpacityProgress(scrimProgress)
+        } else {
+            scrimCanvas.setOpacityProgress(0f)
+        }
+    }
+
+    private fun syncAccessibility() {
+        val activeModal = modal && isPresented
+        scrimDismissView.setDismissEnabled(activeModal && canUserDismissOrRequestClose())
+        sheetContainer.importantForAccessibility =
+            if (isPresented) IMPORTANT_FOR_ACCESSIBILITY_YES
+            else IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+    }
+
+    private fun emitPositionIfNeeded() {
+        val callback = onPositionChanged ?: return
+        if (containerHeightPx <= 0 || resolvedDetents.isEmpty()) return
+        val openPx = openHeightPx
+        val next = doubleArrayOf(
+            (openPx / density).toDouble(),
+            BottomSheetMath.computeFractionalIndex(resolvedDetents, openPx).toDouble(),
+        )
+        if (lastPosition.contentEquals(next)) return
+        lastPosition = next
+        callback(next[0], next[1])
+    }
+
+    private fun minAllowedIndex(): Int = if (modal) -1 else 0
+
+    private fun clampRequestedIndex(index: Int): Int {
+        if (rawDetents.isEmpty()) return -1
+        val minIdx = if (modal) -1 else 0
+        return index.coerceIn(minIdx, rawDetents.lastIndex)
+    }
+
+    private fun targetOffsetForIndex(index: Int): Float {
+        if (index < 0 || resolvedDetents.isEmpty()) return containerHeightPx.toFloat()
+        val safeIdx = index.coerceIn(0, resolvedDetents.lastIndex)
+        return containerHeightPx - resolvedDetents[safeIdx].totalHeightPx
+    }
+
+    // ---- NestedScrollingParent3 fallback for standard Android nested scroll children ----
+
+    override fun onStartNestedScroll(child: View, target: View, axes: Int, type: Int): Boolean {
+        if ((axes and ViewCompat.SCROLL_AXIS_VERTICAL) == 0) return false
+        if (scrollExpandCoordination == ScrollCoordinationLevel.NONE &&
+            scrollCollapseCoordination == ScrollCoordinationLevel.NONE
+        ) {
+            return false
+        }
+        return type == ViewCompat.TYPE_TOUCH && isPresented
+    }
+
+    override fun onNestedScrollAccepted(child: View, target: View, axes: Int, type: Int) {
+        nestedScrollingParentHelper.onNestedScrollAccepted(child, target, axes, type)
+        if (type == ViewCompat.TYPE_TOUCH) {
+            cancelSpring()
+            isNestedDragging = true
+        }
+    }
+
+    override fun onNestedPreScroll(target: View, dx: Int, dy: Int, consumed: IntArray, type: Int) {
+        if (type != ViewCompat.TYPE_TOUCH || dy == 0) return
+        // dy > 0 in NestedScrolling means scrolling content DOWN (finger moves UP -> expanding sheet).
+        if (dy > 0 && scrollExpandCoordination != ScrollCoordinationLevel.NONE && canSheetExpandFurther()) {
+            val beforeOffset = sheetOffsetY
+            onSheetDragByClampedToTop(-dy.toFloat())
+            val moved = (beforeOffset - sheetOffsetY).roundToInt()
+            consumed[1] = moved
+        }
+    }
+
+    override fun onNestedScroll(
+        target: View,
+        dxConsumed: Int,
+        dyConsumed: Int,
+        dxUnconsumed: Int,
+        dyUnconsumed: Int,
+        type: Int,
+        consumed: IntArray,
+    ) {
+        if (type != ViewCompat.TYPE_TOUCH || dyUnconsumed == 0) return
+        // dyUnconsumed < 0 means child hit top and finger is moving DOWN -> collapsing sheet!
+        if (dyUnconsumed < 0 && scrollCollapseCoordination != ScrollCoordinationLevel.NONE) {
+            onSheetDragBy(-dyUnconsumed.toFloat())
+            consumed[1] += dyUnconsumed
+        }
+    }
+
+    override fun onNestedScroll(
+        target: View,
+        dxConsumed: Int,
+        dyConsumed: Int,
+        dxUnconsumed: Int,
+        dyUnconsumed: Int,
+        type: Int,
+    ) {
+        onNestedScroll(target, dxConsumed, dyConsumed, dxUnconsumed, dyUnconsumed, type, IntArray(2))
+    }
+
+    override fun onNestedPreFling(target: View, velocityX: Float, velocityY: Float): Boolean {
+        if (!isAtRestingDetent()) {
+            isNestedDragging = false
+            settleFromRelease(-velocityY)
+            return true
+        }
+        return false
+    }
+
+    override fun onStopNestedScroll(target: View, type: Int) {
+        nestedScrollingParentHelper.onStopNestedScroll(target, type)
+        if (type == ViewCompat.TYPE_TOUCH && isNestedDragging) {
+            isNestedDragging = false
+            if (!isAtRestingDetent()) {
+                settleFromRelease(0f)
+            }
+        }
+    }
+
+    override fun getNestedScrollAxes(): Int = nestedScrollingParentHelper.nestedScrollAxes
+
+    override fun onDetachedFromWindow() {
+        cancelSpring()
+        super.onDetachedFromWindow()
+    }
+}

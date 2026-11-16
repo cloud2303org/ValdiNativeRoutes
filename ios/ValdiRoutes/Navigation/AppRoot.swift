@@ -112,18 +112,26 @@ final class SystemTabsController: UITabBarController, UITabBarControllerDelegate
         navigator?.selectTab(routeTabs[selectedIndex].route, in: shell)
     }
 
-    /// A res/ image of the app_pages module, as is: from the over-the-air package when it has one (ValdiOta.swift), as
-    /// the Valdi pages load it; otherwise from app_pages.bundle, where Valdi exports it.
-    private static func image(_ name: String, data: String?) -> UIImage? {
-        if let data, let bytes = Data(base64Encoded: data), let image = UIImage(data: bytes) {
-            return image.withRenderingMode(.alwaysOriginal)
+    /// A res/ silhouette of the app_pages module: normalized to 24pt when decoded from dev base64 bytes, and rendered
+    /// as a template so UITabBar applies active/inactive semantic tinting across Light, Dark, and single-icon configs.
+    static func image(_ name: String, data: String?) -> UIImage? {
+        if let data, let bytes = Data(base64Encoded: data), let raw = UIImage(data: bytes) {
+            let maxSide = max(raw.size.width, raw.size.height)
+            let scaled: UIImage
+            if maxSide > 24, let cgImage = raw.cgImage {
+                scaled = UIImage(cgImage: cgImage, scale: maxSide / 24.0, orientation: raw.imageOrientation)
+            } else {
+                scaled = raw
+            }
+            return scaled.withRenderingMode(.alwaysTemplate)
         }
         return (ValdiOta.image(module: "app_pages", name: name) ?? UIImage(named: name, in: ValdiHost.resourceBundle, compatibleWith: nil))?
-            .withRenderingMode(.alwaysOriginal)
+            .withRenderingMode(.alwaysTemplate)
     }
 }
 
-/// Pages occupy the system viewport. The business Valdi root overlays it, with no height measurement or extra inset.
+/// Docked custom bars (`bar.height != nil`) anchor at the bottom and propagate `bar.height` through UIKit's
+/// `additionalSafeAreaInsets`; explicit overlays (`overlay: true`, `bar.height == nil`) span `view.bounds`.
 final class CustomTabsController: UIViewController, TabsContainer {
     private let shell: PageEntry
     private let bar: TabBar
@@ -137,7 +145,14 @@ final class CustomTabsController: UIViewController, TabsContainer {
         self.shell = shell
         self.bar = bar
         self.navigator = navigator
-        pages = navigator.tabPages(of: shell).map { PageController(entry: $0.entry, navigator: navigator) }
+        let dockedBottom = (bar.height?.doubleValue).flatMap { $0 > 0 ? CGFloat($0) : nil } ?? 0
+        pages = navigator.tabPages(of: shell).map { item in
+            let controller = PageController(entry: item.entry, navigator: navigator)
+            if dockedBottom > 0 {
+                controller.additionalSafeAreaInsets = UIEdgeInsets(top: 0, left: 0, bottom: dockedBottom, right: 0)
+            }
+            return controller
+        }
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -202,7 +217,12 @@ final class CustomTabsController: UIViewController, TabsContainer {
         }
         guard let root = shell.rootView else { return }
         if root.superview !== view { view.addSubview(root) }
-        root.frame = view.bounds
+        if let barHeight = bar.height?.doubleValue, barHeight > 0 {
+            let totalHeight = min(view.bounds.height, CGFloat(barHeight) + bottom)
+            root.frame = CGRect(x: 0, y: max(0, view.bounds.height - totalHeight), width: view.bounds.width, height: totalHeight)
+        } else {
+            root.frame = view.bounds
+        }
         StartupSplashScreen.shared.contentDidChange()
     }
 }
@@ -219,7 +239,7 @@ private func embed(_ child: UIViewController, in parent: UIViewController) {
 /// (NativeScreens) under the navigation bar.
 final class PageController: UIViewController {
     let entry: PageEntry
-    private let navigator: Navigator
+    private weak var navigator: Navigator?
     private var tabs: (UIViewController & TabsContainer)?
 
     init(entry: PageEntry, navigator: Navigator) {
@@ -232,7 +252,7 @@ final class PageController: UIViewController {
     required init?(coder: NSCoder) { fatalError() }
 
     override func loadView() {
-        guard entry.definition.kind == "valdi" else { return super.loadView() }
+        guard entry.definition.kind == "valdi", let navigator else { return super.loadView() }
         view = PageContainerView(entry: entry, navigator: navigator)
     }
 
@@ -240,6 +260,7 @@ final class PageController: UIViewController {
         super.viewDidLoad()
         // The embedded Valdi/native page owns its background.
         view.backgroundColor = .clear
+        guard let navigator else { return }
         switch entry.definition.kind {
         case "valdi":
             break
@@ -295,7 +316,7 @@ final class PageController: UIViewController {
 /// keyboard height, and the bottom safe-area inset drops by the part of it the keyboard covers.
 final class PageContainerView: UIView {
     let entry: PageEntry
-    private let navigator: Navigator
+    private weak var navigator: Navigator?
     /// Insets without the keyboard.
     private var baseInsets = UIEdgeInsets.zero {
         didSet { if baseInsets != oldValue { applyInsets() } }
@@ -356,7 +377,8 @@ final class PageContainerView: UIView {
         StartupSplashScreen.shared.contentDidChange()
     }
 
-    private func createRootView() -> SCValdiRootView {
+    private func createRootView() -> SCValdiRootView? {
+        guard let navigator else { return nil }
         let insets = Self.insets(baseInsets)
         let rootView = ValdiHost.shared.createPage(entry, insets: insets, navigator: navigator)
         entry.rootView = rootView

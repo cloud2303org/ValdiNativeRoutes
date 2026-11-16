@@ -5,8 +5,8 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { readAppConfig, syncAppConfig } from '../app-config.mjs';
-import { readAppIcon, syncAppIcons } from '../app-icons.mjs';
+import { readAppConfig, syncAppConfig } from '../lib/app-config.mjs';
+import { readAppIcon, syncAppIcons } from '../lib/app-icons.mjs';
 import { sampleApp } from './fixtures/app-config.mjs';
 
 const sharp = createRequire(import.meta.url)('../../tools/valdi-rolldown/node_modules/sharp');

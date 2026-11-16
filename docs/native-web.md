@@ -12,8 +12,8 @@ The application entry installs its globals before loading business services.
 ## Build the runtime
 
 ```sh
-scripts/export-android.sh release
-scripts/export-ios.sh debug
+scripts/maintainer/export-android.sh release
+scripts/maintainer/export-ios.sh debug
 ```
 
 Run these scripts from the repository root. The optional second argument

@@ -248,7 +248,7 @@ bounds ZSTD output/window to 64 MiB and HDiff step memory to 32 MiB.
 ## Build and publish
 
 Use the existing signing key. On a new project with no key, run
-`node scripts/ota.mjs keygen` once and keep `ota/private.pem` private.
+`pnpm ota keygen` (`node scripts/ota/ota.mjs keygen`) once and keep `ota/private.pem` private.
 Only the public key is embedded in the binary.
 
 Build an OTA-enabled Release binary against the appropriate Release runtime:
@@ -266,7 +266,7 @@ To keep the Android setting locally, add
 `valdiOtaUrl=https://updates.example.com/app` to `android/gradle.properties`
 or your user-level `~/.gradle/gradle.properties`; `-PvaldiOtaUrl=...` overrides it.
 For an iOS project default, edit `VALDI_OTA_URL` in `ios/project.yml`, then run
-`node scripts/ios-project.mjs` to regenerate the Xcode project. The build-setting
+`node scripts/lib/ios-project.mjs` to regenerate the Xcode project. The build-setting
 argument shown above overrides that default.
 
 With the current native versions, this example checks
@@ -282,8 +282,8 @@ client requires a new native build.
 From the repository root, after changing compatible application code:
 
 ```sh
-node scripts/ota.mjs pack android 0.1 pages-002
-node scripts/ota.mjs pack ios 1.0 pages-002
+pnpm ota pack android 0.1 pages-002
+pnpm ota pack ios 1.0 pages-002
 ```
 
 The command builds only `app_pages` in Release and writes
@@ -295,19 +295,18 @@ To add a delta, supply either an old package directory or an old archive:
 
 ```sh
 # Package directory: derive base version and check platform/appVersion and archive.
-node scripts/ota.mjs pack android 0.1 pages-002 \
+pnpm ota pack android 0.1 pages-002 \
   --base ota/dist/android/0.1/pages-001
-scripts/ota-pack-ios.sh 1.0 pages-002 --base ota/dist/ios/1.0/pages-001
+pnpm ota pack ios 1.0 pages-002 --base ota/dist/ios/1.0/pages-001
 
 # Archive file: --base-version is required.
-VALDI_HDIFFZ=/path/to/hdiffz node scripts/ota.mjs pack android 0.1 pages-002 \
+VALDI_HDIFFZ=/path/to/hdiffz pnpm ota pack android 0.1 pages-002 \
   --base /path/to/old.valdimodule --base-version pages-001
-scripts/ota-pack-ios.sh 1.0 pages-002 \
+pnpm ota pack ios 1.0 pages-002 \
   --base /path/to/old.valdimodule --base-version pages-001
 ```
 
-Both `scripts/ota-pack-android.sh` and `scripts/ota-pack-ios.sh` forward these
-optional base arguments. Delta packing discovers `hdiffz` in order from
+Delta packing (`node scripts/ota/ota.mjs pack ...`) discovers `hdiffz` in order from
 `VALDI_HDIFFZ`, repository `ota/tools/hdiffz` (or `hdiffz.exe`), `PATH`, then the
 prepared cache. When no tool exists, packing with `--base` automatically downloads
 the official **HDiffPatch 5.1.3** binary for the host and verifies its pinned
@@ -328,7 +327,7 @@ Hosts without a matching binary build the pinned source archive automatically.
 Source builds require `make`, a C/C++ compiler and zlib development headers
 (MinGW on Windows). A failed binary download or checksum does not silently
 switch to source: fix connectivity and retry, or explicitly choose `--source`.
-`scripts/hdiff-tool.json` pins release assets and source hashes. Explicit invalid
+`scripts/ota/hdiff-tool.json` pins release assets and source hashes. Explicit invalid
 `VALDI_HDIFFZ` overrides still fail instead of installing a different tool.
 Full-only packing and native app builds do not install this publisher tool.
 Android/iOS continue compiling the existing vendored HPatch decoder; downloaded
@@ -431,7 +430,7 @@ ios/Tests/run-ota-client-tests.sh
 For standalone native delta runners, point the override at the prepared tool:
 
 ```sh
-export VALDI_HDIFFZ="$(node scripts/hdiff-tool.mjs)"
+export VALDI_HDIFFZ="$(node scripts/ota/hdiff-tool.mjs)"
 ```
 
 The standalone Android runner uses cached Kotlin/JUnit artifacts and

@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { zstdCompressSync, zstdDecompressSync } from 'node:zlib';
-import * as publisher from '../ota.mjs';
-import { findHdiffz } from '../ota-delta.mjs';
+import * as publisher from '../ota/ota.mjs';
+import { findHdiffz } from '../ota/ota-delta.mjs';
 import { discoveryHdiffz, hdiffSkip, optionalHdiffz } from './ota-test-tools.mjs';
 
 const hdiffz = optionalHdiffz();
@@ -160,7 +160,7 @@ test('malformed base packets fail before signing or staging a full package', t =
 });
 
 test('delta validation rejects tampered bindings, downloads, operations, order and unreferenced files', async t => {
-  const { createDelta, validateDelta } = await import('../ota-delta.mjs');
+  const { createDelta, validateDelta } = await import('../ota/ota-delta.mjs');
   const data = archives();
   const original = hdiffz ? createDelta({ ...identity, ...data, baseVersion: 'pages-001', hdiffz }) : schemaDelta(data, createDelta);
   assert.doesNotThrow(() => validateDelta(original, identity, data.targetArchive));
@@ -195,7 +195,7 @@ test('delta validation rejects tampered bindings, downloads, operations, order a
 });
 
 test('strict parser rejects unsafe/duplicate names, wrong lengths, malformed UTF-8, padding and truncated fields', async () => {
-  const { parseArchive, encodePacket } = await import('../ota-delta.mjs');
+  const { parseArchive, encodePacket } = await import('../ota/ota-delta.mjs');
   const bad = [];
   for (const name of ['', '/absolute', 'a//b', 'a/./b', 'a/../b', 'a/', 'a\\b', 'nul\0x', 'C:/file']) bad.push(packet([[name, Buffer.from('x')]]));
   const wrongMagic = packet([]); wrongMagic[0] ^= 1; bad.push(wrongMagic);
@@ -217,7 +217,7 @@ test('strict parser rejects unsafe/duplicate names, wrong lengths, malformed UTF
 });
 
 test('non-HBC and non-js entries use copy/full only, even with a bytecode-looking header', async () => {
-  const { createDelta } = await import('../ota-delta.mjs');
+  const { createDelta } = await import('../ota/ota-delta.mjs');
   const data = archives();
   const old = new Map(data.oldEntries), target = new Map(data.newEntries);
   old.set('plain.js', noise(4096)); target.set('plain.js', Buffer.from(old.get('plain.js'))); target.get('plain.js')[2000] ^= 1;
@@ -297,7 +297,7 @@ test('full manifest bounds count descriptors and reject more than eight bases or
 
 test('real pinned Hermes bytecode uses a real HDiff patch and default-ZSTD reconstruction', { skip: hdiffz ? false : hdiffSkip }, async t => {
   const { createRequire } = await import('node:module');
-  const { createDelta } = await import('../ota-delta.mjs');
+  const { createDelta } = await import('../ota/ota-delta.mjs');
   const require = createRequire(new URL('../../tools/valdi-rolldown/package.json', import.meta.url));
   const packageFile = require.resolve('hermes-compiler/package.json');
   const platform = process.platform === 'darwin' ? 'osx-bin' : process.platform === 'win32' ? 'win64-bin' : 'linux64-bin';
@@ -340,7 +340,7 @@ test('real pinned Hermes bytecode uses a real HDiff patch and default-ZSTD recon
 });
 
 test('oversized split metadata is rejected before signing or emitting any package', async t => {
-  const { createDelta } = await import('../ota-delta.mjs');
+  const { createDelta } = await import('../ota/ota-delta.mjs');
   const entries = Array.from({ length: 3500 }, (_, i) => [`${i}_${'x'.repeat(250)}`, Buffer.alloc(0)]);
   const archive = zstdCompressSync(packet(entries));
   assert.throws(() => createDelta({ ...identity, baseVersion: 'old', baseArchive: archive, targetArchive: archive, hdiffz: process.execPath }), /manifest.*1 MiB/);
@@ -351,7 +351,7 @@ test('oversized split metadata is rejected before signing or emitting any packag
 });
 
 test('an explicit base with missing hdiffz fails even when its target packet is noncanonical', async () => {
-  const { createDelta } = await import('../ota-delta.mjs');
+  const { createDelta } = await import('../ota/ota-delta.mjs');
   const bytes = packet([['hash', Buffer.from('x')]]);
   // Redundant padding flag on an aligned field is legal to parse but cannot be emitted canonically.
   bytes.writeUInt32LE((bytes.readUInt32LE(8) | 0x80000000) >>> 0, 8);

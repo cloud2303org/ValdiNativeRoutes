@@ -48,5 +48,5 @@ targets:
           command -v node >/dev/null || . "$HOME/.nvm/nvm.sh"
           update_url=""
           if [ "$CONFIGURATION" = "Release" ]; then update_url="$VALDI_OTA_URL"; fi
-          node "$SRCROOT/../scripts/ota.mjs" app-info ios "$SRCROOT/Frameworks/valdi_ota.json" "$MARKETING_VERSION" \
+          node "$SRCROOT/../scripts/ota/ota.mjs" app-info ios "$SRCROOT/Frameworks/valdi_ota.json" "$MARKETING_VERSION" \
             "$update_url" > "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/valdi_ota.json"

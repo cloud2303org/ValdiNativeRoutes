@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { packageSwiftRuntime } from '../package-swift-runtime.mjs';
+import { packageSwiftRuntime } from '../maintainer/package-swift-runtime.mjs';
 
 test('Swift framework packaging ships relocatable Clang dependencies and is repeatable with readonly Bazel headers', t => {
   const directory = mkdtempSync(path.join(tmpdir(), 'valdi-swift-package-'));

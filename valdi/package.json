@@ -8,9 +8,7 @@
     "typescript": "5.9.3"
   },
   "dependencies": {
-    "@tanstack/query-core": "5.105.0",
     "dayjs": "1.11.23",
-    "valibot": "1.5.0",
     "zustand": "5.0.16"
   }
 }

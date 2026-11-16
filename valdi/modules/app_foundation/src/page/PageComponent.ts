@@ -1,5 +1,4 @@
 import { StatefulComponent } from 'valdi_core/src/Component';
-import * as v from 'valibot';
 import { navigationHost } from '../navigation/NavigationHost';
 import { PageContext, PageViewModel } from './Page';
 
@@ -9,8 +8,6 @@ import { PageContext, PageViewModel } from './Page';
  * theme (a camera, a photo), 'dark' for one that is always light.
  */
 export type StatusBarStyle = 'auto' | 'light' | 'dark';
-
-const statusBarStyle = v.picklist(['auto', 'light', 'dark'], "status bar style must be 'auto', 'light' or 'dark'");
 
 export type ShowReason = 'navigation' | 'tab' | 'foreground';
 export type HideReason = 'covered' | 'tab' | 'background';
@@ -62,7 +59,7 @@ export abstract class Page<
 
   /** The page's status bar from now on: applied now if the page is on screen, and each time it shows. */
   setStatusBarStyle(style: StatusBarStyle): void {
-    this.statusBarStyle = v.parse(statusBarStyle, style);
+    this.statusBarStyle = style;
     if (this.shown) this.applyStatusBar();
   }
 

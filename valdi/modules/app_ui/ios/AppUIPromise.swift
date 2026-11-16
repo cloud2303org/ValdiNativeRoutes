@@ -22,13 +22,8 @@ enum AppUIPromise {
 
     static func void(_ start: @escaping (@escaping (Result<Void, Error>) -> Void) -> Void)
         -> SCValdiPromise<SCValdiUndefinedValue> {
-        VRAppUIVoidPromise.make { settle in
-            start { result in
-                switch result {
-                case .success: settle(nil)
-                case let .failure(error): settle(message(error))
-                }
-            }
+        make { complete in
+            start { complete($0.map { SCValdiUndefinedValue.undefined()! }) }
         }
     }
 

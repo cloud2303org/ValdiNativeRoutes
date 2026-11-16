@@ -1,5 +1,4 @@
-// From ExpoNativeRoutes ios/native/ui/Sources/NativeRoutesUI/Picker.swift (ColumnPicker, TimePicker and the tree wheel;
-// the tree pickers' sheet and page hosts left out). The wheels are also embedded in Valdi pages (WheelViews.swift).
+// Native UIKit wheel controls embedded in Valdi pages and sheets via WheelViews.swift (`<custom-view>`).
 import UIKit
 
 public struct PickerOption: Equatable {
@@ -16,142 +15,6 @@ public struct TreeNode: Equatable {
   public let children: [TreeNode]
   public init(_ value: String, label: String? = nil, children: [TreeNode] = []) {
     self.value = value; self.label = label ?? value; self.children = children
-  }
-}
-
-public final class ColumnPicker: UIView {
-  public var title: String? { get { sheet.title } set { sheet.title = newValue } }
-  public var message: String? { get { sheet.message } set { sheet.message = newValue } }
-  public var options: [PickerOption] = [] { didSet { if !sheet.open { apply(options: options, value: value) } } }
-  public var value: String = "" { didSet { if !sheet.open { apply(options: options, value: value) } } }
-  public var cancelText = "取消" { didSet { updateActions() } }
-  public var confirmText = "确定" { didSet { updateActions() } }
-  public var onConfirm: (String) -> Void = { _ in }
-  public var onOpenChange: (Bool, SheetDismissReason) -> Void {
-    get { sheet.onOpenChange } set { sheet.onOpenChange = newValue }
-  }
-  /// Reports actual dismissal, including navigation and unmount cleanup.
-  public var onClosed: (OverlayCloseReason) -> Void { get { sheet.onClosed } set { sheet.onClosed = newValue } }
-  public var open: Bool {
-    get { sheet.open }
-    set {
-      if newValue { apply(options: options, value: value) }
-      sheet.open = newValue
-    }
-  }
-  private let sheet = BottomSheet()
-  private let wheel = WheelView(columns: [[]], values: [""])
-  private var draft = ""
-
-  public override init(frame: CGRect) {
-    super.init(frame: frame)
-    translatesAutoresizingMaskIntoConstraints = false
-    updateActions()
-    wheel.onChange = { [weak self] values in self?.draft = values[0] }
-    sheet.content.addArrangedSubview(wheel)
-    embed(sheet)
-  }
-
-  private func apply(options: [PickerOption], value: String) {
-    draft = options.first(where: { $0.value == value })?.value ?? options.first?.value ?? ""
-    wheel.reload(columns: [options], values: [draft])
-  }
-
-  private func updateActions() {
-    sheet.footer = PopupActionButtons(cancelText: cancelText, confirmText: confirmText,
-      onCancel: { [weak self] in
-        guard let self else { return }
-        self.onOpenChange(false, .cancel)
-        self.open = false
-      }, onConfirm: { [weak self] in
-        guard let self else { return }
-        self.onConfirm(self.draft)
-        self.open = false
-      })
-  }
-
-  // The public picker is a full-page host. Only its presented child may consume touches.
-  public override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-    let hit = super.hitTest(point, with: event)
-    return hit === self ? nil : hit
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) { fatalError() }
-}
-
-public final class TimePicker: UIView {
-  public var title: String? { get { sheet.title } set { sheet.title = newValue } }
-  public var message: String? { get { sheet.message } set { sheet.message = newValue } }
-  public var mode: TimePickMode = .datetime { didSet { if !sheet.open { apply() } } }
-  public var value: String = "" { didSet { if !sheet.open { apply() } } }
-  public var minYear: Int?
-  public var maxYear: Int?
-  public var cancelText = "取消" { didSet { updateActions() } }
-  public var confirmText = "确定" { didSet { updateActions() } }
-  public var onConfirm: (String) -> Void = { _ in }
-  public var onOpenChange: (Bool, SheetDismissReason) -> Void {
-    get { sheet.onOpenChange } set { sheet.onOpenChange = newValue }
-  }
-  /// Reports actual dismissal, including navigation and unmount cleanup.
-  public var onClosed: (OverlayCloseReason) -> Void { get { sheet.onClosed } set { sheet.onClosed = newValue } }
-  public var open: Bool {
-    get { sheet.open }
-    set {
-      if newValue { apply() }
-      sheet.open = newValue
-    }
-  }
-  private let sheet = BottomSheet()
-  private let wheel = TimeWheelView(mode: .datetime, value: "", minYear: 2000, maxYear: 2100)
-  private var draft = ""
-
-  public override init(frame: CGRect) {
-    super.init(frame: frame)
-    translatesAutoresizingMaskIntoConstraints = false
-    sheet.iconName = "calendar"
-    updateActions()
-    wheel.onChange = { [weak self] value in self?.draft = value }
-    sheet.content.addArrangedSubview(wheel)
-    embed(sheet)
-  }
-
-  private func apply() {
-    let year = Calendar.current.component(.year, from: Date())
-    wheel.configure(mode: mode, value: value, minYear: minYear ?? year - 5, maxYear: maxYear ?? year + 5)
-    draft = formatTime(mode, clamp(parseTime(value), wheel.minYear, wheel.maxYear))
-  }
-
-  private func updateActions() {
-    sheet.footer = PopupActionButtons(cancelText: cancelText, confirmText: confirmText,
-      onCancel: { [weak self] in
-        guard let self else { return }
-        self.onOpenChange(false, .cancel)
-        self.open = false
-      }, onConfirm: { [weak self] in
-        guard let self else { return }
-        self.onConfirm(self.draft)
-        self.open = false
-      })
-  }
-
-  // The public picker is a full-page host. Only its presented child may consume touches.
-  public override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-    let hit = super.hitTest(point, with: event)
-    return hit === self ? nil : hit
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) { fatalError() }
-}
-
-extension UIView {
-  fileprivate func embed(_ overlay: UIView) {
-    addSubview(overlay)
-    NSLayoutConstraint.activate([
-      overlay.topAnchor.constraint(equalTo: topAnchor), overlay.bottomAnchor.constraint(equalTo: bottomAnchor),
-      overlay.leadingAnchor.constraint(equalTo: leadingAnchor), overlay.trailingAnchor.constraint(equalTo: trailingAnchor),
-    ])
   }
 }
 
@@ -596,6 +459,7 @@ private func equalComponentWidth(in pickerView: UIPickerView, count: Int) -> CGF
 private func centeredPickerLabel(_ text: String, reusing view: UIView?) -> UILabel {
   let label = (view as? UILabel) ?? UILabel()
   label.text = text
+  label.textColor = UiTheme.text
   label.textAlignment = .center
   label.font = .systemFont(ofSize: UiDesign.font.control, weight: .semibold)
   label.adjustsFontSizeToFitWidth = true

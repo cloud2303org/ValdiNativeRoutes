@@ -55,10 +55,15 @@ function palette(colors: ThemeColorTokens): Record<string, string> {
   return result;
 }
 
+let observingDarkMode = false;
+
 /** Once, at startup, before the first page renders. */
 export function installTheme(): void {
   runtime.configureColorPalette('light', palette(native.light));
   runtime.configureColorPalette('dark', palette(native.dark));
   runtime.setActiveColorPalette(Device.isDarkMode() ? 'dark' : 'light');
-  Device.observeDarkMode(isDark => runtime.setActiveColorPalette(isDark ? 'dark' : 'light'));
+  if (!observingDarkMode) {
+    observingDarkMode = true;
+    Device.observeDarkMode(isDark => runtime.setActiveColorPalette(isDark ? 'dark' : 'light'));
+  }
 }

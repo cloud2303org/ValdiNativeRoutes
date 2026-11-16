@@ -28,7 +28,6 @@ import {
   notifyOptions,
   openAdapterOptions,
   pairOptions,
-  parseOptions,
   serviceOptions,
   setMtuOptions,
   writeOptions,
@@ -200,7 +199,7 @@ export class WechatBleRuntime implements WechatBleApi {
 
   openBluetoothAdapter(options: OpenBluetoothAdapterOptions = {}): Promise<BleResult> {
     return withErrMsg('openBluetoothAdapter', async () => {
-      const { mode } = parseOptions(openAdapterOptions, options);
+      const { mode } = openAdapterOptions(options);
       if (this.closing) await this.closing;
       if (mode === 'central' && this.opened) return {};
       // Revalidate peripheral state: the native manager may retire after a timed-out advertisement.
@@ -331,7 +330,7 @@ export class WechatBleRuntime implements WechatBleApi {
 
   async startBluetoothDevicesDiscovery(options: StartBluetoothDevicesDiscoveryOptions = {}): Promise<BleResult> {
     return this.run('startBluetoothDevicesDiscovery', () => {
-      const request = parseOptions(discoveryOptions, options);
+      const request = discoveryOptions(options);
       this.allowDuplicates = request.allowDuplicatesKey === true;
       this.discoveryIntervalMs = request.interval ?? 0;
       this.discoveredDeviceIds.clear();
@@ -356,7 +355,7 @@ export class WechatBleRuntime implements WechatBleApi {
     const session = this.adapterSession;
     try {
       this.ensureOpened();
-      const { deviceId, timeout } = parseOptions(connectOptions, options);
+      const { deviceId, timeout } = connectOptions(options);
       const key = deviceId.toLowerCase();
       const openEpoch = this.openEpoch;
       const powerEpoch = this.powerEpoch;
@@ -380,19 +379,19 @@ export class WechatBleRuntime implements WechatBleApi {
 
   async closeBLEConnection(options: { deviceId: string }): Promise<BleResult> {
     return this.run('closeBLEConnection', () => {
-      const { deviceId } = parseOptions(deviceOptions, options);
+      const { deviceId } = deviceOptions(options);
       this.markDisconnected(deviceId);
       return this.native.closeBLEConnection(deviceId);
     });
   }
 
   async makeBluetoothPair(options: { deviceId: string; pin: string; timeout?: number }): Promise<BleResult> {
-    return this.run('makeBluetoothPair', () => this.native.makeBluetoothPair(parseOptions(pairOptions, options)));
+    return this.run('makeBluetoothPair', () => this.native.makeBluetoothPair(pairOptions(options)));
   }
 
   async isBluetoothDevicePaired(options: { deviceId: string }): Promise<BleResult> {
     return this.run('isBluetoothDevicePaired', () =>
-      this.native.isBluetoothDevicePaired(parseOptions(deviceOptions, options).deviceId),
+      this.native.isBluetoothDevicePaired(deviceOptions(options).deviceId),
     );
   }
 
@@ -400,7 +399,7 @@ export class WechatBleRuntime implements WechatBleApi {
     const operation = 'getBLEDeviceServices';
     try {
       this.ensureOpened();
-      const { deviceId } = parseOptions(deviceOptions, options);
+      const { deviceId } = deviceOptions(options);
       const services = await this.dispatchDevice(deviceId, () => this.native.getBLEDeviceServices(deviceId));
       return success(operation, {
         services: services.map(service => ({
@@ -420,7 +419,7 @@ export class WechatBleRuntime implements WechatBleApi {
     const operation = 'getBLEDeviceCharacteristics';
     try {
       this.ensureOpened();
-      const { deviceId, serviceId } = parseOptions(serviceOptions, options);
+      const { deviceId, serviceId } = serviceOptions(options);
       const characteristics = await this.dispatchDevice(deviceId, () =>
         this.native.getBLEDeviceCharacteristics(deviceId, serviceId),
       );
@@ -437,7 +436,7 @@ export class WechatBleRuntime implements WechatBleApi {
 
   async getBLEDeviceRSSI(options: { deviceId: string }): Promise<BleResult<{ RSSI: number }>> {
     return this.run('getBLEDeviceRSSI', () => {
-      const { deviceId } = parseOptions(deviceOptions, options);
+      const { deviceId } = deviceOptions(options);
       return this.dispatchDevice(deviceId, async () => ({ RSSI: await this.native.getBLEDeviceRSSI(deviceId) }));
     });
   }
@@ -450,7 +449,7 @@ export class WechatBleRuntime implements WechatBleApi {
     type?: BleNotifyType;
   }): Promise<BleResult> {
     return this.run('notifyBLECharacteristicValueChange', () => {
-      const request = parseOptions(notifyOptions, options);
+      const request = notifyOptions(options);
       return this.dispatchDevice(request.deviceId, () => this.native.notifyBLECharacteristicValueChange(request));
     });
   }
@@ -463,7 +462,7 @@ export class WechatBleRuntime implements WechatBleApi {
     writeType?: BleWriteType;
   }): Promise<BleResult> {
     return this.run('writeBLECharacteristicValue', () => {
-      const request = parseOptions(writeOptions, options);
+      const request = writeOptions(options);
       return this.dispatchDevice(request.deviceId, () => this.native.writeBLECharacteristicValue(request));
     });
   }
@@ -474,14 +473,14 @@ export class WechatBleRuntime implements WechatBleApi {
     characteristicId: string;
   }): Promise<BleResult> {
     return this.run('readBLECharacteristicValue', () => {
-      const request = parseOptions(characteristicOptions, options);
+      const request = characteristicOptions(options);
       return this.dispatchDevice(request.deviceId, () => this.native.readBLECharacteristicValue(request));
     });
   }
 
   async setBLEMTU(options: { deviceId: string; mtu: number }): Promise<BleResult<{ mtu: number }>> {
     return this.run('setBLEMTU', () => {
-      const { deviceId, mtu } = parseOptions(setMtuOptions, options);
+      const { deviceId, mtu } = setMtuOptions(options);
       return this.dispatchDevice(deviceId, async () => ({
         mtu: await this.native.setBLEMTU(deviceId, mtu),
       }));
@@ -490,7 +489,7 @@ export class WechatBleRuntime implements WechatBleApi {
 
   async getBLEMTU(options: { deviceId: string; writeType?: BleWriteType }): Promise<BleResult<{ mtu: number }>> {
     return this.run('getBLEMTU', async () => {
-      const { deviceId, writeType } = parseOptions(getMtuOptions, options);
+      const { deviceId, writeType } = getMtuOptions(options);
       return { mtu: await this.native.getBLEMTU(deviceId, writeType) };
     });
   }
@@ -499,7 +498,7 @@ export class WechatBleRuntime implements WechatBleApi {
     services: string[];
   }): Promise<BleResult<{ devices: { deviceId: string; name: string }[] }>> {
     return this.run('getConnectedBluetoothDevices', async () => {
-      const { services } = parseOptions(connectedDevicesOptions, options);
+      const { services } = connectedDevicesOptions(options);
       return { devices: await this.native.getConnectedBluetoothDevices(services) };
     });
   }

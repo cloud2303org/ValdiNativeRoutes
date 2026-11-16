@@ -9,12 +9,20 @@ class TabBarSelectionTest {
     fun legacyAndExplicitDefaultDeclarationsNeedNoComponent() {
         validateTabBar(null, null)
         validateTabBar("default", null)
+        assertThrows(IllegalArgumentException::class.java) { validateTabBar(null, null, 64.0) }
+        assertThrows(IllegalArgumentException::class.java) { validateTabBar("default", null, 64.0) }
     }
 
     @Test
     fun customDeclarationRequiresCanonicalComponentAndRejectsUnknownModes() {
         validateTabBar("custom", "AppTabBar@app_pages/src/AppTabBar")
-        validateTabBar("custom", "default@business/src/navigation/BottomBar")
+        validateTabBar("custom", "AppTabBar@app_pages/src/AppTabBar", 64.0)
+        validateTabBar("custom", "default@business/src/navigation/BottomBar", 72.0)
+        for (height in listOf(0.0, -1.0, Double.NaN, Double.POSITIVE_INFINITY)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                validateTabBar("custom", "AppTabBar@app_pages/src/AppTabBar", height)
+            }
+        }
         for (component in listOf(null, "", "AppTabBar", "AppTabBar@app_pages", "Bar@app_pages/src/with space")) {
             assertThrows(IllegalArgumentException::class.java) { validateTabBar("custom", component) }
         }

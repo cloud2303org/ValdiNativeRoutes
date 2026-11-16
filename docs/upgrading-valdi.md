@@ -76,10 +76,10 @@ GitHub Actions 的 **Application CI → Run workflow** 选择应用分支：
 从最新 `main` 建立干净的升级分支，执行：
 
 ```sh
-node scripts/upstream.mjs pin <FORK_COMMIT> [WIDGETS_TAG]
+node scripts/maintainer/upstream.mjs pin <FORK_COMMIT> [WIDGETS_TAG]
 pnpm install --frozen-lockfile
-node scripts/prepare-valdi.mjs
-node scripts/upstream.mjs report
+node scripts/lib/prepare-valdi.mjs
+node scripts/maintainer/upstream.mjs report
 pnpm test
 pnpm build
 ```

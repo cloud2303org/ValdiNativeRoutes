@@ -145,12 +145,17 @@ only one of those parents can lose the Valdi base config and JSX declarations
 when opened through the other path. This is a configuration-resolution issue,
 not a requirement to replace typed JSX with an unrestricted tag dictionary.
 
-Generated, ignored editor configs now use canonical absolute SDK, module,
-generated-resource and npm paths. They are local to the current checkout;
+Generated, ignored editor configs use canonical absolute SDK, module and
+generated-resource paths. Module-local `node_modules` links expose the declared
+npm installation through physical and `module-build` entries while preserving
+package exports. These configs and links are local to the current checkout;
 regenerate with `pnpm tsconfig` after moving it. Before SDK preparation, the
 tracked `valdi/tsconfig.editor-base.json` supplies scalar compiler options.
+Each generated module directory also has a local `tsconfig.json` extending its
+source module's config, so opening `res.ts` or `Strings.ts` directly retains
+the same framework type aliases.
 The command explicitly reports that full Valdi types still need
-`node scripts/prepare-valdi.mjs`. Native compilation retains that prerequisite.
+`node scripts/lib/prepare-valdi.mjs`. Native compilation retains that prerequisite.
 
 Cross-module source imports use Valdi IDs such as `app_ui/src/api`. The
 filesystem targets in TypeScript `paths` are editor/compiler mappings; they

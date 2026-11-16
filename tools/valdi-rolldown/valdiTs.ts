@@ -39,7 +39,7 @@ export function sourceFiles(module: ValdiModule): string[] {
   // The module's own sources are src/; generated ones may sit at its root too (res.ts).
   const roots = [path.join(module.dir, 'src'), ...module.generatedDirs];
   for (const [i, root] of roots.entries()) {
-    for (const file of ts.sys.readDirectory(root, ['.ts', '.tsx'], ['**/*.d.ts'])) {
+    for (const file of ts.sys.readDirectory(root, ['.ts', '.tsx'], ['**/*.d.ts', '**/node_modules/**'])) {
       // Generated files get their place in the module's own tree; the plugin reads them from where they are.
       files.push(path.join(module.dir, path.relative(i === 0 ? module.dir : root, file)));
     }
@@ -57,6 +57,8 @@ export interface ValdiTsPlugin extends Plugin {
   diagnostics(): string;
   /** The source-checking program shared with the editor: codegen reads its declarations. */
   program(): ts.Program;
+  /** Prepared localization strings for the module, reused across compilation and archive packaging. */
+  strings?(): ReturnType<typeof prepareStrings>;
   /** Release the language service when the module's compilation lifetime ends. */
   dispose(): void;
 }
@@ -64,7 +66,16 @@ export interface ValdiTsPlugin extends Plugin {
 export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, inlineRouteIcons = false): ValdiTsPlugin {
   // Generate before creating the program so imports and accessor types work on
   // the first compile, including codegen consumers that don't run build.ts.
-  if (module.generatedDirs[0]) prepareStrings(module, module.generatedDirs[0]);
+  let preparedStrings: ReturnType<typeof prepareStrings>;
+  let stringsPrepared = false;
+  const currentStrings = () => {
+    if (!stringsPrepared) {
+      preparedStrings = module.generatedDirs[0] ? prepareStrings(module, module.generatedDirs[0]) : undefined;
+      stringsPrepared = true;
+    }
+    return preparedStrings;
+  };
+  currentStrings();
   /** A file's place in the module's tree → where it is on disk. */
   const located = new Map<string, string>();
   const locate = (file: string): string | undefined => {
@@ -81,14 +92,22 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
     return undefined;
   };
 
-  /** `dayjs/plugin/utc` → whether node_modules has its package. */
-  const isNpm = (source: string) => {
+  /** Classify the package without selecting a require-only exports branch. */
+  const isNpm = (source: string, importer?: string) => {
     if (source.startsWith('.') || path.isAbsolute(source)) return false;
     const name = source.split('/').slice(0, source.startsWith('@') ? 2 : 1).join('/');
+    // Respect actual per-module installations and importer-local dependencies.
+    let directory = importer ? path.dirname(importer) : module.dir;
+    for (;;) {
+      if (existsSync(path.join(directory, 'node_modules', name))) return true;
+      const parent = path.dirname(directory);
+      if (parent === directory) break;
+      directory = parent;
+    }
     return !!module.nodeModules && existsSync(path.join(module.nodeModules, name));
   };
-  const isExternal = (source: string) =>
-    !source.startsWith('.') && !path.isAbsolute(source) && !source.startsWith(`${module.name}/`) && !isNpm(source);
+  const isExternal = (source: string, importer: string) =>
+    !source.startsWith('.') && !path.isAbsolute(source) && !source.startsWith(`${module.name}/`) && !isNpm(source, importer);
 
   // rolldown turns `import * as x` of an external into `x = __toESM(require(…))`, which reads x.__esModule and so
   // evaluates the module behind Valdi's lazy proxy on the spot (it has no option to leave the require alone). Valdi
@@ -103,7 +122,7 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
         const source = ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)
           ? statement.moduleSpecifier.text
           : undefined;
-        if (!clause || source === undefined || !isExternal(source)) return statement;
+        if (!clause || source === undefined || !isExternal(source, file.fileName)) return statement;
         const name = clause.namedBindings && ts.isNamespaceImport(clause.namedBindings) ? clause.namedBindings.name : undefined;
         if (!name || clause.name) return statement;
         const require = factory.createCallExpression(factory.createIdentifier('require'), undefined, [
@@ -129,14 +148,17 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
     inlineSourceMap: false,
     inlineSources: false,
   };
-  let config = readModuleProject(module);
+  let config: ts.ParsedCommandLine | undefined = readModuleProject(module);
+  const currentConfig = () => (config ??= readModuleProject(module));
   /** Bumped per changed file, so the language service reads it again and keeps the rest of the program. */
   const versions = new Map<string, number>();
+  let cachedDiagnostics: string | undefined;
+  const cachedEmissionDiagnostics = new Map<string, string>();
 
   let service: ts.LanguageService;
   const host: ts.LanguageServiceHost = {
-    getCompilationSettings: () => ({ ...config.options, ...emitOptions }),
-    getScriptFileNames: () => config.fileNames,
+    getCompilationSettings: () => ({ ...currentConfig().options, ...emitOptions }),
+    getScriptFileNames: () => currentConfig().fileNames,
     getScriptVersion: file => String(versions.get(file) ?? 0),
     getScriptSnapshot: file => {
       const text = ts.sys.readFile(file);
@@ -160,14 +182,13 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
       after: [requireExternals],
     }),
   };
-  // Check the authoritative project, including CommonJS import assignments in
-  // framework sources. Rolldown needs ESNext emission to see module edges, while
-  // runtime bootstrap emits CommonJS directly. Both use identical inputs and
-  // resolution; changing the output format must not change source diagnostics.
+  // Check the authoritative project: app configs preserve ESM and framework
+  // CommonJS syntax and use bundler resolution. Rolldown gets ESNext input;
+  // builtin runtime bootstrap retains its own CommonJS project and output.
   const registry = ts.createDocumentRegistry();
   const sourceService = ts.createLanguageService({
     ...host,
-    getCompilationSettings: () => config.options,
+    getCompilationSettings: () => currentConfig().options,
     getCustomTransformers: undefined,
   }, registry);
   service = ts.createLanguageService(host, registry);
@@ -176,9 +197,23 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
   // CommonJS syntax in external framework sources is valid and is emitted by
   // that framework's compiler. Our own ESNext inputs must also satisfy the
   // emitter: otherwise TS can silently erase import assignments or export=.
-  const emissionDiagnostics = (file: string) => config.options.module === moduleKind
-    ? ''
-    : formatDiagnostics(service.getSemanticDiagnostics(file), module.dir);
+  const emissionDiagnostics = (file: string) => {
+    if (currentConfig().options.module === moduleKind) return '';
+    const cached = cachedEmissionDiagnostics.get(file);
+    if (cached !== undefined) return cached;
+    const key = (diagnostic: ts.Diagnostic) => JSON.stringify([
+      diagnostic.code, diagnostic.start, diagnostic.length,
+      ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'),
+    ]);
+    // Source errors are reported by diagnostics(). Only errors introduced by
+    // the output format belong here, so direct emit still reaches transforms.
+    const sourceErrors = new Set(sourceService.getSemanticDiagnostics(file).map(key));
+    const formatted = formatDiagnostics(service.getSemanticDiagnostics(file).filter(
+      diagnostic => !sourceErrors.has(key(diagnostic)),
+    ), module.dir);
+    cachedEmissionDiagnostics.set(file, formatted);
+    return formatted;
+  };
 
   /** The JavaScript and its source map, whose sources are relative to the file (rolldown chains it). */
   const emitWithMap = (real: string): { code: string; map: string } => {
@@ -200,18 +235,27 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
     name: 'valdi-ts',
     emit,
     emitWithMap,
+    strings: currentStrings,
 
     invalidate(file) {
       versions.set(file, (versions.get(file) ?? 0) + 1);
-      // A file may have been added or removed: where files are, and which ones the program has, are found again.
+      // A file may have been added or removed: where files are, and which ones the program has, are found again on next access.
       located.clear();
-      config = readModuleProject(module);
+      config = undefined;
+      stringsPrepared = false;
+      cachedDiagnostics = undefined;
+      cachedEmissionDiagnostics.clear();
     },
 
     diagnostics() {
+      if (cachedDiagnostics !== undefined) return cachedDiagnostics;
       const diagnostics = projectDiagnostics(sourceService.getProgram()!, module.dir);
-      if (diagnostics) return diagnostics;
-      return sourceFiles(module).map(file => emissionDiagnostics(locate(file)!)).join('');
+      if (diagnostics) {
+        cachedDiagnostics = diagnostics;
+        return diagnostics;
+      }
+      cachedDiagnostics = sourceFiles(module).map(file => emissionDiagnostics(locate(file)!)).join('');
+      return cachedDiagnostics;
     },
 
     program: () => sourceService.getProgram()!,
@@ -221,11 +265,13 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
       sourceService.dispose();
       located.clear();
       versions.clear();
+      cachedDiagnostics = undefined;
+      cachedEmissionDiagnostics.clear();
     },
 
     resolveId(source, importer) {
       // npm packages, and what their files import, resolve as Node does.
-      if (isNpm(source) || importer?.includes(`${path.sep}node_modules${path.sep}`)) return null;
+      if (isNpm(source, importer) || importer?.includes(`${path.sep}node_modules${path.sep}`)) return null;
       let relative: string;
       if (source.startsWith(`${module.name}/`)) {
         relative = source.slice(module.name.length + 1);

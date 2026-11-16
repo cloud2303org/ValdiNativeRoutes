@@ -28,9 +28,9 @@ Install dependencies, then explicitly export the target runtime:
 
 ```sh
 pnpm install
-scripts/export-android.sh debug
+scripts/maintainer/export-android.sh debug
 # On macOS, for iOS:
-scripts/export-ios.sh debug
+scripts/maintainer/export-ios.sh debug
 # Then build the corresponding App:
 pnpm build:android
 # or pnpm build:ios

@@ -343,7 +343,7 @@ try {
             & $shell @arguments | Out-Null
             Assert-Equal '0' "$LASTEXITCODE" 'manual export exit'
             $result = Get-Content -LiteralPath $capture -Raw | ConvertFrom-Json
-            Assert-Equal (Join-Path $fixture 'scripts/export-android.sh') $result.script 'shared exporter app path'
+            Assert-Equal (Join-Path $fixture 'scripts/maintainer/export-android.sh') $result.script 'shared exporter app path'
             Assert-Equal 'release' $result.arguments[0] 'export configuration'
             Assert-Equal $outputDir $result.arguments[1] 'output directory'
             Assert-Equal (($outputRoot -replace '\\', '/') + '/base') $result.baseRoot 'isolated base root'

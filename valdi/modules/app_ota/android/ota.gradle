@@ -22,7 +22,7 @@ abstract class ValdiOtaInfo extends DefaultTask {
     void write() {
         def out = new ByteArrayOutputStream()
         execOperations.exec { spec ->
-            spec.commandLine("node", new File(repoRoot.get().asFile, "scripts/ota.mjs").path,
+            spec.commandLine("node", new File(repoRoot.get().asFile, "scripts/ota/ota.mjs").path,
                 "app-info", "android", exportInfo.get().asFile.path, appVersion.get(), updateUrl.get())
             spec.standardOutput = out
         }
@@ -39,9 +39,9 @@ components.onVariants(components.selector().all(), { variant ->
         task.dependsOn("${variant.name}ValdiModules")
         task.exportInfo.set(file("libs/valdi_ota.json"))
         task.configurationFiles.from(
-            new File(repo, "scripts/ota.mjs"),
-            new File(repo, "scripts/ota-delta.mjs"),
-            new File(repo, "scripts/prerequisites.mjs"),
+            new File(repo, "scripts/ota/ota.mjs"),
+            new File(repo, "scripts/ota/ota-delta.mjs"),
+            new File(repo, "scripts/lib/prerequisites.mjs"),
             new File(repo, "package.json"),
             new File(repo, "tools/valdi-rolldown/modules.mjs"),
             fileTree(new File(repo, "valdi/modules")) { include("*/BUILD.bazel") })

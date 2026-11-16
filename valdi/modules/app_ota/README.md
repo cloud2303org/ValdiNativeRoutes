@@ -23,7 +23,7 @@ app_ota/
 1. 在根 `package.json` 的 `valdi.modules` 中保留 `app_ota`。
 2. Android 的 `app/build.gradle.kts` 保留末尾按模块选择加载 `android/ota.gradle`
    的接线。Kotlin 源码、JSON 依赖、工厂和 CMake 会按模块声明接入。
-3. iOS 执行 `node scripts/ios-project.mjs`，生成的 `Modules.yml` 会引入本模块的
+3. iOS 执行 `node scripts/lib/ios-project.mjs`，生成的 `Modules.yml` 会引入本模块的
    `ios/project.yml`，包含 codec 目标、依赖和配置生成阶段。
 4. 宿主 `runtime/ValdiHost.kt` / `Runtime/ValdiHost.swift` 在创建 runtime 前调用
    `ValdiOta.start(...)`，把返回值交给 `customModuleProvider`；成功完成 StartApp
@@ -66,8 +66,8 @@ iOS 配置 `VALDI_OTA_URL`。Debug 或空 URL 使用安装包内容，不检查�
      --kotlin-out android/app/generated/valdi \
      --objc-out ios/Generated/valdi --objc-framework ValdiRuntime \
      --cpp-modules-out valdi/modules
-   node scripts/native-modules.mjs
-   node scripts/ios-project.mjs
+   node scripts/lib/native-modules.mjs
+   node scripts/lib/ios-project.mjs
    pnpm build:android
    pnpm build:ios
    ```

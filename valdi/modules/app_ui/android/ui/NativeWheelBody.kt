@@ -1,6 +1,7 @@
 package io.valdiroutes.app_ui.ui
 
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Typeface
@@ -8,18 +9,43 @@ import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.compose.ui.graphics.toArgb
 
-/** Shared native wheel layout for Valdi embeds and Compose-hosted popup bodies. */
+/** Marker for custom views (such as picker wheels) whose vertical gestures should not move a hosting BottomSheet. */
+interface OwnsVerticalDrags
+
+/** Shared native wheel layout for Valdi wheel embeds. */
 open class NativeWheelBody(context: Context) : ViewGroup(context), OwnsVerticalDrags {
     private val wheels = mutableListOf<NativeWheelColumn>()
     private val segments = mutableListOf<TextView>()
     private val segmentTrack = GradientDrawable()
     protected val density: Float get() = resources.displayMetrics.density
-    internal var palette = NativeWheelPalette()
+    internal var palette = paletteForConfiguration(resources.configuration)
         private set
 
     init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
     protected open fun onWheelInteraction() {}
+
+    override fun onConfigurationChanged(newConfig: Configuration?) {
+        super.onConfigurationChanged(newConfig)
+        if (newConfig != null) {
+            applyPalette(paletteForConfiguration(newConfig))
+        }
+    }
+
+    private fun paletteForConfiguration(config: Configuration): NativeWheelPalette {
+        val dark = (config.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val tokens = uiColors(dark)
+        return NativeWheelPalette(
+            text = tokens.text.toArgb(),
+            subtle = tokens.subtle.toArgb(),
+            border = tokens.border.toArgb(),
+            surface = tokens.surface.toArgb(),
+            primary = tokens.primary.toArgb(),
+            muted = tokens.muted.toArgb(),
+            hairline = tokens.hairline.toArgb(),
+        )
+    }
 
     internal fun applyPalette(next: NativeWheelPalette) {
         if (palette == next) return

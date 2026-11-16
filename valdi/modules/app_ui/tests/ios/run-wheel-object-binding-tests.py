@@ -24,7 +24,7 @@ def main():
     modules = root / "module-build/out/ios"
     theme_library = modules / "theme_bridge/libtheme_bridge_ios.a"
     if not (modules / "swift/ThemeBridge.swiftmodule").is_file() or not theme_library.is_file():
-        parser.error("Prepare the iOS modules first: node scripts/node-modules.mjs ios")
+        parser.error("Prepare the iOS modules first: node scripts/lib/node-modules.mjs ios")
     output = args.output.resolve() if args.output else Path(tempfile.mkdtemp(prefix="wheel-object-binding-tests-"))
     if args.output:
         output.mkdir(parents=True, exist_ok=False)
@@ -42,8 +42,7 @@ def main():
                root / "ios/Generated/valdi/AppUI",
                root / "ios/Generated/valdi/AppUITypes"]
     sources += [ui / (name + ".swift") for name in (
-        "BottomSheet", "OverlayScope", "OverlayActions", "PopupActionButtons",
-        "ActionButton", "UiTheme", "UiDesign", "Picker", "MenuControls", "AppUISheetHostView")]
+        "UiTheme", "UiDesign", "Picker")]
     bridge = output / "Bridge.h"
     bridge.write_text(
         '#import <ValdiRuntime/ValdiObjC.h>\n'

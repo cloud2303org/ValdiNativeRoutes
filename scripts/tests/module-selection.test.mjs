@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { availableModuleNames, enabledModuleNames, pruneDisabledModuleOutputs } from '../../tools/valdi-rolldown/modules.mjs';
-import { moduleAssetDirectories, nativeModuleInputs, nativeModules, syncNativeModuleRegistration } from '../native-modules.mjs';
+import { moduleAssetDirectories, nativeModuleInputs, nativeModules, syncNativeModuleRegistration } from '../lib/native-modules.mjs';
 import { sampleApp } from './fixtures/app-config.mjs';
 
 function fixture(t) {

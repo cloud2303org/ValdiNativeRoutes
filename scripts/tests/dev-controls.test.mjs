@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
-import { startDevControls } from '../dev-controls.mjs';
+import { startDevControls } from '../lib/dev-controls.mjs';
 
 function harness(overrides = {}) {
   const input = new PassThrough();

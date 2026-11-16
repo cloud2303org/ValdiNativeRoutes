@@ -5,18 +5,15 @@ import ValdiRuntime
 final class ValdiHost {
     static let shared = ValdiHost()
 
-    /// Shared explicitly by the official loader and the generated native module factory.
-    private let videoService = VRVideoService()
-
     private lazy var runtimeManager: SCValdiRuntimeManager = {
-        let videoService = self.videoService
+        let videoLoaders = VRCreateNativeVideoLoaders()
         let manager = SCValdiRuntimeManager()
         // The over-the-air package's modules and images (ValdiOta.swift), chosen before the runtime starts.
         let modules = ValdiOta.start()
         // Applied when the runtime starts, after Valdi's default loader, so remote <image> sources go through SDWebImage.
         manager.updateConfiguration {
             $0.imageLoaders = [AppImageLoader()]
-            $0.videoLoaders = [videoService]
+            $0.videoLoaders = videoLoaders
             $0.customModuleProvider = modules
             // Device.observeDarkMode (theme.ts) only hears about the appearance with this on.
             $0.allowDarkMode = true
@@ -31,9 +28,12 @@ final class ValdiHost {
         if let started { return completion(started) }
         waiting.append(completion)
         guard waiting.count == 1 else { return }
-        MainActor.assumeIsolated { AppUI.imageLoader = AppImages.load }
         let runtime = self.runtime
-        videoService.registerModules { VRRegisterNativeModules(runtime) }
+        MainActor.assumeIsolated {
+            AppUI.imageLoader = AppImages.load
+            AppUI.runtime = runtime
+        }
+        VRRegisterNativeModules(runtime)
         AppNativeModules.register(runtime, navigationHost: navigationHost)
         // App-wide objects (api and the router) are created here, not in a page.
         #if DEBUG
@@ -101,6 +101,7 @@ final class ValdiHost {
     func createPage(_ entry: PageEntry, insets: UIEdgeInsets, navigator: Navigator) -> SCValdiRootView {
         let viewModel = viewModel(entry, insets)
         let context = pageContext(entry, navigator)
+        entry.pageContext = context
         guard let component = entry.definition.component else {
             preconditionFailure("Missing Valdi component for \(entry.route)")
         }
@@ -135,8 +136,22 @@ final class ValdiHost {
         })
         // JS references native functions weakly. Retain the context with the shell, just as pages retain their root.
         shell.tabBarContext = context
-        let root = TabBarRootView(componentPath: component, owner: nil, viewModel: tabBarViewModel(bar, shell, safeAreaBottom),
+        let viewModel = tabBarViewModel(bar, shell, safeAreaBottom)
+        let root: SCValdiRootView
+        if bar.height != nil {
+            do {
+                guard let view = try runtime.loadView(withComponentPath: component, owner: nil,
+                                                       viewModel: viewModel, componentContext: context) as? SCValdiRootView else {
+                    preconditionFailure("No Valdi root view for \(component)")
+                }
+                root = view
+            } catch {
+                preconditionFailure("Cannot create \(component): \(error)")
+            }
+        } else {
+            root = TabBarRootView(componentPath: component, owner: nil, viewModel: viewModel,
                                   componentContext: context, runtime: runtime)
+        }
         root.backgroundColor = .clear
         root.isOpaque = false
         root.valdiContext?.enableAccessibility = true
@@ -187,9 +202,14 @@ final class ValdiHost {
     // TS calls these on the JS thread; navigation state lives on the main thread. A tab page is not on the stack, so
     // both do nothing for it.
     private func pageContext(_ entry: PageEntry, _ navigator: Navigator) -> VRPageContext {
-        VRPageContext(
-            finish: { result in DispatchQueue.main.async { navigator.finish(entry.id, result: result) } },
-            back: { DispatchQueue.main.async { navigator.cancel(entry.id) } }
+        let pageId = entry.id
+        return VRPageContext(
+            finish: { [weak navigator] result in
+                DispatchQueue.main.async { navigator?.finish(pageId, result: result) }
+            },
+            back: { [weak navigator] in
+                DispatchQueue.main.async { navigator?.cancel(pageId) }
+            }
         )
     }
 }

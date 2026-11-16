@@ -5,7 +5,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync,
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { createManifest, publishPackage } from '../ota.mjs';
+import { createManifest, publishPackage } from '../ota/ota.mjs';
 import { discoveryHdiffz, optionalHdiffz } from './ota-test-tools.mjs';
 
 const repository = path.resolve(import.meta.dirname, '../..');
@@ -18,10 +18,12 @@ function fixture(t) {
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, content);
   };
-  for (const name of ['ota.mjs', 'ota-delta.mjs', 'hdiff-tool.mjs', 'hdiff-tool.json', 'prerequisites.mjs', 'native-modules.mjs', 'module-native-config.mjs', 'module-platform-config.mjs', 'app-config.mjs']) {
-    const file = path.join(root, 'scripts', name);
-    mkdirSync(path.dirname(file), { recursive: true });
-    cpSync(path.join(repository, 'scripts', name), file);
+  for (const [sub, list] of [['ota', ['ota.mjs', 'ota-delta.mjs', 'hdiff-tool.mjs', 'hdiff-tool.json']], ['lib', ['prerequisites.mjs', 'native-modules.mjs', 'module-native-config.mjs', 'module-platform-config.mjs', 'app-config.mjs']]]) {
+    for (const name of list) {
+      const file = path.join(root, 'scripts', sub, name);
+      mkdirSync(path.dirname(file), { recursive: true });
+      cpSync(path.join(repository, 'scripts', sub, name), file);
+    }
   }
   write('tools/valdi-rolldown/modules.mjs', readFileSync(path.join(repository, 'tools/valdi-rolldown/modules.mjs')));
   const app = JSON.parse(readFileSync(path.join(repository, 'package.json'))).valdi.app;
@@ -35,7 +37,7 @@ function fixture(t) {
   const keys = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
   write('ota/public.pem', keys.publicKey.export({ type: 'spki', format: 'pem' }));
   write('export.json', JSON.stringify({ platform: 'android', config: 'release', valdi: 'runtime', native: 'cpp' }));
-  const run = (...args) => spawnSync(process.execPath, ['scripts/ota.mjs', ...args], {
+  const run = (...args) => spawnSync(process.execPath, ['scripts/ota/ota.mjs', ...args], {
     cwd: root, encoding: 'utf8',
   });
   return { root, write, run };
@@ -243,7 +245,7 @@ test('OTA uses manual runtime metadata after native source changes and exposes n
 
 test('pack CLI with temporary keys forwards both base forms and filters compiler outputs to app_pages', async t => {
   const { zstdCompressSync } = await import('node:zlib');
-  const { encodePacket } = await import('../ota-delta.mjs');
+  const { encodePacket } = await import('../ota/ota-delta.mjs');
   const { root, write } = fixture(t);
   const hdiffz = optionalHdiffz();
   // The hash-only archive never invokes HDiff. Keep full/base CLI coverage even
@@ -273,7 +275,7 @@ if (args.includes('--res')) {
     write('ota/private.pem', keys.privateKey.export({ type: 'pkcs8', format: 'pem' }));
     for (const [version, options] of [['pages-001', []], ['pages-002', ['--base', 'old.valdimodule', '--base-version', 'embedded-001']],
       ['pages-003', ['--base', `ota/dist/${platform}/1.2.0/pages-001`]]]) {
-      const result = spawnSync(process.execPath, ['scripts/ota.mjs', 'pack', platform, '1.2.0', version, ...options], {
+      const result = spawnSync(process.execPath, ['scripts/ota/ota.mjs', 'pack', platform, '1.2.0', version, ...options], {
         cwd: root, encoding: 'utf8', env: { ...process.env, ...(hdiffz ? { VALDI_HDIFFZ: hdiffz } : {}), npm_execpath: path.join(root, 'pnpm.cjs') },
       });
       assert.equal(result.status, 0, result.stderr);

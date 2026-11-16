@@ -24,12 +24,10 @@ public final class OverlayScope {
   }
 }
 
-/// Same reasons as the RN package. A sheet reports drags and scrim taps as `gesture`.
-public enum SheetDismissReason { case gesture, back, navigation, closeButton, cancel, confirm }
 public enum DialogDismissReason { case backdrop, back, navigation, cancel, confirm }
 public enum OverlayCloseReason { case dismissed, navigation, unmount }
 
-/// Registration and open/close cycle shared by `BottomSheet` and `Dialog`.
+/// Registration and open/close cycle for fullscreen overlays (`ImagePreview`).
 /// The registration is retained until the exit animation completes.
 @MainActor
 final class OverlayPresenter<Reason> {

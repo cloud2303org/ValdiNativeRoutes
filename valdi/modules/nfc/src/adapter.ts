@@ -206,12 +206,10 @@ class AdapterRuntime {
   }
 
   onDiscovered(listener: NFCDiscoveredCallback): void {
-    schema.parseOptions(schema.listener, listener);
     this.discovered.add(listener);
   }
   offDiscovered(listener?: NFCDiscoveredCallback): void {
     if (listener !== undefined) {
-      schema.parseOptions(schema.listener, listener);
       this.discovered.delete(listener);
     } else this.discovered.clear();
   }
@@ -255,7 +253,7 @@ class AdapterRuntime {
         }),
       setTimeout: (options: { timeout: number }) =>
         run('setTimeout', async target => {
-          const { timeout } = schema.parseOptions(schema.setTimeoutOptions, options);
+          const { timeout } = schema.setTimeoutOptions(options);
           await this.native.setTimeout(target, timeout);
           return {};
         }),
@@ -265,17 +263,15 @@ class AdapterRuntime {
         ...common,
         writeNdefMessage: (options: WriteNdefMessageOptions) =>
           run('writeNdefMessage', async target => {
-            const { records, uris, texts } = schema.parseOptions(schema.writeNdefMessageOptions, options);
+            const { records, uris, texts } = schema.writeNdefMessageOptions(options);
             await this.native.writeNdefMessage(target, records, uris, texts);
             return {};
           }),
         onNdefMessage: (listener: NdefMessageCallback) => {
-          schema.parseOptions(schema.listener, listener);
           this.ndefListeners.add(listener);
         },
         offNdefMessage: (listener?: NdefMessageCallback) => {
           if (listener !== undefined) {
-            schema.parseOptions(schema.listener, listener);
             this.ndefListeners.delete(listener);
           } else this.ndefListeners.clear();
         },
@@ -285,7 +281,8 @@ class AdapterRuntime {
       ...common,
       transceive: options =>
         run('transceive', async target => {
-          const { data } = schema.parseOptions(schema.transceiveOptions, options);
+          // Snapshot bytes synchronously at admission before async scheduling inside run().
+          const { data } = schema.transceiveOptions(options);
           return { data: await this.native.transceive(target, data) };
         }),
       getMaxTransceiveLength: () =>

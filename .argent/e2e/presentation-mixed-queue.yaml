@@ -13,4 +13,4 @@ steps:
   - tap: { text: "确定" }
   - await: { visible: { text: "完成记录" }, timeout: 5000 }
   - tap: { text: "确定" }
-  - await: { visible: { text: "showBottomSheet:ok" } }
+  - await: { visible: { text: "showModal:ok" } }

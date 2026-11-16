@@ -65,7 +65,7 @@ if ($missing.Count -gt 0 -and -not $SkipInstall) {
     Write-Output "Missing JS dependencies ($($missing -join ', ')); installing from the frozen lockfiles."
     Push-Location $root
     try {
-        & $script:Node 'scripts/pnpm.mjs' 'install' '--frozen-lockfile'
+        & $script:Node 'scripts/lib/pnpm.mjs' 'install' '--frozen-lockfile'
         $installCode = $LASTEXITCODE
     } finally {
         Pop-Location
@@ -152,7 +152,7 @@ $env:VALDI_BAZEL_ARGS = if ($RepositoryCache) { '--repository_cache=' + ($resolv
 # the workspace's bazel-valdi link may not be readable from the Gradle process.
 if ($resolvedValdi) { $env:VALDI_SOURCE_ROOT = $resolvedValdi }
 
-# `scripts/node-modules.mjs` creates the module-build/modules junction for the Bazel
+# `scripts/lib/node-modules.mjs` creates the module-build/modules junction for the Bazel
 # build and restores the tracked symlink text, so daily and standalone runs work too.
 # CI pipes this step through Tee-Object; a Gradle daemon started here inherits stdout
 # and keeps that pipe open after the build, so the step never finishes.

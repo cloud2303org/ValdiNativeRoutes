@@ -1,8 +1,6 @@
-import * as v from 'valibot';
 import {
   appUIHost,
   AttachmentSource,
-  BottomSheetRequest,
   DatePickerMode,
   ModalReply,
   ModalRequest,
@@ -48,9 +46,6 @@ export type ShowDatePickerOptions = {
   confirmText?: string;
   cancelText?: string;
 };
-export type BottomSheetResult = Pick<PresentationReply, 'confirm' | 'cancel'> & ApiSuccess;
-/** Text presentation; custom content belongs in a page or sheet route. */
-export type ShowBottomSheetOptions = Partial<BottomSheetRequest>;
 export type PreviewImageOptions = { urls: readonly string[]; current?: string };
 
 export type ScanCodeResult = ScanCodeReply & ApiSuccess;
@@ -100,7 +95,7 @@ export function appUIApi(
     /** Resolves once the dialog has closed: `confirm` or `cancel` (also when its page goes away). */
     showModal(options: ShowModalOptions = {}): Promise<ModalResult> {
       return invoke('showModal', async () => {
-        const request = v.parse(schema.modalRequest, options);
+        const request = schema.modalRequest(options);
         const { confirm, cancel, content } = await appUIHost().showModal(request);
         return { confirm, cancel, content };
       });
@@ -109,7 +104,7 @@ export function appUIApi(
     /** Camera only: onlyFromCamera may be omitted or true. Closing the scanner fails with 'scanCode:fail cancel'. */
     scanCode(options: ScanCodeOptions = {}): Promise<ScanCodeResult> {
       return invoke('scanCode', async () => {
-        v.parse(schema.scanCodeRequest, options);
+        schema.scanCodeRequest(options);
         const { result, scanType } = await appUIHost().scanCode();
         return { result, scanType };
       });
@@ -118,7 +113,7 @@ export function appUIApi(
     /** With both sources an action sheet asks first; the camera returns one photo. */
     chooseImage(options: ChooseImageOptions = {}): Promise<ChooseImageResult> {
       return invoke('chooseImage', async () => {
-        const { count, sourceType } = v.parse(schema.chooseImageRequest, options);
+        const { count, sourceType } = schema.chooseImageRequest(options);
         let source = sourceType[0];
         if (sourceType.length > 1) {
           const reply = await appUIHost().showActionSheet({
@@ -142,7 +137,7 @@ export function appUIApi(
 
     chooseFile(options: ChooseFileOptions = {}): Promise<ChooseFileResult> {
       return invoke('chooseFile', async () => {
-        const { count, mimeTypes } = v.parse(schema.chooseFileRequest, options);
+        const { count, mimeTypes } = schema.chooseFileRequest(options);
         const assets = await pick(AttachmentSource.Files, count, mimeTypes);
         return {
           tempFilePaths: assets.map(asset => asset.uri),
@@ -167,7 +162,7 @@ export function appUIApi(
     /** Resolves with the chosen tapIndex; cancelling rejects with 'showActionSheet:fail cancel'. */
     showActionSheet(options: ShowActionSheetOptions): Promise<ActionSheetResult> {
       return invoke('showActionSheet', async () => {
-        const request = v.parse(schema.actionSheetRequest, options);
+        const request = schema.actionSheetRequest(options);
         const reply = await appUIHost().showActionSheet(request);
         if (reply.cancel) throw new Error('cancel');
         return { tapIndex: reply.index };
@@ -177,7 +172,7 @@ export function appUIApi(
     /** Cancelling resolves normally with cancel: true, value '' and index -1. */
     showPicker(options: ShowPickerOptions): Promise<PickerResult> {
       return invoke('showPicker', async () => {
-        const request = v.parse(schema.pickerRequest, options);
+        const request = schema.pickerRequest(options);
         const { confirm, cancel, value, index } = await appUIHost().showPicker(request);
         // A cancel carries no selection, whatever was highlighted or passed in.
         return cancel ? { confirm: false, cancel: true, value: '', index: -1 } : { confirm, cancel, value, index };
@@ -186,7 +181,7 @@ export function appUIApi(
 
     showDatePicker(options: ShowDatePickerOptions = {}): Promise<DatePickerResult> {
       return invoke('showDatePicker', async () => {
-        const request = v.parse(schema.datePickerRequest, options);
+        const request = schema.datePickerRequest(options);
         const { confirm, cancel, value } = await appUIHost().showDatePicker({
           ...request,
           mode: datePickerModes[request.mode],
@@ -195,18 +190,10 @@ export function appUIApi(
       });
     },
 
-    showBottomSheet(options: ShowBottomSheetOptions = {}): Promise<BottomSheetResult> {
-      return invoke('showBottomSheet', async () => {
-        const request = v.parse(schema.bottomSheetRequest, options);
-        const { confirm, cancel } = await appUIHost().showBottomSheet(request);
-        return { confirm, cancel };
-      });
-    },
-
     /** Completes when the preview is closed or its page goes away. */
     previewImage(options: PreviewImageOptions): Promise<ApiSuccess> {
       return invoke('previewImage', async () => {
-        const request = v.parse(schema.imagePreviewRequest, options);
+        const request = schema.imagePreviewRequest(options);
         await appUIHost().previewImage(request);
         return {};
       });
@@ -215,7 +202,7 @@ export function appUIApi(
     /** Resolves once the toast is on screen; it hides itself after `duration` ms. */
     showToast(options: ShowToastOptions): Promise<ApiSuccess> {
       return invoke('showToast', async () => {
-        const request = v.parse(schema.toastRequest, options);
+        const request = schema.toastRequest(options);
         await appUIHost().showToast({ ...request, icon: toastIcons[request.icon] });
         return {};
       });
@@ -231,7 +218,7 @@ export function appUIApi(
     /** Stays until hideLoading; a toast shows above it. */
     showLoading(options: ShowLoadingOptions): Promise<ApiSuccess> {
       return invoke('showLoading', async () => {
-        const request = v.parse(schema.loadingRequest, options);
+        const request = schema.loadingRequest(options);
         await appUIHost().showLoading(request);
         return {};
       });

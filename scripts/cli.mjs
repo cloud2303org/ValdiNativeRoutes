@@ -3,8 +3,8 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chooseAndroidDevice, chooseIosSimulator } from './device.mjs';
-import { appBuildPaths, readAppConfig } from './app-config.mjs';
+import { chooseAndroidDevice, chooseIosSimulator } from './lib/device.mjs';
+import { appBuildPaths, readAppConfig } from './lib/app-config.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -39,7 +39,7 @@ Options (android, ios)
 Notes
   * Debug builds only; Release OTA builds stay manual.
   * Install JS dependencies with pnpm install before building.
-  * Export the runtime manually with scripts/export-android.sh or scripts/export-ios.sh.
+  * Export the runtime manually with scripts/maintainer/export-android.sh or scripts/maintainer/export-ios.sh.
     Runtime changes require a new export; builds do not fingerprint or export it.
   * Host modules prepare their declared native dependencies during app builds.
     Runtime C++ modules prepare theirs during the explicit runtime export.
@@ -203,10 +203,10 @@ function dev(options) {
     : 'bash';
   if (!bash) throw new Error('pnpm dev needs Git Bash on Windows (install Git for Windows) or bash on macOS/Linux.');
   if (options.dryRun) {
-    console.log(`Hot reload plan: ${bash} ${path.join(root, 'scripts/hotreload.sh')} ${options.passthrough.join(' ')}`.trim());
+    console.log(`Hot reload plan: ${bash} ${path.join(root, 'scripts/lib/hotreload.sh')} ${options.passthrough.join(' ')}`.trim());
     return 0;
   }
-  run(bash, [path.join(root, 'scripts/hotreload.sh'), ...options.passthrough], root);
+  run(bash, [path.join(root, 'scripts/lib/hotreload.sh'), ...options.passthrough], root);
   return 0;
 }
 

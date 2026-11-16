@@ -460,7 +460,7 @@ function Assert-PnpmLauncher {
     $package = Get-Content -LiteralPath (Join-Path $AppRoot 'package.json') -Raw | ConvertFrom-Json
     $expected = $package.packageManager -replace '^pnpm@', ''
     if (-not $expected) { throw "package.json does not pin packageManager." }
-    $script = Join-Path $AppRoot 'scripts/pnpm.mjs'
+    $script = Join-Path $AppRoot 'scripts/lib/pnpm.mjs'
     if (-not (Test-Path -LiteralPath $script -PathType Leaf)) { throw "Missing pnpm launcher: $script" }
 
     $previous = $ErrorActionPreference

@@ -26,7 +26,7 @@ jobs:
       - name: Package the tagged template
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-        run: node scripts/release.mjs --ref "$RELEASE_TAG" --out .release
+        run: node scripts/maintainer/release.mjs --ref "$RELEASE_TAG" --out .release
       - name: Publish immutable source archives
         env:
           GH_TOKEN: ${{ github.token }}

@@ -1,6 +1,5 @@
 // What build.ts (one build) and dev.ts (the dev server) share: the modules, and building them with rolldown.
-import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { rolldown, RolldownMagicString, type Plugin, type PreRenderedChunk } from 'rolldown';
 import ts from 'typescript';
@@ -53,7 +52,7 @@ export function moduleConfig(name: string): ModuleConfig {
   if (!existsSync(file)) return {};
   const config = JSON.parse(readFileSync(file, 'utf8'));
   if (config.nativeBuild !== undefined && !['bazel', 'host', 'cpp'].includes(config.nativeBuild)) throw new Error(`${file}: unsupported nativeBuild`);
-  // Keep the cpp ownership contract aligned with scripts/module-native-config.mjs.
+  // Keep the cpp ownership contract aligned with scripts/lib/module-native-config.mjs.
   if (config.nativeBuild === 'cpp') {
     const contribution = Object.keys(config).find(field => /^(android|ios)/.test(field) &&
       !['androidClassPath', 'iosModuleName', 'iosLanguage'].includes(field));
@@ -124,6 +123,24 @@ export function writeTsconfig(module: ValdiModule, modules: ValdiModule[]): bool
     generatedDirs: value.generatedDirs.map(canonical),
     nodeModules: value.nodeModules && canonical(value.nodeModules),
   });
+  let changed = false;
+  // Normal package lookup preserves exports/conditional types. Module-local
+  // links also make it work through module-build/modules and generated roots.
+  for (const value of [module, ...modules]) {
+    if (!value.nodeModules || !existsSync(value.nodeModules)) continue;
+    const target = canonical(value.nodeModules);
+    for (const directory of [value.dir, ...value.generatedDirs]) {
+      const link = path.join(directory, 'node_modules');
+      const existing = lstatSync(link, { throwIfNoEntry: false });
+      // Preserve an actual per-module npm installation.
+      if (existing && !existing.isSymbolicLink()) continue;
+      if (existing && existsSync(link) && realpathSync(link) === target) continue;
+      if (existing) unlinkSync(link);
+      mkdirSync(directory, { recursive: true });
+      symlinkSync(target, link, 'junction');
+      changed = true;
+    }
+  }
   const framework = valdiSourceRoot();
   const bootstrapBase = path.join(valdi, 'tsconfig.editor-base.json');
   if (!framework && !existsSync(bootstrapBase)) {
@@ -135,9 +152,23 @@ export function writeTsconfig(module: ValdiModule, modules: ValdiModule[]): bool
   });
   const file = path.join(module.dir, 'tsconfig.json');
   const content = `${JSON.stringify(config, null, 4)}\n`;
-  if (existsSync(file) && readFileSync(file, 'utf8') === content) return false;
-  writeFileSync(file, content);
-  return true;
+  if (!existsSync(file) || readFileSync(file, 'utf8') !== content) {
+    writeFileSync(file, content);
+    changed = true;
+  }
+  // Opening res.ts or Strings.ts directly must discover the same aliases and
+  // framework types even before the editor opens any authored module source.
+  const generatedConfig = `${JSON.stringify({
+    extends: canonical(file).split(path.sep).join('/'),
+  }, null, 4)}\n`;
+  for (const directory of module.generatedDirs) {
+    const generatedFile = path.join(directory, 'tsconfig.json');
+    if (existsSync(generatedFile) && readFileSync(generatedFile, 'utf8') === generatedConfig) continue;
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(generatedFile, generatedConfig);
+    changed = true;
+  }
+  return changed;
 }
 
 /** Prepare every generated editor input before a consumer TypeScript program starts. */
@@ -192,26 +223,6 @@ function chunkName(module: ValdiModule) {
     return packages.size ? `npm/${[...packages].sort().join('+')}` : `chunks/${chunk.name}`;
   };
 }
-
-/**
- * Resolves bare package imports with Node's resolver. Rolldown's own resolver needs the
- * module tsconfig for that and fails with "Tsconfig not found: Could not resolve 'valibot'"
- * when the tsconfig's `extends` target is not reachable from the bundling process; Node
- * finds the same pnpm-linked package, and the resolved paths keep their `npm/<pkg>`
- * archive names (sourcePath/chunkName). Valdi's own `valdi_core/…` imports are not
- * resolvable here, so they still go through the plugin and the tsconfig paths.
- */
-const nodePackageResolver = (): Plugin => ({
-  name: 'valdi-node-package-resolver',
-  resolveId(source, importer) {
-    if (!importer || !/^[A-Za-z@]/.test(source) || source.startsWith('node:')) return null;
-    try {
-      return createRequire(importer).resolve(source);
-    } catch {
-      return null;
-    }
-  },
-});
 
 /**
  * Valdi's require() returns a lazy proxy that loads the module on its first property read, so a bare `require("x");`
@@ -289,7 +300,14 @@ export async function buildModule(module: ValdiModule, plugin: ValdiTsPlugin, mi
   if (!Object.keys(input).length) return { entries: new Map(), maps: new Map() };
   const bundle = await rolldown({
     input,
-    plugins: [nodePackageResolver(), plugin],
+    plugins: [plugin],
+    // Valdi's plugin already handles TS/module aliases; npm resolution must
+    // follow the import/require conditions rather than Node's require-only API.
+    tsconfig: false,
+    platform: 'neutral',
+    resolve: {
+      mainFields: ['main'],
+    },
     // Pages are required by path at run time, so every file keeps its exports.
     preserveEntrySignatures: 'strict',
   });
@@ -320,7 +338,10 @@ export async function buildModule(module: ValdiModule, plugin: ValdiTsPlugin, mi
     built.entries.set(`${chunk.fileName}.js`, Buffer.from(chunk.code));
     if (chunk.map) built.maps.set(`${chunk.fileName}.js`, chunk.map.toString());
   }
-  addStringEntries(built.entries, module.generatedDirs[0] ? prepareStrings(module, module.generatedDirs[0]) : undefined);
+  const strings = plugin.strings
+    ? plugin.strings()
+    : (module.generatedDirs[0] ? prepareStrings(module, module.generatedDirs[0]) : undefined);
+  addStringEntries(built.entries, strings);
   return built;
 }
 

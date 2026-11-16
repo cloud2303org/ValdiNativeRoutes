@@ -46,8 +46,8 @@ export class ModuleBuild {
     if (!this.compilation) {
       // Initial JSON errors belong to the watched build, after the watcher is
       // registered, so fixing an invalid file can recover without restarting.
-      this.strings = prepareStrings(this.module, this.generatedDir);
       this.compilation = valdiTs(this.module, undefined, true);
+      this.strings = this.compilation.strings?.();
     }
     return this.compilation;
   }

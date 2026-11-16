@@ -127,7 +127,7 @@ Manifest、JNI、R8 或自定义视图使用的类名；这不是每个目录都
 默认宿主 codegen 会清理它们在宿主生成目录中的旧副本，`--check` 只报告待清理项，
 避免同一类型同时进入模块库和 App。显式指定模块的独立生成仍然可用。
 Android 主源码与测试由 Gradle 按 source set 发现；iOS 在新增 Swift 文件后通过
-`node scripts/ios-project.mjs` 重新生成 Xcode 工程。
+`node scripts/lib/ios-project.mjs` 重新生成 Xcode 工程。
 
 本轮模块提取会改变原生声明的模块路径、生成文件归属和 schema 标识；
 滚轮模型的 Android 包也随所属 AppUI 模块调整。原生自定义视图类名保持不变。

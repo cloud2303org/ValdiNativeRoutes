@@ -61,9 +61,9 @@ and App; an application JavaScript update cannot replace native token values.
 Validation:
 
 ```sh
-node scripts/node-modules.mjs android
+node scripts/lib/node-modules.mjs android
 python3 valdi/modules/theme_bridge/tests/run_theme_tokens_tests.py --evidence /tmp/valdi-theme-tests
-node scripts/node-modules.mjs ios
+node scripts/lib/node-modules.mjs ios
 ios/Tests/run-theme-tokens-access-tests.sh
 pnpm test
 ```

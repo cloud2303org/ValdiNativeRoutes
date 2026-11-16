@@ -84,29 +84,34 @@ export interface NativeCode {
 
 export function generateNativeCode(target: CodegenModule, warn: (message: string) => void = console.warn): NativeCode {
   const { module, bundleInfo } = target;
-  const program = target.program ? target.program() : valdiTs(module).program();
-  const nativeTypes: TypeScriptNativeTypeResolver[] = [];
-  for (const dependency of target.nativeDependencies ?? []) {
-    const registered = processAnnotations(dumpAllSymbols(dependency.module, program, warn), dependency.bundleInfo, warn, {
-      registerOnly: true, onRegistered: resolver => nativeTypes.push(resolver),
-    });
-    if (registered.errors.length) throw new Error(`Dependency ${dependency.module.name}: ${registered.errors.map(error => error.message).join('\n')}`);
-  }
-  const items = processAnnotations(dumpAllSymbols(module, program, warn), bundleInfo, warn, { nativeTypes });
-  if (items.errors.length) {
-    throw new Error(
-      `Native code generation for ${module.name} failed:\n${items.errors.map(error => `  ${error.message}`).join('\n')}`,
+  const owned = target.program ? undefined : valdiTs(module);
+  try {
+    const program = target.program ? target.program() : owned!.program();
+    const nativeTypes: TypeScriptNativeTypeResolver[] = [];
+    for (const dependency of target.nativeDependencies ?? []) {
+      const registered = processAnnotations(dumpAllSymbols(dependency.module, program, warn), dependency.bundleInfo, warn, {
+        registerOnly: true, onRegistered: resolver => nativeTypes.push(resolver),
+      });
+      if (registered.errors.length) throw new Error(`Dependency ${dependency.module.name}: ${registered.errors.map(error => error.message).join('\n')}`);
+    }
+    const items = processAnnotations(dumpAllSymbols(module, program, warn), bundleInfo, warn, { nativeTypes });
+    if (items.errors.length) {
+      throw new Error(
+        `Native code generation for ${module.name} failed:\n${items.errors.map(error => `  ${error.message}`).join('\n')}`,
+      );
+    }
+    const sources = combineNativeSources(
+      [
+        ...generateModels(items, bundleInfo),
+        ...generateViewClasses(items, bundleInfo, warn),
+        ...generateDependencyInjectionData(items, bundleInfo),
+      ],
+      bundleInfo,
     );
+    return { sources, iosDependencyMetadata: generateIOSDependencyMetadata(items) };
+  } finally {
+    owned?.dispose();
   }
-  const sources = combineNativeSources(
-    [
-      ...generateModels(items, bundleInfo),
-      ...generateViewClasses(items, bundleInfo, warn),
-      ...generateDependencyInjectionData(items, bundleInfo),
-    ],
-    bundleInfo,
-  );
-  return { sources, iosDependencyMetadata: generateIOSDependencyMetadata(items) };
 }
 
 /**

@@ -1,10 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import path from 'node:path';
-import { syncNativeModuleRegistration } from '../../scripts/native-modules.mjs';
+import { syncNativeModuleRegistration } from '../../scripts/lib/native-modules.mjs';
 import { appModule, appModules, root, valdiSourceRoot, writeTsconfig } from './pipeline';
 import { createModule, MODULE_TEMPLATES, type ModuleTemplate } from './scaffold';
-import { readAppConfig } from '../../scripts/app-config.mjs';
+import { readAppConfig } from '../../scripts/lib/app-config.mjs';
 
 const help = `Usage: pnpm new-module [name] [--template <template>] [--ios-language objc|swift] [--swiftui] [--android-context] [--skip-checks]
 
@@ -58,7 +58,7 @@ async function main() {
   }
   if (!name) throw new Error(help);
   const sources = valdiSourceRoot();
-  if (!sources) throw new Error('Pinned Valdi sources are missing. Run: node scripts/prepare-valdi.mjs');
+  if (!sources) throw new Error('Pinned Valdi sources are missing. Run: node scripts/lib/prepare-valdi.mjs');
   const created = createModule({
     root, sources, name, template: (template ?? 'ui_component') as ModuleTemplate,
     iosLanguage, swiftUI, androidContext, naming: readAppConfig(root).native,

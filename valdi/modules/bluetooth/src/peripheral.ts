@@ -5,8 +5,6 @@ import {
   addServiceOptions,
   advertisingOptions,
   canonicalUuid,
-  listener,
-  parseOptions,
   removeServiceOptions,
   writeValueOptions,
 } from './schemas';
@@ -184,7 +182,6 @@ export class PeripheralRuntime {
     }
   }
   onConnection(callback: BLEPeripheralConnectionStateChangedCallback): void {
-    parseOptions(listener, callback);
     this.callbacks.add(callback);
     runtimes.add(this);
     if (this.connectionSubscription === undefined) {
@@ -259,20 +256,20 @@ class PeripheralServer {
   readonly api: BLEPeripheralServer = {
     addService: options =>
       this.run('addService', () =>
-        this.native.addPeripheralService(this.id, parseOptions(addServiceOptions, options).service),
+        this.native.addPeripheralService(this.id, addServiceOptions(options).service),
       ),
     removeService: options =>
       this.run('removeService', () =>
-        this.native.removePeripheralService(this.id, parseOptions(removeServiceOptions, options).serviceId),
+        this.native.removePeripheralService(this.id, removeServiceOptions(options).serviceId),
       ),
     startAdvertising: options =>
       this.run('startAdvertising', () =>
-        this.native.startPeripheralAdvertising({ serverId: this.id, ...parseOptions(advertisingOptions, options) }),
+        this.native.startPeripheralAdvertising({ serverId: this.id, ...advertisingOptions(options) }),
       ),
     stopAdvertising: () => this.run('stopAdvertising', () => this.native.stopPeripheralAdvertising(this.id)),
     writeCharacteristicValue: options =>
       this.run('writeCharacteristicValue', () => {
-        const { serviceId, characteristicId, value, needNotify, callbackId } = parseOptions(writeValueOptions, options);
+        const { serviceId, characteristicId, value, needNotify, callbackId } = writeValueOptions(options);
         // The native Core owns pending requests, reply deadlines and one-shot callback IDs.
         return this.native.writePeripheralCharacteristicValue({
           serverId: this.id,
@@ -315,7 +312,6 @@ class PeripheralServer {
   }
   private on<T>(callbacks: Set<(event: T) => void>, callback: (event: T) => void): void {
     this.check();
-    parseOptions(listener, callback);
     callbacks.add(callback);
   }
   private off<T>(callbacks: Set<(event: T) => void>, callback?: (event: T) => void): void {

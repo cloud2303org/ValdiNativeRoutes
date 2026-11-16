@@ -54,10 +54,6 @@ data class DatePickerResult(val confirm: Boolean, val cancel: Boolean, val value
     val errMsg: String get() = "showDatePicker:ok"
 }
 
-data class BottomSheetResult(val confirm: Boolean, val cancel: Boolean) {
-    val errMsg: String get() = "showBottomSheet:ok"
-}
-
 /** Typed presentation data, as in ExpoNativeRoutes' AppPresentationOptions; the host picks the Compose controls. */
 sealed interface AppPresentationOptions
 data class ActionSheetOptions(val itemList: List<String>, val alertText: String = "") : AppPresentationOptions
@@ -72,10 +68,6 @@ data class DatePickerOptions(
     val minYear: Int = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) - 5,
     val maxYear: Int = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) + 5,
     val confirmText: String = "确定", val cancelText: String = "取消",
-) : AppPresentationOptions
-data class BottomSheetOptions(
-    val title: String = "", val content: String = "", val confirmText: String = "确定",
-    val cancelText: String = "取消", val showCancel: Boolean = true, val dismissible: Boolean = true,
 ) : AppPresentationOptions
 data class ImagePreviewOptions(val urls: List<String>, val current: String = "") : AppPresentationOptions
 
@@ -157,11 +149,6 @@ object AppUIService {
         DatePickerResult(result.confirm, result.cancel, result.value)
     }
 
-    suspend fun showBottomSheet(options: BottomSheetOptions = BottomSheetOptions()) = api("showBottomSheet") {
-        val result = present(options)
-        BottomSheetResult(result.confirm, result.cancel)
-    }
-
     suspend fun previewImage(options: ImagePreviewOptions) = api("previewImage") {
         present(options)
         APISuccess("previewImage:ok")
@@ -200,6 +187,9 @@ object AppUI {
     private var active: Request? = null
     private var scanner: CodeScanner? = null
     private var picker: AttachmentPicker? = null
+
+    /** Shared Valdi runtime configured at startup so sheet presentations render through Valdi TSX. */
+    var runtime: com.snap.valdi.ValdiRuntime? = null
 
     /** The modal to draw, if any. */
     var modal by mutableStateOf<ModalPresentation?>(null)

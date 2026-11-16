@@ -17,11 +17,19 @@ internal class TabBarSelection(routes: List<String>, select: (String) -> Unit) {
 }
 
 /** Validate the serialized native ingress, including declarations from older bundles without mode. */
-internal fun validateTabBar(mode: String?, component: String?) {
+internal fun validateTabBar(mode: String?, component: String?, height: Double? = null) {
     when (mode ?: "default") {
-        "default" -> require(component == null) { "Default tab bars cannot specify a component" }
-        "custom" -> require(component != null && CanonicalTabBarComponent.matches(component)) {
-            "Custom tab bars require a canonical exported Valdi component path"
+        "default" -> {
+            require(component == null) { "Default tab bars cannot specify a component" }
+            require(height == null) { "Default tab bars cannot specify a height" }
+        }
+        "custom" -> {
+            require(component != null && CanonicalTabBarComponent.matches(component)) {
+                "Custom tab bars require a canonical exported Valdi component path"
+            }
+            require(height == null || (height.isFinite() && height > 0.0)) {
+                "Custom tab bar height must be a positive finite number: $height"
+            }
         }
         else -> throw IllegalArgumentException("Invalid tab bar mode: $mode")
     }

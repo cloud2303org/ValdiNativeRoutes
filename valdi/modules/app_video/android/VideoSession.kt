@@ -18,7 +18,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.snap.valdi.callable.ValdiFunction
 import com.snap.valdi.callable.performUntyped
-import io.valdiroutes.app.R
+import io.valdiroutes.generated.HostLayout
 import java.util.ArrayDeque
 
 /** One session owns exactly one ExoPlayer and one texture-backed PlayerView throughout all presentation modes. */
@@ -33,7 +33,7 @@ internal class VideoSession(
         .setHandleAudioBecomingNoisy(true)
         .build()
     val playerView = try {
-        (LayoutInflater.from(host.context).inflate(R.layout.valdi_video_player, null) as PlayerView).apply {
+        (LayoutInflater.from(host.context).inflate(HostLayout.valdi_video_player, null) as PlayerView).apply {
             player = this@VideoSession.player
             setFullscreenButtonClickListener { fullscreen ->
                 if (released || pageReleased) return@setFullscreenButtonClickListener

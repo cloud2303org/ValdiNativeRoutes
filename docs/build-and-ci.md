@@ -10,8 +10,8 @@ Bazel / Gradle 声明字符串输入，iOS 沿用每次执行的模块构建阶�
 文件格式、Release / OTA 行为与验证边界见[本地化](localization.md)。
 
 统一开发入口由 `scripts/cli.mjs` 用 Node 分发（Windows / macOS / Linux 一致）：
-首次 checkout 执行 `pnpm install`，再手动运行 `scripts/export-android.sh debug` 或
-`scripts/export-ios.sh debug`（Windows 使用 `scripts/windows/export-android.ps1 -Config debug`）。
+首次 checkout 执行 `pnpm install`，再手动运行 `scripts/maintainer/export-android.sh debug` 或
+`scripts/maintainer/export-ios.sh debug`（Windows 使用 `scripts/windows/export-android.ps1 -Config debug`）。
 导出获取固定 Valdi 源码并生成绑定。`pnpm android` / `pnpm ios` 执行正常原生构建、安装，
 并在唯一模拟器（或显式 `--device`）上启动；
 `pnpm dev` 仍是现有热重载；`pnpm build:android` / `pnpm build:ios` 保持纯构建；`pnpm test` 不变。
@@ -39,7 +39,7 @@ Vision 的生成绑定、手写 C++ 适配器、VisionCore 和静态 vendor 链�
 不再使用独立 Vision/vendor DSO 或逐方法 Kotlin/Swift、JNI/Objective-C++ 桥接。
 适配器复用 runtime worker queue 与 disk cache；OTA 继续保留宿主 Kotlin/Swift 和 C codec 链接。
 详见 [Vision 构建与打包](vision-build.md)。该静态方案尚无本轮导出、App 构建或设备验证结果。
-首次导出先运行 `scripts/prepare-valdi.mjs`，通过 Bazel 的 `fetch --repo=@valdi` 获取类型声明，再生成绑定。
+首次导出先运行 `scripts/lib/prepare-valdi.mjs`，通过 Bazel 的 `fetch --repo=@valdi` 获取类型声明，再生成绑定。
 只获取已固定的 fork 源码，不解析应用模块、旧 TS 编译器或 C++ 工具链目标。仅构建 TS 模块时无需编译原生 host 工具或导出 Android/iOS 运行时。图片由预编译 sharp 处理，
 Release 字节码由官方 hermes-compiler 生成，应用 Node 管线不再依赖 toolbox 或 SQL 生成/校验工具。
 共享 runtime 不选择或链接 ClientSQL，应用不集成 Drizzle，也不提供替代 SQL 引擎。
@@ -67,7 +67,7 @@ Xcode / SDK / CMake / Ninja 的实际版本写入日志和缓存键。Actions �
 CI 不额外指定 Bazel / Gradle / Xcode / Ninja 的构建并发或 Bazel 调度内存，使用各工具默认值。
 Bazel 磁盘 action cache 空闲清理目标保留为 3 GB；这与构建并发、调度内存无关。
 
-Linux GitHub-hosted 临时 runner 在恢复缓存之前运行 `scripts/ci-linux-disk.sh prepare`，
+Linux GitHub-hosted 临时 runner 在恢复缓存之前运行 `scripts/maintainer/ci-linux-disk.sh prepare`，
 移除本项目不用的预装 .NET、GHC、CodeQL，以及 Android SDK 中非选定的 NDK；
 保留宿主 Gradle 所需的 NDK；Vision 静态缓存要求 runtime 兼容的 NDK r28，不能用旧 r27/shared 缓存替代。
 Bazel 仍使用自身固定的 NDK，清理及缓存配置需保留静态 vendor 准备所需的工具链。
@@ -101,7 +101,7 @@ artifact 上传是可选步骤：账号存储额度不足时会在日志和任�
 - **应用 Kotlin / Objective-C / C++ 绑定**：`tools/valdi-rolldown/codegen.ts`。Gradle / Xcode 的绑定检查
   继续保留；`pnpm test` 比较已签入上游源码的 golden，不构建或运行原来的 Swift 编译器。
 - **应用模块、npm 包和资源打包**：`build.ts`、`pipeline.ts`、`resources.ts`、`archive.ts`。
-- **应用热重载**：`dev.ts`，由 `scripts/hotreload.sh` 启动；上游 compiler `--monitor` / Watchman 的
+- **应用热重载**：`dev.ts`，由 `scripts/lib/hotreload.sh` 启动；上游 compiler `--monitor` / Watchman 的
   hotreload smoke 测的不是这条路径。
 - **应用 tsconfig / 新模块**：`tsconfig.ts`、`new-module.ts`，日常不再依赖 `valdi projectsync` / CLI 模板。
   `valdi/modules/app_pages/BUILD.bazel` 只是旧模块声明参考，不应再作为应用构建或 CI 入口。
@@ -126,7 +126,7 @@ Git Bash、CMake/Ninja/curl。日常入口检查运行时产物及平台/配置�
 
 ## 仍然需要的原生工具与产物
 
-- **Valdi + Hermes + 应用 C++ 运行时**：由 `scripts/export-android.sh` / `export-ios.sh` 导出
+- **Valdi + Hermes + 应用 C++ 运行时**：由 `scripts/maintainer/export-android.sh` / `scripts/maintainer/export-ios.sh` 导出
   AAR / XCFramework；模块 `cpp/` 中的实现和生成绑定也链接在其中。
 - **Valdi 自带的模块**：`valdi/BUILD.bazel` 依赖 `valdi_core`、`valdi_tsx` 和 `native_web`。
   它们及传递依赖现在默认使用 Node 编译后端，保留原生库与导出规则。
@@ -161,7 +161,7 @@ vendor 或启用的 cpp 模块名单时手动重新导出。
 共享 `home.yaml` 直接启动 Home 并等待「push 详情页」，不需要登录 fixture 或 secret。
 Home 的可见时计时器持续更新，等待下一个实际控件，不以整屏 idle 作为启动就绪条件。
 Android 当前只打包 arm64，届时需要选择相应设备或明确增加测试 ABI。
-`pnpm typecheck` 先检查三个 Node 工程，再检查所有已启用的运行时模块。编辑器、命令行与构建读取同一份模块 tsconfig 和生成输入，源码检查采用 Valdi 的 CommonJS 配置。命令行与构建还检查实际打包文件是否符合 ESNext 输出要求；不支持的 `import = require` / `export =` 写法在输出前报错，运行时 bootstrap 继续直接输出 CommonJS。所有可达依赖声明也参与源码检查，不使用 `skipLibCheck` 或文件归属过滤。
+`pnpm typecheck` 先检查三个 Node 工程，再检查所有已启用的运行时模块。编辑器、命令行与构建读取同一份模块 tsconfig 和生成输入，App 模块源码检查采用 `module: preserve` / `moduleResolution: bundler`，支持框架 CommonJS 声明和现代 npm 条件导出。模块和生成目录通过本地 `node_modules` 链接解析 npm 包，不再使用会绕过 `exports` 的通配路径映射；Rolldown 使用中立平台的 import/require 条件，与源码检查一致。命令行与构建还检查实际打包文件是否符合 ESNext 输出要求；不支持的 `import = require` / `export =` 写法在输出前报错，运行时 bootstrap 保留自身的 CommonJS 项目和输出。所有可达依赖声明也参与源码检查，不使用 `skipLibCheck` 或文件归属过滤。
 
 `pnpm test` 包含上述类型检查、前置检查、升级脚本测试、图片/字节码适配测试和绑定 golden 对比；构建通过也不代表 UI、热重载或 Release 字节码验证通过。
 

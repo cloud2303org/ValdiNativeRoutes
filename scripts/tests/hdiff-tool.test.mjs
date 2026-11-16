@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { crc32, deflateRawSync } from 'node:zlib';
-import * as tools from '../hdiff-tool.mjs';
+import * as tools from '../ota/hdiff-tool.mjs';
 
 function temporary(t) {
   const root = mkdtempSync(path.join(tmpdir(), 'valdi-hdiff-tool-'));
@@ -87,7 +87,7 @@ test('offline discovery accepts a fixed-version receipt and rejects corrupt cach
   const receiptFile = path.join(path.dirname(file), 'receipt.json');
   const receipt = JSON.parse(readFileSync(receiptFile, 'utf8'));
   writeFileSync(receiptFile, JSON.stringify({ ...receipt, inputSha256: tools.toolPlan().sha256 }));
-  const { findHdiffz } = await import('../ota-delta.mjs');
+  const { findHdiffz } = await import('../ota/ota-delta.mjs');
   assert.equal(findHdiffz({ root, env: { PATH: '' } }), file);
   writeFileSync(file, 'corrupt');
   assert.throws(() => findHdiffz({ root, env: { PATH: '' } }), /Delta base requires hdiffz/);
@@ -106,7 +106,7 @@ test('failed downloads do not create an install and the next attempt can retry',
 });
 
 test('automatic preparation preserves explicit overrides and never downloads on invalid overrides', async t => {
-  const { ensureHdiffz } = await import('../ota-delta.mjs');
+  const { ensureHdiffz } = await import('../ota/ota-delta.mjs');
   assert.equal(typeof ensureHdiffz, 'function', 'delta packing has no automatic preparation');
   const root = temporary(t);
   await assert.rejects(ensureHdiffz({ root, env: { VALDI_HDIFFZ: path.join(root, 'absent') } }), /VALDI_HDIFFZ/);

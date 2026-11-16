@@ -1,4 +1,4 @@
-import { createNFCAdapter, type NFCAdapter } from './adapter';
+import { getNFCAdapter, type NFCAdapter } from './adapter';
 
 export interface NFCExtension {
   getNFCAdapter(): NFCAdapter;
@@ -6,6 +6,6 @@ export interface NFCExtension {
 
 /** Lives as long as the app, on the one native NFC session. */
 export const createNFCExtension = (): NFCExtension => {
-  const adapter = createNFCAdapter();
+  const adapter = getNFCAdapter();
   return { getNFCAdapter: () => adapter };
 };

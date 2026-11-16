@@ -76,21 +76,21 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: .tools/hdiffpatch
-          key: hdiff-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/hdiff-tool.json', 'scripts/hdiff-tool.mjs') }}
+          key: hdiff-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/ota/hdiff-tool.json', 'scripts/ota/hdiff-tool.mjs') }}
       - name: Prepare pinned HDiff publisher tool
         env:
           NODE_USE_ENV_PROXY: '1'
           HTTPS_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
           HTTP_PROXY: ${{ vars.WINDOWS_GIT_PROXY_URL }}
         run: |
-          node scripts/hdiff-tool.mjs
+          node scripts/ota/hdiff-tool.mjs
           exit $LASTEXITCODE
       - name: Save publisher HDiff tool
         if: steps.hdiff.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: .tools/hdiffpatch
-          key: hdiff-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/hdiff-tool.json', 'scripts/hdiff-tool.mjs') }}
+          key: hdiff-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/ota/hdiff-tool.json', 'scripts/ota/hdiff-tool.mjs') }}
       - name: Use the installed pnpm launcher at the pinned version
         run: |
           $expected = (Get-Content package.json -Raw | ConvertFrom-Json).packageManager -replace '^pnpm@', ''
@@ -121,7 +121,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force .ci | Out-Null
           if ($env:REQUESTED_VALDI_COMMIT) {
-            $pinArgs = @('scripts/upstream.mjs', 'pin', $env:REQUESTED_VALDI_COMMIT)
+            $pinArgs = @('scripts/maintainer/upstream.mjs', 'pin', $env:REQUESTED_VALDI_COMMIT)
             if ($env:REQUESTED_WIDGETS_TAG) { $pinArgs += $env:REQUESTED_WIDGETS_TAG }
             & node @pinArgs
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -220,7 +220,7 @@ jobs:
           $env:VALDI_SOURCE_ROOT = $env:VALDI_CHECKOUT
           node scripts/project.mjs test --valdi $env:VALDI_CHECKOUT 2>&1 | Tee-Object .ci/test.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node --input-type=module -e 'import { checkRuntime } from "./scripts/prerequisites.mjs"; checkRuntime(process.cwd(), "android");'
+          node --input-type=module -e 'import { checkRuntime } from "./scripts/lib/prerequisites.mjs"; checkRuntime(process.cwd(), "android");'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-FileHash android/app/libs/valdi_runtime.aar, module-build/out/android/calculator/calculator_android.jar, android/app/build/outputs/apk/debug/app-debug.apk | Format-List | Out-File .ci/windows-artifacts.txt
       - name: Audit runtime compilation actions
@@ -240,7 +240,7 @@ jobs:
           $code = $LASTEXITCODE
           Pop-Location
           if ($code -ne 0) { exit $code }
-          node scripts/verify-runtime-actions.mjs .ci/windows-actions.json
+          node scripts/maintainer/verify-runtime-actions.mjs .ci/windows-actions.json
           exit $LASTEXITCODE
       - name: Upload Windows build evidence and APK
         if: always()

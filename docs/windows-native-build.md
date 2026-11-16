@@ -2,7 +2,7 @@
 
 The supported Windows entry point is PowerShell. It runs the native Windows
 executables directly and uses Git Bash only for the repository's portable
-`scripts/export-android.sh` entry point. It does not use WSL, Docker, Linux, or
+`scripts/maintainer/export-android.sh` entry point. It does not use WSL, Docker, Linux, or
 macOS.
 
 ## Prerequisites
@@ -39,7 +39,7 @@ native dependencies, prepares missing/stale dependencies, and builds module
 libraries and module-declared CMake sources. Disabled modules do not participate.
 The root runner does not compile native module libraries before Gradle.
 The Gradle pipeline's
-TypeScript tasks invoke pnpm through `scripts/pnpm.mjs`, which uses Node and the
+TypeScript tasks invoke pnpm through `scripts/lib/pnpm.mjs`, which uses Node and the
 bundled Corepack launcher instead of spawning a `.cmd` shim.
 
 `pnpm build:android` is the daily build-only entry point. Runtime validation checks
@@ -169,7 +169,7 @@ runs `test-cold-build.ps1` in `C:\vc-<run id>` with the repository's optional pr
 `windows-cold-<run id>` (logs, report JSON, APK) and removes only that isolation root.
 
 The explicit runtime export passes the validated Valdi checkout to
-`scripts/export-android.sh`; the app build invokes `gradlew.bat`, whose module
+`scripts/maintainer/export-android.sh`; the app build invokes `gradlew.bat`, whose module
 build steps prepare declared dependencies as needed.
 The checked-in scripts print the resolved `Git Bash`, `Valdi checkout` commit,
 and `Bazel output root` before building.
@@ -293,7 +293,7 @@ bazel aquery "deps(//:valdi_runtime_android)" `
   --output=jsonproto --noinclude_artifacts --noinclude_commandline `
   > ..\runtime-actions.json
 cd ..
-node scripts/verify-runtime-actions.mjs runtime-actions.json
+node scripts/maintainer/verify-runtime-actions.mjs runtime-actions.json
 ```
 
 ## Native changes and build ownership

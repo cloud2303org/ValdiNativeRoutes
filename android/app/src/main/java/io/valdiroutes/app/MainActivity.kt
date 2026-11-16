@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
     private var cancelStartup: (() -> Unit)? = null
     private var startupFailed = false
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
-        ValdiHost.permissionHost.onResult(grants)
+        io.valdiroutes.generated.ValdiNativeModules.onPermissionResult(grants)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,10 +45,8 @@ class MainActivity : ComponentActivity() {
             val content = findViewById<android.view.View>(android.R.id.content)
             initialContentSplash = StartupSplashScreen.attach(content, ::initialContentRoots, ::showStartupError)
             StartupTrace.section("activity.hosts.attach") {
-                ValdiHost.videoHost.attach(this) { videoFullscreen = it }
+                io.valdiroutes.generated.ValdiNativeModules.attachActivity(this, permissionLauncher) { videoFullscreen = it }
                 AppUI.attach(this)
-                // PermissionHost.requestMultiple (BLE, Wi-Fi, NFC) prompts through this activity.
-                ValdiHost.permissionHost.attach(this, permissionLauncher)
             }
             // The first page is startApp's (app.ts): JS decides it, once, at startup.
             cancelStartup = ValdiHost.start(onFailure = { initialContentSplash?.fail(it) }) { routes ->
@@ -65,7 +63,9 @@ class MainActivity : ComponentActivity() {
                         SideEffect { initialContentSplash?.onContentComposed() }
                     }
                     // Registered after navigation handlers: fullscreen back exits video presentation first.
-                    BackHandler(enabled = videoFullscreen) { ValdiHost.videoHost.exitFullscreenFromBack() }
+                    BackHandler(enabled = videoFullscreen) {
+                        io.valdiroutes.generated.ValdiNativeModules.exitVideoFullscreenFromBack()
+                    }
                 }
             }
         }
@@ -78,23 +78,23 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        ValdiHost.videoHost.onResume(this)
+        io.valdiroutes.generated.ValdiNativeModules.onActivityResume(this)
     }
 
     override fun onPause() {
-        ValdiHost.videoHost.onPause(this)
+        io.valdiroutes.generated.ValdiNativeModules.onActivityPause(this)
         super.onPause()
     }
 
     override fun onStop() {
         started = false
-        ValdiHost.videoHost.onStop(this)
+        io.valdiroutes.generated.ValdiNativeModules.onActivityStop(this)
         super.onStop()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        ValdiHost.videoHost.onPictureInPictureModeChanged(this, isInPictureInPictureMode)
+        io.valdiroutes.generated.ValdiNativeModules.onPictureInPictureModeChanged(this, isInPictureInPictureMode)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -107,9 +107,8 @@ class MainActivity : ComponentActivity() {
         cancelStartup = null
         initialContentSplash?.dispose()
         initialContentSplash = null
-        ValdiHost.videoHost.detach(this)
+        io.valdiroutes.generated.ValdiNativeModules.detachActivity(this)
         AppUI.detach(this)
-        ValdiHost.permissionHost.detach(this)
         navigator?.let {
             if (ValdiHost.navigator === it) ValdiHost.navigator = null
             it.destroyAll()

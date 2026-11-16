@@ -52,11 +52,11 @@ Changing an installation ID creates a different application with its own storage
 and signing/provisioning identity. It does not migrate an installed application's
 data. Keep the current IDs to update the existing app in place.
 
-`scripts/app-config.mjs` validates the configuration before generating any files.
+`scripts/lib/app-config.mjs` validates the configuration before generating any files.
 Missing fields, unknown keys, invalid identifiers and reserved native names fail
 with an explicit error.
 
-## Stable native code identity
+## Stable native code identity & `pnpm init-app`
 
 `native.androidNamespace` is the namespace of the host's Kotlin code and generated
 Android resources. It is separate from `applicationId`. Existing source packages,
@@ -67,15 +67,26 @@ implementations created with `pnpm new-module`. The Android module package is
 `<androidNamespace>.modules.<module_id>`. The new module records its names in its
 own metadata and source declarations; existing modules are never renamed.
 
-These fields are initialization defaults, not a command for rewriting all native
-source. The current host source folders and existing native interfaces retain
-their names. Creating an entirely new host namespace will require the later
-project-template initialization step, or an explicit native source refactor.
+To initialize a new project from this template (updating `package.json`, relocating
+the Android host Kotlin package directory, and renaming the iOS host target directory
+and bridging header in one step), run `pnpm init-app` (`scripts/init-app.mjs`):
+
+```sh
+# Rebrand app identity and relocate native host packages
+pnpm init-app --name AcmeApp --display-name "Acme 应用" --app-id com.acme.app
+
+# Rebrand AND strip optional demo/hardware modules into a minimal 6-module starter
+pnpm init-app --name AcmeApp --display-name "Acme 应用" --app-id com.acme.app --minimal
+```
+
+Pass `--dry-run` to validate and preview the planned operations without modifying
+any files, or run `pnpm init-app` with no flags in an interactive terminal for
+the guided prompt.
 
 ## Build and generation
 
 ```sh
-node scripts/app-config.mjs read --json
+node scripts/lib/app-config.mjs read --json
 # First install dependencies and manually export the required runtime (see README).
 pnpm build:android
 pnpm build:ios
@@ -87,7 +98,7 @@ string resource. Both the Gradle wrapper and the root CLI use the same identity.
 For a manually opened Xcode project, generate it from the repository root:
 
 ```sh
-node scripts/ios-project.mjs
+node scripts/lib/ios-project.mjs
 open ios/ValdiRoutes.xcodeproj
 ```
 
@@ -109,7 +120,7 @@ The checked-in base plist and native source files are not rewritten on generatio
 The CLI obtains package IDs and output paths from the shared reader rather than
 parsing Gradle or YAML with regular expressions.
 
-`scripts/e2e.sh` stages the project's recorded flows and baselines under ignored
+`scripts/e2e/e2e.sh` stages the project's recorded flows and baselines under ignored
 `.argent/generated/`, rebinding recorded application launches and native tool
 application IDs to the selected platform's current configuration. Sibling
 fragments and nested test calls use the staged tree. Source recordings and their

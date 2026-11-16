@@ -4,12 +4,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { nativeModuleInputs, nativeModules, syncNativeModuleRegistration } from '../native-modules.mjs';
+import { nativeModuleInputs, nativeModules, syncNativeModuleRegistration } from '../lib/native-modules.mjs';
 import { sampleApp } from './fixtures/app-config.mjs';
-import { stagedModuleOutputs } from '../node-modules.mjs';
+import { stagedModuleOutputs } from '../lib/node-modules.mjs';
 
 test('native module tooling can be imported from a stdin script without executing its CLI', () => {
-  const moduleUrl = new URL('../native-modules.mjs', import.meta.url).href;
+  const moduleUrl = new URL('../lib/native-modules.mjs', import.meta.url).href;
   const result = spawnSync(process.execPath, ['--input-type=module', '-'], {
     input: `import { nativeModules } from ${JSON.stringify(moduleUrl)};\nconsole.log(typeof nativeModules);\n`,
     encoding: 'utf8',

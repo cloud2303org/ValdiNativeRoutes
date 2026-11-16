@@ -16,5 +16,5 @@ if (valdiSourceRoot()) {
   console.log('Editor configs use prepared Valdi sources.');
 } else {
   console.warn('Bootstrap editor configs include TSX settings and local module paths; full Valdi types are not prepared.');
-  console.warn('Prepare framework sources: node scripts/prepare-valdi.mjs');
+  console.warn('Prepare framework sources: node scripts/lib/prepare-valdi.mjs');
 }

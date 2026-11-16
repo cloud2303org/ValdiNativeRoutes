@@ -1,5 +1,4 @@
 import { Device } from 'valdi_core/src/Device';
-import * as v from 'valibot';
 import type { ResolvedNavigation } from './models';
 export type { ResolvedNavigation } from './models';
 
@@ -25,53 +24,25 @@ export interface NavigationOptions extends AnimationSettings<IosAnimation> {
   ios?: AnimationSettings<IosAnimation> & { presentation?: 'push' | 'fullScreen' };
 }
 
-const unknownOption = 'Unknown navigation option';
-const durationMessage = 'durationMs must be an integer from 0 to 2000';
-const durationMs = v.optional(
-  v.pipe(
-    v.number(durationMessage),
-    v.integer(durationMessage),
-    v.minValue(0, durationMessage),
-    v.maxValue(2000, durationMessage),
-  ),
-);
-/** One layer of NavigationOptions. Both platform branches are checked, so a typo fails on both. */
-const navigationLayer = v.strictObject(
-  {
-    animation: v.optional(v.picklist(IOS_ANIMATIONS, 'Unknown animation')),
-    durationMs,
-    android: v.optional(
-      v.strictObject(
-        { animation: v.optional(v.picklist(ANDROID_ANIMATIONS, 'Unknown animation')), durationMs },
-        unknownOption,
-      ),
-    ),
-    ios: v.optional(
-      v.strictObject(
-        {
-          animation: v.optional(v.picklist(IOS_ANIMATIONS, 'Unknown animation')),
-          durationMs,
-          presentation: v.optional(v.picklist(['push', 'fullScreen'], 'Invalid iOS presentation')),
-        },
-        unknownOption,
-      ),
-    ),
-  },
-  unknownOption,
-);
-
 export function resolveNavigation(...layers: (NavigationOptions | undefined)[]): ResolvedNavigation {
   const platform = Device.isAndroid() ? 'android' : 'ios';
   const result: ResolvedNavigation = { animation: 'default', durationMs: 300, presentation: 'push' };
-  layers.forEach(layer => {
-    if (!layer) return;
-    const { android, ios, ...shared } = v.parse(navigationLayer, layer);
+  for (const layer of layers) {
+    if (layer === undefined) continue;
+    if (!layer || typeof layer !== 'object' || Array.isArray(layer)) {
+      throw new Error('Invalid navigation options');
+    }
+    const { android, ios, ...shared } = layer;
     // A platform branch beats the shared keys of its own layer; a key left undefined keeps the layer below.
     for (const settings of [shared, platform === 'android' ? android : ios]) {
-      Object.entries(settings ?? {}).forEach(([key, value]) => {
+      if (settings === undefined) continue;
+      if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+        throw new Error('Invalid navigation options');
+      }
+      for (const [key, value] of Object.entries(settings)) {
         if (value !== undefined) (result as unknown as Record<string, unknown>)[key] = value;
-      });
+      }
     }
-  });
+  }
   return result;
 }

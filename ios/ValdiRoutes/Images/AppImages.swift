@@ -25,9 +25,13 @@ enum AppImages {
     static func load(_ url: URL, completion: @escaping NativeImageLoading.Completion) -> NativeImageLoading.Cancellation? {
         // Picked attachments are local files; caching them again would only duplicate them.
         if url.isFileURL {
-            let task = DispatchWorkItem {
+            var task: DispatchWorkItem!
+            task = DispatchWorkItem {
+                guard !task.isCancelled else { return }
                 let image = UIImage(contentsOfFile: url.path)?.preparingForDisplay()
+                guard !task.isCancelled else { return }
                 DispatchQueue.main.async {
+                    guard !task.isCancelled else { return }
                     MainActor.assumeIsolated { completion(image.map { .success($0) } ?? .failure(invalidImageError())) }
                 }
             }

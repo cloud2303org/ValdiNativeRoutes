@@ -24,12 +24,12 @@
 pnpm install --frozen-lockfile
 
 # 新应用需要 OTA 时，在第一次构建前生成自己的密钥：
-node scripts/ota.mjs keygen
+node scripts/ota/ota.mjs keygen
 
 # 手动导出所需平台的 Debug runtime（获取固定框架源码并生成绑定）：
-scripts/export-android.sh debug
+scripts/maintainer/export-android.sh debug
 # 或 macOS：
-scripts/export-ios.sh debug
+scripts/maintainer/export-ios.sh debug
 
 pnpm android
 # 或 macOS：
@@ -66,15 +66,15 @@ git switch -c upgrade/template-next
 git merge <新的模板tag>
 pnpm install --frozen-lockfile
 pnpm test
-scripts/export-android.sh debug
+scripts/maintainer/export-android.sh debug
 pnpm build:android
 # macOS 下还验证 iOS：
-scripts/export-ios.sh debug
+scripts/maintainer/export-ios.sh debug
 pnpm build:ios
 ```
 
 合并仍需审查业务与模板代码的冲突。当前没有自动 SDK 升级器，
-`scripts/upstream.mjs pin` 只切换 Valdi fork，并不更新整个模板。
+`scripts/maintainer/upstream.mjs pin` 只切换 Valdi fork，并不更新整个模板。
 从 ZIP 建立的新仓库不会自动拥有模板的公共 Git 历史；
 发布元数据保留了来源提交，但不等于能自动无冲突地合并。
 

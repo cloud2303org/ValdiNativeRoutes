@@ -1,3 +1,4 @@
+import { StatefulComponent } from 'valdi_core/src/Component';
 import { Style } from 'valdi_core/src/Style';
 import { systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
 import { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
@@ -24,6 +25,44 @@ function describeJsEngine(): string {
 
 const JS_ENGINE = describeJsEngine();
 
+class VisibleTimer {
+  seconds = 0;
+  private listener?: (seconds: number) => void;
+
+  subscribe(listener: (seconds: number) => void): () => void {
+    this.listener = listener;
+    return () => {
+      if (this.listener === listener) this.listener = undefined;
+    };
+  }
+
+  start(): () => void {
+    const timer = setInterval(() => {
+      this.seconds += 1;
+      this.listener?.(this.seconds);
+    }, 1000);
+    return () => clearInterval(timer);
+  }
+}
+
+class VisibleSecondsLabel extends StatefulComponent<{ timer: VisibleTimer }, { seconds: number }> {
+  state = { seconds: this.viewModel.timer.seconds };
+  private unsubscribe?: () => void;
+
+  override onCreate(): void {
+    this.unsubscribe = this.viewModel.timer.subscribe(seconds => this.setState({ seconds }));
+  }
+
+  override onDestroy(): void {
+    this.unsubscribe?.();
+    this.unsubscribe = undefined;
+  }
+
+  override onRender(): void {
+    <label key="visible-seconds" style={styles.result} value={`可见时计时（whileVisible）：${this.state.seconds} 秒`} />;
+  }
+}
+
 interface State {
   language: AppLanguage;
   /** Survives while the page is covered; a remount would reset it. */
@@ -33,8 +72,6 @@ interface State {
   opens: number;
   /** onShow / onHide calls, with the latest reason of each. */
   lifecycle: { shows: number; hides: number; lastShow: string; lastHide: string };
-  /** Seconds the page has been on screen, counted by a whileVisible timer. */
-  visibleSeconds: number;
 }
 
 const OPENS_KEY = 'demo.homeOpens';
@@ -49,13 +86,14 @@ const KEYBOARD_CASES: Record<string, FormLayout> = {
  * @ExportModel({ios: 'VRHomePage', android: 'io.valdiroutes.pages.HomePage'})
  */
 export class HomePage extends Page<PageViewModel, State, PageContext> {
+  private readonly visibleTimer = new VisibleTimer();
+
   state: State = {
     language: languageStore.getState().language,
     taps: 0,
     lastResult: '还没有结果',
     opens: 0,
     lifecycle: { shows: 0, hides: 0, lastShow: '-', lastHide: '-' },
-    visibleSeconds: 0,
   };
 
   onCreate(): void {
@@ -65,10 +103,7 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
     const opens = (api.getStorageSync<number>(OPENS_KEY) ?? 0) + 1;
     api.setStorageSync(OPENS_KEY, opens);
     this.setState({ opens });
-    this.whileVisible(() => {
-      const timer = setInterval(() => this.setState({ visibleSeconds: this.state.visibleSeconds + 1 }), 1000);
-      return () => clearInterval(timer);
-    });
+    this.whileVisible(() => this.visibleTimer.start());
   }
 
   onShow(reason: ShowReason): void {
@@ -81,13 +116,14 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
     this.setState({ lifecycle: { ...lifecycle, hides: lifecycle.hides + 1, lastHide: reason } });
   }
 
+  private _router?: Router;
   private get router(): Router {
-    return new Router(this.context);
+    return (this._router ??= new Router(this.context));
   }
 
   onRender(): void {
     const { insets } = this.viewModel;
-    const { language, taps, lastResult, opens, lifecycle, visibleSeconds } = this.state;
+    const { language, taps, lastResult, opens, lifecycle } = this.state;
 
     <view style={styles.page}>
       <scroll style={styles.scroll}>
@@ -130,7 +166,7 @@ export class HomePage extends Page<PageViewModel, State, PageContext> {
             style={styles.result}
             value={`onShow ${lifecycle.shows} 次（${lifecycle.lastShow}）· onHide ${lifecycle.hides} 次（${lifecycle.lastHide}）`}
           />
-          <label key="visible-seconds" style={styles.result} value={`可见时计时（whileVisible）：${visibleSeconds} 秒`} />
+          <VisibleSecondsLabel timer={this.visibleTimer} />
 
           <label style={styles.section} value="存储（api.*StorageSync，MMKV）" />
           <label key="opens" style={styles.result} value={`首页打开过 ${opens} 次，重启后接着数`} />

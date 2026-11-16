@@ -35,6 +35,30 @@ export interface RouteTabBar {
   mode?: string;
   /** Canonical exported Valdi class path; required only for 'custom'. */
   component?: string;
+  /** Docked height in dp/pt for custom bars; omitted for default bars or explicit full-viewport overlays. */
+  height?: number;
+}
+
+/**
+ * View model passed by the host to a custom Valdi tab bar component.
+ * By default, custom bars are docked at the bottom with `height + safeAreaBottom` added to page insets;
+ * only `overlay: true` mounts full-viewport and requires a root `hitTest`.
+ *
+ * @ViewModel
+ * @ExportModel({ios: 'VRTabBarViewModel', android: 'io.valdiroutes.pages.TabBarViewModel'})
+ */
+export interface TabBarViewModel {
+  items: RouteTab[];
+  selectedRoute: string;
+  safeAreaBottom: number;
+}
+
+/**
+ * @Context
+ * @ExportModel({ios: 'VRTabBarContext', android: 'io.valdiroutes.pages.TabBarContext'})
+ */
+export interface TabBarContext {
+  selectTab: (route: string) => void;
 }
 
 /** @ExportModel({ios: 'VRRouteDeclaration', android: 'io.valdiroutes.pages.RouteDeclaration'}) */

@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { parseAdbDevices, parseIosSimulators, selectAndroidDevice, selectIosSimulator } from '../device.mjs';
-import { ensureBazelShell, extraBazelFlags } from '../node-modules.mjs';
+import { parseAdbDevices, parseIosSimulators, selectAndroidDevice, selectIosSimulator } from '../lib/device.mjs';
+import { ensureBazelShell, extraBazelFlags } from '../lib/node-modules.mjs';
 import { sampleApp } from './fixtures/app-config.mjs';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -16,11 +16,12 @@ const cliRun = args => spawnSync(process.execPath, [cli, ...args], { cwd: reposi
 function freshIconProject(t) {
   const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'valdi-cli-icon-bootstrap-')));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  mkdirSync(path.join(root, 'scripts'));
+  mkdirSync(path.join(root, 'scripts/lib'), { recursive: true });
   mkdirSync(path.join(root, 'assets'));
-  for (const name of ['cli.mjs', 'prerequisites.mjs', 'device.mjs', 'app-config.mjs', 'app-icons.mjs',
+  copyFileSync(path.join(repository, 'scripts/cli.mjs'), path.join(root, 'scripts/cli.mjs'));
+  for (const name of ['prerequisites.mjs', 'device.mjs', 'app-config.mjs', 'app-icons.mjs',
     'native-dependencies.mjs', 'native-modules.mjs', 'module-native-config.mjs', 'module-platform-config.mjs']) {
-    copyFileSync(path.join(repository, 'scripts', name), path.join(root, 'scripts', name));
+    copyFileSync(path.join(repository, 'scripts/lib', name), path.join(root, 'scripts/lib', name));
   }
   copyFileSync(path.join(repository, 'assets/app-icon.png'), path.join(root, 'assets/app-icon.png'));
   mkdirSync(path.join(root, 'tools/valdi-rolldown'), { recursive: true });
@@ -30,7 +31,7 @@ function freshIconProject(t) {
     valdi: { app: { ...sampleApp(), icon: 'assets/app-icon.png' }, modules: [] },
   }));
   // Stop at the dependency-install boundary; this fixture never invokes a package manager.
-  writeFileSync(path.join(root, 'scripts/pnpm.mjs'),
+  writeFileSync(path.join(root, 'scripts/lib/pnpm.mjs'),
     'console.log("fixture dependency installer reached"); process.exit(23);\n');
   return {
     root,

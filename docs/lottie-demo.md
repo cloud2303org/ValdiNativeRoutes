@@ -25,8 +25,8 @@ The current packager does not include arbitrary JSON resources. Generate the
 checked-in TypeScript resource without changing the generic compiler pipeline:
 
 ```sh
-node scripts/generate-lottie-demo.mjs
-node scripts/generate-lottie-demo.mjs --check
+node scripts/maintainer/generate-lottie-demo.mjs
+node scripts/maintainer/generate-lottie-demo.mjs --check
 ```
 
 The generator checks the original JSON SHA-256 and byte length, the MIT file

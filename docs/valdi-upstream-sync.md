@@ -4,7 +4,7 @@
 合入维护 fork，包括 `beta-0.2.1` 之后的全部 55 个官方提交。
 维护提交为 `15feb6530ceecb971f4c8519ea8ab77474b959db`。
 应用的 `valdi`、`module-build` 及其 registry 必须固定到同一维护提交，
-由 `node scripts/upstream.mjs pin COMMIT` 一起更新。
+由 `node scripts/maintainer/upstream.mjs pin COMMIT` 一起更新。
 
 ## 保留的项目定制
 

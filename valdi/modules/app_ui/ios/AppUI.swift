@@ -1,4 +1,5 @@
 import UIKit
+import ValdiRuntime
 
 // The module-owned AppUI service, after ExpoNativeRoutes' AppUI: Valdi pages reach it through AppUIHost.
 // The application host supplies presentation context and page lifecycle updates; AppUI and AppPresenters use
@@ -91,15 +92,6 @@ struct DatePickerOptions {
     }
 }
 
-struct BottomSheetOptions {
-    var title = ""
-    var content = ""
-    var confirmText = "确定"
-    var cancelText = "取消"
-    var showCancel = true
-    var dismissible = true
-}
-
 struct ImagePreviewOptions {
     var urls: [String]
     /// One of urls; "" for the first.
@@ -134,17 +126,10 @@ struct DatePickerResult {
     var errMsg: String { "showDatePicker:ok" }
 }
 
-struct BottomSheetResult {
-    let confirm: Bool
-    let cancel: Bool
-    var errMsg: String { "showBottomSheet:ok" }
-}
-
 enum PresentationOptions {
     case actionSheet(ActionSheetOptions)
     case picker(PickerOptions)
     case datePicker(DatePickerOptions)
-    case bottomSheet(BottomSheetOptions)
     case imagePreview(ImagePreviewOptions)
 
     /// The reply when the presentation is cancelled for the user (its page covered or removed, or the call cancelled).
@@ -156,7 +141,7 @@ enum PresentationOptions {
         case let .imagePreview(options):
             let index = shown?.index ?? options.urls.firstIndex(of: options.current) ?? 0
             return PresentationResult(confirm: false, cancel: true, value: options.urls[index], index: index)
-        case .actionSheet, .bottomSheet:
+        case .actionSheet:
             return PresentationResult(confirm: false, cancel: true)
         }
     }
@@ -222,14 +207,6 @@ struct AppUIService {
         try await api("showDatePicker") {
             let result = try await presentation(.datePicker(options))
             return DatePickerResult(confirm: result.confirm, cancel: result.cancel, value: result.value)
-        }
-    }
-
-    @MainActor
-    func showBottomSheet(_ options: BottomSheetOptions = BottomSheetOptions()) async throws -> BottomSheetResult {
-        try await api("showBottomSheet") {
-            let result = try await presentation(.bottomSheet(options))
-            return BottomSheetResult(confirm: result.confirm, cancel: result.cancel)
         }
     }
 
@@ -327,6 +304,9 @@ final class AppUI {
     /// App-owned image transport/cache policy, configured on main before runtime registration.
     /// The returned cancellation and completion pass unchanged to NativeRoutesUI.ImagePreview.
     static var imageLoader: NativeImageLoading.Loader?
+
+    /// Shared Valdi runtime configured by the host so sheet presentations render through Valdi TSX.
+    static weak var runtime: SCValdiRuntime?
 
     private enum Kind {
         case modal(ModalOptions, (Result<ModalResult, Error>) -> Void)

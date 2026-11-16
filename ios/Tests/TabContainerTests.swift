@@ -9,6 +9,9 @@ final class TabContainerTests: XCTestCase {
         XCTAssertNil(RouteTable.tabBarError(bar))
         bar.mode = "default"
         XCTAssertNil(RouteTable.tabBarError(bar))
+        bar.height = 64
+        XCTAssertNotNil(RouteTable.tabBarError(bar))
+        bar.height = nil
         bar.component = "AppTabBar@app_pages/src/AppTabBar"
         XCTAssertNotNil(RouteTable.tabBarError(bar))
     }
@@ -22,6 +25,13 @@ final class TabContainerTests: XCTestCase {
         }
         bar.component = "AppTabBar@app_pages/src/AppTabBar"
         XCTAssertNil(RouteTable.tabBarError(bar))
+        bar.height = 64
+        XCTAssertNil(RouteTable.tabBarError(bar))
+        for invalidHeight: NSNumber in [0, -1, NSNumber(value: Double.nan), NSNumber(value: Double.infinity)] {
+            bar.height = invalidHeight
+            XCTAssertNotNil(RouteTable.tabBarError(bar))
+        }
+        bar.height = nil
         bar.mode = "unsupported"
         XCTAssertNotNil(RouteTable.tabBarError(bar))
     }

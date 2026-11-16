@@ -129,5 +129,5 @@ if ($bashOutput) { $exportArguments += $bashOutput }
 # The shared manual export generates the Kotlin/C++ bindings and writes only
 # {platform, config} to valdi_ota.json. Keep its generation and metadata contract
 # identical on Windows; the wrapper only configures the host tools and caches.
-$exitCode = Invoke-GitBash -BashPath $bash -ScriptPath (Join-Path $root 'scripts/export-android.sh') -Arguments $exportArguments
+$exitCode = Invoke-GitBash -BashPath $bash -ScriptPath (Join-Path $root 'scripts/maintainer/export-android.sh') -Arguments $exportArguments
 exit $exitCode

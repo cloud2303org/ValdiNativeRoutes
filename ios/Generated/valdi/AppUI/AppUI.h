@@ -53,6 +53,24 @@
 
 
 //
+// VRAppSheetOverlayContext.h
+//
+
+#import <ValdiRuntime/SCValdiMarshaller.h>
+
+#import <AppUITypes/AppUITypes.h>
+
+
+//
+// VRAppSheetOverlayViewModel.h
+//
+
+#import <ValdiRuntime/SCValdiMarshaller.h>
+
+#import <AppUITypes/AppUITypes.h>
+
+
+//
 // VRAppUINativeModule.h
 //
 
@@ -84,15 +102,6 @@ FOUNDATION_EXPORT NSInteger VRAppUINativeModuleMarshall(SCValdiMarshallerRef  _N
 
 //
 // VRAttachmentSelection.h
-//
-
-#import <ValdiRuntime/SCValdiMarshaller.h>
-
-#import <AppUITypes/AppUITypes.h>
-
-
-//
-// VRBottomSheetRequest.h
 //
 
 #import <ValdiRuntime/SCValdiMarshaller.h>

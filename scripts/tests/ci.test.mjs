@@ -16,12 +16,13 @@ function fixture(t) {
     mkdirSync(path.dirname(target), { recursive: true });
     writeFileSync(target, text);
   };
-  mkdirSync(path.join(root, 'scripts'));
-  for (const name of ['ci.mjs', 'prerequisites.mjs'])
-    copyFileSync(path.join(repository, 'scripts', name), path.join(root, 'scripts', name));
-  write('scripts/upstream.mjs', 'import { fileURLToPath } from "node:url";\nexport const root = fileURLToPath(new URL("..", import.meta.url));\n');
+  mkdirSync(path.join(root, 'scripts/maintainer'), { recursive: true });
+  mkdirSync(path.join(root, 'scripts/lib'), { recursive: true });
+  copyFileSync(path.join(repository, 'scripts/maintainer/ci.mjs'), path.join(root, 'scripts/maintainer/ci.mjs'));
+  copyFileSync(path.join(repository, 'scripts/lib/prerequisites.mjs'), path.join(root, 'scripts/lib/prerequisites.mjs'));
+  write('scripts/maintainer/upstream.mjs', 'import { fileURLToPath } from "node:url";\nexport const root = fileURLToPath(new URL("../..", import.meta.url));\n');
   // The fixture has no exporter, OTA scripts, dependency install, or native build tools.
-  const run = (...args) => spawnSync(process.execPath, ['scripts/ci.mjs', ...args], {
+  const run = (...args) => spawnSync(process.execPath, ['scripts/maintainer/ci.mjs', ...args], {
     cwd: root, encoding: 'utf8', env: { ...process.env, GITHUB_OUTPUT: path.join(root, 'outputs') },
   });
   return { root, write, run };
@@ -59,7 +60,7 @@ test('CI reports invalid platform metadata and rejects the removed runtime-key c
   assert.match(result.stdout, /valid=false/);
   const removed = f.run('runtime-key', 'android');
   assert.notEqual(removed.status, 0);
-  assert.match(removed.stderr, /Usage: node scripts\/ci\.mjs toolchain \| runtime-valid PLATFORM/);
+  assert.match(removed.stderr, /Usage: node scripts\/maintainer\/ci\.mjs toolchain \| runtime-valid PLATFORM/);
 });
 
 test('native CI exports explicitly before builds and saves dependencies after native builds', () => {
@@ -69,7 +70,7 @@ test('native CI exports explicitly before builds and saves dependencies after na
     });
     assert.deepEqual(document.errors, [], file);
     const steps = document.toJS().jobs[job].steps;
-    const exportIndex = steps.findIndex(step => /scripts\/(?:windows\/)?export-[^\r\n]*\.(sh|ps1)\b/.test(step.run ?? ''));
+    const exportIndex = steps.findIndex(step => /scripts\/(?:maintainer\/|windows\/)?export-[^\r\n]*\.(sh|ps1)\b/.test(step.run ?? ''));
     const buildIndices = steps.flatMap((step, index) =>
       /pnpm build:(android|ios)|-File scripts\/windows\/build-android\.ps1/.test(step.run ?? '') ? [index] : []);
     assert.ok(exportIndex >= 0, `${file}: missing explicit export`);

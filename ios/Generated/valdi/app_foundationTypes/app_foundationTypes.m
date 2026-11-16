@@ -404,10 +404,11 @@ static id SCValdiBlockCreateOD_v(SCValdiBlockTrampoline trampoline) {
 @dynamic tabs;
 @dynamic mode;
 @dynamic component;
+@dynamic height;
 
 - (instancetype _Nonnull)initWithRoute:(NSString * _Nonnull)route initial:(NSString * _Nonnull)initial tabs:(NSArray<VRRouteTab *> * _Nonnull)tabs
 {
-    return [super initWithFieldValues:nil, route, initial, tabs, nil, nil];
+    return [super initWithFieldValues:nil, route, initial, tabs, nil, nil, nil];
 }
 
 + (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
@@ -418,6 +419,7 @@ static id SCValdiBlockCreateOD_v(SCValdiBlockTrampoline trampoline) {
         {.name = "tabs", .selName = nil, .type = "a<r:'[0]'>"},
         {.name = "mode", .selName = nil, .type = "s?"},
         {.name = "component", .selName = nil, .type = "s?"},
+        {.name = "height", .selName = nil, .type = "d@?"},
         {.name = nil},
     };
     static const char *const kIdentifiers[] = {
@@ -494,6 +496,74 @@ static id SCValdiBlockCreateOD_v(SCValdiBlockTrampoline trampoline) {
         {.name = nil},
     };
     return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRTabBarContext.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_foundationTypes.h"
+
+@implementation VRTabBarContext
+
+@dynamic selectTab;
+
+- (instancetype _Nonnull)initWithSelectTab:(VRTabBarContextSelectTabBlock _Nonnull)selectTab
+{
+    return [super initWithFieldValues:nil, selectTab];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "selectTab", .selName = nil, .type = "f(s)"},
+        {.name = nil},
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRTabBarViewModel.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "app_foundationTypes.h"
+
+@implementation VRTabBarViewModel
+
+@dynamic items;
+@dynamic selectedRoute;
+@dynamic safeAreaBottom;
+
+- (instancetype _Nonnull)initWithItems:(NSArray<VRRouteTab *> * _Nonnull)items selectedRoute:(NSString * _Nonnull)selectedRoute safeAreaBottom:(double)safeAreaBottom
+{
+    return [super initWithFieldValues:nil, items, selectedRoute, safeAreaBottom];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "items", .selName = nil, .type = "a<r:'[0]'>"},
+        {.name = "selectedRoute", .selName = nil, .type = "s"},
+        {.name = "safeAreaBottom", .selName = nil, .type = "d"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRRouteTab",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
 }
 
 @end

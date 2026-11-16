@@ -1,19 +1,21 @@
-import * as v from 'valibot';
+import type {
+  BleNotifyParams,
+  BlePairParams,
+  BlePeripheralAdvertisingParams,
+  BlePeripheralService,
+  BleReadParams,
+  BleScanParams,
+  BleWriteParams,
+} from './BleHost';
 import { invalidBleData } from './errors';
-import { bytes } from './native';
-
-/**
- * The arguments of the Bluetooth API (wechat.ts) and of its peripheral servers (peripheral.ts): every rule is checked
- * here, once, as the public method starts, and what native needs is normalized here too (canonical UUIDs, copied
- * bytes, defaults). Nothing after this checks them again, nor the replies and events native sends back.
- */
-
-/** The parsed options, or the mini-program's invalid-data failure (errCode 10013) with the first issue's message. */
-export function parseOptions<TSchema extends v.GenericSchema>(schema: TSchema, input: unknown): v.InferOutput<TSchema> {
-  const result = v.safeParse(schema, input);
-  if (!result.success) throw invalidBleData(result.issues[0].message);
-  return result.output;
-}
+import { type BinaryInput, bytes } from './native';
+import type {
+  BLEPeripheralAdvertisingOptions,
+  BLEPeripheralService as PeripheralServiceInput,
+  BLEPeripheralWriteOptions,
+  OpenBluetoothAdapterOptions,
+} from './peripheral';
+import type { BleNotifyType, BleWriteType, StartBluetoothDevicesDiscoveryOptions } from './wechat';
 
 /** Lowercase with dashes, 16- and 32-bit UUIDs on the Bluetooth base UUID; anything else only trimmed and lowercased. */
 export const canonicalUuid = (value: string): string => {
@@ -30,296 +32,189 @@ export const canonicalUuid = (value: string): string => {
   return normalized;
 };
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const SHORT_UUID_PATTERN = /^[0-9a-f]{4}(?:[0-9a-f]{4})?$/;
 
-/** A 16/32/128-bit UUID, made canonical; `compact` keeps 16- and 32-bit ones short. */
-const bleUuid = (typeMessage: string, formatMessage: string, compact = false) =>
-  v.pipe(
-    v.string(typeMessage),
-    v.check(value => UUID_PATTERN.test(canonicalUuid(value)), formatMessage),
-    v.transform(value => {
-      const short = value.trim().toLowerCase();
-      return compact && SHORT_UUID_PATTERN.test(short) ? short : canonicalUuid(value);
-    }),
-  );
-const bluetoothUuid = (field: string) =>
-  bleUuid(`${field} must be a Bluetooth UUID string`, `${field} is not a valid 16/32/128-bit UUID`);
-const serverUuid = (field: string, compact = false) =>
-  bleUuid(`${field} must be a UUID`, `${field} must be a 16/32/128-bit UUID`, compact);
-
-/** v.object, but a missing field fails with that field's own message, as an undefined one does. */
-function fields<TEntries extends v.ObjectEntries>(entries: TEntries, message: string) {
-  const all: v.ObjectEntries = entries;
-  return v.object(entries, issue => {
-    const key = issue.path?.[0].key as string | undefined;
-    if (key === undefined) return message;
-    return v.safeParse(all[key], undefined).issues?.[0].message ?? message;
-  });
-}
-const isRecord = (value: unknown) => !!value && typeof value === 'object' && !Array.isArray(value);
-/** fields(), refusing arrays as well. */
-const record = <TEntries extends v.ObjectEntries>(entries: TEntries, message: string) =>
-  v.pipe(v.custom<unknown>(isRecord, message), fields(entries, message));
-
-const optionsMessage = 'options must be an object';
-const powerLevel = v.picklist(['low', 'medium', 'high'], 'powerLevel must be low, medium or high');
-
-// wechat.ts, the central role.
-
-const deviceMessage = 'deviceId must be a non-empty string';
-const deviceId = v.pipe(v.string(deviceMessage), v.trim(), v.minLength(1, deviceMessage));
-const nonNegative = (field: string) => {
-  const message = `${field} must be a non-negative finite number`;
-  return v.pipe(v.number(message), v.finite(message), v.minValue(0, message));
+const compactUuid = (value: string): string => {
+  const short = value.trim().toLowerCase();
+  return SHORT_UUID_PATTERN.test(short) ? short : canonicalUuid(value);
 };
-const writeType = v.picklist(['write', 'writeNoResponse'], 'writeType must be write or writeNoResponse');
-const pinMessage = 'pin must be a non-empty Base64 string';
-const servicesMessage = 'services must be an array of Bluetooth UUIDs';
-// Item by item, so that each message names its index: `services[1] is not a valid 16/32/128-bit UUID`.
-const services = v.pipe(
-  v.array(v.unknown(), servicesMessage),
-  v.rawTransform(({ dataset, addIssue, NEVER }) => {
-    const uuids: string[] = [];
-    for (const [index, value] of dataset.value.entries()) {
-      const result = v.safeParse(bluetoothUuid(`services[${index}]`), value);
-      if (!result.success) {
-        addIssue({ message: result.issues[0].message });
-        return NEVER;
+
+const trimDeviceId = (deviceId: string): string => {
+  const trimmed = deviceId?.trim();
+  if (!trimmed) throw invalidBleData('deviceId must be a non-empty string');
+  return trimmed;
+};
+
+const toBytes = (value: unknown, field: string): Uint8Array<ArrayBuffer> => {
+  if (!(value instanceof ArrayBuffer) && !(value instanceof Uint8Array)) {
+    throw invalidBleData(`${field} must be an ArrayBuffer or Uint8Array`);
+  }
+  return bytes(value);
+};
+
+const optionalBytes = (value: BinaryInput | undefined, field: string): Uint8Array<ArrayBuffer> =>
+  value === undefined ? new Uint8Array(0) : toBytes(value, field);
+
+// Central role normalizers (wechat.ts)
+
+export const openAdapterOptions = (
+  options?: OpenBluetoothAdapterOptions,
+): { mode: 'central' | 'peripheral' } => ({
+  mode: options?.mode ?? 'central',
+});
+
+export const discoveryOptions = (options: StartBluetoothDevicesDiscoveryOptions = {}): BleScanParams => ({
+  ...(options.services !== undefined ? { services: options.services.map(canonicalUuid) } : {}),
+  ...(options.allowDuplicatesKey !== undefined ? { allowDuplicatesKey: options.allowDuplicatesKey } : {}),
+  ...(options.interval !== undefined ? { interval: options.interval } : {}),
+  ...(options.powerLevel !== undefined ? { powerLevel: options.powerLevel } : {}),
+});
+
+export const deviceOptions = (options: { deviceId: string }): { deviceId: string } => ({
+  deviceId: trimDeviceId(options.deviceId),
+});
+
+export const connectOptions = (options: {
+  deviceId: string;
+  timeout?: number;
+}): { deviceId: string; timeout?: number } => ({
+  deviceId: trimDeviceId(options.deviceId),
+  ...(options.timeout !== undefined ? { timeout: options.timeout } : {}),
+});
+
+export const pairOptions = (options: { deviceId: string; pin: string; timeout?: number }): BlePairParams => ({
+  deviceId: trimDeviceId(options.deviceId),
+  pin: options.pin,
+  timeout: options.timeout ?? 20_000,
+});
+
+export const serviceOptions = (options: {
+  deviceId: string;
+  serviceId: string;
+}): { deviceId: string; serviceId: string } => ({
+  deviceId: trimDeviceId(options.deviceId),
+  serviceId: canonicalUuid(options.serviceId),
+});
+
+export const characteristicOptions = (options: {
+  deviceId: string;
+  serviceId: string;
+  characteristicId: string;
+}): BleReadParams => ({
+  deviceId: trimDeviceId(options.deviceId),
+  serviceId: canonicalUuid(options.serviceId),
+  characteristicId: canonicalUuid(options.characteristicId),
+});
+
+export const notifyOptions = (options: {
+  deviceId: string;
+  serviceId: string;
+  characteristicId: string;
+  state: boolean;
+  type?: BleNotifyType;
+}): BleNotifyParams => ({
+  ...characteristicOptions(options),
+  state: options.state,
+  ...(options.type !== undefined ? { type: options.type } : {}),
+});
+
+export const writeOptions = (options: {
+  deviceId: string;
+  serviceId: string;
+  characteristicId: string;
+  value: BinaryInput;
+  writeType?: BleWriteType;
+}): BleWriteParams => ({
+  ...characteristicOptions(options),
+  // Snapshot at public admission, before any scheduling or native async wait.
+  value: toBytes(options.value, 'value'),
+  writeType: options.writeType ?? 'write',
+});
+
+export const setMtuOptions = (options: { deviceId: string; mtu: number }): { deviceId: string; mtu: number } => ({
+  deviceId: trimDeviceId(options.deviceId),
+  mtu: options.mtu,
+});
+
+export const getMtuOptions = (options: {
+  deviceId: string;
+  writeType?: BleWriteType;
+}): { deviceId: string; writeType: BleWriteType } => ({
+  deviceId: trimDeviceId(options.deviceId),
+  writeType: options.writeType ?? 'write',
+});
+
+export const connectedDevicesOptions = (options: { services: string[] }): { services: string[] } => ({
+  services: options.services.map(canonicalUuid),
+});
+
+// Peripheral server normalizers (peripheral.ts)
+
+export const addServiceOptions = (options: { service: PeripheralServiceInput }): { service: BlePeripheralService } => {
+  const { service } = options;
+  return {
+    service: {
+      uuid: canonicalUuid(service.uuid),
+      characteristics: service.characteristics.map(item => ({
+        uuid: canonicalUuid(item.uuid),
+        properties: {
+          read: item.properties?.read ?? false,
+          write: item.properties?.write ?? false,
+          writeNoResponse: item.properties?.writeNoResponse ?? false,
+          notify: item.properties?.notify ?? false,
+          indicate: item.properties?.indicate ?? false,
+        },
+        permission: {
+          readable: item.permission?.readable ?? false,
+          writeable: item.permission?.writeable ?? false,
+          readEncryptionRequired: item.permission?.readEncryptionRequired ?? false,
+          writeEncryptionRequired: item.permission?.writeEncryptionRequired ?? false,
+        },
+        value: optionalBytes(item.value, 'value'),
+        descriptors: (item.descriptors ?? []).map(desc => ({
+          uuid: canonicalUuid(desc.uuid),
+          read: desc.permission?.read ?? false,
+          write: desc.permission?.write ?? false,
+          value: optionalBytes(desc.value, 'descriptor.value'),
+        })),
+      })),
+    },
+  };
+};
+
+export const removeServiceOptions = (options: { serviceId: string }): { serviceId: string } => ({
+  serviceId: canonicalUuid(options.serviceId),
+});
+
+export const advertisingOptions = (
+  options: BLEPeripheralAdvertisingOptions,
+): Omit<BlePeripheralAdvertisingParams, 'serverId'> => {
+  const request = options.advertiseRequest;
+  const beacon = request.beacon
+    ? {
+        uuid: canonicalUuid(request.beacon.uuid),
+        major: request.beacon.major,
+        minor: request.beacon.minor,
+        measuredPower: request.beacon.measuredPower ?? -59,
       }
-      uuids.push(result.output);
-    }
-    return uuids;
-  }),
-);
-const characteristic = {
-  deviceId,
-  serviceId: bluetoothUuid('serviceId'),
-  characteristicId: bluetoothUuid('characteristicId'),
+    : undefined;
+  return {
+    connectable: request.connectable ?? !beacon,
+    deviceName: request.deviceName ?? '',
+    serviceUuids: (request.serviceUuids ?? []).map(compactUuid),
+    manufacturerData: (request.manufacturerData ?? []).map(entry => ({
+      manufacturerId: Number.parseInt(entry.manufacturerId.replace(/^0x/i, ''), 16),
+      manufacturerSpecificData: optionalBytes(entry.manufacturerSpecificData, 'manufacturerSpecificData'),
+    })),
+    powerLevel: options.powerLevel ?? 'medium',
+    ...(beacon ? { beacon } : {}),
+  };
 };
-const data = (field: string) =>
-  v.pipe(
-    v.union(
-      [v.instance(ArrayBuffer), v.instance<typeof Uint8Array<ArrayBufferLike>>(Uint8Array)],
-      `${field} must be an ArrayBuffer or Uint8Array`,
-    ),
-    v.transform(bytes),
-  );
 
-export const openAdapterOptions = fields(
-  { mode: v.nullish(v.picklist(['central', 'peripheral'], 'mode must be central or peripheral'), 'central') },
-  optionsMessage,
-);
-export const discoveryOptions = fields(
-  {
-    services: v.optional(services),
-    allowDuplicatesKey: v.optional(v.boolean('allowDuplicatesKey must be a boolean')),
-    interval: v.optional(nonNegative('interval')),
-    powerLevel: v.optional(powerLevel),
-  },
-  optionsMessage,
-);
-export const deviceOptions = fields({ deviceId }, optionsMessage);
-export const connectOptions = fields({ deviceId, timeout: v.optional(nonNegative('timeout')) }, optionsMessage);
-export const pairOptions = fields(
-  {
-    deviceId,
-    pin: v.pipe(
-      v.string(pinMessage),
-      v.regex(/^[A-Za-z0-9+/]+={0,2}$/, pinMessage),
-      v.check(pin => pin.length % 4 === 0, pinMessage),
-    ),
-    timeout: v.optional(nonNegative('timeout'), 20_000),
-  },
-  optionsMessage,
-);
-export const serviceOptions = fields({ deviceId, serviceId: characteristic.serviceId }, optionsMessage);
-export const characteristicOptions = fields(characteristic, optionsMessage);
-export const notifyOptions = fields(
-  {
-    state: v.boolean('state must be a boolean'),
-    ...characteristic,
-    type: v.optional(v.picklist(['notification', 'indication'], 'type must be notification or indication')),
-  },
-  optionsMessage,
-);
-export const writeOptions = fields(
-  {
-    // Snapshot at public admission, before any scheduling or native async wait.
-    value: data('value'),
-    ...characteristic,
-    writeType: v.optional(writeType, 'write'),
-  },
-  optionsMessage,
-);
-const mtuMessage = 'mtu must be an integer between 23 and 511';
-export const setMtuOptions = fields(
-  {
-    deviceId,
-    mtu: v.pipe(v.number(mtuMessage), v.integer(mtuMessage), v.minValue(23, mtuMessage), v.maxValue(511, mtuMessage)),
-  },
-  optionsMessage,
-);
-export const getMtuOptions = fields({ deviceId, writeType: v.optional(writeType, 'write') }, optionsMessage);
-export const connectedDevicesOptions = fields({ services }, optionsMessage);
-
-// peripheral.ts, the peripheral role's servers.
-
-const flag = (field: string) => v.optional(v.boolean(`${field} must be a boolean`), false);
-const integer = (field: string, min: number, max: number) => {
-  const message = `${field} is out of range`;
-  return v.pipe(v.number(message), v.safeInteger(message), v.minValue(min, message), v.maxValue(max, message));
-};
-const optionalData = (field: string) => v.optional(data(field), () => new ArrayBuffer(0));
-const distinct = (values: unknown[]) => new Set(values).size === values.length;
-
-const descriptor = v.pipe(
-  record(
-    {
-      uuid: serverUuid('descriptor.uuid'),
-      permission: v.nullish(
-        record(
-          { read: flag('descriptor.permission.read'), write: flag('descriptor.permission.write') },
-          'descriptor.permission must be an object',
-        ),
-        {},
-      ),
-      value: optionalData('descriptor.value'),
-    },
-    'descriptor must be an object',
-  ),
-  v.transform(({ uuid, permission, value }) => ({ uuid, ...permission, value })),
-);
-const characteristicDefinition = record(
-  {
-    uuid: serverUuid('characteristic.uuid'),
-    properties: v.nullish(
-      record(
-        {
-          read: flag('read'),
-          write: flag('write'),
-          writeNoResponse: flag('writeNoResponse'),
-          notify: flag('notify'),
-          indicate: flag('indicate'),
-        },
-        'properties must be an object',
-      ),
-      {},
-    ),
-    permission: v.nullish(
-      record(
-        {
-          readable: flag('readable'),
-          writeable: flag('writeable'),
-          readEncryptionRequired: flag('readEncryptionRequired'),
-          writeEncryptionRequired: flag('writeEncryptionRequired'),
-        },
-        'permission must be an object',
-      ),
-      {},
-    ),
-    value: optionalData('value'),
-    descriptors: v.optional(
-      v.pipe(
-        v.array(descriptor, 'descriptors must be an array'),
-        v.check(items => distinct(items.map(item => item.uuid)), 'descriptors contains duplicate UUIDs'),
-      ),
-      () => [],
-    ),
-  },
-  'characteristic must be an object',
-);
-const serviceDefinition = record(
-  {
-    uuid: serverUuid('service.uuid'),
-    characteristics: v.pipe(
-      v.array(characteristicDefinition, 'characteristics must be an array'),
-      v.check(items => distinct(items.map(item => item.uuid)), 'characteristics contains duplicate UUIDs'),
-    ),
-  },
-  'service must be an object',
-);
-
-export const addServiceOptions = record({ service: serviceDefinition }, optionsMessage);
-export const removeServiceOptions = record({ serviceId: serverUuid('serviceId') }, optionsMessage);
-
-const manufacturerMessage = 'manufacturerId must be a 0x-prefixed 16-bit hex string';
-const manufacturerData = record(
-  {
-    manufacturerId: v.pipe(
-      v.string(manufacturerMessage),
-      v.regex(/^0x[\da-f]{1,4}$/i, manufacturerMessage),
-      v.transform(id => Number.parseInt(id.slice(2), 16)),
-    ),
-    manufacturerSpecificData: optionalData('manufacturerSpecificData'),
-  },
-  'manufacturerData must be an object',
-);
-const beacon = record(
-  {
-    uuid: v.pipe(
-      serverUuid('beacon.uuid', true),
-      v.check(uuid => uuid.length === 36, 'beacon.uuid must be 128-bit'),
-    ),
-    major: integer('beacon.major', 0, 65535),
-    minor: integer('beacon.minor', 0, 65535),
-    measuredPower: v.nullish(integer('beacon.measuredPower', -128, 127), -59),
-  },
-  'beacon must be an object',
-);
-// deviceName, serviceUuids and manufacturerData keep undefined until the beacon check below has seen them.
-const advertiseRequest = record(
-  {
-    connectable: v.optional(v.boolean('connectable must be a boolean')),
-    deviceName: v.optional(v.string('deviceName must be a string')),
-    serviceUuids: v.optional(
-      v.pipe(
-        v.array(serverUuid('serviceUuids', true), 'serviceUuids must be an array'),
-        v.check(uuids => distinct(uuids.map(canonicalUuid)), 'serviceUuids contains duplicate UUIDs'),
-      ),
-    ),
-    manufacturerData: v.optional(
-      v.pipe(
-        v.array(manufacturerData, 'manufacturerData must be an array'),
-        v.check(items => distinct(items.map(item => item.manufacturerId)), 'duplicate manufacturerId'),
-      ),
-    ),
-    beacon: v.optional(beacon),
-  },
-  'advertiseRequest must be an object',
-);
-/** BlePeripheralAdvertisingParams without the serverId. */
-export const advertisingOptions = v.pipe(
-  record({ advertiseRequest, powerLevel: v.nullish(powerLevel, 'medium') }, optionsMessage),
-  v.check(
-    ({ advertiseRequest: request }) =>
-      !request.beacon ||
-      (request.deviceName === undefined &&
-        request.serviceUuids === undefined &&
-        request.manufacturerData === undefined),
-    'beacon cannot be combined with deviceName, serviceUuids or manufacturerData',
-  ),
-  v.transform(({ advertiseRequest: request, powerLevel }) => {
-    const { beacon, connectable = !beacon, deviceName = '', serviceUuids = [], manufacturerData = [] } = request;
-    return { connectable, deviceName, serviceUuids, manufacturerData, powerLevel, ...(beacon ? { beacon } : {}) };
-  }),
-  v.check(({ beacon, connectable }) => !(beacon && connectable), 'beacon advertising must be non-connectable'),
-);
-export const writeValueOptions = v.pipe(
-  record(
-    {
-      needNotify: v.boolean('needNotify must be a boolean'),
-      callbackId: v.optional(integer('callbackId', 0, Number.MAX_SAFE_INTEGER)),
-      serviceId: serverUuid('serviceId'),
-      characteristicId: serverUuid('characteristicId'),
-      value: data('value'),
-    },
-    optionsMessage,
-  ),
-  v.check(
-    ({ callbackId, needNotify }) => callbackId === undefined || !needNotify,
-    'callbackId replies cannot also notify',
-  ),
-);
-
-export const listener = v.function('listener must be a function');
+export const writeValueOptions = (options: BLEPeripheralWriteOptions) => ({
+  serviceId: canonicalUuid(options.serviceId),
+  characteristicId: canonicalUuid(options.characteristicId),
+  value: toBytes(options.value, 'value'),
+  needNotify: options.needNotify,
+  ...(options.callbackId !== undefined ? { callbackId: options.callbackId } : {}),
+});

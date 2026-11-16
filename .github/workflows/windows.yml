@@ -1,8 +1,6 @@
 name: Windows Android CI
 
 on:
-  push:
-    branches: [hermes-v1]
   workflow_dispatch:
     inputs:
       valdi_commit:
@@ -29,7 +27,7 @@ jobs:
   windows-android:
     name: Windows native Android
     # A public repository must not run untrusted PR code on the personal PC.
-    if: github.repository == 'cloud2303org/ValdiNativeRoutes' && github.ref == 'refs/heads/hermes-v1' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.cold_build))
+    if: github.repository == 'cloud2303org/ValdiNativeRoutes' && github.event_name == 'workflow_dispatch' && !inputs.cold_build
     runs-on: [self-hosted, Windows, X64, valdi-windows]
     timeout-minutes: 180
     defaults:
@@ -258,7 +256,7 @@ jobs:
     name: Windows isolated cold bootstrap
     # Manual only: a fresh network clone and empty caches on the same personal PC.
     # The workflow concurrency group serializes it with the normal Windows job.
-    if: github.repository == 'cloud2303org/ValdiNativeRoutes' && github.ref == 'refs/heads/hermes-v1' && github.event_name == 'workflow_dispatch' && inputs.cold_build
+    if: github.repository == 'cloud2303org/ValdiNativeRoutes' && github.event_name == 'workflow_dispatch' && inputs.cold_build
     runs-on: [self-hosted, Windows, X64, valdi-windows]
     timeout-minutes: 240
     defaults:

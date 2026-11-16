@@ -179,7 +179,7 @@ test('--minimal strips optional modules and demo clutter while typechecking, pas
   }
 
   // Wire valdi sources, node_modules, scripts/lib, and rolldown compiler scripts into the isolated fixture.
-  symlinkSync(path.join(repository, 'scripts/lib'), path.join(fixture, 'scripts/lib'), 'junction');
+  cpSync(path.join(repository, 'scripts/lib'), path.join(fixture, 'scripts/lib'), { recursive: true });
   symlinkSync(path.join(repository, 'valdi/.valdi-sources'), path.join(fixture, 'valdi/.valdi-sources'), 'junction');
   symlinkSync(path.join(repository, 'valdi/node_modules'), path.join(fixture, 'valdi/node_modules'), 'junction');
   const toolSrc = path.join(repository, 'tools/valdi-rolldown');
@@ -271,6 +271,12 @@ test('--minimal strips optional modules and demo clutter while typechecking, pas
   ], { cwd: toolDst, encoding: 'utf8' });
   assert.equal(codegenCheck.status, 0, `${codegenCheck.stdout}\n${codegenCheck.stderr}`);
 
+  // Seed staged Bazel bundle output for theme_bridge inside fixture so full packaging stays hermetic on clean CI runners.
+  const stagedThemeBridge = path.join(fixture, 'module-build/out/android/theme_bridge/bundle-debug');
+  mkdirSync(path.join(stagedThemeBridge, 'resources/ts'), { recursive: true });
+  mkdirSync(path.join(stagedThemeBridge, 'resources/android'), { recursive: true });
+  writeFileSync(path.join(stagedThemeBridge, 'theme_bridge.valdimodule'), 'fixture-archive');
+
   const outDir = path.join(fixture, 'out');
   const resDir = path.join(fixture, 'res');
   const build = spawnSync(process.execPath, [
@@ -278,4 +284,5 @@ test('--minimal strips optional modules and demo clutter while typechecking, pas
   ], { cwd: toolDst, encoding: 'utf8' });
   assert.equal(build.status, 0, `${build.stdout}\n${build.stderr}`);
   assert.equal(existsSync(path.join(outDir, 'app_pages.valdimodule')), true);
+  assert.equal(existsSync(path.join(outDir, 'theme_bridge.valdimodule')), true);
 });

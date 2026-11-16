@@ -79,7 +79,8 @@ if (baseFile && moduleConfig(selected!).nativeBuild === 'bazel') {
   throw new Error('--hermes-base requires a source-built module; Bazel-owned archives are already compiled');
 }
 const baseArchive = baseFile ? unpack(readFileSync(baseFile)) : undefined;
-const available = availableModuleNames(path.resolve(import.meta.dirname, '../..'));
+const repositoryRoot = path.resolve(import.meta.dirname, '../..');
+const available = availableModuleNames(repositoryRoot);
 if (!selected) {
   pruneDisabledModuleOutputs(out, available, allModules.map(module => module.name));
   if (mapOut !== out) pruneDisabledModuleOutputs(mapOut, available, allModules.map(module => module.name));
@@ -96,7 +97,7 @@ if (release && mapOut !== out) mkdirSync(mapOut, { recursive: true });
 
 if (androidRes && !selected) rmSync(androidRes, { recursive: true, force: true });
 const bazelOutputs = !selected || moduleConfig(selected).nativeBuild === 'bazel'
-  ? nativePlatform ? stagedModuleOutputs(nativePlatform, release) : buildNodeModules(androidRes ? 'android' : 'ios', release)
+  ? nativePlatform ? stagedModuleOutputs(nativePlatform, release, repositoryRoot) : buildNodeModules(androidRes ? 'android' : 'ios', release)
   : new Map();
 for (const [name, compiled] of bazelOutputs) {
   rmSync(genDir(name), { recursive: true, force: true });

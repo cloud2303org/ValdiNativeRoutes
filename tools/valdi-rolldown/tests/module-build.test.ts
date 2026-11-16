@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -99,9 +99,16 @@ test('declared module dependencies supply resource types while undeclared import
     "import { icon } from 'math/src/index';\nexport const mark = icon;\n",
   );
   await assert.rejects(compileNodeModule(consumer.module, consumer.out, 'Fixture', 'debug'), /Cannot find module/);
-  await compileNodeModule(consumer.module, consumer.out, 'Fixture', 'debug', [
-    { ...module, generatedDirs: [path.join(dep.out, 'resources/ts')] },
-  ]);
+  // Bazel marks upstream NodeValdiModule output directories 0555 read-only before dependent actions run.
+  const depGeneratedTs = path.join(dep.out, 'resources/ts');
+  chmodSync(depGeneratedTs, 0o555);
+  try {
+    await compileNodeModule(consumer.module, consumer.out, 'Fixture', 'debug', [
+      { ...module, generatedDirs: [depGeneratedTs] },
+    ]);
+  } finally {
+    chmodSync(depGeneratedTs, 0o755);
+  }
   const entries = unpack(readFileSync(path.join(consumer.out, 'fixture.valdimodule')));
   assert.match(entries.get('src/index.js')!.toString(), /require\(["']math\/src\/index["']\)/);
   assert.ok(!entries.has('src/Calculator.js'));

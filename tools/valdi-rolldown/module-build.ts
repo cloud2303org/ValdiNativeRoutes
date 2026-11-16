@@ -1,6 +1,6 @@
 // Bazel's module action. It invokes only our Node compiler/codegen, stages its
 // inputs in a temporary module, and writes only declared Bazel outputs.
-import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pack, setArchiveHash } from './archive';
@@ -26,6 +26,19 @@ import {
 } from './resources';
 import { valdiTs, type ValdiModule } from './valdiTs';
 import { fileURLToPath } from 'node:url';
+
+function makeWritable(target: string): void {
+  const stat = lstatSync(target, { throwIfNoEntry: false });
+  if (!stat || stat.isSymbolicLink()) return;
+  if (stat.isDirectory()) {
+    chmodSync(target, stat.mode | 0o700);
+    for (const entry of readdirSync(target)) {
+      makeWritable(path.join(target, entry));
+    }
+  } else {
+    chmodSync(target, stat.mode | 0o200);
+  }
+}
 
 export async function compileNodeModule(
   original: ValdiModule,
@@ -64,12 +77,17 @@ export async function compileNodeModule(
       for (const input of source.generatedDirs) {
         if (existsSync(input)) cpSync(input, generated, { recursive: true });
       }
+      makeWritable(dir);
+      makeWritable(generated);
       return { ...source, dir, generatedDirs: [generated] };
     };
     const module = staged({ ...original, generatedDirs: [] });
     const stagedDependencies = dependencies.map(staged);
-    if (existsSync(path.join(original.dir, 'res')))
-      cpSync(path.join(original.dir, 'res'), path.join(module.dir, 'res'), { recursive: true });
+    if (existsSync(path.join(original.dir, 'res'))) {
+      const stagedRes = path.join(module.dir, 'res');
+      cpSync(path.join(original.dir, 'res'), stagedRes, { recursive: true });
+      makeWritable(stagedRes);
+    }
     writeTsconfig(module, [module, ...stagedDependencies]);
     const images = await findImages(module);
     const fonts = findFonts(module) ?? [];

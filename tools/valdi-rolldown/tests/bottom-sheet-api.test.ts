@@ -220,7 +220,7 @@ function createHost(platform: 1 | 2, entries: Map<string, Buffer>, runtimeEntrie
   return { load, jsx, renderer, delegate };
 }
 
-test('app_ui bottom_sheet aligns with @swmansion/react-native-bottom-sheet v1.0.0 API and Valdi runtime on Android and iOS', async () => {
+test('app_ui bottom_sheet aligns with @swmansion/react-native-bottom-sheet v1.1.0 API and Valdi runtime on Android and iOS', async () => {
   const uiModule = appModule('app_ui');
   const uiPlugin = valdiTs(uiModule);
   const commonModule = appModule('native_common');
@@ -254,13 +254,45 @@ test('app_ui bottom_sheet aligns with @swmansion/react-native-bottom-sheet v1.0.
     const h = createHost(platform, allEntries, runtimeEntries);
     const api = h.load('app_ui/src/index');
     const utils = h.load('app_ui/src/bottom_sheet/bottomSheetUtils');
+    const placement = h.load('app_ui/src/bottom_sheet/cardPlacement');
 
     // 1. Public exports exist on app_ui root
     assert.equal(typeof api.BottomSheet, 'function');
     assert.equal(typeof api.ModalBottomSheet, 'function');
     assert.equal(typeof api.BottomSheetProvider, 'function');
 
-    // 2. Detent normalization & v1.0.0 validation rules
+    // 2. Detent normalization & v1.1.0 cardPlacement / validation rules
+    assert.equal(placement.resolveMaxWidth(undefined), 0);
+    assert.equal(placement.resolveMaxWidth(Infinity), 0);
+    assert.equal(placement.resolveMaxWidth(480), 480);
+    assert.throws(() => placement.resolveMaxWidth(0), /maxWidth/);
+    assert.throws(() => placement.resolveMaxWidth(-100), /maxWidth/);
+    assert.throws(() => placement.resolveMaxWidth(Number.NaN), /maxWidth/);
+
+    assert.equal(placement.resolvePlacement(undefined, false), 0.5);
+    assert.equal(placement.resolvePlacement('start', false), 0);
+    assert.equal(placement.resolvePlacement('end', false), 1);
+    assert.equal(placement.resolvePlacement('start', true), 1);
+    assert.equal(placement.resolvePlacement('end', true), 0);
+    assert.throws(() => placement.resolvePlacement('middle', false), /placement/);
+
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(placement.placeCard(1024, 16, 16, 500, 0.5, 2))),
+      { left: 278, width: 468 },
+    );
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(placement.placeCard(390, 16, 16, 500, 1, 3))),
+      { left: 16, width: 358 },
+    );
+    assert.equal(
+      placement.crowdedInsetsWarning([{ insetLeft: 16, insetRight: 16 }], 1024, 500),
+      null,
+    );
+    assert.match(
+      placement.crowdedInsetsWarning([{ insetLeft: 160, insetRight: 160 }], 300, 500) ?? '',
+      /leaves no room for the sheet/,
+    );
+
     const normalized = utils.normalizeDetents(
       [
         { value: 'content', insets: { start: 12, end: 16, bottom: 8 }, scrimOpacity: 0.4 },
@@ -269,12 +301,15 @@ test('app_ui bottom_sheet aligns with @swmansion/react-native-bottom-sheet v1.0.
       ],
       false,
       undefined,
+      { maxWidth: 480, placementBias: 1 },
     );
     assert.equal(normalized.length, 3);
     assert.equal(normalized[0].kind, 'content');
     assert.equal(normalized[0].insetLeft, 12);
     assert.equal(normalized[0].insetRight, 16);
     assert.equal(normalized[0].insetBottom, 8);
+    assert.equal(normalized[0].maxWidth, 480);
+    assert.equal(normalized[0].placementBias, 1);
     assert.equal(normalized[0].scrimOpacity, 0.4);
     assert.equal(normalized[1].kind, 'percentage');
     assert.equal(normalized[1].value, 0.6);
@@ -338,8 +373,10 @@ test('app_ui bottom_sheet aligns with @swmansion/react-native-bottom-sheet v1.0.
           jsxRuntime.endRender();
           jsxRuntime.beginComponent(ModalBottomSheet, modalProto, undefined, undefined);
           jsxRuntime.setViewModelProperties({
-            detents: [0, 280, '85%'],
+            detents: [0, { value: 280, insets: { horizontal: 16 } }, '85%'],
             index: this.viewModel.modalIndex,
+            maxWidth: 480,
+            placement: 'end',
             lazy: true,
             settleDuration: 400,
             scrimColor: 'rgba(0, 0, 0, 0.5)',
@@ -377,6 +414,17 @@ test('app_ui bottom_sheet aligns with @swmansion/react-native-bottom-sheet v1.0.
     );
     assert.equal(initialLabels.length, 0, 'lazy=true must defer children while closed at index=0');
 
+    // Verify detents wire format carries maxWidth & placementBias and pre-geometry children get maxWidth
+    const detentsAttr = initialEntries
+      .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'detents')
+      .at(-1)?.value;
+    assert.equal(detentsAttr[1].maxWidth, 480);
+    assert.equal(detentsAttr[1].placementBias, 1);
+    const preGeomMaxWidths = initialEntries.filter(
+      (e: any) => e.type === 'SetElementAttribute' && e.name === 'maxWidth' && e.value === 480,
+    );
+    assert.equal(preGeomMaxWidths.length, 2, 'SurfaceView and ContentWrapperView cap pre-geometry maxWidth');
+
     // Open modal sheet to index=1 (280pt) -> lazy children mount and native callbacks wire through!
     h.delegate.clear();
     h.renderer.renderRootComponent(Harness, harnessProto, { modalIndex: 1 }, undefined);
@@ -390,10 +438,20 @@ test('app_ui bottom_sheet aligns with @swmansion/react-native-bottom-sheet v1.0.
     const allAttrs = [...initialEntries, ...openEntries].filter(
       (e: any) => e.type === 'SetElementAttribute',
     );
+    const onNativeGeom = allAttrs.filter((e: any) => e.name === 'onNativeGeometry').at(-1)?.value;
     const onNativePos = allAttrs.filter((e: any) => e.name === 'onNativePositionChange').at(-1)?.value;
     const onNativeIdx = allAttrs.filter((e: any) => e.name === 'onNativeIndexChange').at(-1)?.value;
     const onNativeSettle = allAttrs.filter((e: any) => e.name === 'onNativeSettle').at(-1)?.value;
     const onNativeClose = allAttrs.filter((e: any) => e.name === 'onNativeCloseRequest').at(-1)?.value;
+
+    assert.equal(typeof onNativeGeom, 'function');
+    h.delegate.clear();
+    onNativeGeom(480, 680, 800, 544, 1024);
+    const geomEntries = h.delegate.requests.flatMap((r: any) => r.entries);
+    const committedInset = geomEntries
+      .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'committedContentRegionInset')
+      .at(-1)?.value;
+    assert.equal(committedInset, 544);
 
     assert.equal(typeof onNativePos, 'function');
     onNativePos(140, -0.5);

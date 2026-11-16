@@ -115,7 +115,7 @@ class BottomSheetView(context: Context) :
             !windowOverlay && hostView.isPointInteractive(xPx, yPx)
         }
 
-        hostView.onGeometryChanged = { widthDp, heightDp, surfaceDp, insetDp ->
+        hostView.onGeometryChanged = { widthDp, heightDp, surfaceDp, insetDp, hostWidthDp ->
             val fn = onNativeGeometry
             if (fn != null) {
                 ValdiMarshaller.use { m ->
@@ -123,6 +123,7 @@ class BottomSheetView(context: Context) :
                     m.pushDouble(heightDp)
                     m.pushDouble(surfaceDp)
                     m.pushDouble(insetDp)
+                    m.pushDouble(hostWidthDp)
                     fn.perform(m)
                 }
             }
@@ -391,6 +392,8 @@ class BottomSheetView(context: Context) :
                 insetRightDp = (map["insetRight"] as? Number)?.toFloat() ?: 0f,
                 insetBottomDp = (map["insetBottom"] as? Number)?.toFloat() ?: 0f,
                 widestCard = map["widestCard"] as? Boolean ?: false,
+                maxWidthDp = (map["maxWidth"] as? Number)?.toFloat() ?: 0f,
+                placementBias = (map["placementBias"] as? Number)?.toFloat() ?: 0.5f,
                 scrimOpacity = (map["scrimOpacity"] as? Number)?.toFloat() ?: 1f,
             )
         }

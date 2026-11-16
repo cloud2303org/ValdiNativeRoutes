@@ -129,4 +129,99 @@ final class VRBottomSheetTests: XCTestCase {
         XCTAssertFalse(host.isPresented)
         XCTAssertEqual(settled, [-1])
     }
+
+    func testCriticalSpringLandsExactlyOnTargetAtSettleDurationWithoutJump() {
+        let start = 1000.0
+        let settleDuration: CGFloat = 0.45
+        let spring = VRBSCriticalSpring(
+            current: 600,
+            target: 200,
+            initialVelocity: 0,
+            settleDuration: settleDuration,
+            startTime: start
+        )
+        XCTAssertEqual(spring.duration, 0.45, accuracy: 0.0001)
+
+        // Sample at 120Hz right up to settleDuration: step size shrinks smoothly with no jump on final frame.
+        let dt = 1.0 / 120.0
+        let twoBefore = spring.evaluate(at: start + 0.45 - 2.0 * dt)
+        let oneBefore = spring.evaluate(at: start + 0.45 - dt)
+        let atDuration = spring.evaluate(at: start + 0.45)
+
+        XCTAssertFalse(oneBefore.settled)
+        XCTAssertTrue(atDuration.settled)
+        XCTAssertEqual(atDuration.position, 200, accuracy: 0.0001)
+
+        let prevStep = twoBefore.position - oneBefore.position
+        let finalStep = oneBefore.position - atDuration.position
+        XCTAssertGreaterThan(prevStep, 0)
+        XCTAssertGreaterThan(finalStep, 0)
+        XCTAssertLessThan(finalStep, 0.25)
+        XCTAssertLessThan(finalStep, prevStep)
+    }
+
+    func testWideScreenMaxWidthAndPlacementConstrainGeometryAndHitTesting() {
+        let host = VRBottomSheetHostingView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
+        var latestGeometry: (Double, Double, Double, Double)?
+        host.onGeometryChanged = { w, h, s, inset in
+            latestGeometry = (w, h, s, inset)
+        }
+        host.animateIn = false
+        host.modal = false
+
+        // 1. Centered 480pt column with 16pt side insets: columnLeft = (1024 - 480)/2 = 272 -> card [288..736], width=448.
+        host.setRawDetents([
+            VRBSRawDetentSpec(
+                value: 320,
+                kind: .points,
+                insetLeft: 16,
+                insetRight: 16,
+                widestCard: true,
+                maxWidth: 480,
+                placementBias: 0.5
+            ),
+        ])
+        host.setRequestedIndex(0)
+        host.layoutIfNeeded()
+
+        XCTAssertEqual(latestGeometry?.0 ?? 0, 448, accuracy: 0.5)
+        XCTAssertEqual(latestGeometry?.3 ?? 0, 288, accuracy: 0.5)
+        XCTAssertTrue(host.isPointInPresentedCard(CGPoint(x: 512, y: 600)))
+        XCTAssertFalse(host.isPointInPresentedCard(CGPoint(x: 100, y: 600)))
+        XCTAssertFalse(host.isPointInPresentedCard(CGPoint(x: 900, y: 600)))
+        // Non-modal sheet passes through touches in the wide-screen side gutters!
+        XCTAssertFalse(host.isPointInteractive(CGPoint(x: 100, y: 600)))
+
+        // 2. End-placed 480pt column (placementBias = 1.0): columnLeft = 1024 - 480 = 544 -> card [560..1008], width=448.
+        host.setRawDetents([
+            VRBSRawDetentSpec(
+                value: 320,
+                kind: .points,
+                insetLeft: 16,
+                insetRight: 16,
+                widestCard: true,
+                maxWidth: 480,
+                placementBias: 1.0
+            ),
+        ])
+        XCTAssertEqual(latestGeometry?.0 ?? 0, 448, accuracy: 0.5)
+        XCTAssertEqual(latestGeometry?.3 ?? 0, 560, accuracy: 0.5)
+        XCTAssertFalse(host.isPointInPresentedCard(CGPoint(x: 400, y: 600)))
+        XCTAssertTrue(host.isPointInPresentedCard(CGPoint(x: 800, y: 600)))
+    }
+
+    func testAnimatedOpenExposesIsSettlingDuringSpringAndSurvivesMidSettleLayout() {
+        let host = VRBottomSheetHostingView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        host.animateIn = true
+        host.modal = true
+        host.setRawDetents([VRBSRawDetentSpec(value: 300, kind: .points, widestCard: true)])
+        host.setRequestedIndex(0)
+        host.layoutIfNeeded()
+
+        XCTAssertTrue(host.isSettling)
+        // Redundant layout pass with unchanged bounds during settling does not cancel or corrupt settling state.
+        host.setNeedsLayout()
+        host.layoutIfNeeded()
+        XCTAssertTrue(host.isSettling)
+    }
 }

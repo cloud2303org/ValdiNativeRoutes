@@ -29,6 +29,15 @@ struct VRBSDetentInsets: Equatable {
     }
 }
 
+struct VRBSCardSpan: Equatable {
+    var left: CGFloat
+    var width: CGFloat
+
+    var right: CGFloat {
+        left + width
+    }
+}
+
 struct VRBSRawDetentSpec: Equatable {
     var value: CGFloat
     var kind: VRBSDetentKind
@@ -39,6 +48,8 @@ struct VRBSRawDetentSpec: Equatable {
     var insetRight: CGFloat = 0
     var insetBottom: CGFloat = 0
     var widestCard: Bool = false
+    var maxWidth: CGFloat = 0
+    var placementBias: CGFloat = 0.5
     var scrimOpacity: CGFloat = 1
 }
 
@@ -81,8 +92,11 @@ func VRBSColorFromArgb(_ argb: Int32) -> UIColor {
 struct VRBSCriticalSpring {
     let target: CGFloat
     let omega: CGFloat
+    let duration: CFTimeInterval
     private let d0: CGFloat
     private let c2: CGFloat
+    private let endOffset: CGFloat
+    private let invDenom: CGFloat
     private let startTime: CFTimeInterval
 
     init(
@@ -93,23 +107,63 @@ struct VRBSCriticalSpring {
         startTime: CFTimeInterval = CACurrentMediaTime()
     ) {
         self.target = target
-        self.d0 = current - target
-        self.omega = VRBSMath.computeCriticalSpringOmega(
-            distance: d0,
+        let startOffset = current - target
+        self.d0 = startOffset
+        self.startTime = startTime
+
+        if abs(startOffset) < 0.0001 {
+            self.omega = VRBSMath.computeCriticalSpringOmega(
+                distance: 0,
+                initialVelocity: 0,
+                settleDuration: settleDuration
+            )
+            self.duration = 0
+            self.c2 = 0
+            self.endOffset = 0
+            self.invDenom = 0
+            return
+        }
+
+        let resolvedOmega = VRBSMath.computeCriticalSpringOmega(
+            distance: startOffset,
             initialVelocity: initialVelocity,
             settleDuration: settleDuration
         )
-        self.c2 = initialVelocity + omega * d0
-        self.startTime = startTime
+        self.omega = resolvedOmega
+        let clampedVelocity = VRBSMath.clampSpringInitialVelocity(
+            startOffset: startOffset,
+            initialVelocity: initialVelocity,
+            omega: resolvedOmega
+        )
+        let resolvedC2 = clampedVelocity + resolvedOmega * startOffset
+        self.c2 = resolvedC2
+        let settleSeconds = VRBSMath.settleFraction / resolvedOmega
+        self.duration = CFTimeInterval(settleSeconds)
+        let residual = exp(-VRBSMath.settleFraction) * (startOffset + resolvedC2 * settleSeconds)
+        self.endOffset = residual
+        let denom = startOffset - residual
+        self.invDenom = abs(denom) > 1e-6 ? (1.0 / denom) : 0
     }
 
     func evaluate(at timestamp: CFTimeInterval) -> (position: CGFloat, velocity: CGFloat, settled: Bool) {
-        let dt = max(0, CGFloat(timestamp - startTime))
+        if duration <= 0 || invDenom == 0 {
+            return (target, 0, true)
+        }
+        let elapsed = timestamp - startTime
+        if elapsed >= duration {
+            return (target, 0, true)
+        }
+        let dt = max(0, CGFloat(elapsed))
         let expTerm = exp(-omega * dt)
-        let position = target + (d0 + c2 * dt) * expTerm
-        let velocity = (c2 - omega * (d0 + c2 * dt)) * expTerm
-        let settled = abs(position - target) < 0.25 && abs(velocity) < 5.0
-        return (settled ? target : position, settled ? 0 : velocity, settled)
+        let rawOffset = (d0 + c2 * dt) * expTerm
+        let remaining = (rawOffset - endOffset) * invDenom
+        if remaining <= 0 {
+            return (target, 0, true)
+        }
+        let position = target + d0 * remaining
+        let rawVelocity = (c2 - omega * (d0 + c2 * dt)) * expTerm
+        let velocity = rawVelocity * (d0 * invDenom)
+        return (position, velocity, false)
     }
 }
 
@@ -119,6 +173,30 @@ enum VRBSMath {
     static let settleFraction: CGFloat = 8.0
     static let maxSpringOmega: CGFloat = 100.0
     static let minSettleDurationSeconds: CGFloat = 0.001
+
+    static func columnWidth(hostWidth: CGFloat, maxWidth: CGFloat) -> CGFloat {
+        maxWidth > 0 ? min(maxWidth, hostWidth) : hostWidth
+    }
+
+    static func placeCard(
+        hostWidth: CGFloat,
+        insets: VRBSDetentInsets,
+        maxWidth: CGFloat = 0,
+        placementBias: CGFloat = 0.5,
+        displayScale: CGFloat = 1.0
+    ) -> VRBSCardSpan {
+        let scale = max(1.0, displayScale)
+        let column = columnWidth(hostWidth: hostWidth, maxWidth: maxWidth)
+        let columnLeft = (placementBias * (hostWidth - column) * scale).rounded() / scale
+        return VRBSCardSpan(
+            left: columnLeft + insets.left,
+            width: max(0, column - insets.left - insets.right)
+        )
+    }
+
+    static func contentScale(cardWidth: CGFloat, widestCardWidth: CGFloat) -> CGFloat {
+        widestCardWidth > 0 ? max(0, cardWidth / widestCardWidth) : 1.0
+    }
 
     static func computeCriticalSpringOmega(
         distance: CGFloat,
@@ -132,6 +210,18 @@ enum VRBSMath {
         let absDist = abs(distance)
         let velocityOmega = absDist > 0.5 ? abs(initialVelocity) / absDist : 0
         return min(maxSpringOmega, max(1.0, max(baseOmega, velocityOmega)))
+    }
+
+    static func clampSpringInitialVelocity(
+        startOffset: CGFloat,
+        initialVelocity: CGFloat,
+        omega: CGFloat
+    ) -> CGFloat {
+        guard abs(startOffset) > 1e-4 else { return 0 }
+        if (initialVelocity / startOffset) < -omega {
+            return -omega * startOffset
+        }
+        return initialVelocity
     }
 
     static func resolveReleaseTargetIndex(
@@ -320,6 +410,14 @@ final class VRBottomSheetSurfaceView: UIView {
 @objc(VRBottomSheetContentWrapperView)
 final class VRBottomSheetContentWrapperView: UIView {
     var onSubviewHierarchyChanged: (() -> Void)?
+    private var lastAppliedBoundsSize: CGSize = .zero
+
+    var contentScale: CGFloat = 1.0 {
+        didSet {
+            guard abs(contentScale - oldValue) > 0.0001 else { return }
+            applySublayerScale()
+        }
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -334,6 +432,32 @@ final class VRBottomSheetContentWrapperView: UIView {
     override func didAddSubview(_ subview: UIView) {
         super.didAddSubview(subview)
         onSubviewHierarchyChanged?()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if bounds.size != lastAppliedBoundsSize {
+            lastAppliedBoundsSize = bounds.size
+            if abs(contentScale - 1.0) > 0.0001 {
+                applySublayerScale()
+            }
+        }
+    }
+
+    private func applySublayerScale() {
+        let s = max(0, contentScale)
+        if abs(s - 1.0) <= 0.0001 {
+            if !CATransform3DIsIdentity(layer.sublayerTransform) {
+                layer.sublayerTransform = CATransform3DIdentity
+            }
+            return
+        }
+        let tx = (s - 1.0) * bounds.width * 0.5
+        let ty = (s - 1.0) * bounds.height * 0.5
+        layer.sublayerTransform = CATransform3DConcat(
+            CATransform3DMakeScale(s, s, 1.0),
+            CATransform3DMakeTranslation(tx, ty, 0)
+        )
     }
 }
 

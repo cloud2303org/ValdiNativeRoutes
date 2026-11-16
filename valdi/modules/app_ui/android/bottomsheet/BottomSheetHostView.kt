@@ -21,13 +21,13 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * Core Android sheet engine aligned with `@swmansion/react-native-bottom-sheet` v1.0.0,
+ * Core Android sheet engine aligned with `@swmansion/react-native-bottom-sheet` v1.1.0,
  * adapted idiomatically to Valdi's layout, gesture recognizer, and custom-view lifecycle.
  */
 internal class BottomSheetHostView(context: Context) : ViewGroup(context), NestedScrollingParent3 {
 
     // ---- Callbacks wired by BottomSheetView ----
-    var onGeometryChanged: ((widthDp: Double, heightDp: Double, surfaceHeightDp: Double, insetDp: Double) -> Unit)? = null
+    var onGeometryChanged: ((widthDp: Double, heightDp: Double, surfaceHeightDp: Double, insetDp: Double, hostWidthDp: Double) -> Unit)? = null
     var onIndexChanged: ((Int) -> Unit)? = null
     var onSettleChanged: ((Int) -> Unit)? = null
     var onPositionChanged: ((positionDp: Double, fractionalIndex: Double) -> Unit)? = null
@@ -86,6 +86,9 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
     private var statusBarTopInsetPx: Int = 0
     private var measuredNaturalContentHeightPx: Int = 0
     private var hasMeasuredContentHeight: Boolean = false
+    private var cardMaxWidthPx: Float = 0f
+    private var cardPlacementBias: Float = 0.5f
+    private var widestCardInsetsPx: DetentInsets = DetentInsets()
 
     /** Current vertical offset of the sheet's top edge from container top (`containerHeight` == closed). */
     private var sheetOffsetY: Float = 0f
@@ -424,6 +427,21 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
     private fun recomputeDetentsAndSync(animateResize: Boolean) {
         if (containerHeightPx <= 0 || containerWidthPx <= 0) return
 
+        val firstRaw = rawDetents.firstOrNull()
+        cardMaxWidthPx = ((firstRaw?.maxWidthDp ?: 0f) * density).coerceAtLeast(0f)
+        cardPlacementBias = (firstRaw?.placementBias ?: 0.5f).coerceIn(0f, 1f)
+
+        val widestRaw = rawDetents.firstOrNull { it.widestCard } ?: firstRaw
+        widestCardInsetsPx = if (widestRaw != null) {
+            DetentInsets(
+                left = (widestRaw.insetLeftDp * density).coerceAtLeast(0f),
+                right = (widestRaw.insetRightDp * density).coerceAtLeast(0f),
+                bottom = (widestRaw.insetBottomDp * density).coerceAtLeast(0f),
+            )
+        } else {
+            DetentInsets()
+        }
+
         val resolved = rawDetents.map { raw ->
             val topInsetPx = if (raw.usesStatusBarTopInset) {
                 statusBarTopInsetPx.toFloat()
@@ -511,7 +529,8 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
         if (isDraggingSheet || isNestedDragging) {
             syncVisualsForCurrentOffset()
             emitPositionIfNeeded()
-        } else if (animateResize || isAnimating) {
+        } else if ((animateResize && abs(newTargetOffset - sheetOffsetY) >= 0.5f) || isAnimating) {
+            syncVisualsForCurrentOffset()
             startSpringTo(
                 targetOffsetPx = newTargetOffset,
                 initialVelocityPxPerSec = 0f,
@@ -528,16 +547,14 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
     private fun emitGeometryIfNeeded() {
         if (containerWidthPx <= 0 || containerHeightPx <= 0) return
 
-        // Find widest card detent (matching TS widestCard flag or min horizontal inset).
-        val widestRaw = rawDetents.firstOrNull { it.widestCard } ?: rawDetents.firstOrNull()
-        val widestInsetPx = if (widestRaw != null) {
-            min(widestRaw.insetLeftDp, widestRaw.insetRightDp) * density
-        } else {
-            0f
-        }
-        val widestLeftPx = (widestRaw?.insetLeftDp ?: 0f) * density
-        val widestRightPx = (widestRaw?.insetRightDp ?: 0f) * density
-        val contentRegionWidthPx = (containerWidthPx - widestLeftPx - widestRightPx).coerceAtLeast(0f)
+        val widestSpan = BottomSheetMath.placeCard(
+            hostWidthPx = containerWidthPx.toFloat(),
+            insets = widestCardInsetsPx,
+            maxWidthPx = cardMaxWidthPx,
+            placementBias = cardPlacementBias,
+        )
+        val contentRegionWidthPx = widestSpan.width
+        val contentRegionInsetPx = widestSpan.left
 
         // Tallest card height across resolved detents (or available height when 'content' detent present).
         val maxAvailableForContent = rawDetents.maxOfOrNull { raw ->
@@ -558,11 +575,12 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
             (contentRegionWidthPx / density).toDouble(),
             (contentRegionHeightPx / density).toDouble(),
             (containerHeightPx / density).toDouble(),
-            (widestInsetPx / density).toDouble(),
+            (contentRegionInsetPx / density).toDouble(),
+            (containerWidthPx / density).toDouble(),
         )
         if (lastGeometry.contentEquals(next)) return
         lastGeometry = next
-        onGeometryChanged?.invoke(next[0], next[1], next[2], next[3])
+        onGeometryChanged?.invoke(next[0], next[1], next[2], next[3], next[4])
     }
 
     // ---- Dragging & Snapping ----
@@ -734,32 +752,61 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
         targetIndex: Int,
     ) {
         cancelSpring()
+        val startOffset = sheetOffsetY - targetOffsetPx
         val distance = targetOffsetPx - sheetOffsetY
         val omega = BottomSheetMath.computeCriticalSpringOmega(
             distancePx = distance,
             initialVelocityPxPerSec = initialVelocityPxPerSec,
             settleDurationSeconds = settleDurationSeconds,
         )
+        val clampedVelocity = BottomSheetMath.clampSpringInitialVelocity(
+            startOffsetPx = startOffset,
+            initialVelocityPxPerSec = initialVelocityPxPerSec,
+            omega = omega,
+        )
+        val endOffset = BottomSheetMath.computeSpringEndOffset(
+            startOffsetPx = startOffset,
+            clampedInitialVelocityPxPerSec = clampedVelocity,
+            omega = omega,
+        )
         val stiffness = (omega * omega).coerceAtLeast(1f)
+
+        var finished = false
+        fun finishSettle() {
+            if (finished) return
+            finished = true
+            springAnimation = null
+            setSheetOffsetYInternal(targetOffsetPx)
+            syncAccessibility()
+            onPresentationChanged?.invoke()
+            onSettleChanged?.invoke(targetIndex)
+        }
 
         springValueHolder.value = sheetOffsetY
         val spring = SpringAnimation(springValueHolder).apply {
-            setStartVelocity(initialVelocityPxPerSec)
-            minimumVisibleChange = DynamicAnimation.MIN_VISIBLE_CHANGE_PIXELS
+            setStartVelocity(clampedVelocity)
+            minimumVisibleChange = BottomSheetMath.SETTLE_MIN_VISIBLE_CHANGE
             spring = SpringForce(targetOffsetPx).apply {
                 this.stiffness = stiffness
                 this.dampingRatio = SpringForce.DAMPING_RATIO_NO_BOUNCY
             }
-            addUpdateListener { _, value, _ ->
-                setSheetOffsetYInternal(value)
+            addUpdateListener { animation, value, _ ->
+                val (scaledPosition, settled) = BottomSheetMath.scaleSpringPosition(
+                    rawValuePx = value,
+                    targetValuePx = targetOffsetPx,
+                    startOffsetPx = startOffset,
+                    endOffsetPx = endOffset,
+                )
+                if (!settled) {
+                    setSheetOffsetYInternal(scaledPosition)
+                } else {
+                    animation.cancel()
+                    finishSettle()
+                }
             }
             addEndListener { _, canceled, _, _ ->
                 if (!canceled) {
-                    springAnimation = null
-                    setSheetOffsetYInternal(targetOffsetPx)
-                    syncAccessibility()
-                    onPresentationChanged?.invoke()
-                    onSettleChanged?.invoke(targetIndex)
+                    finishSettle()
                 }
             }
         }
@@ -783,23 +830,41 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
         if (containerHeightPx <= 0 || containerWidthPx <= 0) return
 
         val openPx = openHeightPx
+        val hostWidthPx = containerWidthPx.toFloat()
         val insets = BottomSheetMath.interpolateInsets(resolvedDetents, openPx)
-        val cardLeft = insets.left
-        val cardRight = (containerWidthPx - insets.right).coerceAtLeast(cardLeft)
+        val span = BottomSheetMath.placeCard(
+            hostWidthPx = hostWidthPx,
+            insets = insets,
+            maxWidthPx = cardMaxWidthPx,
+            placementBias = cardPlacementBias,
+        )
+        val cardLeft = span.left
+        val cardRight = span.right
         val cardHeight = (openPx - insets.bottom).coerceAtLeast(0f)
+        val hasCardGaps = insets.isInset || cardLeft > 0.5f || cardRight < hostWidthPx - 0.5f
 
         sheetContainer.translationY = sheetOffsetY
-        clipContainer.setClipsToCard(insets.isInset || cardShadows.isNotEmpty() || cardElevationPx > 0f)
+        clipContainer.setClipsToCard(hasCardGaps || cardShadows.isNotEmpty() || cardElevationPx > 0f)
         clipContainer.setCard(cardLeft, 0f, cardRight, cardHeight)
 
         // Position surface and content wrapper at committedContentRegionInset so content doesn't reflow horizontally during drag.
-        val horizontalDelta = if (committedContentRegionInsetDp != null) {
-            cardLeft - committedContentRegionInsetDp!! * density
-        } else {
-            0f
-        }
+        val committedLeftPx = (committedContentRegionInsetDp ?: 0f) * density
+        val horizontalDelta = cardLeft - committedLeftPx
         surfaceView?.translationX = horizontalDelta
-        contentWrapperView?.translationX = horizontalDelta
+        contentWrapperView?.let { wrapper ->
+            val widestWidthPx = BottomSheetMath.placeCard(
+                hostWidthPx = hostWidthPx,
+                insets = widestCardInsetsPx,
+                maxWidthPx = cardMaxWidthPx,
+                placementBias = cardPlacementBias,
+            ).width
+            val scale = BottomSheetMath.contentScale(span.width, widestWidthPx)
+            wrapper.pivotX = 0f
+            wrapper.pivotY = 0f
+            wrapper.scaleX = scale
+            wrapper.scaleY = scale
+            wrapper.translationX = horizontalDelta
+        }
 
         // Stitch top and bottom RenderNode shadow halves without redrawing blurred paths!
         if (topShadowView.hasShadows && openPx > 0.5f && cardHeight > 0.5f) {

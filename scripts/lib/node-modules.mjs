@@ -1,6 +1,6 @@
 // Module-only Bazel workspace. App packaging remains Gradle/Xcode.
 import { spawnSync } from 'node:child_process';
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { nativeModules, syncNativeModuleRegistration } from './native-modules.mjs';
@@ -18,6 +18,12 @@ export function extraBazelFlags(value) {
     .filter(Boolean);
 }
 
+function copyWritableFile(from, to) {
+  if (existsSync(to)) chmodSync(to, 0o644);
+  copyFileSync(from, to);
+  chmodSync(to, 0o644);
+}
+
 // Bazel marks output directories read-only. Keep the host's staging tree writable
 // so Xcode/Gradle can consume refreshed resources on subsequent builds.
 export function copyModuleTree(source, destination) {
@@ -27,11 +33,7 @@ export function copyModuleTree(source, destination) {
     const from = path.join(source, entry.name);
     const to = path.join(destination, entry.name);
     if (entry.isDirectory()) copyModuleTree(from, to);
-    else {
-      if (existsSync(to)) chmodSync(to, 0o644);
-      copyFileSync(from, to);
-      chmodSync(to, 0o644);
-    }
+    else copyWritableFile(from, to);
   }
 }
 
@@ -133,7 +135,7 @@ export function buildNodeModules(platform = 'ios', release = false, native = fal
         const combined = spawnSync('xcrun', ['libtool', '-static', '-o', path.join(destination, filename),
           path.join(directory, source), path.join(directory, `lib${name}_ios_objc.lo`)], { stdio: 'inherit' });
         if (combined.status !== 0) throw new Error(`Cannot combine Swift/ObjC library for ${name}`);
-      } else cpSync(path.join(directory, source), path.join(destination, filename));
+      } else copyWritableFile(path.join(directory, source), path.join(destination, filename));
       if (platform === 'ios') {
         rmSync(path.join(destination, 'include'), { recursive: true, force: true });
         copyModuleTree(path.join(directory, `${name}_compiled/ios`), path.join(destination, 'include'));
@@ -147,7 +149,7 @@ export function buildNodeModules(platform = 'ios', release = false, native = fal
           for (const file of files.stdout.trim().split(/\r?\n/)) {
             if (!/\.(swiftmodule|swiftdoc|swiftsourceinfo|swiftinterface)$/.test(file)) continue;
             const absolute = path.isAbsolute(file) ? file : path.join(workspace, file);
-            cpSync(absolute, path.join(outputRoot, path.basename(file)));
+            copyWritableFile(absolute, path.join(outputRoot, path.basename(file)));
           }
         }
       }

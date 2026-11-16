@@ -241,6 +241,7 @@ final class VRBottomSheetView: UIView, SCValdiContentViewProviding {
             SCValdiMarshallerPushDouble(marshaller, height)
             SCValdiMarshallerPushDouble(marshaller, surfaceHeight)
             SCValdiMarshallerPushDouble(marshaller, inset)
+            SCValdiMarshallerPushDouble(marshaller, Double(self.hostingView.bounds.width))
             SCValdiFunctionSafePerform(fn, marshaller)
         }
 
@@ -383,6 +384,8 @@ final class VRBottomSheetView: UIView, SCValdiContentViewProviding {
                 insetRight: CGFloat((dict["insetRight"] as? NSNumber)?.doubleValue ?? 0),
                 insetBottom: CGFloat((dict["insetBottom"] as? NSNumber)?.doubleValue ?? 0),
                 widestCard: (dict["widestCard"] as? Bool) ?? false,
+                maxWidth: CGFloat((dict["maxWidth"] as? NSNumber)?.doubleValue ?? 0),
+                placementBias: CGFloat((dict["placementBias"] as? NSNumber)?.doubleValue ?? 0.5),
                 scrimOpacity: CGFloat((dict["scrimOpacity"] as? NSNumber)?.doubleValue ?? 1)
             )
         }

@@ -5,6 +5,7 @@ export {
   type PositionChangeEventData,
   type ScrollCoordination,
   type ScrollCoordinationMode,
+  type SheetPlacement,
 } from './BottomSheet';
 export {
   BottomSheetProvider,

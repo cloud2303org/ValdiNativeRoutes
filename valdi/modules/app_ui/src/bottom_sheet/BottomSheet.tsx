@@ -1,4 +1,5 @@
 import { AnyRenderFunction } from 'valdi_core/src/AnyRenderFunction';
+import { isDevBuild } from 'valdi_core/src/BuildType';
 import { Component, StatefulComponent } from 'valdi_core/src/Component';
 import { Device } from 'valdi_core/src/Device';
 import { Style } from 'valdi_core/src/Style';
@@ -6,6 +7,12 @@ import { DetachedSlot } from 'valdi_core/src/slot/DetachedSlot';
 import { Layout, View } from 'valdi_tsx/src/NativeTemplateElements';
 
 import { BottomSheetPortalRegistry, resolveOptionalPortalRegistry } from './BottomSheetProvider';
+import {
+  crowdedInsetsWarning,
+  resolveMaxWidth,
+  resolvePlacement,
+  type SheetPlacement,
+} from './cardPlacement';
 import {
   ColorValue,
   Detent,
@@ -20,6 +27,8 @@ import {
   validateIndex,
   validateSettleDuration,
 } from './bottomSheetUtils';
+
+export type { SheetPlacement } from './cardPlacement';
 
 /** Payload of {@link BottomSheetProps.onPositionChange}. */
 export interface PositionChangeEventData {
@@ -70,6 +79,17 @@ export interface BottomSheetProps {
    * of its container. Defaults to the status bar's overlap with the container.
    */
   topInset?: number;
+  /**
+   * Maximum width of the sheet's column in points (side `insets` included).
+   * Narrower containers still use their available width. Omit or pass `Infinity` for no cap.
+   */
+  maxWidth?: number;
+  /**
+   * Horizontal alignment when `maxWidth` makes the sheet narrower than its host.
+   * `'start'` and `'end'` follow the current layout direction (LTR / RTL).
+   * @default 'center'
+   */
+  placement?: SheetPlacement;
   /**
    * When `true`, the sheet animates from closed to its initial `index` on
    * first layout instead of appearing immediately at that position.
@@ -164,6 +184,8 @@ function resolveScrollCoordination(prop: ScrollCoordination | undefined): {
 
 interface BottomSheetHostNodeProps {
   detents: NormalizedDetent[];
+  resolvedMaxWidth: number;
+  contentMaxWidth?: number;
   index: number;
   animateIn: boolean;
   animateContentHeight: boolean;
@@ -206,6 +228,9 @@ interface HostGeometryState {
 }
 
 class BottomSheetHostNode extends StatefulComponent<BottomSheetHostNodeProps, HostGeometryState> {
+  private hostWidth = 0;
+  private lastCrowdedWarning: string | null = null;
+
   state: HostGeometryState = {
     hasNativeGeometry: false,
     contentRegionWidth: 0,
@@ -214,12 +239,38 @@ class BottomSheetHostNode extends StatefulComponent<BottomSheetHostNodeProps, Ho
     contentRegionInset: 0,
   };
 
+  private warnAboutCrowdedInsets(): void {
+    if (!isDevBuild()) {
+      return;
+    }
+    const warning = crowdedInsetsWarning(
+      this.viewModel.detents,
+      this.hostWidth,
+      this.viewModel.resolvedMaxWidth,
+    );
+    if (warning !== null && warning !== this.lastCrowdedWarning) {
+      console.warn(warning);
+    }
+    this.lastCrowdedWarning = warning;
+  }
+
+  override onViewModelUpdate(previousViewModel?: BottomSheetHostNodeProps): void {
+    if (previousViewModel) {
+      this.warnAboutCrowdedInsets();
+    }
+  }
+
   private readonly handleNativeGeometry = (
     contentRegionWidth: number,
     contentRegionHeight: number,
     surfaceHeight: number,
     contentRegionInset: number,
+    hostWidth = 0,
   ): void => {
+    if (hostWidth > 0) {
+      this.hostWidth = hostWidth;
+    }
+    this.warnAboutCrowdedInsets();
     const prev = this.state;
     if (
       prev.hasNativeGeometry &&
@@ -306,6 +357,7 @@ class BottomSheetHostNode extends StatefulComponent<BottomSheetHostNodeProps, Ho
         top={0}
         left={hasNativeGeometry ? contentRegionInset : 0}
         width={regionWidth}
+        maxWidth={hasNativeGeometry ? undefined : vm.contentMaxWidth}
         height={resolvedSurfaceHeight}
       >
         {vm.surface ? (
@@ -325,6 +377,7 @@ class BottomSheetHostNode extends StatefulComponent<BottomSheetHostNodeProps, Ho
         androidClass="io.valdiroutes.app.BottomSheetContentWrapperView"
         marginLeft={hasNativeGeometry ? contentRegionInset : 0}
         width={regionWidth}
+        maxWidth={hasNativeGeometry ? undefined : vm.contentMaxWidth}
         height={regionHeight}
         flexShrink={0}
         style={vm.contentStyle as Style<Layout> | undefined}
@@ -350,7 +403,7 @@ let nextSheetInstanceId = 0;
 let fallbackOverlayOpenOrderCounter = 0;
 
 /**
- * Non-modal bottom sheet component aligned 1:1 with `@swmansion/react-native-bottom-sheet` v1.0.0.
+ * Non-modal bottom sheet component aligned 1:1 with `@swmansion/react-native-bottom-sheet` v1.1.0.
  *
  * Renders inline inside its parent container while interactions pass through to sibling views above the sheet card.
  * For modal presentation with backdrop scrim, accessibility isolation, and dismissal gestures, use `ModalBottomSheet`.
@@ -360,6 +413,7 @@ export class BottomSheet extends StatefulComponent<BottomSheetProps, BottomSheet
   private readonly portalSlot = new DetachedSlot();
   private portalRegistry?: BottomSheetPortalRegistry;
   private normalizedDetents: NormalizedDetent[] = [];
+  private resolvedMaxWidth = 0;
   private wasClosed = true;
   private isRegisteredInPortal = false;
 
@@ -392,7 +446,13 @@ export class BottomSheet extends StatefulComponent<BottomSheetProps, BottomSheet
       throw new Error('ModalBottomSheet must be used inside BottomSheetProvider, or pass windowOverlay={true}.');
     }
 
-    this.normalizedDetents = normalizeDetents(props.detents, Device.isRTL(), props.topInset);
+    const isRTL = Device.isRTL();
+    this.resolvedMaxWidth = resolveMaxWidth(props.maxWidth);
+    const placementBias = resolvePlacement(props.placement, isRTL);
+    this.normalizedDetents = normalizeDetents(props.detents, isRTL, props.topInset, {
+      maxWidth: this.resolvedMaxWidth,
+      placementBias,
+    });
     validateIndex(props.index, this.normalizedDetents.length, modal);
     validateSettleDuration(props.settleDuration);
 
@@ -471,9 +531,19 @@ export class BottomSheet extends StatefulComponent<BottomSheetProps, BottomSheet
     const resolvedScrimColor = props.scrimColor ?? (modal ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0)');
     const scrimColorArgb = parseColorToArgb(resolvedScrimColor, modal ? 0x66000000 : 0x00000000);
 
+    const widestDetent = this.normalizedDetents.find(detent => detent.widestCard);
+    const contentLeft = widestDetent?.insetLeft ?? 0;
+    const contentRight = widestDetent?.insetRight ?? 0;
+    const contentMaxWidth =
+      this.resolvedMaxWidth > 0
+        ? Math.max(0, this.resolvedMaxWidth - contentLeft - contentRight)
+        : undefined;
+
     const renderHostNode = (): void => {
       <BottomSheetHostNode
         detents={this.normalizedDetents}
+        resolvedMaxWidth={this.resolvedMaxWidth}
+        contentMaxWidth={contentMaxWidth}
         index={props.index}
         animateIn={props.animateIn ?? true}
         animateContentHeight={props.animateContentHeight ?? true}

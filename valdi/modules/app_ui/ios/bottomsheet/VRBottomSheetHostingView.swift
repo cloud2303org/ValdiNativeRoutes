@@ -277,12 +277,15 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
 
     private var cornerRadii: [CGFloat] = [0, 0, 0, 0]
     private var cornerCurve: CALayerCornerCurve = .circular
+    private var cardMaxWidth: CGFloat = 0
+    private var cardPlacementBias: CGFloat = 0.5
+    private var widestCardInsets = VRBSDetentInsets()
     private var cardShadows: [VRBSCardShadow] = []
     private var shadowLayers: [CALayer] = []
     private var shadowMaskLayers: [CAShapeLayer] = []
 
     private var scrimBaseColor: UIColor = VRBSColorFromArgb(0x52000000)
-    private var lastGeometryTuple: (CGFloat, CGFloat, CGFloat, CGFloat)?
+    private var lastGeometryTuple: (CGFloat, CGFloat, CGFloat, CGFloat, CGFloat)?
     private var lastPositionTuple: (CGFloat, CGFloat)?
 
     // ---- Subviews ----
@@ -292,6 +295,7 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
     let sheetContainer = UIView()
     let clipContainer = VRBottomSheetCardClipView()
 
+    private weak var contentWrapperView: VRBottomSheetContentWrapperView?
     private weak var markerView: VRBottomSheetMarkerView?
 
     // ---- Gestures & Scroll Coordination ----
@@ -364,11 +368,13 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
 
     // ---- Descendant Discovery (`VRBottomSheetContentWrapperView`, `VRBottomSheetMarkerView`) ----
 
-    func refreshSpecialDescendants() {
+    func refreshSpecialDescendants(syncVisuals: Bool = true) {
+        var foundWrapper: VRBottomSheetContentWrapperView?
         var foundMarker: VRBottomSheetMarkerView?
 
         for sub in clipContainer.subviews {
             if let c = sub as? VRBottomSheetContentWrapperView {
+                foundWrapper = c
                 c.onSubviewHierarchyChanged = { [weak self] in
                     self?.refreshSpecialDescendants()
                 }
@@ -380,6 +386,8 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
             }
         }
 
+        contentWrapperView = foundWrapper
+
         if markerView !== foundMarker {
             markerView?.onMarkerTopChanged = nil
             markerView = foundMarker
@@ -390,7 +398,9 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
                 onNaturalContentHeightMeasured(max(0, m.frame.minY))
             }
         }
-        syncVisualsForCurrentOffset()
+        if syncVisuals {
+            syncVisualsForCurrentOffset()
+        }
     }
 
     private func onNaturalContentHeightMeasured(_ height: CGFloat) {
@@ -496,8 +506,12 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
         max(0, containerSize.height - sheetOffsetY)
     }
 
-    var isAnimating: Bool {
+    var isSettling: Bool {
         activeSpring != nil
+    }
+
+    var isAnimating: Bool {
+        isSettling
     }
 
     var isPresented: Bool {
@@ -566,6 +580,10 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
 
     // ---- Layout & Detent Resolution ----
 
+    private var currentDisplayScale: CGFloat {
+        max(1.0, traitCollection.displayScale)
+    }
+
     override func safeAreaInsetsDidChange() {
         super.safeAreaInsetsDidChange()
         if containerSize.height > 0 && rawDetents.contains(where: { $0.usesStatusBarTopInset }) {
@@ -590,7 +608,8 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
         clipContainer.frame = CGRect(origin: .zero, size: size)
         CATransaction.commit()
 
-        refreshSpecialDescendants()
+        // While CADisplayLink drives settling, avoid out-of-band visual sync churn unless container size changed.
+        refreshSpecialDescendants(syncVisuals: !isSettling || sizeChanged)
 
         if size.width > 0 && size.height > 0 && (sizeChanged || !hasInitializedPresentation) {
             recomputeDetentsAndSync(animateResize: false)
@@ -609,6 +628,20 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
     private func recomputeDetentsAndSync(animateResize: Bool) {
         guard containerSize.width > 0, containerSize.height > 0 else { return }
         let statusTop = currentStatusBarTopInset()
+
+        let firstRaw = rawDetents.first
+        cardMaxWidth = max(0, firstRaw?.maxWidth ?? 0)
+        cardPlacementBias = min(1, max(0, firstRaw?.placementBias ?? 0.5))
+
+        if let widestRaw = rawDetents.first(where: { $0.widestCard }) ?? firstRaw {
+            widestCardInsets = VRBSDetentInsets(
+                left: max(0, widestRaw.insetLeft),
+                right: max(0, widestRaw.insetRight),
+                bottom: max(0, widestRaw.insetBottom)
+            )
+        } else {
+            widestCardInsets = VRBSDetentInsets()
+        }
 
         resolvedDetents = rawDetents.map { raw in
             let topInset = raw.usesStatusBarTopInset ? statusTop : max(0, raw.insetTop)
@@ -684,7 +717,8 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
         if isDraggingSheet {
             syncVisualsForCurrentOffset()
             emitPositionIfNeeded()
-        } else if animateResize || activeSpring != nil {
+        } else if (animateResize && abs(newOffset - sheetOffsetY) >= 0.5) || activeSpring != nil {
+            syncVisualsForCurrentOffset()
             startSpring(to: newOffset, initialVelocity: 0, targetIndex: desired)
         } else {
             stopSpring()
@@ -696,11 +730,15 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
 
     private func emitGeometryIfNeeded(statusTop: CGFloat) {
         guard containerSize.width > 0, containerSize.height > 0 else { return }
-        let widestRaw = rawDetents.first(where: { $0.widestCard }) ?? rawDetents.first
-        let widestInset = widestRaw.map { min($0.insetLeft, $0.insetRight) } ?? 0
-        let widestLeft = widestRaw?.insetLeft ?? 0
-        let widestRight = widestRaw?.insetRight ?? 0
-        let contentRegionWidth = max(0, containerSize.width - widestLeft - widestRight)
+        let widestSpan = VRBSMath.placeCard(
+            hostWidth: containerSize.width,
+            insets: widestCardInsets,
+            maxWidth: cardMaxWidth,
+            placementBias: cardPlacementBias,
+            displayScale: currentDisplayScale
+        )
+        let contentRegionWidth = widestSpan.width
+        let contentRegionInset = widestSpan.left
 
         let maxAvailableForContent = rawDetents.map { raw -> CGFloat in
             let top = raw.usesStatusBarTopInset ? statusTop : max(0, raw.insetTop)
@@ -716,15 +754,16 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
            abs(prev.0 - contentRegionWidth) < 0.01,
            abs(prev.1 - contentRegionHeight) < 0.01,
            abs(prev.2 - surfaceHeight) < 0.01,
-           abs(prev.3 - widestInset) < 0.01 {
+           abs(prev.3 - contentRegionInset) < 0.01,
+           abs(prev.4 - containerSize.width) < 0.01 {
             return
         }
-        lastGeometryTuple = (contentRegionWidth, contentRegionHeight, surfaceHeight, widestInset)
+        lastGeometryTuple = (contentRegionWidth, contentRegionHeight, surfaceHeight, contentRegionInset, containerSize.width)
         onGeometryChanged?(
             Double(contentRegionWidth),
             Double(contentRegionHeight),
             Double(surfaceHeight),
-            Double(widestInset)
+            Double(contentRegionInset)
         )
     }
 
@@ -869,31 +908,53 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
         guard containerSize.width > 0, containerSize.height > 0 else { return }
 
         let open = openHeight
+        let hostWidth = containerSize.width
+        let displayScale = currentDisplayScale
         let insets = VRBSMath.interpolateInsets(detents: resolvedDetents, openHeight: open)
-        let cardLeft = insets.left
-        let cardRight = max(cardLeft, containerSize.width - insets.right)
+        let span = VRBSMath.placeCard(
+            hostWidth: hostWidth,
+            insets: insets,
+            maxWidth: cardMaxWidth,
+            placementBias: cardPlacementBias,
+            displayScale: displayScale
+        )
+        let cardLeft = span.left
+        let cardRight = span.right
         let cardHeight = max(0, open - insets.bottom)
-        let cardRect = CGRect(x: cardLeft, y: 0, width: cardRight - cardLeft, height: cardHeight)
+        let cardRect = CGRect(x: cardLeft, y: 0, width: span.width, height: cardHeight)
+        let hasCardGaps = insets.isInset || cardLeft > 0.5 || cardRight < hostWidth - 0.5
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         sheetContainer.center = CGPoint(
-            x: containerSize.width * 0.5,
+            x: hostWidth * 0.5,
             y: containerSize.height * 0.5 + sheetOffsetY
         )
 
         clipContainer.updateStyle(
             radii: cornerRadii,
             curve: cornerCurve,
-            clipsToCard: insets.isInset || !cardShadows.isEmpty
+            clipsToCard: hasCardGaps || !cardShadows.isEmpty
         )
         clipContainer.updateCardRect(cardRect)
 
         // Shift surface and content horizontally relative to committedContentRegionInset without touching frame/Yoga!
-        let horizontalDelta = committedContentRegionInset.map { cardLeft - $0 } ?? 0
-        clipContainer.layer.sublayerTransform = horizontalDelta == 0
+        let committedLeft = committedContentRegionInset ?? 0
+        let horizontalDelta = cardLeft - committedLeft
+        clipContainer.layer.sublayerTransform = abs(horizontalDelta) < 0.0001
             ? CATransform3DIdentity
             : CATransform3DMakeTranslation(horizontalDelta, 0, 0)
+
+        if let wrapper = contentWrapperView {
+            let widestWidth = VRBSMath.placeCard(
+                hostWidth: hostWidth,
+                insets: widestCardInsets,
+                maxWidth: cardMaxWidth,
+                placementBias: cardPlacementBias,
+                displayScale: displayScale
+            ).width
+            wrapper.contentScale = VRBSMath.contentScale(cardWidth: span.width, widestCardWidth: widestWidth)
+        }
 
         // Update outset/box shadows in shadowHostView:
         if !shadowLayers.isEmpty && open > 0.5 && cardHeight > 0.5 {
@@ -901,7 +962,7 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
             let screenCardRect = CGRect(
                 x: cardLeft,
                 y: sheetOffsetY,
-                width: cardRight - cardLeft,
+                width: span.width,
                 height: cardHeight
             )
             for (idx, shadow) in cardShadows.filter({ $0.opacity > 0 }).enumerated() where idx < shadowLayers.count {

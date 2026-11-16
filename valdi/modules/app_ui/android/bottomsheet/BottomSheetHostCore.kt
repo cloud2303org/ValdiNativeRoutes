@@ -9,7 +9,10 @@ import androidx.annotation.Keep
 import com.snap.valdi.extensions.ViewUtils
 import com.snap.valdi.views.ValdiView
 import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.round
 import kotlin.math.roundToInt
 
 internal enum class DetentKind {
@@ -42,6 +45,15 @@ internal data class DetentInsets(
         get() = left > 0f || right > 0f || bottom > 0f
 }
 
+/** Horizontal span of the card inside its host container, in px. */
+internal data class CardSpan(
+    val left: Float,
+    val width: Float,
+) {
+    val right: Float
+        get() = left + width
+}
+
 /** Unresolved detent specification received from Valdi TSX props (lengths in dp/pt). */
 internal data class RawDetentSpec(
     val value: Float,
@@ -53,6 +65,8 @@ internal data class RawDetentSpec(
     val insetRightDp: Float = 0f,
     val insetBottomDp: Float = 0f,
     val widestCard: Boolean = false,
+    val maxWidthDp: Float = 0f,
+    val placementBias: Float = 0.5f,
     val scrimOpacity: Float = 1f,
 )
 
@@ -72,8 +86,40 @@ internal object BottomSheetMath {
     const val RELEASE_PROJECTION_SECONDS = 0.1f
     const val DEFAULT_SETTLE_DURATION_SECONDS = 0.45f
     const val SETTLE_SETTLED_FRACTION = 8f
+    const val SETTLE_MIN_VISIBLE_CHANGE = 0.001f
     const val MAX_SPRING_OMEGA = 100f
     const val MIN_SETTLE_DURATION_SECONDS = 0.001f
+
+    /**
+     * Width of the sheet's column in a host `hostWidthPx` wide, capped at `maxWidthPx` (`0` for no cap).
+     * Mirrors `columnWidth` in `cardPlacement.ts`.
+     */
+    fun columnWidth(hostWidthPx: Float, maxWidthPx: Float): Float =
+        if (maxWidthPx > 0f) min(maxWidthPx, hostWidthPx) else hostWidthPx
+
+    /**
+     * Places the card horizontally across a host `hostWidthPx` wide, snapping the column origin to a
+     * whole device pixel so centered columns in odd free widths stay crisp. Mirrors `placeCard` in `cardPlacement.ts`.
+     */
+    fun placeCard(
+        hostWidthPx: Float,
+        insets: DetentInsets,
+        maxWidthPx: Float = 0f,
+        placementBias: Float = 0.5f,
+    ): CardSpan {
+        val column = columnWidth(hostWidthPx, maxWidthPx)
+        val columnLeft = (placementBias * (hostWidthPx - column)).roundToInt().toFloat()
+        return CardSpan(
+            left = columnLeft + insets.left,
+            width = (column - insets.left - insets.right).coerceAtLeast(0f),
+        )
+    }
+
+    /**
+     * Scale factor applied to content when the current card width differs from the widest card width.
+     */
+    fun contentScale(cardWidthPx: Float, widestCardWidthPx: Float): Float =
+        if (widestCardWidthPx > 0f) (cardWidthPx / widestCardWidthPx).coerceAtLeast(0f) else 1f
 
     /**
      * Projects release position in sheet-height coordinates (`openHeightPx - velocityY * 0.1s`)
@@ -121,7 +167,7 @@ internal object BottomSheetMath {
 
     /**
      * Computes critically-damped natural frequency `omega` (`stiffness = omega^2`), matching
-     * upstream v1.0.0: `omega = min(MAX_SPRING_OMEGA, max(8 / settleDuration, |v0| / |distance|))`.
+     * upstream v1.1.0: `omega = min(MAX_SPRING_OMEGA, max(8 / settleDuration, |v0| / |distance|))`.
      */
     fun computeCriticalSpringOmega(
         distancePx: Float,
@@ -136,6 +182,58 @@ internal object BottomSheetMath {
         val velocityOmega =
             if (absDistance > 0.5f) abs(initialVelocityPxPerSec) / absDistance else 0f
         return max(baseOmega, velocityOmega).coerceIn(1f, MAX_SPRING_OMEGA)
+    }
+
+    /**
+     * Clamps initial velocity toward the target so a critically-damped spring with capped `omega`
+     * never overshoots its target.
+     */
+    fun clampSpringInitialVelocity(
+        startOffsetPx: Float,
+        initialVelocityPxPerSec: Float,
+        omega: Float,
+    ): Float {
+        if (abs(startOffsetPx) <= 1e-4f) return 0f
+        return if ((initialVelocityPxPerSec / startOffsetPx) < -omega) {
+            -omega * startOffsetPx
+        } else {
+            initialVelocityPxPerSec
+        }
+    }
+
+    /**
+     * Residual offset left on the unscaled critically-damped spring at `omega * t = 8`.
+     * Scaling this residual out of the curve lets the animation land on `target` at the exact
+     * settle duration without a final-frame jump (upstream v1.1.0 `73723b3a`).
+     */
+    fun computeSpringEndOffset(
+        startOffsetPx: Float,
+        clampedInitialVelocityPxPerSec: Float,
+        omega: Float,
+    ): Float {
+        if (omega <= 0f || abs(startOffsetPx) <= 1e-4f) return 0f
+        val duration = SETTLE_SETTLED_FRACTION / omega
+        return exp(-SETTLE_SETTLED_FRACTION) *
+            (startOffsetPx + (clampedInitialVelocityPxPerSec + omega * startOffsetPx) * duration)
+    }
+
+    /**
+     * Maps an unscaled `SpringAnimation` value onto the exact-landing curve (`(position, settled)`).
+     */
+    fun scaleSpringPosition(
+        rawValuePx: Float,
+        targetValuePx: Float,
+        startOffsetPx: Float,
+        endOffsetPx: Float,
+    ): Pair<Float, Boolean> {
+        val denom = startOffsetPx - endOffsetPx
+        if (abs(denom) <= 1e-5f) return targetValuePx to true
+        val remaining = (rawValuePx - targetValuePx - endOffsetPx) / denom
+        return if (remaining > 1e-5f && abs(startOffsetPx * remaining) > SETTLE_MIN_VISIBLE_CHANGE) {
+            (targetValuePx + startOffsetPx * remaining) to false
+        } else {
+            targetValuePx to true
+        }
     }
 
     /**

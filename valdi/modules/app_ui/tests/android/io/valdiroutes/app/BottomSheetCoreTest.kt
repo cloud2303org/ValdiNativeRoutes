@@ -179,4 +179,88 @@ class BottomSheetCoreTest {
         assertFalse(coordinator.backCallback.isEnabled)
         assertFalse(coordinator.handleBack())
     }
+
+    @Test
+    fun placeCardHonorsMaxWidthPlacementBiasAndPixelRounding() {
+        // Wide host (1024px) with maxWidth=500px, centered (bias=0.5), 16px side insets:
+        // columnLeft = round(0.5 * (1024 - 500)) = 262 -> left = 278, width = 468.
+        val centered = BottomSheetMath.placeCard(
+            hostWidthPx = 1024f,
+            insets = DetentInsets(left = 16f, right = 16f),
+            maxWidthPx = 500f,
+            placementBias = 0.5f,
+        )
+        assertEquals(278f, centered.left, 0.001f)
+        assertEquals(468f, centered.width, 0.001f)
+        assertEquals(746f, centered.right, 0.001f)
+
+        // Start (bias=0) vs End (bias=1) placement:
+        val startPlaced = BottomSheetMath.placeCard(
+            hostWidthPx = 1024f,
+            insets = DetentInsets(left = 12f, right = 20f),
+            maxWidthPx = 500f,
+            placementBias = 0f,
+        )
+        assertEquals(12f, startPlaced.left, 0.001f)
+        assertEquals(468f, startPlaced.width, 0.001f)
+
+        val endPlaced = BottomSheetMath.placeCard(
+            hostWidthPx = 1024f,
+            insets = DetentInsets(left = 12f, right = 20f),
+            maxWidthPx = 500f,
+            placementBias = 1f,
+        )
+        assertEquals(524f + 12f, endPlaced.left, 0.001f)
+        assertEquals(468f, endPlaced.width, 0.001f)
+
+        // Odd free space (1025 - 500 = 525px) snaps columnLeft to whole pixel (263px).
+        val oddCentered = BottomSheetMath.placeCard(
+            hostWidthPx = 1025f,
+            insets = DetentInsets(),
+            maxWidthPx = 500f,
+            placementBias = 0.5f,
+        )
+        assertEquals(263f, oddCentered.left, 0.001f)
+        assertEquals(500f, oddCentered.width, 0.001f)
+
+        // Host narrower than maxWidth clamps column to hostWidth.
+        val narrow = BottomSheetMath.placeCard(
+            hostWidthPx = 390f,
+            insets = DetentInsets(left = 16f, right = 16f),
+            maxWidthPx = 500f,
+            placementBias = 1f,
+        )
+        assertEquals(16f, narrow.left, 0.001f)
+        assertEquals(358f, narrow.width, 0.001f)
+        assertEquals(0.5f, BottomSheetMath.contentScale(179f, 358f), 0.001f)
+    }
+
+    @Test
+    fun exactLandingSpringScalingEliminatesResidualJumpAtSettleDuration() {
+        val startValue = 600f
+        val targetValue = 200f
+        val startOffset = startValue - targetValue // +400px
+        val omega = BottomSheetMath.computeCriticalSpringOmega(
+            distancePx = targetValue - startValue,
+            initialVelocityPxPerSec = 0f,
+            settleDurationSeconds = 0.45f,
+        )
+        val clampedVel = BottomSheetMath.clampSpringInitialVelocity(startOffset, 0f, omega)
+        val endOffset = BottomSheetMath.computeSpringEndOffset(startOffset, clampedVel, omega)
+        assertTrue(endOffset > 1f) // Unscaled spring still has >1px left at t=0.45s!
+
+        // At t=0, rawValue = 600 -> scaled = 600, settled = false
+        val atStart = BottomSheetMath.scaleSpringPosition(startValue, targetValue, startOffset, endOffset)
+        assertEquals(600f, atStart.first, 0.001f)
+        assertFalse(atStart.second)
+
+        // At t=settleDuration, rawValue = targetValue + endOffset -> scaled lands on 200, settled = true!
+        val atEnd = BottomSheetMath.scaleSpringPosition(targetValue + endOffset, targetValue, startOffset, endOffset)
+        assertEquals(200f, atEnd.first, 0.001f)
+        assertTrue(atEnd.second)
+
+        // Fast throw toward target (-50000 px/s) is clamped to -omega * startOffset so it never overshoots.
+        val clampedThrow = BottomSheetMath.clampSpringInitialVelocity(startOffset, -50000f, omega)
+        assertEquals(-omega * startOffset, clampedThrow, 0.01f)
+    }
 }

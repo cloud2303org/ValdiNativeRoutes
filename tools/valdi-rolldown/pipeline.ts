@@ -137,7 +137,7 @@ export function writeTsconfig(module: ValdiModule, modules: ValdiModule[]): bool
       if (existing && existsSync(link) && realpathSync(link) === target) continue;
       if (existing) unlinkSync(link);
       mkdirSync(directory, { recursive: true });
-      symlinkSync(target, link, 'junction');
+      symlinkSync(target, link, 'dir');
       changed = true;
     }
   }

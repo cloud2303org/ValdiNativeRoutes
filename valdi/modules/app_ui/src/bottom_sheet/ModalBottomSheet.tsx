@@ -13,7 +13,7 @@ export interface ModalBottomSheetProps extends Omit<BottomSheetProps, 'detents'>
 }
 
 /**
- * Modal bottom sheet component aligned 1:1 with `@swmansion/react-native-bottom-sheet` v1.0.0.
+ * Modal bottom sheet component aligned 1:1 with `@swmansion/react-native-bottom-sheet` v1.1.0.
  *
  * Presents a backdrop scrim, blocks background touches and screen-reader traversal,
  * supports scrim tap / Back / Escape dismissal (`onCloseRequest`), and renders inside

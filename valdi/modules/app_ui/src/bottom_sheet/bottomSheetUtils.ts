@@ -95,6 +95,12 @@ export interface SurfaceStyle extends Omit<View, 'boxShadow'> {
   shadowRadius?: number;
 }
 
+/** The sheet-wide horizontal layout, carried on every native detent. */
+export interface CardLayout {
+  readonly maxWidth: number;
+  readonly placementBias: number;
+}
+
 export interface NormalizedDetent {
   value: number;
   kind: 'points' | 'percentage' | 'content';
@@ -105,6 +111,10 @@ export interface NormalizedDetent {
   insetRight: number;
   insetBottom: number;
   widestCard: boolean;
+  /** The sheet's `maxWidth`, or 0 for none. The same on every detent. */
+  maxWidth: number;
+  /** The sheet's `placement` as a physical bias (`0` left, `0.5` center, `1` right). */
+  placementBias: number;
   scrimOpacity: number;
 }
 
@@ -138,6 +148,19 @@ export interface ResolvedSurfaceStyle {
 }
 
 const PERCENTAGE_DETENT_REGEX = /^([+-]?(?:\d+\.?\d*|\.\d+))%$/;
+
+const CLOSED_INSETS = {
+  usesStatusBarTopInset: false,
+  insetTop: 0,
+  insetLeft: 0,
+  insetRight: 0,
+  insetBottom: 0,
+} as const;
+
+const DEFAULT_CARD_LAYOUT: CardLayout = {
+  maxWidth: 0,
+  placementBias: 0.5,
+};
 
 const NAMED_COLORS: Record<string, number> = {
   transparent: 0x00000000,
@@ -228,6 +251,7 @@ function parseDetentEntry(
   detent: ModalDetent,
   index: number,
   topInset: number | undefined,
+  cardLayout: CardLayout,
   isRTL: boolean,
 ): NormalizedDetent {
   const config = typeof detent === 'object' ? detent : { value: detent };
@@ -240,12 +264,18 @@ function parseDetentEntry(
   return {
     ...parsed,
     programmatic: config.programmatic ?? false,
-    usesStatusBarTopInset: topInset === undefined,
-    insetTop: topInset ?? 0,
-    insetLeft: left,
-    insetRight: right,
-    insetBottom: bottom,
+    ...(isClosed
+      ? CLOSED_INSETS
+      : {
+          usesStatusBarTopInset: topInset === undefined,
+          insetTop: topInset ?? 0,
+          insetLeft: left,
+          insetRight: right,
+          insetBottom: bottom,
+        }),
     widestCard: false,
+    maxWidth: cardLayout.maxWidth,
+    placementBias: cardLayout.placementBias,
     scrimOpacity: 'scrimOpacity' in config && config.scrimOpacity !== undefined ? config.scrimOpacity : isClosed ? 0 : 1,
   };
 }
@@ -266,17 +296,19 @@ function sameInsets(a: NormalizedDetent, b: NormalizedDetent): boolean {
 
 /**
  * Normalizes and validates `detents` in ascending order, marking the widest open card.
+ * `maxWidth` caps every card alike, so it never changes which card is widest.
  */
 export function normalizeDetents(
   detents: readonly ModalDetent[],
   isRTL = false,
   topInset?: number,
+  cardLayout: CardLayout = DEFAULT_CARD_LAYOUT,
 ): NormalizedDetent[] {
   if (detents.length === 0) {
     throw new Error('BottomSheet requires at least one detent.');
   }
 
-  const normalized = detents.map((d, i) => parseDetentEntry(d, i, topInset, isRTL));
+  const normalized = detents.map((d, i) => parseDetentEntry(d, i, topInset, cardLayout, isRTL));
 
   let widestIndex = -1;
   let smallestSideGap = Infinity;

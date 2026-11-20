@@ -215,14 +215,17 @@ final class VRBottomSheetView: UIView, SCValdiContentViewProviding {
         }
     }
 
-    private var onNativeGeometry: (any SCValdiFunction)?
+    private var onNativeGeometry: (any SCValdiFunction)? {
+        didSet {
+            if onNativeGeometry != nil {
+                hostingView.replayGeometryIfAvailable()
+            }
+        }
+    }
     private var onNativeIndexChange: (any SCValdiFunction)?
     private var onNativeSettle: (any SCValdiFunction)?
     private var onNativePositionChange: (any SCValdiFunction)?
     private var onNativeCloseRequest: (any SCValdiFunction)?
-
-    private var surfaceCornerRadii: [CGFloat] = [0, 0, 0, 0]
-    private var surfaceCornerCurve: String = "circular"
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -344,6 +347,83 @@ final class VRBottomSheetView: UIView, SCValdiContentViewProviding {
 
     override func valdi_prepareForPoolReuse() {
         super.valdi_prepareForPoolReuse()
+        onNativeGeometry = nil
+        onNativeIndexChange = nil
+        onNativeSettle = nil
+        onNativePositionChange = nil
+        onNativeCloseRequest = nil
+        resetConfig()
+    }
+
+    // ---- Typed Config Application ----
+
+    private func applyConfigUntyped(_ value: Any?) -> Bool {
+        guard let config = try? VRWheelObjectBinding.decode(value, as: VRBottomSheetConfig.self) as? VRBottomSheetConfig else {
+            resetConfig()
+            return false
+        }
+        applyConfig(config)
+        return true
+    }
+
+    private func applyConfig(_ config: VRBottomSheetConfig) {
+        windowOverlay = config.windowOverlay
+        openOrder = Int(config.openOrder)
+        hostingView.animateIn = config.animateIn
+        hostingView.animateContentHeight = config.animateContentHeight
+        hostingView.modal = config.modal
+        hostingView.scrollExpandCoordination = VRBSScrollCoordinationLevel.fromWireValue(Int(config.scrollExpandCoordination))
+        hostingView.scrollCollapseCoordination = VRBSScrollCoordinationLevel.fromWireValue(Int(config.scrollCollapseCoordination))
+        hostingView.settleDurationSeconds = config.settleDuration > 0
+            ? CGFloat(config.settleDuration)
+            : VRBSMath.defaultSettleDurationSeconds
+        hostingView.hasCloseRequestHandler = config.hasCloseRequestHandler
+        hostingView.setScrimColorArgb(Int32(truncatingIfNeeded: Int64(config.scrimColorArgb)))
+        hostingView.setScrimAccessibilityLabel(config.scrimAccessibilityLabel)
+
+        let radii = config.surfaceCornerRadii.map { CGFloat($0.doubleValue) }
+        hostingView.setSurfaceCornerStyle(radii: radii, curveString: config.surfaceCornerCurve.rawValue)
+
+        let shadows: [VRBSCardShadow] = config.surfaceShadows.compactMap { shadow in
+            let opacity = Float(shadow.opacity)
+            guard opacity > 0 else { return nil }
+            return VRBSCardShadow(
+                offsetX: CGFloat(shadow.offsetX),
+                offsetY: CGFloat(shadow.offsetY),
+                blurRadius: CGFloat(shadow.blurRadius),
+                spreadDistance: CGFloat(shadow.spreadDistance),
+                colorArgb: Int32(truncatingIfNeeded: Int64(shadow.colorArgb)),
+                opacity: opacity,
+                excludesInterior: shadow.excludesInterior
+            )
+        }
+        hostingView.setSurfaceShadows(shadows)
+
+        hostingView.committedContentRegionInset = config.committedContentRegionInset.map { CGFloat($0.doubleValue) }
+
+        let detents: [VRBSRawDetentSpec] = config.detents.map { item in
+            let kind = VRBSDetentKind(rawValue: item.kind.rawValue) ?? .points
+            return VRBSRawDetentSpec(
+                value: CGFloat(item.value),
+                kind: kind,
+                programmatic: item.programmatic,
+                usesStatusBarTopInset: item.usesStatusBarTopInset,
+                insetTop: CGFloat(item.insetTop),
+                insetLeft: CGFloat(item.insetLeft),
+                insetRight: CGFloat(item.insetRight),
+                insetBottom: CGFloat(item.insetBottom),
+                widestCard: item.widestCard,
+                maxWidth: CGFloat(item.maxWidth),
+                placementBias: CGFloat(item.placementBias),
+                scrimOpacity: CGFloat(item.scrimOpacity)
+            )
+        }
+        hostingView.setRawDetents(detents)
+        hostingView.setRequestedIndex(Int(config.detentIndex))
+        syncHostPlacement()
+    }
+
+    private func resetConfig() {
         if let overlay = hostingView.superview as? VRBottomSheetOverlayContainerView {
             overlay.detach(hostingView)
         }
@@ -351,237 +431,28 @@ final class VRBottomSheetView: UIView, SCValdiContentViewProviding {
             hostingView.frame = bounds
             addSubview(hostingView)
         }
-        onNativeGeometry = nil
-        onNativeIndexChange = nil
-        onNativeSettle = nil
-        onNativePositionChange = nil
-        onNativeCloseRequest = nil
         windowOverlay = false
         openOrder = 0
-        hostingView.committedContentRegionInset = nil
-        hostingView.setRawDetents([])
-        hostingView.setRequestedIndex(-1)
-    }
-
-    // ---- Attribute Decoding ----
-
-    private func applyDetentsArray(_ array: [Any]?) {
-        guard let array else {
-            hostingView.setRawDetents([])
-            return
-        }
-        let specs: [VRBSRawDetentSpec] = array.compactMap { item in
-            guard let dict = item as? [String: Any] else { return nil }
-            let kindStr = (dict["kind"] as? String) ?? "points"
-            let kind = VRBSDetentKind(rawValue: kindStr) ?? .points
-            return VRBSRawDetentSpec(
-                value: CGFloat((dict["value"] as? NSNumber)?.doubleValue ?? 0),
-                kind: kind,
-                programmatic: (dict["programmatic"] as? Bool) ?? false,
-                usesStatusBarTopInset: (dict["usesStatusBarTopInset"] as? Bool) ?? false,
-                insetTop: CGFloat((dict["insetTop"] as? NSNumber)?.doubleValue ?? 0),
-                insetLeft: CGFloat((dict["insetLeft"] as? NSNumber)?.doubleValue ?? 0),
-                insetRight: CGFloat((dict["insetRight"] as? NSNumber)?.doubleValue ?? 0),
-                insetBottom: CGFloat((dict["insetBottom"] as? NSNumber)?.doubleValue ?? 0),
-                widestCard: (dict["widestCard"] as? Bool) ?? false,
-                maxWidth: CGFloat((dict["maxWidth"] as? NSNumber)?.doubleValue ?? 0),
-                placementBias: CGFloat((dict["placementBias"] as? NSNumber)?.doubleValue ?? 0.5),
-                scrimOpacity: CGFloat((dict["scrimOpacity"] as? NSNumber)?.doubleValue ?? 1)
-            )
-        }
-        hostingView.setRawDetents(specs)
-    }
-
-    private func applyCornerRadii(_ array: [Any]?) {
-        if let array, array.count >= 4 {
-            surfaceCornerRadii = (0..<4).map { idx in
-                CGFloat((array[idx] as? NSNumber)?.doubleValue ?? 0)
-            }
-        } else {
-            surfaceCornerRadii = [0, 0, 0, 0]
-        }
-        hostingView.setSurfaceCornerStyle(radii: surfaceCornerRadii, curveString: surfaceCornerCurve)
-    }
-
-    private func applyCornerCurve(_ curve: String?) {
-        surfaceCornerCurve = curve ?? "circular"
-        hostingView.setSurfaceCornerStyle(radii: surfaceCornerRadii, curveString: surfaceCornerCurve)
-    }
-
-    private func applySurfaceShadows(_ array: [Any]?) {
-        guard let array else {
-            hostingView.setSurfaceShadows([])
-            return
-        }
-        let shadows: [VRBSCardShadow] = array.compactMap { item in
-            guard let dict = item as? [String: Any] else { return nil }
-            let colorArgb = Int32(truncatingIfNeeded: (dict["colorArgb"] as? NSNumber)?.int64Value ?? 0)
-            let opacity = Float((dict["opacity"] as? NSNumber)?.doubleValue ?? 1.0)
-            guard opacity > 0 else { return nil }
-            return VRBSCardShadow(
-                offsetX: CGFloat((dict["offsetX"] as? NSNumber)?.doubleValue ?? 0),
-                offsetY: CGFloat((dict["offsetY"] as? NSNumber)?.doubleValue ?? 0),
-                blurRadius: CGFloat((dict["blurRadius"] as? NSNumber)?.doubleValue ?? 0),
-                spreadDistance: CGFloat((dict["spreadDistance"] as? NSNumber)?.doubleValue ?? 0),
-                colorArgb: colorArgb,
-                opacity: opacity,
-                excludesInterior: (dict["excludesInterior"] as? Bool) ?? true
-            )
-        }
-        hostingView.setSurfaceShadows(shadows)
+        hostingView.resetForRecycling()
+        hostingView.animateIn = true
+        hostingView.animateContentHeight = true
+        hostingView.modal = false
+        hostingView.scrollExpandCoordination = .handoff
+        hostingView.scrollCollapseCoordination = .handoff
+        hostingView.settleDurationSeconds = VRBSMath.defaultSettleDurationSeconds
+        hostingView.hasCloseRequestHandler = false
+        hostingView.setScrimColorArgb(0x52000000)
+        hostingView.setScrimAccessibilityLabel("Close sheet")
+        hostingView.setSurfaceCornerStyle(radii: [0, 0, 0, 0], curveString: "circular")
+        hostingView.setSurfaceShadows([])
     }
 
     override class func bindAttributes(_ attributesBinder: any SCValdiAttributesBinderProtocol) {
-        attributesBinder.bindAttribute("detents", invalidateLayoutOnChange: false, withArrayBlock: { view, array, _ in
+        attributesBinder.bindAttribute("config", invalidateLayoutOnChange: false, withUntypedBlock: { view, value, _ in
             guard let v = view as? VRBottomSheetView else { return false }
-            v.applyDetentsArray(array)
-            return true
+            return v.applyConfigUntyped(value)
         }, resetBlock: { view, _ in
-            (view as? VRBottomSheetView)?.applyDetentsArray(nil)
-        })
-
-        attributesBinder.bindAttribute("detentIndex", invalidateLayoutOnChange: false, withIntBlock: { view, value, _ in
-            guard let v = view as? VRBottomSheetView else { return false }
-            v.hostingView.setRequestedIndex(value)
-            v.syncHostPlacement()
-            return true
-        }, resetBlock: { view, _ in
-            guard let v = view as? VRBottomSheetView else { return }
-            v.hostingView.setRequestedIndex(-1)
-            v.syncHostPlacement()
-        })
-
-        attributesBinder.bindAttribute("animateIn", invalidateLayoutOnChange: false, withBoolBlock: { view, value, _ in
-            guard let v = view as? VRBottomSheetView else { return false }
-            v.hostingView.animateIn = value
-            return true
-        }, resetBlock: { view, _ in
-            (view as? VRBottomSheetView)?.hostingView.animateIn = true
-        })
-
-        attributesBinder.bindAttribute("animateContentHeight", invalidateLayoutOnChange: false, withBoolBlock: { view, value, _ in
-            guard let v = view as? VRBottomSheetView else { return false }
-            v.hostingView.animateContentHeight = value
-            return true
-        }, resetBlock: { view, _ in
-            (view as? VRBottomSheetView)?.hostingView.animateContentHeight = true
-        })
-
-        attributesBinder.bindAttribute("modal", invalidateLayoutOnChange: false, withBoolBlock: { view, value, _ in
-            guard let v = view as? VRBottomSheetView else { return false }
-            v.hostingView.modal = value
-            return true
-        }, resetBlock: { view, _ in
-            (view as? VRBottomSheetView)?.hostingView.modal = false
-        })
-
-        attributesBinder.bindAttribute("windowOverlay", invalidateLayoutOnChange: false, withBoolBlock: { view, value, _ in
-            guard let v = view as? VRBottomSheetView else { return false }
-            v.windowOverlay = value
-            return true
-        }, resetBlock: { view, _ in
-            (view as? VRBottomSheetView)?.windowOverlay = false
-        })
-
-        attributesBinder.bindAttribute("openOrder", invalidateLayoutOnChange: false, withIntBlock: { view, value, _ in
-            guard let v = view as? VRBottomSheetView else { return false }
-            v.openOrder = value
-            return true
-        }, resetBlock: { view, _ in
-            (view as? VRBottomSheetView)?.openOrder = 0
-        })
-
-        attributesBinder.bindAttribute("scrollExpandCoordination", invalidateLayoutOnChange: false, withIntBlock: { view, value, _ in
-            guard let v = view as? VRBottomSheetView else { return false }
-            v.hostingView.scrollExpandCoordination = VRBSScrollCoordinationLevel.fromWireValue(value)
-            return true
-        }, resetBlock: { view, _ in
-            (view as? VRBottomSheetView)?.hostingView.scrollExpandCoordination = .handoff
-        })
-
-        attributesBinder.bindAttribute("scrollCollapseCoordination", invalidateLayoutOnChange: false, withIntBlock: { view, value, _ in
-            guard let v = view as? VRBottomSheetView else { return false }
-            v.hostingView.scrollCollapseCoordination = VRBSScrollCoordinationLevel.fromWireValue(value)
-            return true
-        }, resetBlock: { view, _ in
-            (view as? VRBottomSheetView)?.hostingView.scrollCollapseCoordination = .handoff
-        })
-
-        attributesBinder.bindAttribute("settleDuration", invalidateLayoutOnChange: false, withDouble: { view, value, _ in
-            guard let v = view as? VRBottomSheetView else { return false }
-            v.hostingView.settleDurationSeconds = value > 0 ? value : VRBSMath.defaultSettleDurationSeconds
-            return true
-        }, resetBlock: { view, _ in
-            (view as? VRBottomSheetView)?.hostingView.settleDurationSeconds = VRBSMath.defaultSettleDurationSeconds
-        })
-
-        attributesBinder.bindAttribute("hasCloseRequestHandler", invalidateLayoutOnChange: false, withBoolBlock: { view, value, _ in
-            guard let v = view as? VRBottomSheetView else { return false }
-            v.hostingView.hasCloseRequestHandler = value
-            return true
-        }, resetBlock: { view, _ in
-            (view as? VRBottomSheetView)?.hostingView.hasCloseRequestHandler = false
-        })
-
-        attributesBinder.bindAttribute("scrimColorArgb", invalidateLayoutOnChange: false, withIntBlock: { view, value, _ in
-            guard let v = view as? VRBottomSheetView else { return false }
-            v.hostingView.setScrimColorArgb(Int32(truncatingIfNeeded: value))
-            return true
-        }, resetBlock: { view, _ in
-            (view as? VRBottomSheetView)?.hostingView.setScrimColorArgb(0x52000000)
-        })
-
-        attributesBinder.bindAttribute("scrimAccessibilityLabel", invalidateLayoutOnChange: false, withStringBlock: { view, value, _ in
-            guard let v = view as? VRBottomSheetView else { return false }
-            v.hostingView.setScrimAccessibilityLabel(value ?? "Close sheet")
-            return true
-        }, resetBlock: { view, _ in
-            (view as? VRBottomSheetView)?.hostingView.setScrimAccessibilityLabel("Close sheet")
-        })
-
-        attributesBinder.bindAttribute("surfaceCornerRadii", invalidateLayoutOnChange: false, withArrayBlock: { view, array, _ in
-            guard let v = view as? VRBottomSheetView else { return false }
-            v.applyCornerRadii(array)
-            return true
-        }, resetBlock: { view, _ in
-            (view as? VRBottomSheetView)?.applyCornerRadii(nil)
-        })
-
-        attributesBinder.bindAttribute("surfaceCornerCurve", invalidateLayoutOnChange: false, withStringBlock: { view, value, _ in
-            guard let v = view as? VRBottomSheetView else { return false }
-            v.applyCornerCurve(value)
-            return true
-        }, resetBlock: { view, _ in
-            (view as? VRBottomSheetView)?.applyCornerCurve(nil)
-        })
-
-        attributesBinder.bindAttribute("surfaceShadows", invalidateLayoutOnChange: false, withArrayBlock: { view, array, _ in
-            guard let v = view as? VRBottomSheetView else { return false }
-            v.applySurfaceShadows(array)
-            return true
-        }, resetBlock: { view, _ in
-            (view as? VRBottomSheetView)?.applySurfaceShadows(nil)
-        })
-
-        attributesBinder.bindAttribute("surfaceElevation", invalidateLayoutOnChange: false, withDouble: { _, _, _ in
-            // Android-only elevation prop; iOS uses surfaceShadows.
-            true
-        }, resetBlock: { _, _ in })
-
-        attributesBinder.bindAttribute("surfaceShadowColorArgb", invalidateLayoutOnChange: false, withIntBlock: { _, _, _ in
-            true
-        }, resetBlock: { _, _ in })
-
-        attributesBinder.bindAttribute("committedContentRegionInset", invalidateLayoutOnChange: false, withUntypedBlock: { view, value, _ in
-            guard let v = view as? VRBottomSheetView else { return false }
-            if let num = value as? NSNumber {
-                v.hostingView.committedContentRegionInset = CGFloat(num.doubleValue)
-            } else {
-                v.hostingView.committedContentRegionInset = nil
-            }
-            return true
-        }, resetBlock: { view, _ in
-            (view as? VRBottomSheetView)?.hostingView.committedContentRegionInset = nil
+            (view as? VRBottomSheetView)?.resetConfig()
         })
 
         attributesBinder.bindAttribute("onNativeGeometry", withFunctionBlock: { view, fn in

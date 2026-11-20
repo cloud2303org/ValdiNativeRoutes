@@ -1,18 +1,13 @@
 import { AnyRenderFunction } from 'valdi_core/src/AnyRenderFunction';
 import { isDevBuild } from 'valdi_core/src/BuildType';
-import { Component, StatefulComponent } from 'valdi_core/src/Component';
+import { StatefulComponent } from 'valdi_core/src/Component';
 import { Device } from 'valdi_core/src/Device';
 import { Style } from 'valdi_core/src/Style';
 import { DetachedSlot } from 'valdi_core/src/slot/DetachedSlot';
 import { Layout, View } from 'valdi_tsx/src/NativeTemplateElements';
 
+import { type BottomSheetConfig, BottomSheetCornerCurve, BottomSheetDetentKind } from './BottomSheetHost';
 import { BottomSheetPortalRegistry, resolveOptionalPortalRegistry } from './BottomSheetProvider';
-import {
-  crowdedInsetsWarning,
-  resolveMaxWidth,
-  resolvePlacement,
-  type SheetPlacement,
-} from './cardPlacement';
 import {
   ColorValue,
   Detent,
@@ -27,6 +22,7 @@ import {
   validateIndex,
   validateSettleDuration,
 } from './bottomSheetUtils';
+import { crowdedInsetsWarning, resolveMaxWidth, resolvePlacement, type SheetPlacement } from './cardPlacement';
 
 export type { SheetPlacement } from './cardPlacement';
 
@@ -156,6 +152,12 @@ export interface BottomSheetInternalProps extends Omit<BottomSheetProps, 'detent
   modal?: boolean;
 }
 
+const DETENT_KIND_MAP: Record<NormalizedDetent['kind'], BottomSheetDetentKind> = {
+  points: BottomSheetDetentKind.Points,
+  percentage: BottomSheetDetentKind.Percentage,
+  content: BottomSheetDetentKind.Content,
+};
+
 const SCROLL_COORDINATION_LEVEL: Record<ScrollCoordinationMode, number> = {
   none: 0,
   initial: 1,
@@ -243,11 +245,7 @@ class BottomSheetHostNode extends StatefulComponent<BottomSheetHostNodeProps, Ho
     if (!isDevBuild()) {
       return;
     }
-    const warning = crowdedInsetsWarning(
-      this.viewModel.detents,
-      this.hostWidth,
-      this.viewModel.resolvedMaxWidth,
-    );
+    const warning = crowdedInsetsWarning(this.viewModel.detents, this.hostWidth, this.viewModel.resolvedMaxWidth);
     if (warning !== null && warning !== this.lastCrowdedWarning) {
       console.warn(warning);
     }
@@ -316,6 +314,49 @@ class BottomSheetHostNode extends StatefulComponent<BottomSheetHostNodeProps, Ho
     const regionWidth: number | `${number}%` = hasNativeGeometry ? contentRegionWidth : '100%';
     const regionHeight: number | `${number}%` = hasNativeGeometry ? contentRegionHeight : '100%';
     const resolvedSurfaceHeight: number | `${number}%` = hasNativeGeometry ? surfaceHeight : '100%';
+    const config: BottomSheetConfig = {
+      detents: vm.detents.map(d => ({
+        value: d.value,
+        kind: DETENT_KIND_MAP[d.kind],
+        programmatic: d.programmatic,
+        usesStatusBarTopInset: d.usesStatusBarTopInset,
+        insetTop: d.insetTop,
+        insetLeft: d.insetLeft,
+        insetRight: d.insetRight,
+        insetBottom: d.insetBottom,
+        widestCard: d.widestCard,
+        maxWidth: d.maxWidth,
+        placementBias: d.placementBias,
+        scrimOpacity: d.scrimOpacity,
+      })),
+      detentIndex: vm.index,
+      animateIn: vm.animateIn,
+      animateContentHeight: vm.animateContentHeight,
+      modal: vm.modal,
+      windowOverlay: vm.windowOverlay,
+      openOrder: vm.openOrder,
+      scrollExpandCoordination: vm.scrollExpandCoordination,
+      scrollCollapseCoordination: vm.scrollCollapseCoordination,
+      settleDuration: vm.settleDurationSeconds,
+      hasCloseRequestHandler: vm.hasCloseRequestHandler,
+      scrimColorArgb: vm.scrimColorArgb,
+      scrimAccessibilityLabel: vm.scrimAccessibilityLabel,
+      surfaceCornerRadii: [...vm.surfaceCornerRadii],
+      surfaceCornerCurve:
+        vm.surfaceCornerCurve === 'continuous' ? BottomSheetCornerCurve.Continuous : BottomSheetCornerCurve.Circular,
+      surfaceShadows: vm.surfaceShadows.map(s => ({
+        offsetX: s.offsetX,
+        offsetY: s.offsetY,
+        blurRadius: s.blurRadius,
+        spreadDistance: s.spreadDistance,
+        colorArgb: s.colorArgb,
+        opacity: s.opacity,
+        excludesInterior: s.excludesInterior,
+      })),
+      surfaceElevation: vm.surfaceElevation,
+      surfaceShadowColorArgb: vm.surfaceShadowColorArgb,
+      ...(hasNativeGeometry ? { committedContentRegionInset: contentRegionInset } : {}),
+    };
 
     <custom-view
       iosClass="VRBottomSheetView"
@@ -325,25 +366,7 @@ class BottomSheetHostNode extends StatefulComponent<BottomSheetHostNodeProps, Ho
       right={0}
       bottom={0}
       left={0}
-      detents={vm.detents}
-      detentIndex={vm.index}
-      animateIn={vm.animateIn}
-      animateContentHeight={vm.animateContentHeight}
-      modal={vm.modal}
-      windowOverlay={vm.windowOverlay}
-      openOrder={vm.openOrder}
-      scrollExpandCoordination={vm.scrollExpandCoordination}
-      scrollCollapseCoordination={vm.scrollCollapseCoordination}
-      settleDuration={vm.settleDurationSeconds}
-      hasCloseRequestHandler={vm.hasCloseRequestHandler}
-      scrimColorArgb={vm.scrimColorArgb}
-      scrimAccessibilityLabel={vm.scrimAccessibilityLabel}
-      surfaceCornerRadii={vm.surfaceCornerRadii}
-      surfaceCornerCurve={vm.surfaceCornerCurve}
-      surfaceShadows={vm.surfaceShadows}
-      surfaceElevation={vm.surfaceElevation}
-      surfaceShadowColorArgb={vm.surfaceShadowColorArgb}
-      committedContentRegionInset={hasNativeGeometry ? contentRegionInset : undefined}
+      config={config}
       onNativeGeometry={this.handleNativeGeometry}
       onNativeIndexChange={this.handleNativeIndexChange}
       onNativeSettle={this.handleNativeSettle}
@@ -535,9 +558,7 @@ export class BottomSheet extends StatefulComponent<BottomSheetProps, BottomSheet
     const contentLeft = widestDetent?.insetLeft ?? 0;
     const contentRight = widestDetent?.insetRight ?? 0;
     const contentMaxWidth =
-      this.resolvedMaxWidth > 0
-        ? Math.max(0, this.resolvedMaxWidth - contentLeft - contentRight)
-        : undefined;
+      this.resolvedMaxWidth > 0 ? Math.max(0, this.resolvedMaxWidth - contentLeft - contentRight) : undefined;
 
     const renderHostNode = (): void => {
       <BottomSheetHostNode

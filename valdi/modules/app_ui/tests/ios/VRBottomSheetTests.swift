@@ -224,4 +224,16 @@ final class VRBottomSheetTests: XCTestCase {
         host.layoutIfNeeded()
         XCTAssertTrue(host.isSettling)
     }
+
+    func testOutOfOrderRequestedIndexBeforeDetentsOpensCleanly() {
+        let host = VRBottomSheetHostingView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        host.animateIn = false
+        host.modal = true
+        host.setRequestedIndex(0)
+        host.setRawDetents([VRBSRawDetentSpec(value: 300, kind: .points, widestCard: true)])
+        host.layoutIfNeeded()
+
+        XCTAssertTrue(host.isPresented)
+        XCTAssertEqual(host.openHeight, 300, accuracy: 0.5)
+    }
 }

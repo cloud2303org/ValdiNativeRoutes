@@ -1,5 +1,8 @@
 package io.valdiroutes.app
 
+import io.valdiroutes.app_ui.BottomSheetCardShadow
+import io.valdiroutes.app_ui.BottomSheetDetent
+import io.valdiroutes.app_ui.BottomSheetDetentKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -262,5 +265,59 @@ class BottomSheetCoreTest {
         // Fast throw toward target (-50000 px/s) is clamped to -omega * startOffset so it never overshoots.
         val clampedThrow = BottomSheetMath.clampSpringInitialVelocity(startOffset, -50000f, omega)
         assertEquals(-omega * startOffset, clampedThrow, 0.01f)
+    }
+
+    @Test
+    fun typedGeneratedModelsMapDirectlyToNativeSpecs() {
+        val detents = mapRawDetents(
+            listOf(
+                BottomSheetDetent(
+                    value = 0.0,
+                    kind = BottomSheetDetentKind.Content,
+                    programmatic = false,
+                    usesStatusBarTopInset = true,
+                    insetTop = 0.0,
+                    insetLeft = 12.0,
+                    insetRight = 12.0,
+                    insetBottom = 8.0,
+                    widestCard = true,
+                    maxWidth = 480.0,
+                    placementBias = 0.5,
+                    scrimOpacity = 0.8,
+                ),
+            ),
+        )
+        assertEquals(1, detents.size)
+        assertEquals(DetentKind.CONTENT, detents[0].kind)
+        assertTrue(detents[0].usesStatusBarTopInset)
+        assertTrue(detents[0].widestCard)
+        assertEquals(480f, detents[0].maxWidthDp, 0.001f)
+        assertEquals(0.8f, detents[0].scrimOpacity, 0.001f)
+
+        val radii = mapCornerRadiiDp(listOf(16.0, 16.0, 0.0, 0.0))
+        assertEquals(4, radii.size)
+        assertEquals(16f, radii[0], 0.001f)
+        assertEquals(16f, radii[1], 0.001f)
+        assertEquals(0f, radii[2], 0.001f)
+        assertEquals(0f, radii[3], 0.001f)
+
+        val shadows = mapSurfaceShadows(
+            listOf(
+                BottomSheetCardShadow(
+                    offsetX = 0.0,
+                    offsetY = 4.0,
+                    blurRadius = 12.0,
+                    spreadDistance = 0.0,
+                    colorArgb = 0x80000000.toInt().toDouble(),
+                    opacity = 0.5,
+                    excludesInterior = true,
+                ),
+            ),
+            density = 2f,
+        )
+        assertEquals(1, shadows.size)
+        assertEquals(8f, shadows[0].offsetY, 0.001f)
+        assertEquals(24f, shadows[0].blurRadius, 0.001f)
+        assertEquals(0x40000000, shadows[0].color)
     }
 }

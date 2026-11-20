@@ -21,6 +21,49 @@ NSArray<NSString *> * _Nonnull VRAttachmentSourceGetAllCases() {
 }
 
 //
+// VRBottomSheetCornerCurve.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectRegistry.h>
+
+#import "AppUITypes.h"
+
+VRBottomSheetCornerCurve VRBottomSheetCornerCurveCircular = @"circular";
+VRBottomSheetCornerCurve VRBottomSheetCornerCurveContinuous = @"continuous";
+VALDI_STRING_ENUM(VRBottomSheetCornerCurve, VRBottomSheetCornerCurveCircular, VRBottomSheetCornerCurveContinuous)
+NSArray<NSString *> * _Nonnull VRBottomSheetCornerCurveGetAllCases() {
+    static dispatch_once_t onceToken;
+    static NSArray<NSString *> *kAllCases;
+    dispatch_once(&onceToken, ^{
+        kAllCases = @[VRBottomSheetCornerCurveCircular, VRBottomSheetCornerCurveContinuous];
+    });
+    return kAllCases;
+}
+
+//
+// VRBottomSheetDetentKind.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectRegistry.h>
+
+#import "AppUITypes.h"
+
+VRBottomSheetDetentKind VRBottomSheetDetentKindPoints = @"points";
+VRBottomSheetDetentKind VRBottomSheetDetentKindPercentage = @"percentage";
+VRBottomSheetDetentKind VRBottomSheetDetentKindContent = @"content";
+VALDI_STRING_ENUM(VRBottomSheetDetentKind, VRBottomSheetDetentKindPoints, VRBottomSheetDetentKindPercentage, VRBottomSheetDetentKindContent)
+NSArray<NSString *> * _Nonnull VRBottomSheetDetentKindGetAllCases() {
+    static dispatch_once_t onceToken;
+    static NSArray<NSString *> *kAllCases;
+    dispatch_once(&onceToken, ^{
+        kAllCases = @[VRBottomSheetDetentKindPoints, VRBottomSheetDetentKindPercentage, VRBottomSheetDetentKindContent];
+    });
+    return kAllCases;
+}
+
+//
 // VRDatePickerMode.m
 //
 
@@ -319,6 +362,176 @@ static id SCValdiBlockCreateOOD_v(SCValdiBlockTrampoline trampoline) {
     };
     static const char *const kIdentifiers[] = {
         "VRAttachmentAsset",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRBottomSheetCardShadow.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "AppUITypes.h"
+
+@implementation VRBottomSheetCardShadow
+
+@dynamic offsetX;
+@dynamic offsetY;
+@dynamic blurRadius;
+@dynamic spreadDistance;
+@dynamic colorArgb;
+@dynamic opacity;
+@dynamic excludesInterior;
+
+- (instancetype _Nonnull)initWithOffsetX:(double)offsetX offsetY:(double)offsetY blurRadius:(double)blurRadius spreadDistance:(double)spreadDistance colorArgb:(double)colorArgb opacity:(double)opacity excludesInterior:(BOOL)excludesInterior
+{
+    return [super initWithFieldValues:nil, offsetX, offsetY, blurRadius, spreadDistance, colorArgb, opacity, excludesInterior];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "offsetX", .selName = nil, .type = "d"},
+        {.name = "offsetY", .selName = nil, .type = "d"},
+        {.name = "blurRadius", .selName = nil, .type = "d"},
+        {.name = "spreadDistance", .selName = nil, .type = "d"},
+        {.name = "colorArgb", .selName = nil, .type = "d"},
+        {.name = "opacity", .selName = nil, .type = "d"},
+        {.name = "excludesInterior", .selName = nil, .type = "b"},
+        {.name = nil},
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRBottomSheetConfig.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "AppUITypes.h"
+
+@implementation VRBottomSheetConfig
+
+@dynamic detents;
+@dynamic detentIndex;
+@dynamic animateIn;
+@dynamic animateContentHeight;
+@dynamic modal;
+@dynamic windowOverlay;
+@dynamic openOrder;
+@dynamic scrollExpandCoordination;
+@dynamic scrollCollapseCoordination;
+@dynamic settleDuration;
+@dynamic hasCloseRequestHandler;
+@dynamic scrimColorArgb;
+@dynamic scrimAccessibilityLabel;
+@dynamic surfaceCornerRadii;
+@dynamic surfaceCornerCurve;
+@dynamic surfaceShadows;
+@dynamic surfaceElevation;
+@dynamic surfaceShadowColorArgb;
+@dynamic committedContentRegionInset;
+
+- (instancetype _Nonnull)initWithDetents:(NSArray<VRBottomSheetDetent *> * _Nonnull)detents detentIndex:(double)detentIndex animateIn:(BOOL)animateIn animateContentHeight:(BOOL)animateContentHeight modal:(BOOL)modal windowOverlay:(BOOL)windowOverlay openOrder:(double)openOrder scrollExpandCoordination:(double)scrollExpandCoordination scrollCollapseCoordination:(double)scrollCollapseCoordination settleDuration:(double)settleDuration hasCloseRequestHandler:(BOOL)hasCloseRequestHandler scrimColorArgb:(double)scrimColorArgb scrimAccessibilityLabel:(NSString * _Nonnull)scrimAccessibilityLabel surfaceCornerRadii:(NSArray<NSNumber *> * _Nonnull)surfaceCornerRadii surfaceCornerCurve:(VRBottomSheetCornerCurve _Nonnull)surfaceCornerCurve surfaceShadows:(NSArray<VRBottomSheetCardShadow *> * _Nonnull)surfaceShadows surfaceElevation:(double)surfaceElevation surfaceShadowColorArgb:(double)surfaceShadowColorArgb
+{
+    return [super initWithFieldValues:nil, detents, detentIndex, animateIn, animateContentHeight, modal, windowOverlay, openOrder, scrollExpandCoordination, scrollCollapseCoordination, settleDuration, hasCloseRequestHandler, scrimColorArgb, scrimAccessibilityLabel, surfaceCornerRadii, surfaceCornerCurve, surfaceShadows, surfaceElevation, surfaceShadowColorArgb, nil];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "detents", .selName = nil, .type = "a<r:'[0]'>"},
+        {.name = "detentIndex", .selName = nil, .type = "d"},
+        {.name = "animateIn", .selName = nil, .type = "b"},
+        {.name = "animateContentHeight", .selName = nil, .type = "b"},
+        {.name = "modal", .selName = nil, .type = "b"},
+        {.name = "windowOverlay", .selName = nil, .type = "b"},
+        {.name = "openOrder", .selName = nil, .type = "d"},
+        {.name = "scrollExpandCoordination", .selName = nil, .type = "d"},
+        {.name = "scrollCollapseCoordination", .selName = nil, .type = "d"},
+        {.name = "settleDuration", .selName = nil, .type = "d"},
+        {.name = "hasCloseRequestHandler", .selName = nil, .type = "b"},
+        {.name = "scrimColorArgb", .selName = nil, .type = "d"},
+        {.name = "scrimAccessibilityLabel", .selName = nil, .type = "s"},
+        {.name = "surfaceCornerRadii", .selName = nil, .type = "a<d@>"},
+        {.name = "surfaceCornerCurve", .selName = nil, .type = "r:'[1]'"},
+        {.name = "surfaceShadows", .selName = nil, .type = "a<r:'[2]'>"},
+        {.name = "surfaceElevation", .selName = nil, .type = "d"},
+        {.name = "surfaceShadowColorArgb", .selName = nil, .type = "d"},
+        {.name = "committedContentRegionInset", .selName = nil, .type = "d@?"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRBottomSheetDetent",
+        "VRBottomSheetCornerCurve",
+        "VRBottomSheetCardShadow",
+        nil
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRBottomSheetDetent.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "AppUITypes.h"
+
+@implementation VRBottomSheetDetent
+
+@dynamic value;
+@dynamic kind;
+@dynamic programmatic;
+@dynamic usesStatusBarTopInset;
+@dynamic insetTop;
+@dynamic insetLeft;
+@dynamic insetRight;
+@dynamic insetBottom;
+@dynamic widestCard;
+@dynamic maxWidth;
+@dynamic placementBias;
+@dynamic scrimOpacity;
+
+- (instancetype _Nonnull)initWithValue:(double)value kind:(VRBottomSheetDetentKind _Nonnull)kind programmatic:(BOOL)programmatic usesStatusBarTopInset:(BOOL)usesStatusBarTopInset insetTop:(double)insetTop insetLeft:(double)insetLeft insetRight:(double)insetRight insetBottom:(double)insetBottom widestCard:(BOOL)widestCard maxWidth:(double)maxWidth placementBias:(double)placementBias scrimOpacity:(double)scrimOpacity
+{
+    return [super initWithFieldValues:nil, value, kind, programmatic, usesStatusBarTopInset, insetTop, insetLeft, insetRight, insetBottom, widestCard, maxWidth, placementBias, scrimOpacity];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "value", .selName = nil, .type = "d"},
+        {.name = "kind", .selName = nil, .type = "r:'[0]'"},
+        {.name = "programmatic", .selName = nil, .type = "b"},
+        {.name = "usesStatusBarTopInset", .selName = nil, .type = "b"},
+        {.name = "insetTop", .selName = nil, .type = "d"},
+        {.name = "insetLeft", .selName = nil, .type = "d"},
+        {.name = "insetRight", .selName = nil, .type = "d"},
+        {.name = "insetBottom", .selName = nil, .type = "d"},
+        {.name = "widestCard", .selName = nil, .type = "b"},
+        {.name = "maxWidth", .selName = nil, .type = "d"},
+        {.name = "placementBias", .selName = nil, .type = "d"},
+        {.name = "scrimOpacity", .selName = nil, .type = "d"},
+        {.name = nil},
+    };
+    static const char *const kIdentifiers[] = {
+        "VRBottomSheetDetentKind",
         nil
     };
     return SCValdiMarshallableObjectDescriptorMake(kFields, kIdentifiers, nil, SCValdiMarshallableObjectTypeClass);

@@ -415,11 +415,12 @@ test('app_ui bottom_sheet aligns with @swmansion/react-native-bottom-sheet v1.1.
     assert.equal(initialLabels.length, 0, 'lazy=true must defer children while closed at index=0');
 
     // Verify detents wire format carries maxWidth & placementBias and pre-geometry children get maxWidth
-    const detentsAttr = initialEntries
-      .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'detents')
+    const configAttr = initialEntries
+      .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'config')
       .at(-1)?.value;
-    assert.equal(detentsAttr[1].maxWidth, 480);
-    assert.equal(detentsAttr[1].placementBias, 1);
+    assert.equal(configAttr.detents[1].maxWidth, 480);
+    assert.equal(configAttr.detents[1].placementBias, 1);
+    assert.equal(configAttr.committedContentRegionInset, undefined);
     const preGeomMaxWidths = initialEntries.filter(
       (e: any) => e.type === 'SetElementAttribute' && e.name === 'maxWidth' && e.value === 480,
     );
@@ -449,8 +450,8 @@ test('app_ui bottom_sheet aligns with @swmansion/react-native-bottom-sheet v1.1.
     onNativeGeom(480, 680, 800, 544, 1024);
     const geomEntries = h.delegate.requests.flatMap((r: any) => r.entries);
     const committedInset = geomEntries
-      .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'committedContentRegionInset')
-      .at(-1)?.value;
+      .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'config')
+      .at(-1)?.value?.committedContentRegionInset;
     assert.equal(committedInset, 544);
 
     assert.equal(typeof onNativePos, 'function');
@@ -571,8 +572,8 @@ test('AppSheetOverlay renders actionSheet, picker, and datePicker exclusively vi
 
       const closeEntries = h.delegate.requests.flatMap((r: any) => r.entries);
       const reqIdx = closeEntries
-        .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'detentIndex')
-        .at(-1)?.value;
+        .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'config')
+        .at(-1)?.value?.detentIndex;
       assert.equal(reqIdx, -1);
 
       const onNativeSettle = entries
@@ -732,8 +733,8 @@ test('AppSheetOverlay renders actionSheet, picker, and datePicker exclusively vi
       h.renderer.renderRootComponent(AppSheetOverlay, proto, { ...vm, open: false }, ctx);
       const cancelEntries = h.delegate.requests.flatMap((r: any) => r.entries);
       const reqIdx = cancelEntries
-        .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'detentIndex')
-        .at(-1)?.value;
+        .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'config')
+        .at(-1)?.value?.detentIndex;
       assert.equal(reqIdx, -1);
 
       const onNativeSettle = entries

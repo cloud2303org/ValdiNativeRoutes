@@ -216,9 +216,13 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
     var modal: Bool = false {
         didSet {
             guard modal != oldValue else { return }
-            syncVisualsForCurrentOffset()
-            syncAccessibility()
-            onPresentationChanged?()
+            if containerSize.height > 0 && !rawDetents.isEmpty {
+                recomputeDetentsAndSync(animateResize: false)
+            } else {
+                syncVisualsForCurrentOffset()
+                syncAccessibility()
+                onPresentationChanged?()
+            }
         }
     }
     var hasCloseRequestHandler: Bool = false {
@@ -260,7 +264,7 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
     // ---- Internal State ----
     private var rawDetents: [VRBSRawDetentSpec] = []
     private var resolvedDetents: [VRBSDetentSpec] = []
-    private var requestedIndex: Int = -1
+    private var rawRequestedIndex: Int = -1
     private var currentTargetIndex: Int = -1
     private var lastReportedIndex: Int = -1
     private var hasInitializedPresentation: Bool = false
@@ -424,19 +428,31 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
     }
 
     func setRequestedIndex(_ index: Int, animated: Bool = true) {
-        let clamped = clampRequestedIndex(index)
-        if !hasInitializedPresentation && clamped >= 0 {
+        if !hasInitializedPresentation && index >= 0 {
             sawOpenRequestBeforeInit = true
         }
+        let prevRaw = rawRequestedIndex
+        rawRequestedIndex = index
+        if rawDetents.isEmpty {
+            if index < 0 && sawOpenRequestBeforeInit {
+                sawOpenRequestBeforeInit = false
+                onSettleChanged?(-1)
+            }
+            return
+        }
+        let clamped = clampRequestedIndex(index)
         if !animated && hasInitializedPresentation {
-            requestedIndex = clamped
             if containerSize.height > 0 {
                 snapToIndex(clamped, initialVelocity: 0, animated: false, emitIndexCallback: false)
             }
             return
         }
-        if clamped == requestedIndex && hasInitializedPresentation { return }
-        requestedIndex = clamped
+        if hasInitializedPresentation &&
+            clamped == currentTargetIndex &&
+            prevRaw == index &&
+            (activeSpring != nil || isDraggingSheet || abs(targetOffset(for: clamped) - sheetOffsetY) <= 0.5) {
+            return
+        }
         guard containerSize.height > 0 else { return }
 
         if !hasInitializedPresentation {
@@ -449,6 +465,24 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
         if clamped != currentTargetIndex || (activeSpring == nil && !isDraggingSheet && abs(targetOffset(for: clamped) - sheetOffsetY) > 0.5) {
             snapToIndex(clamped, initialVelocity: 0, animated: animated, emitIndexCallback: false)
         }
+    }
+
+    func resetForRecycling() {
+        stopSpring()
+        isDraggingSheet = false
+        rawDetents = []
+        resolvedDetents = []
+        rawRequestedIndex = -1
+        currentTargetIndex = -1
+        lastReportedIndex = -1
+        hasInitializedPresentation = false
+        sawOpenRequestBeforeInit = false
+        hasMeasuredContentHeight = false
+        measuredNaturalContentHeight = 0
+        committedContentRegionInset = nil
+        lastGeometryTuple = nil
+        lastPositionTuple = nil
+        sheetOffsetY = containerSize.height
     }
 
     func setScrimColorArgb(_ argb: Int32) {
@@ -627,6 +661,17 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
 
     private func recomputeDetentsAndSync(animateResize: Bool) {
         guard containerSize.width > 0, containerSize.height > 0 else { return }
+        if rawDetents.isEmpty {
+            resolvedDetents = []
+            sheetOffsetY = containerSize.height
+            currentTargetIndex = -1
+            syncVisualsForCurrentOffset()
+            if !hasInitializedPresentation && rawRequestedIndex < 0 && sawOpenRequestBeforeInit {
+                sawOpenRequestBeforeInit = false
+                onSettleChanged?(-1)
+            }
+            return
+        }
         let statusTop = currentStatusBarTopInset()
 
         let firstRaw = rawDetents.first
@@ -670,7 +715,7 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
 
         emitGeometryIfNeeded(statusTop: statusTop)
 
-        let desired = clampRequestedIndex(requestedIndex)
+        let desired = clampRequestedIndex(rawRequestedIndex)
         if !hasInitializedPresentation {
             if desired >= 0 {
                 sawOpenRequestBeforeInit = true
@@ -767,6 +812,11 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
         )
     }
 
+    func replayGeometryIfAvailable() {
+        guard let prev = lastGeometryTuple else { return }
+        onGeometryChanged?(Double(prev.0), Double(prev.1), Double(prev.2), Double(prev.3))
+    }
+
     // ---- Spring & Visual Synchronization ----
 
     func dismissModalByUser() {
@@ -798,7 +848,7 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
 
         if releaseIndex == -1 && hasCloseRequestHandler {
             onCloseRequest?()
-            if requestedIndex < 0 {
+            if rawRequestedIndex < 0 {
                 snapToIndex(-1, initialVelocity: velocityYPointsPerSec, animated: true, emitIndexCallback: false)
                 return
             }
@@ -830,7 +880,7 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
         let clamped = clampRequestedIndex(index)
         let prevPresented = isPresented
         currentTargetIndex = clamped
-        requestedIndex = clamped
+        rawRequestedIndex = clamped
 
         if emitIndexCallback && clamped != lastReportedIndex {
             lastReportedIndex = clamped

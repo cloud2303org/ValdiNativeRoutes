@@ -37,7 +37,7 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
     // ---- Props ----
     private var rawDetents: List<RawDetentSpec> = emptyList()
     private var resolvedDetents: List<DetentSpec> = emptyList()
-    private var requestedIndex: Int = -1
+    private var rawRequestedIndex: Int = -1
     private var currentTargetIndex: Int = -1
     private var lastReportedIndex: Int = -1
     private var hasInitializedPresentation = false
@@ -49,9 +49,13 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
         set(value) {
             if (field == value) return
             field = value
-            syncVisualsForCurrentOffset()
-            syncAccessibility()
-            onPresentationChanged?.invoke()
+            if (containerHeightPx > 0 && rawDetents.isNotEmpty()) {
+                recomputeDetentsAndSync(animateResize = false)
+            } else {
+                syncVisualsForCurrentOffset()
+                syncAccessibility()
+                onPresentationChanged?.invoke()
+            }
         }
     var hasCloseRequestHandler: Boolean = false
         set(value) {
@@ -268,12 +272,19 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
     }
 
     fun setRequestedIndex(index: Int) {
-        val clamped = clampRequestedIndex(index)
-        if (!hasInitializedPresentation && clamped >= 0) {
+        if (!hasInitializedPresentation && index >= 0) {
             sawOpenRequestBeforeInit = true
         }
-        if (clamped == requestedIndex && hasInitializedPresentation) return
-        requestedIndex = clamped
+        val prevRaw = rawRequestedIndex
+        rawRequestedIndex = index
+        if (rawDetents.isEmpty()) {
+            if (index < 0 && sawOpenRequestBeforeInit) {
+                sawOpenRequestBeforeInit = false
+                onSettleChanged?.invoke(-1)
+            }
+            return
+        }
+        val clamped = clampRequestedIndex(index)
         if (containerHeightPx <= 0) return
 
         if (!hasInitializedPresentation) {
@@ -281,9 +292,35 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
             return
         }
 
+        if (
+            clamped == currentTargetIndex &&
+            prevRaw == index &&
+            (isAnimating || isDraggingSheet || abs(targetOffsetForIndex(clamped) - sheetOffsetY) < 0.5f)
+        ) {
+            return
+        }
         if (clamped != currentTargetIndex || (!isAnimating && !isDraggingSheet && targetOffsetForIndex(clamped) != sheetOffsetY)) {
             snapToIndex(clamped, initialVelocityPxPerSec = 0f, animated = true, emitIndexCallback = false)
         }
+    }
+
+    fun resetForRecycling() {
+        cancelSpring()
+        isDraggingSheet = false
+        isNestedDragging = false
+        rawDetents = emptyList()
+        resolvedDetents = emptyList()
+        rawRequestedIndex = -1
+        currentTargetIndex = -1
+        lastReportedIndex = -1
+        hasInitializedPresentation = false
+        sawOpenRequestBeforeInit = false
+        hasMeasuredContentHeight = false
+        measuredNaturalContentHeightPx = 0
+        committedContentRegionInsetDp = null
+        lastGeometry = null
+        lastPosition = null
+        sheetOffsetY = containerHeightPx.toFloat()
     }
 
     fun setScrimColorArgb(colorArgb: Int) {
@@ -426,6 +463,17 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
 
     private fun recomputeDetentsAndSync(animateResize: Boolean) {
         if (containerHeightPx <= 0 || containerWidthPx <= 0) return
+        if (rawDetents.isEmpty()) {
+            resolvedDetents = emptyList()
+            sheetOffsetY = containerHeightPx.toFloat()
+            currentTargetIndex = -1
+            syncVisualsForCurrentOffset()
+            if (!hasInitializedPresentation && rawRequestedIndex < 0 && sawOpenRequestBeforeInit) {
+                sawOpenRequestBeforeInit = false
+                onSettleChanged?.invoke(-1)
+            }
+            return
+        }
 
         val firstRaw = rawDetents.firstOrNull()
         cardMaxWidthPx = ((firstRaw?.maxWidthDp ?: 0f) * density).coerceAtLeast(0f)
@@ -477,7 +525,7 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
 
         emitGeometryIfNeeded()
 
-        val desiredIndex = clampRequestedIndex(requestedIndex)
+        val desiredIndex = clampRequestedIndex(rawRequestedIndex)
         if (!hasInitializedPresentation) {
             if (desiredIndex >= 0) {
                 sawOpenRequestBeforeInit = true
@@ -583,6 +631,11 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
         onGeometryChanged?.invoke(next[0], next[1], next[2], next[3], next[4])
     }
 
+    fun replayGeometryIfAvailable() {
+        val g = lastGeometry ?: return
+        onGeometryChanged?.invoke(g[0], g[1], g[2], g[3], g[4])
+    }
+
     // ---- Dragging & Snapping ----
 
     internal fun onSheetDragBegan() {
@@ -677,7 +730,7 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
         if (releaseIndex == -1 && hasCloseRequestHandler) {
             // Notify caller via onCloseRequest; if it synchronously closed the sheet, continue closing with release velocity.
             onCloseRequest?.invoke()
-            if (requestedIndex < 0) {
+            if (rawRequestedIndex < 0) {
                 snapToIndex(
                     index = -1,
                     initialVelocityPxPerSec = velocityYPxPerSec,
@@ -718,7 +771,7 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
         val clamped = clampRequestedIndex(index)
         val prevPresented = isPresented
         currentTargetIndex = clamped
-        requestedIndex = clamped
+        rawRequestedIndex = clamped
 
         if (emitIndexCallback && clamped != lastReportedIndex) {
             lastReportedIndex = clamped

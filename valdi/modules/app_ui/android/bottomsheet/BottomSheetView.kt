@@ -17,12 +17,17 @@ import com.snap.valdi.ValdiRuntimeManager
 import com.snap.valdi.attributes.AttributesBinder
 import com.snap.valdi.attributes.AttributesBindingContext
 import com.snap.valdi.callable.ValdiFunction
+import com.snap.valdi.utils.ValdiMarshallableObject
 import com.snap.valdi.utils.ValdiMarshaller
 import com.snap.valdi.views.CustomChildViewAppender
-import com.snap.valdi.views.ValdiRecyclableView
 import com.snap.valdi.views.ValdiView
 import com.snap.valdi.views.touches.DisallowInterceptTouchEventMode
 import com.snap.valdi.views.touches.TouchDispatcher
+import io.valdiroutes.app_ui.BottomSheetCardShadow
+import io.valdiroutes.app_ui.BottomSheetConfig
+import io.valdiroutes.app_ui.BottomSheetDetent
+import io.valdiroutes.app_ui.BottomSheetDetentKind
+import io.valdiroutes.app_ui.ui.applyWheelConfigOrReset
 import kotlin.math.roundToInt
 
 /**
@@ -91,6 +96,12 @@ class BottomSheetView(context: Context) :
 
     // ---- ValdiFunction callbacks ----
     var onNativeGeometry: ValdiFunction? = null
+        set(value) {
+            field = value
+            if (value != null) {
+                hostView.replayGeometryIfAvailable()
+            }
+        }
     var onNativeIndexChange: ValdiFunction? = null
     var onNativeSettle: ValdiFunction? = null
     var onNativePositionChange: ValdiFunction? = null
@@ -353,97 +364,122 @@ class BottomSheetView(context: Context) :
 
     override fun prepareForRecycling() {
         super.prepareForRecycling()
-        teardownOverlayDialog()
         onNativeGeometry = null
         onNativeIndexChange = null
         onNativeSettle = null
         onNativePositionChange = null
         onNativeCloseRequest = null
-        requestedToPresentInOverlay = false
-        windowOverlay = false
-        openOrder = 0
-        hostView.committedContentRegionInsetDp = null
-        hostView.setRawDetents(emptyList())
-        hostView.setRequestedIndex(-1)
+        resetConfig()
     }
 
-    // ---- Attribute decoding helpers ----
+    // ---- Typed config application ----
 
-    internal fun applyDetentsUntyped(value: Any?) {
-        val list = value as? List<*> ?: run {
-            hostView.setRawDetents(emptyList())
+    internal fun applyConfigUntyped(value: Any?) {
+        if (value == null) {
+            resetConfig()
             return
         }
-        val parsed = list.mapNotNull { item ->
-            val map = item as? Map<*, *> ?: return@mapNotNull null
-            val kindStr = map["kind"] as? String ?: "points"
-            val kind = when (kindStr) {
-                "percentage" -> DetentKind.PERCENTAGE
-                "content" -> DetentKind.CONTENT
-                else -> DetentKind.POINTS
-            }
-            RawDetentSpec(
-                value = (map["value"] as? Number)?.toFloat() ?: 0f,
-                kind = kind,
-                programmatic = map["programmatic"] as? Boolean ?: false,
-                usesStatusBarTopInset = map["usesStatusBarTopInset"] as? Boolean ?: false,
-                insetTopDp = (map["insetTop"] as? Number)?.toFloat() ?: 0f,
-                insetLeftDp = (map["insetLeft"] as? Number)?.toFloat() ?: 0f,
-                insetRightDp = (map["insetRight"] as? Number)?.toFloat() ?: 0f,
-                insetBottomDp = (map["insetBottom"] as? Number)?.toFloat() ?: 0f,
-                widestCard = map["widestCard"] as? Boolean ?: false,
-                maxWidthDp = (map["maxWidth"] as? Number)?.toFloat() ?: 0f,
-                placementBias = (map["placementBias"] as? Number)?.toFloat() ?: 0.5f,
-                scrimOpacity = (map["scrimOpacity"] as? Number)?.toFloat() ?: 1f,
-            )
+        applyWheelConfigOrReset(reset = ::resetConfig) {
+            applyConfig(ValdiMarshallableObject.fromUntyped(BottomSheetConfig::class.java, value))
         }
-        hostView.setRawDetents(parsed)
     }
 
-    internal fun applyDetentIndex(index: Int) {
-        requestedToPresentInOverlay = index >= 0
-        hostView.setRequestedIndex(index)
+    internal fun applyConfig(config: BottomSheetConfig) {
+        windowOverlay = config.windowOverlay
+        openOrder = config.openOrder.toInt()
+        hostView.animateIn = config.animateIn
+        hostView.animateContentHeight = config.animateContentHeight
+        hostView.modal = config.modal
+        hostView.scrollExpandCoordination =
+            ScrollCoordinationLevel.fromWireValue(config.scrollExpandCoordination.toInt())
+        hostView.scrollCollapseCoordination =
+            ScrollCoordinationLevel.fromWireValue(config.scrollCollapseCoordination.toInt())
+        hostView.settleDurationSeconds = if (config.settleDuration > 0.0) {
+            config.settleDuration.toFloat()
+        } else {
+            BottomSheetMath.DEFAULT_SETTLE_DURATION_SECONDS
+        }
+        hostView.hasCloseRequestHandler = config.hasCloseRequestHandler
+        hostView.setScrimColorArgb(config.scrimColorArgb.toLong().toInt())
+        hostView.setScrimAccessibilityLabel(config.scrimAccessibilityLabel)
+        hostView.setSurfaceCornerRadiiDp(mapCornerRadiiDp(config.surfaceCornerRadii))
+        val density = resources.displayMetrics.density.coerceAtLeast(0.001f)
+        hostView.setSurfaceShadows(mapSurfaceShadows(config.surfaceShadows, density))
+        hostView.setSurfaceElevationDp(config.surfaceElevation.toFloat())
+        hostView.setSurfaceShadowColorArgb(config.surfaceShadowColorArgb.toLong().toInt())
+        hostView.committedContentRegionInsetDp = config.committedContentRegionInset?.toFloat()
+        hostView.setRawDetents(mapRawDetents(config.detents))
+
+        val nextIndex = config.detentIndex.toInt()
+        requestedToPresentInOverlay = nextIndex >= 0
+        hostView.setRequestedIndex(nextIndex)
         syncOverlayVisibility()
     }
 
-    internal fun applyCornerRadiiUntyped(value: Any?) {
-        val list = value as? List<*>
-        if (list == null || list.size < 4) {
-            hostView.setSurfaceCornerRadiiDp(FloatArray(4))
-            return
-        }
-        val radii = FloatArray(4) { i -> (list[i] as? Number)?.toFloat() ?: 0f }
-        hostView.setSurfaceCornerRadiiDp(radii)
-    }
-
-    internal fun applySurfaceShadowsUntyped(value: Any?) {
-        val list = value as? List<*> ?: run {
-            hostView.setSurfaceShadows(emptyList())
-            return
-        }
-        val density = resources.displayMetrics.density.coerceAtLeast(0.001f)
-        val parsed = list.mapNotNull { item ->
-            val map = item as? Map<*, *> ?: return@mapNotNull null
-            val rawColor = (map["colorArgb"] as? Number)?.toInt() ?: 0
-            val opacity = ((map["opacity"] as? Number)?.toFloat() ?: 1f).coerceIn(0f, 1f)
-            val combinedAlpha = (Color.alpha(rawColor) * opacity).roundToInt().coerceIn(0, 255)
-            if (combinedAlpha <= 0) return@mapNotNull null
-            CardShadow(
-                offsetX = ((map["offsetX"] as? Number)?.toFloat() ?: 0f) * density,
-                offsetY = ((map["offsetY"] as? Number)?.toFloat() ?: 0f) * density,
-                blurRadius = (((map["blurRadius"] as? Number)?.toFloat() ?: 0f) * density).coerceAtLeast(0f),
-                spreadDistance = ((map["spreadDistance"] as? Number)?.toFloat() ?: 0f) * density,
-                color = Color.argb(
-                    combinedAlpha,
-                    Color.red(rawColor),
-                    Color.green(rawColor),
-                    Color.blue(rawColor),
-                ),
-            )
-        }
-        hostView.setSurfaceShadows(parsed)
+    internal fun resetConfig() {
+        teardownOverlayDialog()
+        requestedToPresentInOverlay = false
+        windowOverlay = false
+        openOrder = 0
+        hostView.resetForRecycling()
+        hostView.animateIn = true
+        hostView.animateContentHeight = true
+        hostView.modal = false
+        hostView.scrollExpandCoordination = ScrollCoordinationLevel.HANDOFF
+        hostView.scrollCollapseCoordination = ScrollCoordinationLevel.HANDOFF
+        hostView.settleDurationSeconds = BottomSheetMath.DEFAULT_SETTLE_DURATION_SECONDS
+        hostView.hasCloseRequestHandler = false
+        hostView.setScrimColorArgb(BottomSheetScrimCanvasView.DEFAULT_SCRIM_COLOR)
+        hostView.setScrimAccessibilityLabel(ScrimDismissView.DEFAULT_LABEL)
+        hostView.setSurfaceCornerRadiiDp(FloatArray(4))
+        hostView.setSurfaceShadows(emptyList())
+        hostView.setSurfaceElevationDp(0f)
+        hostView.setSurfaceShadowColorArgb(Color.BLACK)
     }
 }
+
+internal fun mapRawDetents(detents: List<BottomSheetDetent>): List<RawDetentSpec> = detents.map { item ->
+    val kind = when (item.kind) {
+        BottomSheetDetentKind.Points -> DetentKind.POINTS
+        BottomSheetDetentKind.Percentage -> DetentKind.PERCENTAGE
+        BottomSheetDetentKind.Content -> DetentKind.CONTENT
+    }
+    RawDetentSpec(
+        value = item.value.toFloat(),
+        kind = kind,
+        programmatic = item.programmatic,
+        usesStatusBarTopInset = item.usesStatusBarTopInset,
+        insetTopDp = item.insetTop.toFloat(),
+        insetLeftDp = item.insetLeft.toFloat(),
+        insetRightDp = item.insetRight.toFloat(),
+        insetBottomDp = item.insetBottom.toFloat(),
+        widestCard = item.widestCard,
+        maxWidthDp = item.maxWidth.toFloat(),
+        placementBias = item.placementBias.toFloat(),
+        scrimOpacity = item.scrimOpacity.toFloat(),
+    )
+}
+
+internal fun mapCornerRadiiDp(radii: List<Double>): FloatArray {
+    if (radii.size < 4) return FloatArray(4)
+    return FloatArray(4) { idx -> radii[idx].toFloat() }
+}
+
+internal fun mapSurfaceShadows(shadows: List<BottomSheetCardShadow>, density: Float): List<CardShadow> =
+    shadows.mapNotNull { shadow ->
+        val rawColor = shadow.colorArgb.toLong().toInt()
+        val opacity = shadow.opacity.toFloat().coerceIn(0f, 1f)
+        val baseAlpha = (rawColor ushr 24) and 0xFF
+        val combinedAlpha = (baseAlpha * opacity).roundToInt().coerceIn(0, 255)
+        if (combinedAlpha <= 0) return@mapNotNull null
+        CardShadow(
+            offsetX = shadow.offsetX.toFloat() * density,
+            offsetY = shadow.offsetY.toFloat() * density,
+            blurRadius = (shadow.blurRadius.toFloat() * density).coerceAtLeast(0f),
+            spreadDistance = shadow.spreadDistance.toFloat() * density,
+            color = (combinedAlpha shl 24) or (rawColor and 0x00FFFFFF),
+        )
+    }
 
 /**
  * Registers all Valdi `<custom-view>` binders for `app_ui`'s BottomSheet library.
@@ -467,129 +503,10 @@ private class BottomSheetViewBinder : AttributesBinder<BottomSheetView> {
 
     override fun bindAttributes(ctx: AttributesBindingContext<BottomSheetView>) {
         ctx.bindUntypedAttribute(
-            "detents",
+            "config",
             false,
-            { view, value -> view.applyDetentsUntyped(value) },
-            { view -> view.applyDetentsUntyped(null) },
-        )
-        ctx.bindIntAttribute(
-            "detentIndex",
-            false,
-            { view, value, _ -> view.applyDetentIndex(value) },
-            { view, _ -> view.applyDetentIndex(-1) },
-        )
-        ctx.bindBooleanAttribute(
-            "animateIn",
-            false,
-            { view, value, _ -> view.hostView.animateIn = value },
-            { view, _ -> view.hostView.animateIn = true },
-        )
-        ctx.bindBooleanAttribute(
-            "animateContentHeight",
-            false,
-            { view, value, _ -> view.hostView.animateContentHeight = value },
-            { view, _ -> view.hostView.animateContentHeight = true },
-        )
-        ctx.bindBooleanAttribute(
-            "modal",
-            false,
-            { view, value, _ -> view.hostView.modal = value },
-            { view, _ -> view.hostView.modal = false },
-        )
-        ctx.bindBooleanAttribute(
-            "windowOverlay",
-            false,
-            { view, value, _ -> view.windowOverlay = value },
-            { view, _ -> view.windowOverlay = false },
-        )
-        ctx.bindIntAttribute(
-            "openOrder",
-            false,
-            { view, value, _ -> view.openOrder = value },
-            { view, _ -> view.openOrder = 0 },
-        )
-        ctx.bindIntAttribute(
-            "scrollExpandCoordination",
-            false,
-            { view, value, _ ->
-                view.hostView.scrollExpandCoordination = ScrollCoordinationLevel.fromWireValue(value)
-            },
-            { view, _ -> view.hostView.scrollExpandCoordination = ScrollCoordinationLevel.HANDOFF },
-        )
-        ctx.bindIntAttribute(
-            "scrollCollapseCoordination",
-            false,
-            { view, value, _ ->
-                view.hostView.scrollCollapseCoordination = ScrollCoordinationLevel.fromWireValue(value)
-            },
-            { view, _ -> view.hostView.scrollCollapseCoordination = ScrollCoordinationLevel.HANDOFF },
-        )
-        ctx.bindFloatAttribute(
-            "settleDuration",
-            false,
-            { view, value, _ ->
-                view.hostView.settleDurationSeconds =
-                    if (value > 0f) value else BottomSheetMath.DEFAULT_SETTLE_DURATION_SECONDS
-            },
-            { view, _ ->
-                view.hostView.settleDurationSeconds = BottomSheetMath.DEFAULT_SETTLE_DURATION_SECONDS
-            },
-        )
-        ctx.bindBooleanAttribute(
-            "hasCloseRequestHandler",
-            false,
-            { view, value, _ -> view.hostView.hasCloseRequestHandler = value },
-            { view, _ -> view.hostView.hasCloseRequestHandler = false },
-        )
-        ctx.bindIntAttribute(
-            "scrimColorArgb",
-            false,
-            { view, value, _ -> view.hostView.setScrimColorArgb(value) },
-            { view, _ -> view.hostView.setScrimColorArgb(BottomSheetScrimCanvasView.DEFAULT_SCRIM_COLOR) },
-        )
-        ctx.bindStringAttribute(
-            "scrimAccessibilityLabel",
-            false,
-            { view, value, _ -> view.hostView.setScrimAccessibilityLabel(value) },
-            { view, _ -> view.hostView.setScrimAccessibilityLabel(ScrimDismissView.DEFAULT_LABEL) },
-        )
-        ctx.bindUntypedAttribute(
-            "surfaceCornerRadii",
-            false,
-            { view, value -> view.applyCornerRadiiUntyped(value) },
-            { view -> view.applyCornerRadiiUntyped(null) },
-        )
-        ctx.bindStringAttribute(
-            "surfaceCornerCurve",
-            false,
-            { _, _, _ -> /* Android uses circular rounded rects natively */ },
-            { _, _ -> },
-        )
-        ctx.bindUntypedAttribute(
-            "surfaceShadows",
-            false,
-            { view, value -> view.applySurfaceShadowsUntyped(value) },
-            { view -> view.applySurfaceShadowsUntyped(null) },
-        )
-        ctx.bindFloatAttribute(
-            "surfaceElevation",
-            false,
-            { view, value, _ -> view.hostView.setSurfaceElevationDp(value) },
-            { view, _ -> view.hostView.setSurfaceElevationDp(0f) },
-        )
-        ctx.bindIntAttribute(
-            "surfaceShadowColorArgb",
-            false,
-            { view, value, _ -> view.hostView.setSurfaceShadowColorArgb(value) },
-            { view, _ -> view.hostView.setSurfaceShadowColorArgb(Color.BLACK) },
-        )
-        ctx.bindUntypedAttribute(
-            "committedContentRegionInset",
-            false,
-            { view, value ->
-                view.hostView.committedContentRegionInsetDp = (value as? Number)?.toFloat()
-            },
-            { view -> view.hostView.committedContentRegionInsetDp = null },
+            { view, value -> view.applyConfigUntyped(value) },
+            { view -> view.resetConfig() },
         )
 
         ctx.bindFunctionAttribute(

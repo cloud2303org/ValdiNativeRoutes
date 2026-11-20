@@ -34,6 +34,10 @@ export function createEditorConfig(
     }
     aliases.tslib = [absolute(paths.join(framework, 'src/valdi_modules/src/valdi/valdi_core/src/tslib'))];
   }
+  const solidNative = modules.find(candidate => candidate.name === 'solid_native');
+  const solidJsxDecl = module.jsxBackend === 'solid' && solidNative && module.name !== 'solid_native'
+    ? [absolute(paths.join(solidNative.dir, 'src/jsx.d.ts'))]
+    : [];
   // npm packages use normal node_modules lookup. A wildcard paths mapping to
   // node_modules would bypass package exports, including private subpaths.
   return {
@@ -55,6 +59,7 @@ export function createEditorConfig(
     },
     include: [
       ...RUNTIME_SOURCE_PATTERNS,
+      ...solidJsxDecl,
       ...module.generatedDirs.map(directory => absolute(paths.join(directory, '**/*.ts'))),
     ],
   };

@@ -4,7 +4,9 @@ import { publishRoutes } from './NavigationHost';
 import type { NavigationOptions } from './options';
 
 export type EmptyParams = Record<string, never>;
-export type PageComponent = abstract new (...args: any[]) => { onRender(): void };
+export type PageComponent =
+  | (abstract new (...args: any[]) => { onRender(): void })
+  | ((props: any) => any);
 
 export interface PageDefinition<P extends {} = EmptyParams, R extends {} = never> {
   readonly kind: 'valdi' | 'native';

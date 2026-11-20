@@ -45,12 +45,16 @@ export interface ModuleConfig {
   iosModuleFactory?: string;
   iosModuleFactoryClass?: string;
   template?: string;
+  jsxBackend?: 'solid';
 }
 
 export function moduleConfig(name: string): ModuleConfig {
   const file = path.join(modulesDir, name, 'module.json');
   if (!existsSync(file)) return {};
   const config = JSON.parse(readFileSync(file, 'utf8'));
+  if (config.jsxBackend !== undefined && config.jsxBackend !== 'solid') {
+    throw new Error(`${file}: unsupported jsxBackend`);
+  }
   if (config.nativeBuild !== undefined && !['bazel', 'host', 'cpp'].includes(config.nativeBuild)) throw new Error(`${file}: unsupported nativeBuild`);
   // Keep the cpp ownership contract aligned with scripts/lib/module-native-config.mjs.
   if (config.nativeBuild === 'cpp') {
@@ -72,12 +76,14 @@ export function moduleConfig(name: string): ModuleConfig {
 }
 
 export function appModule(name: string): ValdiModule {
+  const config = moduleConfig(name);
   return {
     name,
     dir: path.join(modulesDir, name),
     generatedDirs: [genDir(name)],
     // The npm packages its sources import (valdi/package.json, pinned by valdi/pnpm-lock.yaml) are bundled into it.
     nodeModules: path.join(valdi, 'node_modules'),
+    ...(config.jsxBackend ? { jsxBackend: config.jsxBackend } : {}),
   };
 }
 
@@ -306,7 +312,8 @@ export async function buildModule(module: ValdiModule, plugin: ValdiTsPlugin, mi
     tsconfig: false,
     platform: 'neutral',
     resolve: {
-      mainFields: ['main'],
+      conditionNames: ['browser', 'import', 'require', 'default'],
+      mainFields: ['browser', 'module', 'main'],
     },
     // Pages are required by path at run time, so every file keeps its exports.
     preserveEntrySignatures: 'strict',

@@ -52,6 +52,32 @@ export async function compileRuntimeModule(spec: RuntimeModuleSpec, execroot = p
       copyFileSync(input, output);
       return output;
     });
+    if (spec.name === 'valdi_core') {
+      const transport = path.join(temporary, 'src/NativeDebuggerTransport.ts');
+      copyFileSync(path.join(import.meta.dirname, 'runtime-native/NativeDebuggerTransport.ts'), transport);
+      sources.push(transport);
+      for (const rel of ['src/debugging/DebuggerProvider.ts', 'src/debugging/DebugSettings.ts']) {
+        const file = path.join(temporary, rel);
+        if (existsSync(file)) {
+          const text = readFileSync(file, 'utf8');
+          if (text.includes("import { jsx } from '../JSXBootstrap';")) {
+            writeFileSync(file, text.replace("import { jsx } from '../JSXBootstrap';", "import { transport as jsx } from '../NativeDebuggerTransport';"));
+          }
+        }
+      }
+      const resolver = path.join(temporary, 'src/debugging/DaemonClientManagerResolver.ts');
+      if (existsSync(resolver)) {
+        const text = readFileSync(resolver, 'utf8');
+        if (text.includes("import { jsx } from '../JSXBootstrap';")) {
+          writeFileSync(
+            resolver,
+            text
+              .replace("import { jsx } from '../JSXBootstrap';", "import { daemon } from '../NativeDebuggerTransport';")
+              .replace('jsx.daemonClientManager', 'daemon'),
+          );
+        }
+      }
+    }
     // Pinned upstream declaration omission: this type is imported from
     // ValdiRuntime by its own sources but only privately imported there. This
     // type-only re-export has no JS or native runtime effect.
@@ -133,13 +159,44 @@ export async function compileRuntimeModule(spec: RuntimeModuleSpec, execroot = p
       const built: Built = { entries: new Map(), maps: new Map() };
       for (const source of active.sourceEntries) {
         const relative = path.relative(temporary, source).split(path.sep).join('/').replace(/\.tsx?$/, '.js');
-        if (source.endsWith('.js')) built.entries.set(relative, readFileSync(source));
+        if (spec.name === 'valdi_core' && relative === 'src/Valdi.js') {
+          const replacement = path.join(import.meta.dirname, 'runtime-native/Valdi.ts');
+          const emitted = ts.transpileModule(readFileSync(replacement, 'utf8'), {
+            fileName: 'valdi_core/src/Valdi.ts',
+            compilerOptions: { target: ts.ScriptTarget.ES2015, module: ts.ModuleKind.CommonJS, sourceMap: true },
+          });
+          built.entries.set(relative, Buffer.from(emitted.outputText.replace(/\n\/\/# sourceMappingURL=.*$/, '')));
+          if (emitted.sourceMapText) built.maps.set(relative, emitted.sourceMapText);
+        } else if (source.endsWith('.js')) built.entries.set(relative, readFileSync(source));
         else {
           const emitted = plugin.emitWithMap(source);
           built.entries.set(relative, Buffer.from(emitted.code));
           const map = JSON.parse(emitted.map);
           map.sources = map.sources.map((file: string) => `//${spec.name}/${path.relative(temporary, file).split(path.sep).join('/')}`);
           built.maps.set(relative, JSON.stringify(map));
+        }
+      }
+      if (spec.name === 'valdi_core') {
+        for (const legacy of [
+          'src/Component.js',
+          'src/Renderer.js',
+          'src/RootComponentsManager.js',
+          'src/JSXBootstrap.js',
+          'src/JSX.js',
+          'src/EntryPointComponent.js',
+          'src/ElementRef.js',
+          'src/ComponentRef.js',
+          'src/ComponentPrototype.js',
+          'src/utils/ComponentUtils.js',
+          'src/NodePrototype.js',
+          'src/ComponentPath.js',
+          'src/Remember.js',
+          'src/ElementModifier.js',
+          'src/SchedulingPageComponent.js',
+          'src/provider/resolveProviderSource.js',
+        ]) {
+          built.entries.delete(legacy);
+          built.maps.delete(legacy);
         }
       }
       builds.set(mode, built);

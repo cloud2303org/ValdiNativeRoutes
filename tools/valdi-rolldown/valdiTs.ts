@@ -1,3 +1,4 @@
+/// <reference path="./ambient.d.ts" />
 // A rolldown plugin compiling a Valdi module's .ts/.tsx as the Valdi compiler does: TypeScript with the module's
 // tsconfig, Valdi's JSXProcessor on .tsx (it needs the type checker, so this is a whole program, not per-file
 // transpilation) and its console transformer on everything. TypeScript emits ES modules; rolldown turns them into
@@ -7,8 +8,10 @@
 // looked up in the module's directory first and then in generated resource declarations (res.ts);
 // npm packages (in `nodeModules`) are left to rolldown, which bundles them; every other module (valdi_core, …) stays
 // an external require.
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
+import { transformSync } from '@babel/core';
+import solidBabelPlugin from '@solidjs/babel-plugin';
 import type { Plugin } from 'rolldown';
 import ts from 'typescript';
 import { createConsoleLogTransformer } from './vendor/companion/ConsoleLogTransformer';
@@ -29,6 +32,7 @@ export interface ValdiModule {
   /** Explicit runtime-module inputs; ordinary app modules still discover src/. */
   sourceEntries?: string[];
   includeJavaScript?: boolean;
+  jsxBackend?: 'solid';
 }
 
 const EXTENSIONS = ['.ts', '.tsx', '/index.ts', '/index.tsx'];
@@ -171,12 +175,15 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
     readDirectory: ts.sys.readDirectory,
     directoryExists: ts.sys.directoryExists,
     getDirectories: ts.sys.getDirectories,
+    realpath: ts.sys.realpath,
     // Called once per emitted file: JSXProcessor keeps per-file state (node prototypes, ids), as in Valdi's
     // Workspace.doEmitFile.
     getCustomTransformers: () => ({
       before: [
         routeTransformer(service.getProgram()!.getTypeChecker(), module, inlineRouteIcons),
-        ...(emitting.endsWith('.tsx') ? new JSXProcessor().makeTransformers(service.getProgram()!.getTypeChecker()) : []),
+        ...(module.jsxBackend !== 'solid' && emitting.endsWith('.tsx')
+          ? new JSXProcessor().makeTransformers(service.getProgram()!.getTypeChecker())
+          : []),
         createConsoleLogTransformer(),
       ],
       after: [requireExternals],
@@ -227,7 +234,20 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
     if (!js || !map) throw new Error(`TypeScript emitted nothing for ${real}`);
     const sourceMap = JSON.parse(map.text);
     sourceMap.sources = sourceMap.sources.map((source: string) => path.resolve(path.dirname(map.name), source));
-    return { code: js.text.replace(/\n\/\/# sourceMappingURL=\S+\s*$/, '\n'), map: JSON.stringify(sourceMap) };
+    const code = js.text.replace(/\n\/\/# sourceMappingURL=\S+\s*$/, '\n');
+    if (module.jsxBackend === 'solid' && real.endsWith('.tsx')) {
+      const compiled = transformSync(code, {
+        filename: real,
+        configFile: false,
+        babelrc: false,
+        sourceMaps: true,
+        inputSourceMap: sourceMap,
+        plugins: [[solidBabelPlugin, { generate: 'universal', moduleName: 'solid_native/src/renderer', dev: false }]],
+      });
+      if (!compiled?.code || !compiled.map) throw new Error(`Solid emitted nothing for ${real}`);
+      return { code: compiled.code, map: JSON.stringify(compiled.map) };
+    }
+    return { code, map: JSON.stringify(sourceMap) };
   };
   const emit = (real: string) => emitWithMap(real).code;
 
@@ -270,6 +290,27 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
     },
 
     resolveId(source, importer) {
+      // One client-side Solid 2.0 runtime across all Valdi modules: only solid_runtime bundles solid-js/@solidjs/universal.
+      // Explicitly pick client builds so platform:'neutral' never pulls solid-js/dist/server.js.
+      const solidExternal: Record<string, string> = {
+        'solid-js': 'solid_runtime/src/solid',
+        '@solidjs/universal': 'solid_runtime/src/universal',
+        'solid-js/internal': 'solid_runtime/src/internal',
+      };
+      if (solidExternal[source]) {
+        if (module.name !== 'solid_runtime') {
+          return { id: solidExternal[source], external: true };
+        }
+        const localTargets: Record<string, string> = {
+          'solid-js': realpathSync(path.join(module.nodeModules!, 'solid-js/dist/solid.js')),
+          '@solidjs/universal': realpathSync(path.join(module.nodeModules!, '@solidjs/universal/dist/universal.js')),
+          'solid-js/internal': realpathSync(path.join(module.nodeModules!, 'solid-js/dist/internal.js')),
+        };
+        return localTargets[source];
+      }
+      if (source.startsWith('solid-js/') || source.startsWith('@solidjs/universal/')) {
+        throw new Error(`Unsupported Solid subpath "${source}": use solid-js or @solidjs/universal.`);
+      }
       // npm packages, and what their files import, resolve as Node does.
       if (isNpm(source, importer) || importer?.includes(`${path.sep}node_modules${path.sep}`)) return null;
       let relative: string;

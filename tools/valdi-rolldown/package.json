@@ -7,9 +7,12 @@
     "dev": "tsx dev.ts",
     "new-module": "tsx new-module.ts",
     "tsconfig": "tsx tsconfig.ts",
-    "typecheck": "node typecheck-node.mjs"
+    "typecheck": "node typecheck-node.mjs",
+    "test:solid": "node --conditions=browser --import tsx --test tests/solid2-universal.test.ts"
   },
   "devDependencies": {
+    "@babel/core": "7.29.0",
+    "@solidjs/babel-plugin": "2.0.2",
     "@types/node": "^26.6.5",
     "hermes-compiler": "260318099.0.4",
     "rolldown": "1.2.15",

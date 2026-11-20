@@ -11,5 +11,5 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": ["**/*.ts", "**/*.mts", "modules.mjs", "typecheck-node.mjs"],
-  "exclude": ["node_modules", ".gen", "**/*.test.ts", "**/*.test.mts"]
+  "exclude": ["node_modules", ".gen", "runtime-native", "**/*.test.ts", "**/*.test.mts"]
 }

@@ -125,7 +125,7 @@ final class SystemTabsController: UITabBarController, UITabBarControllerDelegate
             }
             return scaled.withRenderingMode(.alwaysTemplate)
         }
-        return (ValdiOta.image(module: "app_pages", name: name) ?? UIImage(named: name, in: ValdiHost.resourceBundle, compatibleWith: nil))?
+        return UIImage(named: name, in: ValdiHost.resourceBundle, compatibleWith: nil)?
             .withRenderingMode(.alwaysTemplate)
     }
 }

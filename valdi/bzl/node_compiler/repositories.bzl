@@ -8,7 +8,7 @@ def _tools_impl(ctx):
     # Expose only authored inputs, never the installed pnpm store, generated
     # configs or machine-local outputs. Each file becomes a hashed Bazel input.
     for entry in tools.readdir():
-        if entry.basename in ["codegen", "vendor"] or entry.basename.endswith(".ts") or entry.basename.endswith(".mjs") or entry.basename in ["package.json", "pnpm-lock.yaml"]:
+        if entry.basename in ["codegen", "vendor", "runtime-native"] or entry.basename.endswith(".ts") or entry.basename.endswith(".mjs") or entry.basename in ["package.json", "pnpm-lock.yaml"]:
             ctx.symlink(entry, entry.basename)
     # All native compiler dependencies ship prebuilt platform packages.
     # rules_js requires an explicit pnpm 10 lifecycle allowlist.
@@ -41,7 +41,7 @@ filegroup(name = "framework_inputs", srcs = glob(["framework/**"]))
 npm_link_all_packages(name = "node_modules")
 js_library(
     name = "compiler",
-    srcs = glob(["*.ts", "*.mjs", "codegen/**/*.ts", "vendor/**"],
+    srcs = glob(["*.ts", "*.mjs", "codegen/**/*.ts", "runtime-native/**/*.ts", "vendor/**"],
                 exclude = ["*.test.ts", "codegen/goldens.ts"]) + ["package.json", "pnpm-lock.yaml"],
     deps = [":node_modules"],
 )

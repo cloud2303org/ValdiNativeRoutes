@@ -9,36 +9,14 @@ import com.snap.valdi.modules.ModuleFactoryRegistry
 
 object ValdiNativeModules {
     fun registerFactories(context: Context) {
-        val factory0 = io.valdiroutes.app.OtaModuleFactory()
-        ModuleFactoryRegistry.registerModuleFactory { factory0 }
-        val factory1 = io.valdiroutes.app_ui.AppUIModuleFactoryImpl(context.applicationContext)
-        ModuleFactoryRegistry.registerModuleFactory { factory1 }
-        val factory2 = io.valdiroutes.video.VideoModuleFactoryImpl(context.applicationContext)
-        ModuleFactoryRegistry.registerModuleFactory { factory2 }
-        val factory3 = io.valdiroutes.bluetooth.BluetoothModuleFactoryImpl(context.applicationContext)
-        ModuleFactoryRegistry.registerModuleFactory { factory3 }
-        val factory4 = com.snap.modules.calculator.CalculatorModuleFactoryImpl()
-        ModuleFactoryRegistry.registerModuleFactory { factory4 }
-        val factory5 = io.valdiroutes.mmkv.MMKVModuleFactoryImpl(context.applicationContext)
-        ModuleFactoryRegistry.registerModuleFactory { factory5 }
-        val factory6 = io.valdiroutes.nfc.NfcModuleFactoryImpl(context.applicationContext)
-        ModuleFactoryRegistry.registerModuleFactory { factory6 }
-        val factory7 = io.valdiroutes.permissions.PermissionModuleFactoryImpl(context.applicationContext)
-        ModuleFactoryRegistry.registerModuleFactory { factory7 }
-        val factory8 = io.valdiroutes.app.modules.theme_bridge.ThemeBridgeModuleFactoryImpl()
-        ModuleFactoryRegistry.registerModuleFactory { factory8 }
-        val factory9 = com.snap.valdi.modules.webview.WebViewNativeModuleFactoryImpl()
-        ModuleFactoryRegistry.registerModuleFactory { factory9 }
-        val factory10 = io.valdiroutes.wifi.WifiModuleFactoryImpl(context.applicationContext)
-        ModuleFactoryRegistry.registerModuleFactory { factory10 }
+
     }
 
     fun registerViewBinders(context: Context, runtime: ValdiRuntimeManager) {
-        runtime.registerGlobalAttributesBinder(com.snap.valdi.modules.webview.ValdiWebViewAttributesBinder(context))
+
     }
 
     fun registerAssetLoaders(runtime: ValdiRuntimeManager) {
-        runtime.registerAssetLoader(io.valdiroutes.video.VideoModuleFactoryImpl.requireHost().loader)
     }
 
     fun attachActivity(
@@ -46,36 +24,26 @@ object ValdiNativeModules {
         permissionLauncher: ActivityResultLauncher<Array<String>>,
         onVideoFullscreenChanged: (Boolean) -> Unit,
     ) {
-        io.valdiroutes.video.VideoModuleFactoryImpl.requireHost().attach(activity, onVideoFullscreenChanged)
-        io.valdiroutes.permissions.PermissionModuleFactoryImpl.requireHost().attach(activity, permissionLauncher)
     }
 
     fun onPermissionResult(grants: Map<String, Boolean>) {
-        io.valdiroutes.permissions.PermissionModuleFactoryImpl.requireHost().onResult(grants)
     }
 
     fun onActivityResume(activity: ComponentActivity) {
-        io.valdiroutes.video.VideoModuleFactoryImpl.requireHost().onResume(activity)
     }
 
     fun onActivityPause(activity: ComponentActivity) {
-        io.valdiroutes.video.VideoModuleFactoryImpl.requireHost().onPause(activity)
     }
 
     fun onActivityStop(activity: ComponentActivity) {
-        io.valdiroutes.video.VideoModuleFactoryImpl.requireHost().onStop(activity)
     }
 
     fun onPictureInPictureModeChanged(activity: ComponentActivity, isInPictureInPictureMode: Boolean) {
-        io.valdiroutes.video.VideoModuleFactoryImpl.requireHost().onPictureInPictureModeChanged(activity, isInPictureInPictureMode)
     }
 
     fun exitVideoFullscreenFromBack() {
-        io.valdiroutes.video.VideoModuleFactoryImpl.requireHost().exitFullscreenFromBack()
     }
 
     fun detachActivity(activity: ComponentActivity) {
-        io.valdiroutes.video.VideoModuleFactoryImpl.requireHost().detach(activity)
-        io.valdiroutes.permissions.PermissionModuleFactoryImpl.requireHost().detach(activity)
     }
 }

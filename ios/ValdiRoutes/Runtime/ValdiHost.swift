@@ -6,15 +6,10 @@ final class ValdiHost {
     static let shared = ValdiHost()
 
     private lazy var runtimeManager: SCValdiRuntimeManager = {
-        let videoLoaders = VRCreateNativeVideoLoaders()
         let manager = SCValdiRuntimeManager()
-        // The over-the-air package's modules and images (ValdiOta.swift), chosen before the runtime starts.
-        let modules = ValdiOta.start()
         // Applied when the runtime starts, after Valdi's default loader, so remote <image> sources go through SDWebImage.
         manager.updateConfiguration {
             $0.imageLoaders = [AppImageLoader()]
-            $0.videoLoaders = videoLoaders
-            $0.customModuleProvider = modules
             // Device.observeDarkMode (theme.ts) only hears about the appearance with this on.
             $0.allowDarkMode = true
         }
@@ -29,10 +24,6 @@ final class ValdiHost {
         waiting.append(completion)
         guard waiting.count == 1 else { return }
         let runtime = self.runtime
-        MainActor.assumeIsolated {
-            AppUI.imageLoader = AppImages.load
-            AppUI.runtime = runtime
-        }
         VRRegisterNativeModules(runtime)
         AppNativeModules.register(runtime, navigationHost: navigationHost)
         // App-wide objects (api and the router) are created here, not in a page.
@@ -43,7 +34,6 @@ final class ValdiHost {
         #endif
         VRStartApp.invoke(jsRuntimeProvider: { runtime.jsRuntime()! }, debug: debug) { declaration in
             let table = RouteTable(declaration)
-            Task.detached(priority: .background) { await ValdiOta.checkForUpdate() }
             DispatchQueue.main.async { [self] in
                 started = table
                 waiting.forEach { $0(table) }

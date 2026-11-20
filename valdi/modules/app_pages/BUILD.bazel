@@ -1,22 +1,16 @@
 load("@valdi//bzl/valdi:valdi_module.bzl", "valdi_module")
 
-# Legacy declaration, not an app build or CI entry point: tools/valdi-rolldown builds app_pages (Gradle and Xcode run
-# it) and its tsconfig.ts replaces `valdi projectsync`. Kept as a reference for the original module layout. npm
-# packages resolve from valdi/node_modules, which Valdi's compiler can't see: building this target fails.
-
 valdi_module(
     name = "app_pages",
     srcs = glob([
         "src/**/*.ts",
         "src/**/*.tsx",
     ]),
-    # Tab bar icons (routes.tabs); the native tab bars load the exported variants.
-    res = glob(["res/**/*.png"]),
     visibility = ["//visibility:public"],
     deps = [
         "//modules/app_foundation:app_foundation_compiled",
-        "//modules/app_ui:app_ui_compiled",
-        "//modules/app_vision:app_vision_compiled",
+        "//modules/solid_native:solid_native_compiled",
+        "//modules/solid_runtime:solid_runtime_compiled",
         "@valdi//src/valdi_modules/src/valdi/native_web",
         "@valdi//src/valdi_modules/src/valdi/valdi_core",
         "@valdi//src/valdi_modules/src/valdi/valdi_tsx",

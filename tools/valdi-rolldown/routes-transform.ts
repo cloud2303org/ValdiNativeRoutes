@@ -22,8 +22,20 @@ export function routeTransformer(
       ts.isFunctionDeclaration(declaration) && declaration.name?.text === name &&
       declaration.getSourceFile().fileName.replaceAll('\\', '/').endsWith('/navigation/config.ts'));
     const componentPath = (node: ts.Expression, field = 'valdiPage.component'): string => {
-      const declaration = symbol(node)?.declarations?.find(ts.isClassDeclaration);
-      if (!declaration?.name || !ts.getJSDocTags(declaration).some(tag => tag.tagName.text === 'Component')) {
+      const resolved = symbol(node);
+      const classDecl = resolved?.declarations?.find(ts.isClassDeclaration);
+      const fnDecl = resolved?.declarations?.find(
+        (d): d is ts.FunctionDeclaration | ts.VariableDeclaration | ts.ArrowFunction | ts.FunctionExpression =>
+          ts.isFunctionDeclaration(d) ||
+          (ts.isVariableDeclaration(d) && !!d.initializer &&
+            (ts.isArrowFunction(d.initializer) || ts.isFunctionExpression(d.initializer))) ||
+          ((ts.isArrowFunction(d) || ts.isFunctionExpression(d)) && ts.isExportAssignment(d.parent)),
+      );
+      const declaration = classDecl ?? fnDecl;
+      if (!declaration) {
+        return fail(node, `${field} must reference an exported @Component class or Solid component function`);
+      }
+      if (classDecl && (!classDecl.name || !ts.getJSDocTags(classDecl).some(tag => tag.tagName.text === 'Component'))) {
         return fail(node, `${field} must reference an exported @Component class`);
       }
       const file = declaration.getSourceFile().fileName;
@@ -32,10 +44,22 @@ export function routeTransformer(
       const owner = !local.startsWith('..') ? module.name : parts?.[1];
       const relative = !local.startsWith('..') ? local.replaceAll('\\', '/').replace(/\.tsx?$/, '') : parts?.[2];
       if (!owner || !relative) return fail(node, 'Cannot resolve the component module');
-      if (!(ts.getCombinedModifierFlags(declaration) & ts.ModifierFlags.Export)) {
-        return fail(node, 'Route components must be exported');
+      let member: string | undefined;
+      if (ts.isClassDeclaration(declaration) || ts.isFunctionDeclaration(declaration)) {
+        if (!(ts.getCombinedModifierFlags(declaration) & ts.ModifierFlags.Export)) {
+          return fail(node, 'Route components must be exported');
+        }
+        member = ts.getCombinedModifierFlags(declaration) & ts.ModifierFlags.Default ? 'default' : declaration.name?.text;
+      } else if (ts.isVariableDeclaration(declaration)) {
+        const statement = declaration.parent?.parent;
+        if (!statement || !ts.isVariableStatement(statement) || !ts.getModifiers(statement)?.some(m => m.kind === ts.SyntaxKind.ExportKeyword)) {
+          return fail(node, 'Route components must be exported');
+        }
+        member = ts.isIdentifier(declaration.name) ? declaration.name.text : undefined;
+      } else {
+        member = 'default';
       }
-      const member = ts.getCombinedModifierFlags(declaration) & ts.ModifierFlags.Default ? 'default' : declaration.name.text;
+      if (!member) return fail(node, 'Route components must be named or default exported');
       return `${member}@${owner}/${relative}`;
     };
     const icon = (node: ts.Expression): ts.Expression => {

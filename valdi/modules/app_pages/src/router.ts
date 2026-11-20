@@ -3,7 +3,6 @@ import {
   createRouter,
   Router as FoundationRouter,
   type RouteName as FoundationRouteName,
-  type TabName as FoundationTabName,
   type RouteParams as FoundationRouteParams,
   type RouteResults as FoundationRouteResults,
   type RouteViewModel as FoundationRouteViewModel,
@@ -14,7 +13,6 @@ import { routes } from './routes';
 export type { NavigationOptions } from 'app_foundation/src/navigation/router';
 
 export type RouteName = FoundationRouteName<typeof routes>;
-export type TabName = FoundationTabName<typeof routes>;
 export type RouteParams = FoundationRouteParams<typeof routes>;
 export type RouteResults = FoundationRouteResults<typeof routes>;
 export type RouteViewModel<R extends RouteName> = FoundationRouteViewModel<typeof routes, R>;

@@ -387,9 +387,6 @@ class BottomSheetView(context: Context) :
     internal fun applyConfig(config: BottomSheetConfig) {
         windowOverlay = config.windowOverlay
         openOrder = config.openOrder.toInt()
-        hostView.animateIn = config.animateIn
-        hostView.animateContentHeight = config.animateContentHeight
-        hostView.modal = config.modal
         hostView.scrollExpandCoordination =
             ScrollCoordinationLevel.fromWireValue(config.scrollExpandCoordination.toInt())
         hostView.scrollCollapseCoordination =
@@ -408,11 +405,16 @@ class BottomSheetView(context: Context) :
         hostView.setSurfaceElevationDp(config.surfaceElevation.toFloat())
         hostView.setSurfaceShadowColorArgb(config.surfaceShadowColorArgb.toLong().toInt())
         hostView.committedContentRegionInsetDp = config.committedContentRegionInset?.toFloat()
-        hostView.setRawDetents(mapRawDetents(config.detents))
 
         val nextIndex = config.detentIndex.toInt()
         requestedToPresentInOverlay = nextIndex >= 0
-        hostView.setRequestedIndex(nextIndex)
+        hostView.applyPresentationConfig(
+            modal = config.modal,
+            animateIn = config.animateIn,
+            animateContentHeight = config.animateContentHeight,
+            detents = mapRawDetents(config.detents),
+            requestedIndex = nextIndex,
+        )
         syncOverlayVisibility()
     }
 

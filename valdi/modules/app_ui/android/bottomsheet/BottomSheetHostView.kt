@@ -45,10 +45,12 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
 
     var animateIn: Boolean = true
     var animateContentHeight: Boolean = true
-    var modal: Boolean = false
+    private var _modal: Boolean = false
+    var modal: Boolean
+        get() = _modal
         set(value) {
-            if (field == value) return
-            field = value
+            if (_modal == value) return
+            _modal = value
             if (containerHeightPx > 0 && rawDetents.isNotEmpty()) {
                 recomputeDetentsAndSync(animateResize = false)
             } else {
@@ -257,11 +259,92 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
         measuredNaturalContentHeightPx = naturalHeightPx.coerceAtLeast(0)
         hasMeasuredContentHeight = true
         if (rawDetents.any { it.kind == DetentKind.CONTENT } && containerHeightPx > 0) {
-            recomputeDetentsAndSync(animateResize = hadMeasurement && animateContentHeight && isPresented)
+            recomputeDetentsAndSync(
+                animateResize = BottomSheetMath.shouldAnimateContentMeasurement(
+                    hadMeasurement = hadMeasurement,
+                    animateContentHeight = animateContentHeight,
+                    isPresented = isPresented,
+                    currentTargetIndex = currentTargetIndex,
+                    openHeightPx = openHeightPx,
+                ),
+            )
         }
     }
 
     // ---- Configuration setters ----
+
+    fun applyPresentationConfig(
+        modal: Boolean,
+        animateIn: Boolean,
+        animateContentHeight: Boolean,
+        detents: List<RawDetentSpec>,
+        requestedIndex: Int,
+    ) {
+        val modalChanged = _modal != modal
+        val detentsChanged = rawDetents != detents
+        this.animateIn = animateIn
+        this.animateContentHeight = animateContentHeight
+        _modal = modal
+        rawDetents = detents
+
+        if (!hasInitializedPresentation) {
+            if (requestedIndex >= 0) {
+                sawOpenRequestBeforeInit = true
+            }
+            rawRequestedIndex = requestedIndex
+            if (rawDetents.isEmpty() && requestedIndex < 0 && sawOpenRequestBeforeInit) {
+                sawOpenRequestBeforeInit = false
+                onSettleChanged?.invoke(-1)
+            }
+            if (containerHeightPx > 0 && containerWidthPx > 0) {
+                recomputeDetentsAndSync(animateResize = false)
+            } else if (modalChanged) {
+                syncVisualsForCurrentOffset()
+                syncAccessibility()
+                onPresentationChanged?.invoke()
+            }
+            return
+        }
+
+        if (detentsChanged || modalChanged) {
+            val prevPresented = isPresented
+            val prevTargetIndex = currentTargetIndex
+            rawRequestedIndex = requestedIndex
+            if (containerHeightPx <= 0 || containerWidthPx <= 0) {
+                if (modalChanged) {
+                    syncVisualsForCurrentOffset()
+                    syncAccessibility()
+                    onPresentationChanged?.invoke()
+                }
+                return
+            }
+            if (rawDetents.isEmpty()) {
+                recomputeDetentsAndSync(animateResize = false)
+                if (modalChanged || isPresented != prevPresented) {
+                    syncAccessibility()
+                    onPresentationChanged?.invoke()
+                }
+                return
+            }
+            resolveDetentsAndEmitGeometry()
+            val clamped = clampRequestedIndex(requestedIndex)
+            if (clamped != prevTargetIndex) {
+                snapToIndex(clamped, initialVelocityPxPerSec = 0f, animated = true, emitIndexCallback = false)
+            } else {
+                reanchorInitializedPresentation(
+                    desiredIndex = clamped,
+                    animateResize = detentsChanged && animateContentHeight && isPresented,
+                )
+            }
+            if (modalChanged || isPresented != prevPresented) {
+                syncAccessibility()
+                onPresentationChanged?.invoke()
+            }
+            return
+        }
+
+        setRequestedIndex(requestedIndex)
+    }
 
     fun setRawDetents(specs: List<RawDetentSpec>) {
         if (specs == rawDetents) return
@@ -461,20 +544,7 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
         }
     }
 
-    private fun recomputeDetentsAndSync(animateResize: Boolean) {
-        if (containerHeightPx <= 0 || containerWidthPx <= 0) return
-        if (rawDetents.isEmpty()) {
-            resolvedDetents = emptyList()
-            sheetOffsetY = containerHeightPx.toFloat()
-            currentTargetIndex = -1
-            syncVisualsForCurrentOffset()
-            if (!hasInitializedPresentation && rawRequestedIndex < 0 && sawOpenRequestBeforeInit) {
-                sawOpenRequestBeforeInit = false
-                onSettleChanged?.invoke(-1)
-            }
-            return
-        }
-
+    private fun resolveDetentsAndEmitGeometry() {
         val firstRaw = rawDetents.firstOrNull()
         cardMaxWidthPx = ((firstRaw?.maxWidthDp ?: 0f) * density).coerceAtLeast(0f)
         cardPlacementBias = (firstRaw?.placementBias ?: 0.5f).coerceIn(0f, 1f)
@@ -490,7 +560,7 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
             DetentInsets()
         }
 
-        val resolved = rawDetents.map { raw ->
+        resolvedDetents = rawDetents.map { raw ->
             val topInsetPx = if (raw.usesStatusBarTopInset) {
                 statusBarTopInsetPx.toFloat()
             } else {
@@ -521,9 +591,46 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
                 scrimOpacity = raw.scrimOpacity,
             )
         }
-        resolvedDetents = resolved
 
         emitGeometryIfNeeded()
+    }
+
+    private fun reanchorInitializedPresentation(desiredIndex: Int, animateResize: Boolean) {
+        currentTargetIndex = desiredIndex
+        val newTargetOffset = targetOffsetForIndex(desiredIndex)
+        if (isDraggingSheet || isNestedDragging) {
+            syncVisualsForCurrentOffset()
+            emitPositionIfNeeded()
+        } else if ((animateResize && abs(newTargetOffset - sheetOffsetY) >= 0.5f) || isAnimating) {
+            syncVisualsForCurrentOffset()
+            startSpringTo(
+                targetOffsetPx = newTargetOffset,
+                initialVelocityPxPerSec = 0f,
+                targetIndex = desiredIndex,
+            )
+        } else {
+            cancelSpring()
+            sheetOffsetY = newTargetOffset
+            syncVisualsForCurrentOffset()
+            emitPositionIfNeeded()
+        }
+    }
+
+    private fun recomputeDetentsAndSync(animateResize: Boolean) {
+        if (containerHeightPx <= 0 || containerWidthPx <= 0) return
+        if (rawDetents.isEmpty()) {
+            resolvedDetents = emptyList()
+            sheetOffsetY = containerHeightPx.toFloat()
+            currentTargetIndex = -1
+            syncVisualsForCurrentOffset()
+            if (!hasInitializedPresentation && rawRequestedIndex < 0 && sawOpenRequestBeforeInit) {
+                sawOpenRequestBeforeInit = false
+                onSettleChanged?.invoke(-1)
+            }
+            return
+        }
+
+        resolveDetentsAndEmitGeometry()
 
         val desiredIndex = clampRequestedIndex(rawRequestedIndex)
         if (!hasInitializedPresentation) {
@@ -531,9 +638,11 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
                 sawOpenRequestBeforeInit = true
             }
             // Defer initial open if target detent is a 'content' detent whose marker hasn't laid out yet.
-            val waitingForContent = desiredIndex in rawDetents.indices &&
-                rawDetents[desiredIndex].kind == DetentKind.CONTENT &&
-                !hasMeasuredContentHeight
+            val waitingForContent = BottomSheetMath.shouldWaitForContentMeasurement(
+                rawDetents = rawDetents,
+                desiredIndex = desiredIndex,
+                hasMeasuredContentHeight = hasMeasuredContentHeight,
+            )
 
             if (waitingForContent) {
                 sheetOffsetY = containerHeightPx.toFloat()
@@ -572,24 +681,7 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
         }
 
         // Re-anchor existing presentation after container resize or content height change.
-        currentTargetIndex = desiredIndex
-        val newTargetOffset = targetOffsetForIndex(desiredIndex)
-        if (isDraggingSheet || isNestedDragging) {
-            syncVisualsForCurrentOffset()
-            emitPositionIfNeeded()
-        } else if ((animateResize && abs(newTargetOffset - sheetOffsetY) >= 0.5f) || isAnimating) {
-            syncVisualsForCurrentOffset()
-            startSpringTo(
-                targetOffsetPx = newTargetOffset,
-                initialVelocityPxPerSec = 0f,
-                targetIndex = desiredIndex,
-            )
-        } else {
-            cancelSpring()
-            sheetOffsetY = newTargetOffset
-            syncVisualsForCurrentOffset()
-            emitPositionIfNeeded()
-        }
+        reanchorInitializedPresentation(desiredIndex = desiredIndex, animateResize = animateResize)
     }
 
     private fun emitGeometryIfNeeded() {

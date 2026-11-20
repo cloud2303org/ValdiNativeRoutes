@@ -320,4 +320,62 @@ class BottomSheetCoreTest {
         assertEquals(24f, shadows[0].blurRadius, 0.001f)
         assertEquals(0x40000000, shadows[0].color)
     }
+
+    @Test
+    fun contentDetentWaitAndFirstMeasurementAnimateDecisions() {
+        val contentDetent = listOf(
+            RawDetentSpec(value = 0f, kind = DetentKind.CONTENT),
+        )
+        assertTrue(
+            BottomSheetMath.shouldWaitForContentMeasurement(
+                rawDetents = contentDetent,
+                desiredIndex = 0,
+                hasMeasuredContentHeight = false,
+            ),
+        )
+        assertFalse(
+            BottomSheetMath.shouldWaitForContentMeasurement(
+                rawDetents = contentDetent,
+                desiredIndex = 0,
+                hasMeasuredContentHeight = true,
+            ),
+        )
+        assertFalse(
+            BottomSheetMath.shouldWaitForContentMeasurement(
+                rawDetents = contentDetent,
+                desiredIndex = -1,
+                hasMeasuredContentHeight = false,
+            ),
+        )
+
+        // First natural height measurement arriving while open at closed offset (openHeightPx == 0) must animate.
+        assertTrue(
+            BottomSheetMath.shouldAnimateContentMeasurement(
+                hadMeasurement = false,
+                animateContentHeight = false,
+                isPresented = true,
+                currentTargetIndex = 0,
+                openHeightPx = 0f,
+            ),
+        )
+        // Subsequent height updates follow animateContentHeight && isPresented.
+        assertFalse(
+            BottomSheetMath.shouldAnimateContentMeasurement(
+                hadMeasurement = true,
+                animateContentHeight = false,
+                isPresented = true,
+                currentTargetIndex = 0,
+                openHeightPx = 220f,
+            ),
+        )
+        assertTrue(
+            BottomSheetMath.shouldAnimateContentMeasurement(
+                hadMeasurement = true,
+                animateContentHeight = true,
+                isPresented = true,
+                currentTargetIndex = 0,
+                openHeightPx = 220f,
+            ),
+        )
+    }
 }

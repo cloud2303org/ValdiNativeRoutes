@@ -213,9 +213,12 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
     var openOrder: Int = 0
     var animateIn: Bool = true
     var animateContentHeight: Bool = true
-    var modal: Bool = false {
-        didSet {
-            guard modal != oldValue else { return }
+    private var _modal: Bool = false
+    var modal: Bool {
+        get { _modal }
+        set {
+            guard _modal != newValue else { return }
+            _modal = newValue
             if containerSize.height > 0 && !rawDetents.isEmpty {
                 recomputeDetentsAndSync(animateResize: false)
             } else {
@@ -413,11 +416,86 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
         measuredNaturalContentHeight = max(0, height)
         hasMeasuredContentHeight = true
         if rawDetents.contains(where: { $0.kind == .content }) && containerSize.height > 0 {
-            recomputeDetentsAndSync(animateResize: hadMeasurement && animateContentHeight && isPresented)
+            let shouldAnimate = (hadMeasurement && animateContentHeight && isPresented) ||
+                (!hadMeasurement && currentTargetIndex >= 0 && openHeight <= 0.5)
+            recomputeDetentsAndSync(animateResize: shouldAnimate)
         }
     }
 
     // ---- Prop Setters ----
+
+    func applyPresentationConfig(
+        modal: Bool,
+        animateIn: Bool,
+        animateContentHeight: Bool,
+        detents: [VRBSRawDetentSpec],
+        requestedIndex: Int
+    ) {
+        let modalChanged = _modal != modal
+        let detentsChanged = rawDetents != detents
+        self.animateIn = animateIn
+        self.animateContentHeight = animateContentHeight
+        _modal = modal
+        rawDetents = detents
+
+        if !hasInitializedPresentation {
+            if requestedIndex >= 0 {
+                sawOpenRequestBeforeInit = true
+            }
+            rawRequestedIndex = requestedIndex
+            if rawDetents.isEmpty && requestedIndex < 0 && sawOpenRequestBeforeInit {
+                sawOpenRequestBeforeInit = false
+                onSettleChanged?(-1)
+            }
+            if containerSize.width > 0 && containerSize.height > 0 {
+                recomputeDetentsAndSync(animateResize: false)
+            } else if modalChanged {
+                syncVisualsForCurrentOffset()
+                syncAccessibility()
+                onPresentationChanged?()
+            }
+            return
+        }
+
+        if detentsChanged || modalChanged {
+            let prevPresented = isPresented
+            let prevTargetIndex = currentTargetIndex
+            rawRequestedIndex = requestedIndex
+            guard containerSize.width > 0 && containerSize.height > 0 else {
+                if modalChanged {
+                    syncVisualsForCurrentOffset()
+                    syncAccessibility()
+                    onPresentationChanged?()
+                }
+                return
+            }
+            if rawDetents.isEmpty {
+                recomputeDetentsAndSync(animateResize: false)
+                if modalChanged || isPresented != prevPresented {
+                    syncAccessibility()
+                    onPresentationChanged?()
+                }
+                return
+            }
+            resolveDetentsAndEmitGeometry(statusTop: currentStatusBarTopInset())
+            let clamped = clampRequestedIndex(requestedIndex)
+            if clamped != prevTargetIndex {
+                snapToIndex(clamped, initialVelocity: 0, animated: true, emitIndexCallback: false)
+            } else {
+                reanchorInitializedPresentation(
+                    desiredIndex: clamped,
+                    animateResize: detentsChanged && animateContentHeight && isPresented
+                )
+            }
+            if modalChanged || isPresented != prevPresented {
+                syncAccessibility()
+                onPresentationChanged?()
+            }
+            return
+        }
+
+        setRequestedIndex(requestedIndex)
+    }
 
     func setRawDetents(_ specs: [VRBSRawDetentSpec]) {
         guard specs != rawDetents else { return }
@@ -659,21 +737,7 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
         return safeAreaInsets.top
     }
 
-    private func recomputeDetentsAndSync(animateResize: Bool) {
-        guard containerSize.width > 0, containerSize.height > 0 else { return }
-        if rawDetents.isEmpty {
-            resolvedDetents = []
-            sheetOffsetY = containerSize.height
-            currentTargetIndex = -1
-            syncVisualsForCurrentOffset()
-            if !hasInitializedPresentation && rawRequestedIndex < 0 && sawOpenRequestBeforeInit {
-                sawOpenRequestBeforeInit = false
-                onSettleChanged?(-1)
-            }
-            return
-        }
-        let statusTop = currentStatusBarTopInset()
-
+    private func resolveDetentsAndEmitGeometry(statusTop: CGFloat) {
         let firstRaw = rawDetents.first
         cardMaxWidth = max(0, firstRaw?.maxWidth ?? 0)
         cardPlacementBias = min(1, max(0, firstRaw?.placementBias ?? 0.5))
@@ -714,6 +778,40 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
         }
 
         emitGeometryIfNeeded(statusTop: statusTop)
+    }
+
+    private func reanchorInitializedPresentation(desiredIndex: Int, animateResize: Bool) {
+        currentTargetIndex = desiredIndex
+        let newOffset = targetOffset(for: desiredIndex)
+        if isDraggingSheet {
+            syncVisualsForCurrentOffset()
+            emitPositionIfNeeded()
+        } else if (animateResize && abs(newOffset - sheetOffsetY) >= 0.5) || activeSpring != nil {
+            syncVisualsForCurrentOffset()
+            startSpring(to: newOffset, initialVelocity: 0, targetIndex: desiredIndex)
+        } else {
+            stopSpring()
+            sheetOffsetY = newOffset
+            syncVisualsForCurrentOffset()
+            emitPositionIfNeeded()
+        }
+    }
+
+    private func recomputeDetentsAndSync(animateResize: Bool) {
+        guard containerSize.width > 0, containerSize.height > 0 else { return }
+        if rawDetents.isEmpty {
+            resolvedDetents = []
+            sheetOffsetY = containerSize.height
+            currentTargetIndex = -1
+            syncVisualsForCurrentOffset()
+            if !hasInitializedPresentation && rawRequestedIndex < 0 && sawOpenRequestBeforeInit {
+                sawOpenRequestBeforeInit = false
+                onSettleChanged?(-1)
+            }
+            return
+        }
+        let statusTop = currentStatusBarTopInset()
+        resolveDetentsAndEmitGeometry(statusTop: statusTop)
 
         let desired = clampRequestedIndex(rawRequestedIndex)
         if !hasInitializedPresentation {
@@ -757,20 +855,7 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
             return
         }
 
-        currentTargetIndex = desired
-        let newOffset = targetOffset(for: desired)
-        if isDraggingSheet {
-            syncVisualsForCurrentOffset()
-            emitPositionIfNeeded()
-        } else if (animateResize && abs(newOffset - sheetOffsetY) >= 0.5) || activeSpring != nil {
-            syncVisualsForCurrentOffset()
-            startSpring(to: newOffset, initialVelocity: 0, targetIndex: desired)
-        } else {
-            stopSpring()
-            sheetOffsetY = newOffset
-            syncVisualsForCurrentOffset()
-            emitPositionIfNeeded()
-        }
+        reanchorInitializedPresentation(desiredIndex: desired, animateResize: animateResize)
     }
 
     private func emitGeometryIfNeeded(statusTop: CGFloat) {

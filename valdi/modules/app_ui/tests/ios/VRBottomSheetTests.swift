@@ -236,4 +236,45 @@ final class VRBottomSheetTests: XCTestCase {
         XCTAssertTrue(host.isPresented)
         XCTAssertEqual(host.openHeight, 300, accuracy: 0.5)
     }
+
+    func testPreLaidOutContentSheetAnimatesInAfterAtomicConfigAndMeasurement() {
+        let host = VRBottomSheetHostingView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        host.layoutIfNeeded()
+
+        host.applyPresentationConfig(
+            modal: true,
+            animateIn: true,
+            animateContentHeight: true,
+            detents: [VRBSRawDetentSpec(value: 0, kind: .content, widestCard: true)],
+            requestedIndex: 0
+        )
+        XCTAssertFalse(host.isSettling)
+        XCTAssertEqual(host.openHeight, 0, accuracy: 0.5)
+
+        let wrapper = VRBottomSheetContentWrapperView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let marker = VRBottomSheetMarkerView(frame: CGRect(x: 0, y: 240, width: 390, height: 0))
+        wrapper.addSubview(marker)
+        host.clipContainer.addSubview(wrapper)
+        host.refreshSpecialDescendants()
+
+        XCTAssertTrue(host.isPresented)
+        XCTAssertTrue(host.isSettling)
+    }
+
+    func testPreLaidOutSheetHonorsAnimateInFalseWithAtomicConfig() {
+        let host = VRBottomSheetHostingView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        host.layoutIfNeeded()
+
+        host.applyPresentationConfig(
+            modal: true,
+            animateIn: false,
+            animateContentHeight: true,
+            detents: [VRBSRawDetentSpec(value: 300, kind: .points, widestCard: true)],
+            requestedIndex: 0
+        )
+
+        XCTAssertTrue(host.isPresented)
+        XCTAssertFalse(host.isSettling)
+        XCTAssertEqual(host.openHeight, 300, accuracy: 0.5)
+    }
 }

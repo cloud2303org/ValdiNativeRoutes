@@ -318,6 +318,33 @@ internal object BottomSheetMath {
         return sign * (1f - (1f / ((absOvershoot * c / dimensionPx) + 1f))) * dimensionPx
     }
 
+    /**
+     * Defers initial sheet presentation while targeting a `'content'` detent whose
+     * [BottomSheetMarkerView] has not yet reported a natural height.
+     */
+    fun shouldWaitForContentMeasurement(
+        rawDetents: List<RawDetentSpec>,
+        desiredIndex: Int,
+        hasMeasuredContentHeight: Boolean,
+    ): Boolean =
+        desiredIndex in rawDetents.indices &&
+            rawDetents[desiredIndex].kind == DetentKind.CONTENT &&
+            !hasMeasuredContentHeight
+
+    /**
+     * Animates content-height updates when dynamically resizing an already-open sheet, or when
+     * the first measurement resolves for an open sheet still resting at closed offset (`openHeight == 0`).
+     */
+    fun shouldAnimateContentMeasurement(
+        hadMeasurement: Boolean,
+        animateContentHeight: Boolean,
+        isPresented: Boolean,
+        currentTargetIndex: Int,
+        openHeightPx: Float,
+    ): Boolean =
+        (hadMeasurement && animateContentHeight && isPresented) ||
+            (!hadMeasurement && currentTargetIndex >= 0 && openHeightPx <= 0.5f)
+
     private fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
 }
 

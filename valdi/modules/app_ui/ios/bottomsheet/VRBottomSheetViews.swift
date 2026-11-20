@@ -369,9 +369,6 @@ final class VRBottomSheetView: UIView, SCValdiContentViewProviding {
     private func applyConfig(_ config: VRBottomSheetConfig) {
         windowOverlay = config.windowOverlay
         openOrder = Int(config.openOrder)
-        hostingView.animateIn = config.animateIn
-        hostingView.animateContentHeight = config.animateContentHeight
-        hostingView.modal = config.modal
         hostingView.scrollExpandCoordination = VRBSScrollCoordinationLevel.fromWireValue(Int(config.scrollExpandCoordination))
         hostingView.scrollCollapseCoordination = VRBSScrollCoordinationLevel.fromWireValue(Int(config.scrollCollapseCoordination))
         hostingView.settleDurationSeconds = config.settleDuration > 0
@@ -418,8 +415,13 @@ final class VRBottomSheetView: UIView, SCValdiContentViewProviding {
                 scrimOpacity: CGFloat(item.scrimOpacity)
             )
         }
-        hostingView.setRawDetents(detents)
-        hostingView.setRequestedIndex(Int(config.detentIndex))
+        hostingView.applyPresentationConfig(
+            modal: config.modal,
+            animateIn: config.animateIn,
+            animateContentHeight: config.animateContentHeight,
+            detents: detents,
+            requestedIndex: Int(config.detentIndex)
+        )
         syncHostPlacement()
     }
 

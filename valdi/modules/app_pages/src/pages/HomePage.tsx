@@ -1,9 +1,37 @@
 import type { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import type { SolidPageProps } from 'solid_native/src/bridge';
+import { useAnimate } from 'solid_native/src/renderer';
+import { AnimationCurve } from 'valdi_core/src/AnimationOptions';
+import { Style } from 'valdi_core/src/Style';
 import { systemBoldFont, systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
+import type { View } from 'valdi_tsx/src/NativeTemplateElements';
 import { router } from '../router';
 import { accentColor, cycleAccent, globalCount, setGlobalCount } from '../sharedState';
+
+const parityCardStyle = new Style<View>({
+  padding: 14,
+  borderRadius: 14,
+  backgroundColor: '#FFFFFF',
+  borderWidth: 1,
+  borderColor: '#E2E8F0',
+  marginBottom: 14,
+  flexDirection: 'column',
+});
+
+const chipStyle = new Style<View>({
+  paddingTop: 6,
+  paddingBottom: 6,
+  paddingLeft: 12,
+  paddingRight: 12,
+  borderRadius: 999,
+  backgroundColor: '#F1F5F9',
+  borderWidth: 1,
+  borderColor: '#CBD5E1',
+  marginRight: 8,
+});
+
+const PARITY_CHIPS = ['Style CSS', 'Native Animate', 'Horizontal Scroll', 'onLayout', 'Visibility'];
 
 interface ListItem {
   id: number;
@@ -53,8 +81,12 @@ function ActionButton(props: {
 }
 
 export function HomePage(props: SolidPageProps<PageViewModel, PageContext>) {
+  const animate = useAnimate();
   const [localCount, setLocalCount] = createSignal(0);
   const [showPanel, setShowPanel] = createSignal(true);
+  const [barExpanded, setBarExpanded] = createSignal(false);
+  const [cardWidth, setCardWidth] = createSignal(0);
+  const [cardVisible, setCardVisible] = createSignal(false);
   const [nextItemId, setNextItemId] = createSignal(4);
   const [items, setItems] = createSignal<ListItem[]>([
     { id: 1, label: 'Alpha signal row' },
@@ -316,6 +348,54 @@ export function HomePage(props: SolidPageProps<PageViewModel, PageContext>) {
               </view>
             )}
           </For>
+        </view>
+
+        <view
+          style={parityCardStyle}
+          onLayout={frame => setCardWidth(Math.round(frame.width))}
+          onVisibilityChanged={visible => setCardVisible(visible)}
+        >
+          <view flexDirection="row" alignItems="center" justifyContent="space-between" marginBottom={10}>
+            <label value="Style, Animate & Scroll" font={systemSemiboldFont(15)} color="#0F172A" />
+            <ActionButton
+              title={barExpanded() ? 'Collapse Box' : 'Animate Box'}
+              backgroundColor="#EEF2FF"
+              textColor="#3730A3"
+              onTap={() => {
+                animate({ duration: 0.25, curve: AnimationCurve.EaseInOut }, () => {
+                  setBarExpanded(expanded => !expanded);
+                });
+                refreshStats();
+              }}
+            />
+          </view>
+
+          <view
+            height={12}
+            width={barExpanded() ? 240 : 100}
+            borderRadius={6}
+            backgroundColor={accentColor()}
+            marginBottom={8}
+          />
+
+          <label
+            value={`Measured width: ${cardWidth()}pt · Visible: ${cardVisible() ? 'yes' : 'no'}`}
+            font={systemFont(12)}
+            color="#64748B"
+            marginBottom={10}
+          />
+
+          <scroll horizontal={true} showsHorizontalScrollIndicator={false}>
+            <view flexDirection="row" alignItems="center">
+              <For each={PARITY_CHIPS}>
+                {chip => (
+                  <view style={chipStyle}>
+                    <label value={chip} font={systemSemiboldFont(12)} color="#334155" />
+                  </view>
+                )}
+              </For>
+            </view>
+          </scroll>
         </view>
 
         <view

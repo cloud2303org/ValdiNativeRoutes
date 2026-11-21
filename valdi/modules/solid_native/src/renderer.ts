@@ -13,7 +13,8 @@ import {
   untrack,
   useContext,
 } from 'solid-js';
-import type { NativeElement, NativeTree } from './native-tree';
+import type { AnimationOptions } from 'valdi_core/src/AnimationOptions';
+import { NativeTree, type AnimationHandle, type NativeElement, type NativeFrame } from './native-tree';
 
 export const RenderContext = createContext<NativeTree>();
 
@@ -24,6 +25,26 @@ function activeTree(): NativeTree {
   }
   return tree;
 }
+
+export function useNativeTree(): NativeTree {
+  return activeTree();
+}
+
+export function useAnimate(): (options: AnimationOptions, action: () => void) => AnimationHandle {
+  const tree = activeTree();
+  return (options, action) => tree.animate(options, action);
+}
+
+export function animate(tree: NativeTree, options: AnimationOptions, action: () => void): AnimationHandle {
+  return tree.animate(options, action);
+}
+
+export function onNextLayoutComplete(tree: NativeTree, callback: () => void): void {
+  tree.onLayoutComplete(callback);
+}
+
+export { NativeTree };
+export type { AnimationHandle, NativeElement, NativeFrame };
 
 const renderer = createRenderer<NativeElement>({
   createElement(tag, staticProps) {

@@ -1,11 +1,20 @@
-import { getOwner, onCleanup } from 'solid-js';
-import type { NativeSink } from './transport';
+import { flush as solidFlush, getOwner, onCleanup } from 'solid-js';
+import type { AnimationOptions } from 'valdi_core/src/AnimationOptions';
+import type { EventTime } from 'valdi_tsx/src/GestureEvents';
+import type { NativeNode } from 'valdi_tsx/src/NativeNode';
+import type { NativeView } from 'valdi_tsx/src/NativeView';
+import { resolveCustomViewClass, type NativeSink } from './transport';
 
 export interface NativeFrame {
   x: number;
   y: number;
   width: number;
   height: number;
+}
+
+export interface AnimationHandle {
+  readonly token: number;
+  cancel(): void;
 }
 
 export interface NativeElement {
@@ -21,10 +30,14 @@ export interface NativeElement {
   props: Record<string, unknown>;
   frame: NativeFrame;
   readonly children: NativeElement[];
+  getFrame(): Promise<NativeFrame | undefined>;
+  getNativeView(): Promise<NativeView | undefined>;
+  getNativeNode(): NativeNode | undefined;
+  takeSnapshot(): Promise<string | undefined>;
 }
 
 type HostOp =
-  | { type: 'create'; node: NativeElement }
+  | { type: 'create'; node: NativeElement; tag: string }
   | { type: 'root'; node: NativeElement }
   | { type: 'set'; node: NativeElement; key: string; value: unknown }
   | {
@@ -35,7 +48,14 @@ type HostOp =
       anchor?: NativeElement;
     }
   | { type: 'detach'; node: NativeElement }
+  | { type: 'beginAnimation'; options: AnimationOptions; cancelToken: number }
+  | { type: 'endAnimation' }
+  | { type: 'cancelAnimation'; cancelToken: number }
+  | { type: 'layoutComplete'; callback: () => void }
   | { type: 'nextDraw'; callback: () => void };
+
+const JS_ONLY_PROPS = new Set(['onLayout', '$onLayout', 'onVisibilityChanged', 'onViewportChanged']);
+const CUSTOM_VIEW_CLASS_PROPS = new Set(['iosClass', 'androidClass', 'macosClass', 'linuxClass']);
 
 function scheduleMicrotask(fn: () => void): void {
   if (typeof queueMicrotask === 'function') {
@@ -50,14 +70,18 @@ export class NativeTree {
   alive = true;
 
   private nextId = 1;
+  private nextAnimationToken = 1;
   private operations: HostOp[] = [];
   private flushScheduled = false;
   private flushing = false;
   private materialized = new Set<NativeElement>();
   private detachedInBatch = new Set<NativeElement>();
   private disposedNodes = new Set<NativeElement>();
+  private observedVisibilityNodes = new Set<NativeElement>();
   private elementsById = new Map<number, NativeElement>();
   private frameObserverRegistered = false;
+  private visibilityObserverRegistered = false;
+  private needsVisibilityObserver = false;
 
   constructor(readonly sink: NativeSink) {
     this.root = this.makeElement('view', { width: '100%', height: '100%' });
@@ -76,11 +100,12 @@ export class NativeTree {
         }
       }
     }
+    const tree = this;
     const node: NativeElement = {
       id,
       tag,
       kind: 'element',
-      tree: this,
+      tree,
       props,
       frame: { x: 0, y: 0, width: 0, height: 0 },
       get children() {
@@ -89,6 +114,18 @@ export class NativeTree {
           list.push(child);
         }
         return list;
+      },
+      getFrame() {
+        return tree.getElementFrame(node);
+      },
+      getNativeView() {
+        return tree.getElementNativeView(node);
+      },
+      getNativeNode() {
+        return tree.getElementNativeNode(node);
+      },
+      takeSnapshot() {
+        return tree.takeElementSnapshot(node);
       },
     };
     this.elementsById.set(id, node);
@@ -123,6 +160,18 @@ export class NativeTree {
       get children() {
         return [];
       },
+      getFrame() {
+        return Promise.resolve(undefined);
+      },
+      getNativeView() {
+        return Promise.resolve(undefined);
+      },
+      getNativeNode() {
+        return undefined;
+      },
+      takeSnapshot() {
+        return Promise.resolve(undefined);
+      },
     };
     return node;
   }
@@ -131,6 +180,27 @@ export class NativeTree {
     if (!this.alive || node.kind !== 'element' || key === 'children') return;
     if (Object.is(node.props[key], value)) return;
     node.props[key] = value;
+
+    if (key === 'onLayout' || key === '$onLayout') {
+      return;
+    }
+
+    if (key === 'onVisibilityChanged' || key === 'onViewportChanged') {
+      if (this.materialized.has(node)) {
+        const wasObserving = this.observedVisibilityNodes.has(node);
+        const shouldObserve = this.hasVisibilityObserver(node);
+        if (shouldObserve && !wasObserving) {
+          this.observedVisibilityNodes.add(node);
+          this.needsVisibilityObserver = true;
+          this.enqueue({ type: 'set', node, key: 'observeVisibility', value: true });
+        } else if (!shouldObserve && wasObserving) {
+          this.observedVisibilityNodes.delete(node);
+          this.enqueue({ type: 'set', node, key: 'observeVisibility', value: false });
+        }
+      }
+      return;
+    }
+
     if (this.materialized.has(node)) {
       this.enqueue({ type: 'set', node, key, value });
     } else if (node === this.root) {
@@ -208,15 +278,95 @@ export class NativeTree {
     }
   }
 
+  onLayoutComplete(callback: () => void): void {
+    if (!this.alive) return;
+    this.enqueue({ type: 'layoutComplete', callback });
+  }
+
   onNextDraw(callback: () => void): void {
     if (!this.alive) return;
     this.operations.push({ type: 'nextDraw', callback });
     this.flush();
   }
 
+  animate(options: AnimationOptions, action: () => void): AnimationHandle {
+    if (!this.alive || !this.sink.beginAnimation || !this.sink.endAnimation) {
+      action();
+      solidFlush();
+      return { token: 0, cancel() {} };
+    }
+
+    // Drain any previously queued Solid effects and native ops before opening the animation block
+    // so only mutations performed by `action()` are animated.
+    solidFlush();
+    this.flush();
+    const token = this.nextAnimationToken++;
+    this.operations.push({ type: 'beginAnimation', options, cancelToken: token });
+    try {
+      action();
+      solidFlush();
+    } finally {
+      this.operations.push({ type: 'endAnimation' });
+      this.flush();
+    }
+    return {
+      token,
+      cancel: () => this.cancelAnimation(token),
+    };
+  }
+
+  cancelAnimation(token: number): void {
+    if (!this.alive || token <= 0 || !this.sink.cancelAnimation) return;
+    this.operations.push({ type: 'cancelAnimation', cancelToken: token });
+    this.flush();
+  }
+
+  getElementFrame(node: NativeElement): Promise<NativeFrame | undefined> {
+    if (!this.alive || node.kind !== 'element' || !this.materialized.has(node) || !this.sink.getFrame) {
+      return Promise.resolve(undefined);
+    }
+    return new Promise(resolve => {
+      this.sink.getFrame!(node.id, frame => resolve(frame));
+    });
+  }
+
+  getElementNativeView(node: NativeElement): Promise<NativeView | undefined> {
+    if (!this.alive || node.kind !== 'element' || !this.materialized.has(node) || !this.sink.getNativeView) {
+      return Promise.resolve(undefined);
+    }
+    return new Promise(resolve => {
+      this.sink.getNativeView!(node.id, view => resolve(view));
+    });
+  }
+
+  getElementNativeNode(node: NativeElement): NativeNode | undefined {
+    if (!this.alive || node.kind !== 'element' || !this.materialized.has(node) || !this.sink.getNativeNode) {
+      return undefined;
+    }
+    return this.sink.getNativeNode(node.id);
+  }
+
+  takeElementSnapshot(node: NativeElement): Promise<string | undefined> {
+    if (!this.alive || node.kind !== 'element' || !this.materialized.has(node) || !this.sink.takeSnapshot) {
+      return Promise.resolve(undefined);
+    }
+    return new Promise(resolve => {
+      this.sink.takeSnapshot!(node.id, snapshot => resolve(snapshot));
+    });
+  }
+
   flush(): void {
     if (!this.alive || this.flushing) return;
-    if (this.operations.length === 0 && this.disposedNodes.size === 0 && this.detachedInBatch.size === 0) return;
+    const registerVisibility =
+      this.needsVisibilityObserver && !this.visibilityObserverRegistered && Boolean(this.sink.observeVisibility);
+    if (
+      this.operations.length === 0 &&
+      this.disposedNodes.size === 0 &&
+      this.detachedInBatch.size === 0 &&
+      !registerVisibility
+    ) {
+      return;
+    }
 
     this.flushing = true;
     const ops = this.operations;
@@ -231,13 +381,24 @@ export class NativeTree {
           this.frameObserverRegistered = true;
           this.sink.observeFrames(updates => this.handleFrameUpdates(updates));
         }
+        if (this.needsVisibilityObserver && !this.visibilityObserverRegistered && this.sink.observeVisibility) {
+          this.visibilityObserverRegistered = true;
+          this.sink.observeVisibility((appearingIds, disappearingIds, viewportUpdates, acknowledger, eventTime) =>
+            this.handleVisibilityUpdates(appearingIds, disappearingIds, viewportUpdates, acknowledger, eventTime),
+          );
+        }
 
         for (let i = 0; i < ops.length; i++) {
           const op = ops[i];
           switch (op.type) {
-            case 'create':
-              this.sink.create(op.node.id, op.node.tag);
+            case 'create': {
+              const resolvedTag =
+                op.node.tag === 'custom-view'
+                  ? resolveCustomViewClass(op.node.props, this.sink.getPlatform?.() ?? 2)
+                  : op.tag;
+              this.sink.create(op.node.id, resolvedTag);
               break;
+            }
             case 'root':
               this.sink.setRoot(op.node.id);
               break;
@@ -253,6 +414,18 @@ export class NativeTree {
               break;
             case 'detach':
               this.sink.detach(op.node.id);
+              break;
+            case 'beginAnimation':
+              this.sink.beginAnimation?.(op.options, op.cancelToken);
+              break;
+            case 'endAnimation':
+              this.sink.endAnimation?.();
+              break;
+            case 'cancelAnimation':
+              this.sink.cancelAnimation?.(op.cancelToken);
+              break;
+            case 'layoutComplete':
+              this.sink.onLayoutComplete?.(op.callback);
               break;
             case 'nextDraw':
               this.sink.onNextDraw(op.callback);
@@ -310,9 +483,14 @@ export class NativeTree {
     this.operations = [];
     this.detachedInBatch.clear();
     this.disposedNodes.clear();
+    this.observedVisibilityNodes.clear();
     this.materialized.clear();
     this.elementsById.clear();
     this.sink.dispose();
+  }
+
+  private hasVisibilityObserver(node: NativeElement): boolean {
+    return typeof node.props.onVisibilityChanged === 'function' || typeof node.props.onViewportChanged === 'function';
   }
 
   private handleFrameUpdates(updates: Float64Array): void {
@@ -337,8 +515,66 @@ export class NativeTree {
         if (typeof cb === 'function') {
           (cb as (frame: NativeFrame) => void)(node.frame);
         }
+        const injectedCb = node.props.$onLayout;
+        if (typeof injectedCb === 'function') {
+          (injectedCb as (frame: NativeFrame) => void)(node.frame);
+        }
       }
     });
+  }
+
+  private handleVisibilityUpdates(
+    appearingIds: number[],
+    disappearingIds: number[],
+    viewportUpdates: number[],
+    acknowledger: () => void,
+    eventTime: number,
+  ): void {
+    try {
+      if (!this.alive) return;
+      this.sink.run(() => {
+        const time = eventTime as unknown as EventTime;
+        if (disappearingIds) {
+          for (let i = 0; i < disappearingIds.length; i++) {
+            const node = this.elementsById.get(disappearingIds[i]);
+            const cb = node?.props.onVisibilityChanged;
+            if (typeof cb === 'function') {
+              (cb as (isVisible: boolean, eventTime: EventTime) => void)(false, time);
+            }
+          }
+        }
+        if (appearingIds) {
+          for (let i = 0; i < appearingIds.length; i++) {
+            const node = this.elementsById.get(appearingIds[i]);
+            const cb = node?.props.onVisibilityChanged;
+            if (typeof cb === 'function') {
+              (cb as (isVisible: boolean, eventTime: EventTime) => void)(true, time);
+            }
+          }
+        }
+        if (viewportUpdates) {
+          for (let i = 0; i + 4 < viewportUpdates.length; i += 5) {
+            const node = this.elementsById.get(viewportUpdates[i]);
+            const cb = node?.props.onViewportChanged;
+            if (node && typeof cb === 'function') {
+              const viewport: NativeFrame = {
+                x: viewportUpdates[i + 1],
+                y: viewportUpdates[i + 2],
+                width: viewportUpdates[i + 3],
+                height: viewportUpdates[i + 4],
+              };
+              (cb as (viewport: NativeFrame, frame: NativeFrame, eventTime: EventTime) => void)(
+                viewport,
+                node.frame,
+                time,
+              );
+            }
+          }
+        }
+      });
+    } finally {
+      acknowledger();
+    }
   }
 
   private isAttachedToRoot(node: NativeElement): boolean {
@@ -352,6 +588,7 @@ export class NativeTree {
 
   private unmaterializeSubtree(node: NativeElement): void {
     this.materialized.delete(node);
+    this.observedVisibilityNodes.delete(node);
     for (let child = node.firstChild; child; child = child.nextSibling) {
       if (child.kind === 'element') {
         this.unmaterializeSubtree(child);
@@ -362,12 +599,25 @@ export class NativeTree {
   private materialize(node: NativeElement): void {
     if (node.kind !== 'element' || this.materialized.has(node)) return;
     this.materialized.add(node);
-    this.enqueue({ type: 'create', node });
+
+    const isCustomView = node.tag === 'custom-view';
+    const platform = this.sink.getPlatform?.() ?? 2;
+    const createTag = isCustomView ? resolveCustomViewClass(node.props, platform) : node.tag;
+    this.enqueue({ type: 'create', node, tag: createTag });
+
+    const omitCustomViewClassProps = isCustomView && createTag !== 'view';
     for (const key in node.props) {
+      if (JS_ONLY_PROPS.has(key)) continue;
+      if (omitCustomViewClassProps && CUSTOM_VIEW_CLASS_PROPS.has(key)) continue;
       const value = node.props[key];
       if (value !== undefined) {
         this.enqueue({ type: 'set', node, key, value });
       }
+    }
+    if (this.hasVisibilityObserver(node)) {
+      this.needsVisibilityObserver = true;
+      this.observedVisibilityNodes.add(node);
+      this.enqueue({ type: 'set', node, key: 'observeVisibility', value: true });
     }
     if (node === this.root) {
       this.enqueue({ type: 'root', node });

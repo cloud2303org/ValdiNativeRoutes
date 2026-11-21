@@ -1,7 +1,13 @@
+import type { AnimationOptions } from 'valdi_core/src/AnimationOptions';
 import { withLocalNativeRefs } from 'valdi_core/src/NativeReferences';
-import type { NativeFrameObserver } from 'valdi_core/src/RenderRequest';
+import type { NativeFrameObserver, NativeVisibilityObserver } from 'valdi_core/src/RenderRequest';
 import type { ValdiRuntime } from 'valdi_core/src/ValdiRuntime';
 import { getValdiRuntime } from 'valdi_core/src/ValdiRuntimeProvider';
+import type { ElementFrame } from 'valdi_tsx/src/Geometry';
+import type { IStyle } from 'valdi_tsx/src/IStyle';
+import type { NativeNode } from 'valdi_tsx/src/NativeNode';
+import type { NativeView } from 'valdi_tsx/src/NativeView';
+import type { PropertyList } from 'valdi_tsx/src/PropertyList';
 
 export type TransportMode = 'compat' | 'native-solid';
 
@@ -38,6 +44,7 @@ export interface BatchStats {
 export interface NativeSink {
   readonly mode: TransportMode;
   readonly stats: BatchStats;
+  getPlatform?(): number;
   run<T>(action: () => T): T;
   begin(): void;
   end(): void;
@@ -48,8 +55,17 @@ export interface NativeSink {
   detach(id: number): void;
   destroy(id: number): void;
   set(id: number, name: string, value: unknown): void;
+  beginAnimation?(options: AnimationOptions, cancelToken: number): void;
+  endAnimation?(): void;
+  cancelAnimation?(cancelToken: number): void;
+  onLayoutComplete?(callback: () => void): void;
   onNextDraw(callback: () => void): void;
-  observeFrames?(callback: (updates: Float64Array) => void): void;
+  observeFrames?(callback: NativeFrameObserver): void;
+  observeVisibility?(callback: NativeVisibilityObserver): void;
+  getFrame?(id: number, callback: (frame: ElementFrame | undefined) => void): void;
+  getNativeView?(id: number, callback: (view: NativeView | undefined) => void): void;
+  getNativeNode?(id: number): NativeNode | undefined;
+  takeSnapshot?(id: number, callback: (snapshotBase64: string | undefined) => void): void;
   dispose(): void;
 }
 
@@ -149,11 +165,45 @@ const ANDROID_VIEW_CLASSES: Record<string, string> = {
 
 const STAGING_CONTAINER_ID = 0xffffff;
 
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
 export function resolveCompatViewClass(tag: string, platform: number): string {
   // 1 = Android, 2 = iOS, 3 = MacOS, 4 = Web, 5 = Linux
   if (platform === 1) return ANDROID_VIEW_CLASSES[tag] ?? tag;
   if (platform === 2 || platform === 3 || platform === 5) return IOS_VIEW_CLASSES[tag] ?? tag;
   return tag;
+}
+
+export function resolveCustomViewClass(props: Record<string, unknown>, platform: number): string {
+  if (props.viewFactory !== undefined) {
+    return 'Deferred';
+  }
+  // 1 = Android, 2 = iOS, 3 = MacOS, 4 = Web, 5 = Linux
+  if (platform === 1) {
+    return nonEmptyString(props.androidClass) ?? 'view';
+  }
+  if (platform === 3) {
+    return nonEmptyString(props.macosClass) ?? nonEmptyString(props.iosClass) ?? 'view';
+  }
+  if (platform === 5) {
+    return nonEmptyString(props.linuxClass) ?? nonEmptyString(props.macosClass) ?? nonEmptyString(props.iosClass) ?? 'view';
+  }
+  if (platform === 2) {
+    return nonEmptyString(props.iosClass) ?? 'view';
+  }
+  return nonEmptyString(props.iosClass) ?? nonEmptyString(props.androidClass) ?? 'view';
+}
+
+function isValdiStyle(value: unknown): value is IStyle<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as IStyle<unknown>).toNative === 'function' &&
+    typeof (value as { attributes?: unknown }).attributes === 'object' &&
+    (value as { attributes?: unknown }).attributes !== null
+  );
 }
 
 export class ValdiBinarySink implements NativeSink {
@@ -166,6 +216,7 @@ export class ValdiBinarySink implements NativeSink {
   private attributeIds = new Map<string, number>();
   private opsInCurrentBatch = 0;
   private pendingFrameObserver?: NativeFrameObserver;
+  private pendingVisibilityObserver?: NativeVisibilityObserver;
   private stagingCreated = false;
   private destroyed = false;
   private readonly platform: number;
@@ -187,12 +238,20 @@ export class ValdiBinarySink implements NativeSink {
     }
   }
 
+  getPlatform(): number {
+    return this.platform;
+  }
+
   run<T>(action: () => T): T {
     return withLocalNativeRefs(this.treeId, action);
   }
 
-  observeFrames(callback: (updates: Float64Array) => void): void {
+  observeFrames(callback: NativeFrameObserver): void {
     this.pendingFrameObserver = callback;
+  }
+
+  observeVisibility(callback: NativeVisibilityObserver): void {
+    this.pendingVisibilityObserver = callback;
   }
 
   begin(): void {
@@ -203,9 +262,11 @@ export class ValdiBinarySink implements NativeSink {
 
   end(): void {
     const frameObserver = this.pendingFrameObserver;
+    const visibilityObserver = this.pendingVisibilityObserver;
     this.pendingFrameObserver = undefined;
+    this.pendingVisibilityObserver = undefined;
 
-    if (this.destroyed || (this.buffer.byteLength === 0 && !frameObserver)) {
+    if (this.destroyed || (this.buffer.byteLength === 0 && !frameObserver && !visibilityObserver)) {
       this.buffer.rewind();
       this.bufferPool.push(this.buffer);
       return;
@@ -230,6 +291,7 @@ export class ValdiBinarySink implements NativeSink {
         descriptor,
         descriptorSize,
         values,
+        visibilityObserver,
         frameObserver,
       },
       () => {
@@ -275,7 +337,14 @@ export class ValdiBinarySink implements NativeSink {
   }
 
   set(id: number, name: string, value: unknown): void {
-    if (name === 'onLayout' || name === '$onLayout') return;
+    if (
+      name === 'onLayout' ||
+      name === '$onLayout' ||
+      name === 'onVisibilityChanged' ||
+      name === 'onViewportChanged'
+    ) {
+      return;
+    }
     const attrId = this.attributeId(name);
     this.opsInCurrentBatch++;
 
@@ -293,9 +362,53 @@ export class ValdiBinarySink implements NativeSink {
       for (const item of value) {
         this.buffer.putU32(this.attach(item));
       }
+    } else if (isValdiStyle(value)) {
+      const styleId = value.toNative((attrs: PropertyList) => this.runtime.createCSSRule(attrs));
+      this.buffer.putU32_3(EntryOpcode.SET_ATTRIBUTE_STYLE | (id << 8), attrId, styleId);
     } else {
       this.buffer.putU32_3(EntryOpcode.SET_ATTRIBUTE_ATTACHED_VALUE | (id << 8), attrId, this.attach(value));
     }
+  }
+
+  beginAnimation(options: AnimationOptions, cancelToken: number): void {
+    const opts = options as {
+      duration?: number;
+      curve?: unknown;
+      beginFromCurrentState?: boolean;
+      crossfade?: boolean;
+      stiffness?: number;
+      damping?: number;
+      controlPoints?: number[];
+      completion?: (wasCancelled: boolean) => void;
+    };
+    this.opsInCurrentBatch++;
+    this.buffer.putU32(EntryOpcode.BEGIN_ANIMATIONS);
+    this.buffer.putF64(opts.duration ?? 0);
+    this.buffer.putU32(this.resolveAnimationCurve(opts.curve));
+    this.buffer.putU32(opts.beginFromCurrentState ? 1 : 0);
+    this.buffer.putU32(opts.crossfade ? 1 : 0);
+    this.buffer.putF64(opts.stiffness ?? 0);
+    this.buffer.putF64(opts.damping ?? 0);
+    // C++ validates controlPointsIndex < valuesSize && completionIndex < valuesSize,
+    // so both slots must always be attached into `values` even when undefined.
+    this.buffer.putU32(this.attach(opts.controlPoints));
+    this.buffer.putU32(this.attach(opts.completion));
+    this.buffer.putU32(cancelToken);
+  }
+
+  endAnimation(): void {
+    this.opsInCurrentBatch++;
+    this.buffer.putU32(EntryOpcode.END_ANIMATIONS);
+  }
+
+  cancelAnimation(cancelToken: number): void {
+    this.opsInCurrentBatch++;
+    this.buffer.putU32_2(EntryOpcode.CANCEL_ANIMATION, cancelToken);
+  }
+
+  onLayoutComplete(callback: () => void): void {
+    this.opsInCurrentBatch++;
+    this.buffer.putU32_2(EntryOpcode.ON_LAYOUT_COMPLETE, this.attach(callback));
   }
 
   onNextDraw(callback: () => void): void {
@@ -303,8 +416,51 @@ export class ValdiBinarySink implements NativeSink {
     this.buffer.putU32_2(EntryOpcode.ON_NEXT_DRAW, this.attach(callback));
   }
 
+  getFrame(id: number, callback: (frame: ElementFrame | undefined) => void): void {
+    if (this.destroyed) {
+      callback(undefined);
+      return;
+    }
+    this.runtime.getFrameForElementId(this.treeId, id, callback);
+  }
+
+  getNativeView(id: number, callback: (view: NativeView | undefined) => void): void {
+    if (this.destroyed) {
+      callback(undefined);
+      return;
+    }
+    this.runtime.getNativeViewForElementId(this.treeId, id, callback);
+  }
+
+  getNativeNode(id: number): NativeNode | undefined {
+    if (this.destroyed) return undefined;
+    return this.runtime.getNativeNodeForElementId(this.treeId, id);
+  }
+
+  takeSnapshot(id: number, callback: (snapshotBase64: string | undefined) => void): void {
+    if (this.destroyed) {
+      callback(undefined);
+      return;
+    }
+    this.runtime.takeElementSnapshot(this.treeId, id, callback);
+  }
+
   dispose(): void {
     this.destroyed = true;
+  }
+
+  private resolveAnimationCurve(curve: unknown): number {
+    switch (curve) {
+      case 'linear':
+        return 1;
+      case 'easeIn':
+        return 2;
+      case 'easeOut':
+        return 3;
+      case 'easeInOut':
+      default:
+        return 4;
+    }
   }
 
   private intern(str: string): number {

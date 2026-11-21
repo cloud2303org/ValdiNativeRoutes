@@ -26,6 +26,10 @@ const enum Opcode {
   SET_ATTRIBUTE_ARRAY = 11,
   SET_ATTRIBUTE_STYLE = 12,
   SET_ATTRIBUTE_ATTACHED_VALUE = 13,
+  BEGIN_ANIMATIONS = 14,
+  END_ANIMATIONS = 15,
+  ON_LAYOUT_COMPLETE = 16,
+  CANCEL_ANIMATION = 17,
   ON_NEXT_DRAW = 18,
   DETACH_ELEMENT = 19,
   INSERT_ELEMENT_BEFORE = 20,
@@ -45,12 +49,28 @@ type DecodedOp =
         | Opcode.SET_ATTRIBUTE_INT
         | Opcode.SET_ATTRIBUTE_DOUBLE
         | Opcode.SET_ATTRIBUTE_ARRAY
+        | Opcode.SET_ATTRIBUTE_STYLE
         | Opcode.SET_ATTRIBUTE_ATTACHED_VALUE;
       id: number;
       attr: string;
       injected: boolean;
       value: unknown;
     }
+  | {
+      type: Opcode.BEGIN_ANIMATIONS;
+      duration: number;
+      curveInt: number;
+      beginFromCurrentState: boolean;
+      crossfade: boolean;
+      stiffness: number;
+      damping: number;
+      controlPoints: unknown;
+      completion: unknown;
+      cancelToken: number;
+    }
+  | { type: Opcode.END_ANIMATIONS }
+  | { type: Opcode.ON_LAYOUT_COMPLETE; callback: () => void }
+  | { type: Opcode.CANCEL_ANIMATION; cancelToken: number }
   | { type: Opcode.ON_NEXT_DRAW; callback: () => void }
   | { type: Opcode.DETACH_ELEMENT; id: number }
   | { type: Opcode.INSERT_ELEMENT_BEFORE; id: number; parentId: number; beforeId: number };
@@ -69,17 +89,38 @@ interface SimTree {
   nodes: Map<number, SimNode>;
   batches: DecodedOp[][];
   onNextDrawCallbacks: (() => void)[];
+  onLayoutCompleteCallbacks: (() => void)[];
+  frameObserver?: (updates: Float64Array) => void;
+  visibilityObserver?: (
+    appearingElements: number[],
+    disappearingElements: number[],
+    viewportUpdates: number[],
+    acknowledger: () => void,
+    eventTime: number,
+  ) => void;
 }
 
-function createCppSimulator() {
+function createCppSimulator(initialPlatform = 2) {
+  let platform = initialPlatform;
   const strings: string[] = [];
   const attributes: string[] = [];
+  const cssRules: Record<string, unknown>[] = [];
   const trees = new Map<string, SimTree>();
+  const elementFrames = new Map<string, { x: number; y: number; width: number; height: number }>();
+  const nativeViews = new Map<string, any>();
+  const nativeNodes = new Map<string, any>();
+  const snapshots = new Map<string, string>();
 
   const getTree = (treeId: string): SimTree => {
     let tree = trees.get(treeId);
     if (!tree) {
-      tree = { treeId, nodes: new Map(), batches: [], onNextDrawCallbacks: [] };
+      tree = {
+        treeId,
+        nodes: new Map(),
+        batches: [],
+        onNextDrawCallbacks: [],
+        onLayoutCompleteCallbacks: [],
+      };
       trees.set(treeId, tree);
     }
     return tree;
@@ -117,8 +158,18 @@ function createCppSimulator() {
     descriptor: ArrayBuffer;
     descriptorSize: number;
     values: unknown[];
+    frameObserver?: (updates: Float64Array) => void;
+    visibilityObserver?: (
+      appearingElements: number[],
+      disappearingElements: number[],
+      viewportUpdates: number[],
+      acknowledger: () => void,
+      eventTime: number,
+    ) => void;
   }) => {
     const tree = getTree(String(request.treeId));
+    if (request.frameObserver) tree.frameObserver = request.frameObserver;
+    if (request.visibilityObserver) tree.visibilityObserver = request.visibilityObserver;
     const dv = new DataView(request.descriptor);
     const wordLen = request.descriptorSize;
     assert.ok(wordLen * 4 <= request.descriptor.byteLength, 'descriptorSize exceeds buffer byteLength');
@@ -202,6 +253,12 @@ function createCppSimulator() {
             arr.push(request.values[valIdx]);
           }
           value = arr;
+        } else if (opcode === Opcode.SET_ATTRIBUTE_STYLE) {
+          const styleId = dv.getUint32(cur * 4, true);
+          cur++;
+          const styleAttrs = cssRules[styleId];
+          assert.ok(styleAttrs !== undefined, `Unknown CSS rule id ${styleId}`);
+          value = { __styleId: styleId, attrs: styleAttrs };
         } else if (opcode === Opcode.SET_ATTRIBUTE_ATTACHED_VALUE) {
           const valIdx = dv.getUint32(cur * 4, true);
           cur++;
@@ -216,6 +273,54 @@ function createCppSimulator() {
           node.attrs[attr] = value;
         }
         ops.push({ type: opcode as any, id: nodeId, attr, injected, value });
+      } else if (opcode === Opcode.BEGIN_ANIMATIONS) {
+        assert.ok(cur + 12 <= wordLen, 'BEGIN_ANIMATIONS requires 12 payload words');
+        const duration = dv.getFloat64(cur * 4, true);
+        cur += 2;
+        const curveInt = dv.getUint32(cur * 4, true);
+        cur++;
+        const beginFromCurrentState = dv.getUint32(cur * 4, true) !== 0;
+        cur++;
+        const crossfade = dv.getUint32(cur * 4, true) !== 0;
+        cur++;
+        const stiffness = dv.getFloat64(cur * 4, true);
+        cur += 2;
+        const damping = dv.getFloat64(cur * 4, true);
+        cur += 2;
+        const controlPointsIndex = dv.getUint32(cur * 4, true);
+        cur++;
+        const completionIndex = dv.getUint32(cur * 4, true);
+        cur++;
+        const cancelToken = dv.getUint32(cur * 4, true);
+        cur++;
+        assert.ok(curveInt >= 1 && curveInt <= 4, `Invalid animation curve ${curveInt}`);
+        assert.ok(controlPointsIndex < request.values.length, 'controlPointsIndex out of range');
+        assert.ok(completionIndex < request.values.length, 'completionIndex out of range');
+        ops.push({
+          type: Opcode.BEGIN_ANIMATIONS,
+          duration,
+          curveInt,
+          beginFromCurrentState,
+          crossfade,
+          stiffness,
+          damping,
+          controlPoints: request.values[controlPointsIndex],
+          completion: request.values[completionIndex],
+          cancelToken,
+        });
+      } else if (opcode === Opcode.END_ANIMATIONS) {
+        ops.push({ type: Opcode.END_ANIMATIONS });
+      } else if (opcode === Opcode.ON_LAYOUT_COMPLETE) {
+        const valIdx = dv.getUint32(cur * 4, true);
+        cur++;
+        const callback = request.values[valIdx] as () => void;
+        assert.equal(typeof callback, 'function', 'ON_LAYOUT_COMPLETE expects callback function');
+        tree.onLayoutCompleteCallbacks.push(callback);
+        ops.push({ type: Opcode.ON_LAYOUT_COMPLETE, callback });
+      } else if (opcode === Opcode.CANCEL_ANIMATION) {
+        const cancelToken = dv.getUint32(cur * 4, true);
+        cur++;
+        ops.push({ type: Opcode.CANCEL_ANIMATION, cancelToken });
       } else if (opcode === Opcode.ON_NEXT_DRAW) {
         const valIdx = dv.getUint32(cur * 4, true);
         cur++;
@@ -258,10 +363,18 @@ function createCppSimulator() {
   return {
     strings,
     attributes,
+    cssRules,
     trees,
+    elementFrames,
+    nativeViews,
+    nativeNodes,
+    snapshots,
     getTree,
+    setPlatform: (nextPlatform: number) => {
+      platform = nextPlatform;
+    },
     runtimeApi: {
-      getCurrentPlatform: () => 2, // iOS
+      getCurrentPlatform: () => platform,
       internString: (str: string) => {
         const idx = strings.indexOf(str);
         if (idx >= 0) return idx;
@@ -274,6 +387,22 @@ function createCppSimulator() {
         attributes.push(name);
         return attributes.length - 1;
       },
+      createCSSRule: (attrs: Record<string, unknown>) => {
+        cssRules.push({ ...attrs });
+        return cssRules.length - 1;
+      },
+      getFrameForElementId: (treeId: string, elementId: number, cb: (frame: any) => void) => {
+        cb(elementFrames.get(`${treeId}:${elementId}`));
+      },
+      getNativeViewForElementId: (treeId: string, elementId: number, cb: (view: any) => void) => {
+        cb(nativeViews.get(`${treeId}:${elementId}`));
+      },
+      getNativeNodeForElementId: (treeId: string, elementId: number) => {
+        return nativeNodes.get(`${treeId}:${elementId}`);
+      },
+      takeElementSnapshot: (treeId: string, elementId: number, cb: (snapshot: string | undefined) => void) => {
+        cb(snapshots.get(`${treeId}:${elementId}`));
+      },
       pushCurrentContext: (_id?: string) => {},
       popCurrentContext: () => {},
       submitRawRenderRequest: (request: any, cb?: () => void) => {
@@ -284,8 +413,8 @@ function createCppSimulator() {
   };
 }
 
-function createValdiTestHarness(mode: TransportMode = 'compat') {
-  const sim = createCppSimulator();
+function createValdiTestHarness(mode: TransportMode = 'compat', platform = 2) {
+  const sim = createCppSimulator(platform);
   const contextStack: (string | undefined)[] = [];
   sim.runtimeApi.pushCurrentContext = (id?: string) => {
     contextStack.push(id);
@@ -336,6 +465,33 @@ function createValdiTestHarness(mode: TransportMode = 'compat') {
     'valdi_core/src/UncaughtErrorHandler': {
       UncaughtErrorHandlerResult: { CRASH_APPLICATION: 1, IGNORE: 0 },
       setCatchAllUncaughtErrorHandler: () => {},
+    },
+    'valdi_core/src/AnimationOptions': {
+      AnimationCurve: {
+        Linear: 'linear',
+        EaseIn: 'easeIn',
+        EaseOut: 'easeOut',
+        EaseInOut: 'easeInOut',
+      },
+    },
+    'valdi_core/src/Style': {
+      Style: class Style<T> {
+        readonly attributes: T;
+        private native: number | undefined;
+        constructor(attributes: T) {
+          this.attributes = attributes;
+        }
+        toNative(convertFunc: (attributes: T) => number): number {
+          if (this.native === undefined) {
+            this.native = convertFunc(this.attributes);
+          }
+          return this.native;
+        }
+        extend(attributes: any) {
+          const next = attributes?.attributes ?? attributes;
+          return new (this.constructor as any)({ ...this.attributes, ...next });
+        }
+      },
     },
     'app_foundation/src/host/AppContext': {
       getHost: () => ({
@@ -825,7 +981,458 @@ function runSuiteForMode(mode: TransportMode) {
     assert.equal(drawn, true);
     h.manager.destroy('1');
   });
+
+  test(`[${mode}] 9. Style objects emit SET_ATTRIBUTE_STYLE (12) and reuse cached native CSS rule ids`, async () => {
+    const h = createValdiTestHarness(mode);
+    const { Style } = h.loadModule('valdi_core/src/Style');
+
+    h.compileInlineTsx(
+      'inline_test/StylePage',
+      `
+      import { Style } from 'valdi_core/src/Style';
+      const cardStyle = new Style({ backgroundColor: '#123456', borderRadius: 8, padding: 10 });
+      export function StylePage() {
+        return (
+          <view>
+            <view style={cardStyle} />
+            <view style={cardStyle} />
+          </view>
+        );
+      }
+      `,
+    );
+
+    h.manager.create('31', 'StylePage@inline_test/StylePage', {}, { back() {}, finish() {} });
+    const simTree = h.sim.getTree('31');
+
+    const styleOps = simTree.batches[0].filter(
+      (op): op is Extract<DecodedOp, { attr: string }> => op.type === Opcode.SET_ATTRIBUTE_STYLE,
+    );
+    assert.equal(styleOps.length, 2, 'Both views must emit SET_ATTRIBUTE_STYLE');
+    assert.equal(h.sim.cssRules.length, 1, 'Style must cache createCSSRule id across views');
+    assert.deepEqual(h.sim.cssRules[0], { backgroundColor: '#123456', borderRadius: 8, padding: 10 });
+    assert.deepEqual(styleOps[0].value, {
+      __styleId: 0,
+      attrs: { backgroundColor: '#123456', borderRadius: 8, padding: 10 },
+    });
+    assert.deepEqual(styleOps[1].value, styleOps[0].value);
+    h.manager.destroy('31');
+    assert.ok(Style);
+  });
+
+  test(`[${mode}] 10. <custom-view> resolves platform class names and viewFactory -> Deferred`, () => {
+    // iOS (platform = 2)
+    const iosHarness = createValdiTestHarness(mode, 2);
+    iosHarness.compileInlineTsx(
+      'inline_test/CustomViewPage',
+      `
+      export function CustomViewPage(props) {
+        return (
+          <view>
+            <custom-view iosClass="SCMyCustomIOSView" androidClass="com.example.MyView" macosClass="NSMyCustomView" padding={6} />
+            <custom-view viewFactory={props.viewModel().factory} backgroundColor="#112233" />
+          </view>
+        );
+      }
+      `,
+    );
+    const factory = { __tag: 'ViewFactory' };
+    iosHarness.manager.create('41', 'CustomViewPage@inline_test/CustomViewPage', { factory }, { back() {}, finish() {} });
+    const iosTree = iosHarness.sim.getTree('41');
+    const iosCustom = [...iosTree.nodes.values()].find(n => n.viewClass === 'SCMyCustomIOSView');
+    assert.ok(iosCustom, 'iOS platform must resolve iosClass');
+    assert.equal(iosCustom.attrs.padding, 6);
+    assert.equal(iosCustom.attrs.iosClass, undefined);
+    assert.equal(iosCustom.attrs.androidClass, undefined);
+
+    const iosDeferred = [...iosTree.nodes.values()].find(n => n.viewClass === 'Deferred');
+    assert.ok(iosDeferred, 'viewFactory must create Deferred view');
+    assert.equal(iosDeferred.attrs.viewFactory, factory);
+    assert.equal(iosDeferred.attrs.backgroundColor, '#112233');
+    iosHarness.manager.destroy('41');
+
+    // Android (platform = 1)
+    const androidHarness = createValdiTestHarness(mode, 1);
+    androidHarness.compileInlineTsx(
+      'inline_test/CustomViewPage',
+      `
+      export function CustomViewPage() {
+        return <custom-view iosClass="SCMyCustomIOSView" androidClass="com.example.MyView" padding={8} />;
+      }
+      `,
+    );
+    androidHarness.manager.create('42', 'CustomViewPage@inline_test/CustomViewPage', {}, { back() {}, finish() {} });
+    const androidTree = androidHarness.sim.getTree('42');
+    const androidCustom = [...androidTree.nodes.values()].find(n => n.viewClass === 'com.example.MyView');
+    assert.ok(androidCustom, 'Android platform must resolve androidClass');
+    assert.equal(androidCustom.attrs.padding, 8);
+    androidHarness.manager.destroy('42');
+  });
+
+  test(`[${mode}] 11. Visibility/viewport observers, $onLayout, and onLayoutComplete dispatch & acknowledger safety`, async () => {
+    const h = createValdiTestHarness(mode);
+    const solid = h.loadModule('solid_runtime/src/solid');
+    const [trackVis, setTrackVis] = solid.createSignal(true);
+    const events: any[] = [];
+    const onLayoutCompleteCb = () => {
+      events.push('element-layout-complete');
+    };
+    const treeLayoutCompleteCb = () => {
+      events.push('tree-layout-complete');
+    };
+
+    h.compileInlineTsx(
+      'inline_test/VisibilityPage',
+      `
+      export function VisibilityPage(props) {
+        const cfg = props.viewModel();
+        return (
+          <view>
+            <view
+              backgroundColor="#AAA"
+              onLayout={f => cfg.events.push(['layoutA', f])}
+              $onLayout={f => cfg.events.push(['$layoutA', f])}
+              onVisibilityChanged={cfg.trackVis() ? (v, t) => cfg.events.push(['visA', v, t]) : undefined}
+              onViewportChanged={cfg.trackVis() ? (vp, fr, t) => cfg.events.push(['vpA', vp, fr, t]) : undefined}
+              onLayoutComplete={cfg.onLayoutCompleteCb}
+            />
+            <view
+              backgroundColor="#BBB"
+              onVisibilityChanged={(v, t) => {
+                cfg.events.push(['visB', v, t]);
+                if (v === false) throw new Error('simulated callback error');
+              }}
+            />
+          </view>
+        );
+      }
+      `,
+    );
+
+    h.manager.create(
+      '51',
+      'VisibilityPage@inline_test/VisibilityPage',
+      { trackVis, events, onLayoutCompleteCb },
+      { back() {}, finish() {} },
+    );
+    const sessionTree = h.manager.rootComponents['51'].tree;
+    const simTree = h.sim.getTree('51');
+    const nodeA = [...simTree.nodes.values()].find(n => n.attrs.backgroundColor === '#AAA')!;
+    const nodeB = [...simTree.nodes.values()].find(n => n.attrs.backgroundColor === '#BBB')!;
+    assert.ok(nodeA && nodeB);
+
+    assert.equal(nodeA.attrs.observeVisibility, true);
+    assert.equal(nodeB.attrs.observeVisibility, true);
+    assert.equal(nodeA.attrs.onVisibilityChanged, undefined);
+    assert.equal(nodeA.attrs.onViewportChanged, undefined);
+    assert.equal(nodeA.attrs.onLayout, undefined);
+    assert.equal(nodeA.attrs.$onLayout, undefined);
+    assert.equal(nodeA.attrs.onLayoutComplete, onLayoutCompleteCb, 'Element onLayoutComplete stays native attr');
+    assert.ok(simTree.frameObserver, 'frameObserver must be registered');
+    assert.ok(simTree.visibilityObserver, 'visibilityObserver must be registered');
+
+    // Simulate frame update for A -> caches frame for subsequent viewport update and calls onLayout + $onLayout
+    const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+    simTree.frameObserver!(new Float64Array([nodeA.id, 10, 20, 300, 120]));
+    assert.deepEqual(plain(events.slice(0, 2)), [
+      ['layoutA', { x: 10, y: 20, width: 300, height: 120 }],
+      ['$layoutA', { x: 10, y: 20, width: 300, height: 120 }],
+    ]);
+
+    events.length = 0;
+    let ackCount = 0;
+    assert.throws(
+      () => {
+        simTree.visibilityObserver!(
+          [nodeA.id], // C++ param 1: visibleIds (appearing)
+          [nodeB.id], // C++ param 2: invisibleIds (disappearing)
+          [nodeA.id, 0, 10, 300, 100],
+          () => {
+            ackCount++;
+          },
+          9876,
+        );
+      },
+      /simulated callback error/,
+    );
+    assert.equal(ackCount, 1, 'acknowledger() must run in finally even when callback throws');
+    assert.deepEqual(plain(events), [['visB', false, 9876]]);
+
+    events.length = 0;
+    simTree.visibilityObserver!(
+      [nodeA.id],
+      [],
+      [nodeA.id, 0, 10, 300, 100],
+      () => {
+        ackCount++;
+      },
+      9999,
+    );
+    assert.equal(ackCount, 2);
+    assert.deepEqual(plain(events), [
+      ['visA', true, 9999],
+      ['vpA', { x: 0, y: 10, width: 300, height: 100 }, { x: 10, y: 20, width: 300, height: 120 }, 9999],
+    ]);
+
+    // Clearing both visibility callbacks on A must set observeVisibility = false
+    setTrackVis(false);
+    await h.flushMicrotasks();
+    assert.equal(nodeA.attrs.observeVisibility, false);
+
+    // Tree-level onNextLayoutComplete / onLayoutComplete emits opcode 16
+    const renderer = h.loadModule('solid_native/src/renderer');
+    const triggeredEvents = events as unknown[];
+    triggeredEvents.length = 0;
+    renderer.onNextLayoutComplete(sessionTree, treeLayoutCompleteCb);
+    await h.flushMicrotasks();
+    assert.equal(simTree.onLayoutCompleteCallbacks.length, 1);
+    simTree.onLayoutCompleteCallbacks[0]();
+    assert.ok(triggeredEvents.includes('tree-layout-complete'));
+
+    h.manager.destroy('51');
+  });
+
+  test(`[${mode}] 12. Native animate() / useAnimate() / cancel() emit BEGIN_ANIMATIONS (14), mutations, END_ANIMATIONS (15), CANCEL_ANIMATION (17)`, async () => {
+    const h = createValdiTestHarness(mode);
+    const solid = h.loadModule('solid_runtime/src/solid');
+    const [preWidth, setPreWidth] = solid.createSignal(50);
+    const [animWidth, setAnimWidth] = solid.createSignal(100);
+    let animateHandle: any;
+
+    h.compileInlineTsx(
+      'inline_test/AnimPage',
+      `
+      import { useAnimate } from 'solid_native/src/renderer';
+      import { AnimationCurve } from 'valdi_core/src/AnimationOptions';
+      export function AnimPage(props) {
+        const animate = useAnimate();
+        return (
+          <view>
+            <view width={props.viewModel().preWidth()} />
+            <view
+              width={props.viewModel().animWidth()}
+              onTap={() => {
+                props.viewModel().onStarted(
+                  animate(
+                    {
+                      duration: 0.35,
+                      curve: AnimationCurve.EaseOut,
+                      beginFromCurrentState: true,
+                      crossfade: false,
+                      completion: props.viewModel().completion,
+                    },
+                    () => props.viewModel().setAnimWidth(240),
+                  ),
+                );
+              }}
+            />
+          </view>
+        );
+      }
+      `,
+    );
+
+    const completion = () => {};
+    h.manager.create(
+      '61',
+      'AnimPage@inline_test/AnimPage',
+      {
+        preWidth,
+        animWidth,
+        setAnimWidth,
+        completion,
+        onStarted: (handle: any) => {
+          animateHandle = handle;
+        },
+      },
+      { back() {}, finish() {} },
+    );
+    const simTree = h.sim.getTree('61');
+    const animatedNode = [...simTree.nodes.values()].find(n => n.attrs.width === 100)!;
+    assert.ok(animatedNode);
+
+    // Enqueue a pre-existing dirty write before tapping animate; animate() must flush it separately first.
+    setPreWidth(75);
+    const batchesBefore = simTree.batches.length;
+    (animatedNode.attrs.onTap as () => void)();
+
+    // Both batches flush synchronously inside animate() (no wait for microtask needed!)
+    assert.equal(simTree.batches.length, batchesBefore + 2);
+    const preBatch = simTree.batches[batchesBefore];
+    assert.equal(preBatch.length, 1);
+    assert.equal(preBatch[0].type, Opcode.SET_ATTRIBUTE_DOUBLE);
+
+    const animBatch = simTree.batches[batchesBefore + 1];
+    assert.equal(animBatch.length, 3);
+    assert.equal(animBatch[0].type, Opcode.BEGIN_ANIMATIONS);
+    if (animBatch[0].type === Opcode.BEGIN_ANIMATIONS) {
+      assert.equal(animBatch[0].duration, 0.35);
+      assert.equal(animBatch[0].curveInt, 3); // EaseOut
+      assert.equal(animBatch[0].beginFromCurrentState, true);
+      assert.equal(animBatch[0].crossfade, false);
+      assert.equal(animBatch[0].completion, completion);
+      assert.equal(animBatch[0].cancelToken, animateHandle.token);
+    }
+    assert.equal(animBatch[1].type, Opcode.SET_ATTRIBUTE_DOUBLE);
+    if (animBatch[1].type === Opcode.SET_ATTRIBUTE_DOUBLE) {
+      assert.equal(animBatch[1].id, animatedNode.id);
+      assert.equal(animBatch[1].attr, 'width');
+      assert.equal(animBatch[1].value, 240);
+    }
+    assert.equal(animBatch[2].type, Opcode.END_ANIMATIONS);
+
+    animateHandle.cancel();
+    assert.equal(simTree.batches.length, batchesBefore + 3);
+    assert.deepEqual(simTree.batches[batchesBefore + 2], [
+      { type: Opcode.CANCEL_ANIMATION, cancelToken: animateHandle.token },
+    ]);
+
+    h.manager.destroy('61');
+
+    // Also exercise HomePage's compiled parity card ("Animate Box" -> "Collapse Box")
+    h.manager.create('62', 'HomePage@app_pages/src/pages/HomePage', makePageViewModel('home', 'p62'), {
+      back() {},
+      finish() {},
+    });
+    const homeTree = h.sim.getTree('62');
+    const batchesBeforeHomeTap = homeTree.batches.length;
+    tapButtonWithText(homeTree, 'Animate Box');
+    assert.ok(homeTree.batches.length > batchesBeforeHomeTap);
+    const homeAnimBatch = homeTree.batches.find(
+      b => b.some(op => op.type === Opcode.BEGIN_ANIMATIONS) && b.some(op => op.type === Opcode.END_ANIMATIONS),
+    );
+    assert.ok(homeAnimBatch, 'HomePage Animate Box tap must emit BEGIN_ANIMATIONS + END_ANIMATIONS');
+    assert.ok(findNodeWithLabel(homeTree, v => v === 'Collapse Box'));
+    h.manager.destroy('62');
+  });
+
+  test(`[${mode}] 13. Imperative NativeElement helpers getFrame, getNativeView, getNativeNode, takeSnapshot`, async () => {
+    const h = createValdiTestHarness(mode);
+    let capturedRef: any;
+
+    h.compileInlineTsx(
+      'inline_test/RefHelpersPage',
+      `
+      export function RefHelpersPage(props) {
+        return <view ref={el => props.viewModel().setRef(el)} backgroundColor="#ABCDEF" />;
+      }
+      `,
+    );
+
+    h.manager.create(
+      '71',
+      'RefHelpersPage@inline_test/RefHelpersPage',
+      {
+        setRef: (el: any) => {
+          capturedRef = el;
+        },
+      },
+      { back() {}, finish() {} },
+    );
+    assert.ok(capturedRef, 'ref callback must receive NativeElement');
+
+    const expectedFrame = { x: 4, y: 8, width: 120, height: 48 };
+    const expectedView = { __nativeElementType: 'nativeView', tag: 'mock' };
+    const expectedNode = { id: capturedRef.id };
+    h.sim.elementFrames.set(`71:${capturedRef.id}`, expectedFrame);
+    h.sim.nativeViews.set(`71:${capturedRef.id}`, expectedView);
+    h.sim.nativeNodes.set(`71:${capturedRef.id}`, expectedNode);
+    h.sim.snapshots.set(`71:${capturedRef.id}`, 'base64-png-stub');
+
+    assert.deepEqual(await capturedRef.getFrame(), expectedFrame);
+    assert.equal(await capturedRef.getNativeView(), expectedView);
+    assert.equal(capturedRef.getNativeNode(), expectedNode);
+    assert.equal(await capturedRef.takeSnapshot(), 'base64-png-stub');
+
+    h.manager.destroy('71');
+    assert.equal(await capturedRef.getFrame(), undefined);
+    assert.equal(await capturedRef.getNativeView(), undefined);
+    assert.equal(capturedRef.getNativeNode(), undefined);
+    assert.equal(await capturedRef.takeSnapshot(), undefined);
+  });
 }
+
+test('[types] 14. Full 17-element JSX definitions typecheck and disallow direct children on <label>', () => {
+  const tsconfigPath = path.join(repoRoot, 'valdi/modules/app_pages/tsconfig.json');
+  const configResult = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
+  assert.equal(configResult.error, undefined);
+  const parsed = ts.parseJsonConfigFileContent(configResult.config, ts.sys, path.dirname(tsconfigPath));
+
+  const virtualValid = path.join(repoRoot, 'valdi/modules/app_pages/src/__virtual_jsx_check.tsx');
+  const validSource = `
+    import { For } from 'solid-js';
+    import { Style } from 'valdi_core/src/Style';
+    import type { View } from 'valdi_tsx/src/NativeTemplateElements';
+    const boxStyle = new Style<View>({ padding: 8, backgroundColor: '#fff' });
+    export function AllElements() {
+      return (
+        <layout flexDirection="column" onLayoutComplete={() => {}}>
+          <view style={boxStyle} onVisibilityChanged={() => {}} onViewportChanged={() => {}}>
+            <scroll horizontal={true} contentOffsetX={10} showsHorizontalScrollIndicator={false}>
+              <label value="Title" numberOfLines={1} />
+            </scroll>
+            <image src="https://example.com/a.png" objectFit="cover" />
+            <video />
+            <webview />
+            <textfield placeholder="Input" onChange={() => {}} />
+            <textview placeholder="Multiline" />
+            <textanimationgroup>
+              <label value="Animated" />
+            </textanimationgroup>
+            <spinner />
+            <shape />
+            <blur blurStyle="dark">
+              <label value="Blurred" />
+            </blur>
+            <glass>
+              <label value="Glass" />
+            </glass>
+            <animatedimage />
+            <button onTap={() => {}} />
+            <custom-view iosClass="SCMyView" androidClass="com.example.MyView" padding={4} />
+            <For each={['a', 'b']}>{item => <label value={item} />}</For>
+          </view>
+        </layout>
+      );
+    }
+  `;
+
+  const virtualBad = path.join(repoRoot, 'valdi/modules/app_pages/src/__virtual_jsx_bad.tsx');
+  const badSource = `
+    export function BadLabel() {
+      return <label>Direct text not allowed</label>;
+    }
+  `;
+
+  const host = ts.createCompilerHost(parsed.options, true);
+  const origGetSourceFile = host.getSourceFile.bind(host);
+  const origFileExists = host.fileExists.bind(host);
+  const virtuals = new Map<string, string>([
+    [virtualValid, validSource],
+    [virtualBad, badSource],
+  ]);
+  host.fileExists = f => virtuals.has(f) || origFileExists(f);
+  host.getSourceFile = (f, langVersion, onError, shouldCreate) => {
+    const src = virtuals.get(f);
+    if (src !== undefined) {
+      return ts.createSourceFile(f, src, langVersion);
+    }
+    return origGetSourceFile(f, langVersion, onError, shouldCreate);
+  };
+
+  const jsxDeclPath = path.join(repoRoot, 'valdi/modules/solid_native/src/jsx.d.ts');
+  const validProgram = ts.createProgram([jsxDeclPath, virtualValid], parsed.options, host);
+  const validDiags = ts.getPreEmitDiagnostics(validProgram, validProgram.getSourceFile(virtualValid));
+  assert.deepEqual(
+    validDiags.map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n')),
+    [],
+    'All 17 Valdi intrinsic elements and <For> must typecheck cleanly',
+  );
+
+  const badProgram = ts.createProgram([jsxDeclPath, virtualBad], parsed.options, host);
+  const badDiags = ts.getPreEmitDiagnostics(badProgram, badProgram.getSourceFile(virtualBad));
+  assert.ok(badDiags.length > 0, '<label> with direct child text must fail typecheck');
+});
 
 runSuiteForMode('compat');
 runSuiteForMode('native-solid');

@@ -170,6 +170,7 @@ struct VRBSCriticalSpring {
 enum VRBSMath {
     static let releaseProjectionSeconds: CGFloat = 0.1
     static let defaultSettleDurationSeconds: CGFloat = 0.45
+    static let flickVelocityThresholdPointsPerSec: CGFloat = 600.0
     static let settleFraction: CGFloat = 8.0
     static let maxSpringOmega: CGFloat = 100.0
     static let minSettleDurationSeconds: CGFloat = 0.001
@@ -231,33 +232,30 @@ enum VRBSMath {
         canDismissOrClose: Bool
     ) -> Int {
         guard !detents.isEmpty else { return -1 }
-        let projectedHeight = currentOpenHeight - velocityYPointsPerSec * releaseProjectionSeconds
-        var bestIndex = -1
-        var bestDistance = CGFloat.greatestFiniteMagnitude
-
+        var candidates: [(index: Int, height: CGFloat)] = []
         if canDismissOrClose {
-            bestIndex = -1
-            bestDistance = abs(projectedHeight)
+            candidates.append((-1, 0))
         }
-
         for (i, spec) in detents.enumerated() where !spec.programmatic {
-            let dist = abs(projectedHeight - spec.totalHeight)
-            if dist < bestDistance {
-                bestDistance = dist
-                bestIndex = i
+            candidates.append((i, spec.totalHeight))
+        }
+        if candidates.isEmpty {
+            for (i, spec) in detents.enumerated() {
+                candidates.append((i, spec.totalHeight))
             }
         }
 
-        if bestIndex == -1 && !canDismissOrClose {
-            for (i, spec) in detents.enumerated() {
-                let dist = abs(projectedHeight - spec.totalHeight)
-                if dist < bestDistance {
-                    bestDistance = dist
-                    bestIndex = i
-                }
-            }
+        if velocityYPointsPerSec < -flickVelocityThresholdPointsPerSec {
+            return candidates.first(where: { $0.height > currentOpenHeight + 0.5 })?.index
+                ?? candidates.last?.index ?? -1
         }
-        return bestIndex
+        if velocityYPointsPerSec > flickVelocityThresholdPointsPerSec {
+            return candidates.last(where: { $0.height < currentOpenHeight - 0.5 })?.index
+                ?? candidates.first?.index ?? -1
+        }
+        return candidates.min(by: {
+            abs($0.height - currentOpenHeight) < abs($1.height - currentOpenHeight)
+        })?.index ?? -1
     }
 
     static func computeFractionalIndex(detents: [VRBSDetentSpec], openHeight: CGFloat) -> CGFloat {

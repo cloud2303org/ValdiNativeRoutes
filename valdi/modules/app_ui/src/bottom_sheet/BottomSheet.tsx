@@ -130,7 +130,11 @@ export interface BottomSheetProps {
   scrimAccessibilityLabel?: string;
   /** Scroll gesture coordination strategy. @default { expand: 'handoff', collapse: 'initial' } */
   scrollCoordination?: ScrollCoordination;
-  /** Settle spring duration in milliseconds (`>= 0`). Defaults to `450` ms. */
+  /**
+   * Settle spring duration in milliseconds (`>= 0`).
+   * Omit to use the pre-1.0 native default spring (`STIFFNESS_MEDIUM` on Android, `450` ms critical spring on iOS);
+   * specify milliseconds to override with an exact-duration settle curve.
+   */
   settleDuration?: number;
   /**
    * Custom render function for the sheet surface (e.g. blur view or custom card material),

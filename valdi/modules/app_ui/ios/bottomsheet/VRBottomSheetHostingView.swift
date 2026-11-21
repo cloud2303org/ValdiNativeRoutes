@@ -1372,21 +1372,12 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
         guard let first = resolvedDetents.first, let last = resolvedDetents.last else { return }
         let maxTotal = last.totalHeight
         let minTotal = canUserDismissOrRequestClose ? 0 : first.totalHeight
-        let proposedOpen = containerSize.height - sheetOffsetY - dy
-
-        let nextOpen: CGFloat
-        if proposedOpen > maxTotal {
-            nextOpen = maxTotal + VRBSMath.rubberBand(overshoot: proposedOpen - maxTotal, dimension: containerSize.height * 0.35)
-        } else if proposedOpen < minTotal {
-            if minTotal <= 0 {
-                nextOpen = 0
-            } else {
-                nextOpen = max(0, minTotal - VRBSMath.rubberBand(overshoot: minTotal - proposedOpen, dimension: max(1, minTotal)))
-            }
-        } else {
-            nextOpen = proposedOpen
+        let minOffset = containerSize.height - maxTotal
+        let maxOffset = containerSize.height - minTotal
+        let nextOffset = min(maxOffset, max(minOffset, sheetOffsetY + dy))
+        if nextOffset != sheetOffsetY {
+            setSheetOffsetYInternal(nextOffset)
         }
-        setSheetOffsetYInternal(containerSize.height - nextOpen)
     }
 
     private func applyDragDeltaClampedToTop(_ dy: CGFloat) -> CGFloat {

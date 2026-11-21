@@ -61,7 +61,7 @@ internal class SheetValdiGestureRecognizer(
 ) : ValdiGestureRecognizer(view) {
 
     private val touchSlop: Int = ViewConfiguration.get(view.context).scaledTouchSlop
-    private val maxFlingVelocity: Float = ViewConfiguration.get(view.context).scaledMaximumFlingVelocity.toFloat()
+    private var activePointerId = MotionEvent.INVALID_POINTER_ID
     private var downRawX = 0f
     private var downRawY = 0f
     private var lastRawY = 0f
@@ -113,32 +113,37 @@ internal class SheetValdiGestureRecognizer(
                 }
                 downLocalX = event.x
                 downLocalY = event.y
-                downRawX = event.rawX
-                downRawY = event.rawY
-                lastRawY = event.rawY
+                activePointerId = event.getPointerId(0)
+                downRawX = screenX(event, 0)
+                downRawY = screenY(event, 0)
+                lastRawY = downRawY
 
                 coordinatedScrollView = findInnermostVerticalValdiScrollView(view, event.x, event.y)
                 pinnedScrollOffsetY = coordinatedScrollView?.contentOffsetY ?: 0
                 panMode = SheetPanMode.UNDECIDED
 
                 velocityTracker = VelocityTracker.obtain().also {
-                    addRawMovement(it, event)
+                    addScreenMovement(it, event)
                 }
                 updateState(ValdiGestureRecognizerState.POSSIBLE)
             }
 
             MotionEvent.ACTION_MOVE -> {
                 if (rejected) return
-                if (event.pointerCount > 1 && !slopExceeded) {
-                    rejected = true
-                    updateState(ValdiGestureRecognizerState.FAILED)
-                    return
+                val pointerIndex = if (activePointerId != MotionEvent.INVALID_POINTER_ID) {
+                    event.findPointerIndex(activePointerId)
+                } else {
+                    0
                 }
-                val tracker = velocityTracker ?: VelocityTracker.obtain().also { velocityTracker = it }
-                addRawMovement(tracker, event)
+                if (pointerIndex < 0 || pointerIndex >= event.pointerCount) return
 
-                val totalDx = event.rawX - downRawX
-                val totalDy = event.rawY - downRawY
+                val tracker = velocityTracker ?: VelocityTracker.obtain().also { velocityTracker = it }
+                addScreenMovement(tracker, event)
+
+                val curX = screenX(event, pointerIndex)
+                val curY = screenY(event, pointerIndex)
+                val totalDx = curX - downRawX
+                val totalDy = curY - downRawY
 
                 if (!slopExceeded) {
                     if (abs(totalDx) > touchSlop && abs(totalDx) > abs(totalDy)) {
@@ -148,7 +153,7 @@ internal class SheetValdiGestureRecognizer(
                         return
                     }
                     if (abs(totalDy) <= touchSlop) {
-                        lastRawY = event.rawY
+                        lastRawY = curY
                         return
                     }
                     slopExceeded = true
@@ -169,7 +174,7 @@ internal class SheetValdiGestureRecognizer(
                         panMode = SheetPanMode.SHEET
                     }
 
-                    lastRawY = event.rawY
+                    lastRawY = curY
                     startedHostDrag = true
                     host.onSheetDragBegan()
                     if (exclusiveScrollClaim) {
@@ -180,12 +185,12 @@ internal class SheetValdiGestureRecognizer(
                 }
 
                 if (lastRawY.isNaN()) {
-                    lastRawY = event.rawY
+                    lastRawY = curY
                     updateState(ValdiGestureRecognizerState.CHANGED)
                     return
                 }
-                val dy = event.rawY - lastRawY
-                lastRawY = event.rawY
+                val dy = curY - lastRawY
+                lastRawY = curY
                 if (dy == 0f) {
                     updateState(ValdiGestureRecognizerState.CHANGED)
                     return
@@ -199,14 +204,21 @@ internal class SheetValdiGestureRecognizer(
                 if (slopExceeded && !rejected && isActive) {
                     startedHostDrag = false
                     val tracker = velocityTracker
-                    tracker?.let {
-                        addRawMovement(it, event)
-                        it.computeCurrentVelocity(1000, maxFlingVelocity)
+                    val vy = if (tracker != null) {
+                        tracker.computeCurrentVelocity(1000)
+                        if (activePointerId != MotionEvent.INVALID_POINTER_ID) {
+                            tracker.getYVelocity(activePointerId)
+                        } else {
+                            tracker.yVelocity
+                        }
+                    } else {
+                        0f
                     }
-                    val vy = tracker?.yVelocity ?: 0f
+                    activePointerId = MotionEvent.INVALID_POINTER_ID
                     finishCoordinatedDrag(event, vy)
                     updateState(ValdiGestureRecognizerState.ENDED)
                 } else {
+                    activePointerId = MotionEvent.INVALID_POINTER_ID
                     if (startedHostDrag) {
                         startedHostDrag = false
                         restoreScrollBar()
@@ -220,13 +232,17 @@ internal class SheetValdiGestureRecognizer(
             }
 
             MotionEvent.ACTION_POINTER_UP -> {
-                if (slopExceeded && !rejected && event.actionIndex == 0 && event.pointerCount > 1) {
-                    lastRawY = Float.NaN
+                val actionIndex = event.actionIndex
+                if (event.getPointerId(actionIndex) == activePointerId && event.pointerCount > 1) {
+                    val newPointerIndex = if (actionIndex == 0) 1 else 0
+                    activePointerId = event.getPointerId(newPointerIndex)
+                    lastRawY = screenY(event, newPointerIndex)
                     velocityTracker?.clear()
                 }
             }
 
             MotionEvent.ACTION_CANCEL -> {
+                activePointerId = MotionEvent.INVALID_POINTER_ID
                 if (startedHostDrag) {
                     startedHostDrag = false
                     restoreScrollBar()
@@ -405,6 +421,7 @@ internal class SheetValdiGestureRecognizer(
     }
 
     private fun resetTracking() {
+        activePointerId = MotionEvent.INVALID_POINTER_ID
         slopExceeded = false
         rejected = false
         startedHostDrag = false
@@ -421,17 +438,17 @@ internal class SheetValdiGestureRecognizer(
         velocityTracker = null
     }
 
-    private fun addRawMovement(tracker: VelocityTracker, event: MotionEvent) {
-        val rawEvent = MotionEvent.obtain(
-            event.downTime,
-            event.eventTime,
-            event.actionMasked,
-            event.rawX,
-            event.rawY,
-            event.metaState,
-        )
-        tracker.addMovement(rawEvent)
-        rawEvent.recycle()
+    private fun screenX(event: MotionEvent, pointerIndex: Int): Float =
+        event.getX(pointerIndex) + (event.rawX - event.x)
+
+    private fun screenY(event: MotionEvent, pointerIndex: Int): Float =
+        event.getY(pointerIndex) + (event.rawY - event.y)
+
+    private fun addScreenMovement(tracker: VelocityTracker, event: MotionEvent) {
+        val copy = MotionEvent.obtain(event)
+        copy.offsetLocation(event.rawX - event.x, event.rawY - event.y)
+        tracker.addMovement(copy)
+        copy.recycle()
     }
 
     private fun maxScrollOffsetY(sv: ValdiScrollView): Int =

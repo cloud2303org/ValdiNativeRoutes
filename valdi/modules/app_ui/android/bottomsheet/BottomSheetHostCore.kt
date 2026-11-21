@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.view.View
 import androidx.annotation.Keep
+import androidx.dynamicanimation.animation.SpringForce
 import com.snap.valdi.extensions.ViewUtils
 import com.snap.valdi.views.ValdiView
 import kotlin.math.abs
@@ -85,6 +86,9 @@ internal data class DetentSpec(
 internal object BottomSheetMath {
     const val RELEASE_PROJECTION_SECONDS = 0.1f
     const val DEFAULT_SETTLE_DURATION_SECONDS = 0.45f
+    const val DEFAULT_SPRING_STIFFNESS = SpringForce.STIFFNESS_MEDIUM
+    const val MAX_DEFAULT_SPRING_VELOCITY_RATIO = 5f
+    const val FLICK_VELOCITY_THRESHOLD_DP_PER_SEC = 600f
     const val SETTLE_SETTLED_FRACTION = 8f
     const val SETTLE_MIN_VISIBLE_CHANGE = 0.001f
     const val MAX_SPRING_OMEGA = 100f
@@ -122,47 +126,59 @@ internal object BottomSheetMath {
         if (widestCardWidthPx > 0f) (cardWidthPx / widestCardWidthPx).coerceAtLeast(0f) else 1f
 
     /**
-     * Projects release position in sheet-height coordinates (`openHeightPx - velocityY * 0.1s`)
-     * and returns the closest snap target among interactive detents (plus `0` when modal & no
-     * `onCloseRequest` handler, or including `0` so close requests can be detected).
+     * Resolves the release snap target using `0.16.2`'s `600 dp/s` flick threshold so natural
+     * flicks commit in the swipe direction while slow drags settle to the nearest interactive
+     * detent (or closed when `canDismissOrClose`).
      */
     fun resolveReleaseTargetIndex(
         detents: List<DetentSpec>,
         currentOpenHeightPx: Float,
         velocityYPxPerSec: Float,
         canDismissOrClose: Boolean,
+        density: Float = 1f,
     ): Int {
         if (detents.isEmpty()) return -1
-        val projectedHeight = currentOpenHeightPx - velocityYPxPerSec * RELEASE_PROJECTION_SECONDS
-        var bestIndex = -1
-        var bestDistance = Float.POSITIVE_INFINITY
-
+        val candidates = ArrayList<Pair<Int, Float>>(detents.size + 1)
         if (canDismissOrClose) {
-            bestIndex = -1
-            bestDistance = abs(projectedHeight - 0f)
+            candidates.add(-1 to 0f)
         }
-
         for (i in detents.indices) {
             val spec = detents[i]
-            if (spec.programmatic) continue
-            val dist = abs(projectedHeight - spec.totalHeightPx)
-            if (dist < bestDistance) {
-                bestDistance = dist
-                bestIndex = i
+            if (!spec.programmatic) {
+                candidates.add(i to spec.totalHeightPx)
             }
         }
-
-        // Fallback if all detents were marked programmatic and sheet cannot close.
-        if (bestIndex == -1 && !canDismissOrClose) {
+        if (candidates.isEmpty()) {
             for (i in detents.indices) {
-                val dist = abs(projectedHeight - detents[i].totalHeightPx)
-                if (dist < bestDistance) {
-                    bestDistance = dist
-                    bestIndex = i
-                }
+                candidates.add(i to detents[i].totalHeightPx)
             }
         }
-        return bestIndex
+        val flickThreshold = FLICK_VELOCITY_THRESHOLD_DP_PER_SEC * density.coerceAtLeast(0.001f)
+        if (velocityYPxPerSec < -flickThreshold) {
+            return candidates.firstOrNull { it.second > currentOpenHeightPx + 0.5f }?.first
+                ?: candidates.last().first
+        }
+        if (velocityYPxPerSec > flickThreshold) {
+            return candidates.lastOrNull { it.second < currentOpenHeightPx - 0.5f }?.first
+                ?: candidates.first().first
+        }
+        return candidates.minBy { abs(it.second - currentOpenHeightPx) }.first
+    }
+
+    /**
+     * Clamps release velocity ratio against travel distance (`[-5, 5] * distance`) matching
+     * `0.16.2` `SheetHostView.kt` for the default `STIFFNESS_MEDIUM` spring.
+     */
+    fun clampDefaultSpringVelocity(
+        distancePx: Float,
+        initialVelocityPxPerSec: Float,
+    ): Float {
+        if (distancePx == 0f) return 0f
+        val velocityRatio = initialVelocityPxPerSec / distancePx
+        return velocityRatio.coerceIn(
+            -MAX_DEFAULT_SPRING_VELOCITY_RATIO,
+            MAX_DEFAULT_SPRING_VELOCITY_RATIO,
+        ) * distancePx
     }
 
     /**
@@ -353,6 +369,7 @@ internal class BottomSheetScrimCanvasView(context: Context) : View(context) {
     private val paint = Paint()
     private var baseColor: Int = DEFAULT_SCRIM_COLOR
     private var baseAlpha: Int = Color.alpha(DEFAULT_SCRIM_COLOR)
+    private var lastAlpha: Int = 0
     var currentProgress: Float = 0f
         private set
 
@@ -366,6 +383,9 @@ internal class BottomSheetScrimCanvasView(context: Context) : View(context) {
         if (baseColor == colorArgb) return
         baseColor = colorArgb
         baseAlpha = Color.alpha(colorArgb)
+        val alpha = (baseAlpha * currentProgress).roundToInt().coerceIn(0, 255)
+        lastAlpha = alpha
+        visibility = if (alpha > 0) VISIBLE else GONE
         invalidate()
     }
 
@@ -374,6 +394,8 @@ internal class BottomSheetScrimCanvasView(context: Context) : View(context) {
         if (currentProgress == clamped) return
         currentProgress = clamped
         val alpha = (baseAlpha * clamped).roundToInt().coerceIn(0, 255)
+        if (alpha == lastAlpha) return
+        lastAlpha = alpha
         visibility = if (alpha > 0) VISIBLE else GONE
         invalidate()
     }

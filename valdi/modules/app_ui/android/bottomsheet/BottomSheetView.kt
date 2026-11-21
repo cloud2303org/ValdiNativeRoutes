@@ -389,7 +389,7 @@ class BottomSheetView(context: Context) :
         hostView.settleDurationSeconds = if (config.settleDuration > 0.0) {
             config.settleDuration.toFloat()
         } else {
-            BottomSheetMath.DEFAULT_SETTLE_DURATION_SECONDS
+            0f
         }
         hostView.hasCloseRequestHandler = config.hasCloseRequestHandler
         hostView.setScrimColorArgb(config.scrimColorArgb.toLong().toInt())
@@ -424,7 +424,7 @@ class BottomSheetView(context: Context) :
         hostView.modal = false
         hostView.scrollExpandCoordination = ScrollCoordinationLevel.HANDOFF
         hostView.scrollCollapseCoordination = ScrollCoordinationLevel.HANDOFF
-        hostView.settleDurationSeconds = BottomSheetMath.DEFAULT_SETTLE_DURATION_SECONDS
+        hostView.settleDurationSeconds = 0f
         hostView.hasCloseRequestHandler = false
         hostView.setScrimColorArgb(BottomSheetScrimCanvasView.DEFAULT_SCRIM_COLOR)
         hostView.setScrimAccessibilityLabel(ScrimDismissView.DEFAULT_LABEL)

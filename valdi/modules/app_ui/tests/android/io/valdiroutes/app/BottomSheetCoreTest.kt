@@ -378,4 +378,37 @@ class BottomSheetCoreTest {
             ),
         )
     }
+
+    @Test
+    fun flickThresholdDismissesTallSheetAndClampsDefaultSpringVelocity() {
+        val tallSheetDetents = listOf(DetentSpec(heightPx = 1872))
+        val density = 3f
+        // Downward flick below 600 dp/s (1800 px/s at 3x) settles back to detent 0.
+        assertEquals(
+            0,
+            BottomSheetMath.resolveReleaseTargetIndex(
+                detents = tallSheetDetents,
+                currentOpenHeightPx = 1650f,
+                velocityYPxPerSec = 1700f,
+                canDismissOrClose = true,
+                density = density,
+            ),
+        )
+        // Downward flick above 600 dp/s (1800 px/s at 3x) dismisses cleanly even from near top.
+        assertEquals(
+            -1,
+            BottomSheetMath.resolveReleaseTargetIndex(
+                detents = tallSheetDetents,
+                currentOpenHeightPx = 1650f,
+                velocityYPxPerSec = 1900f,
+                canDismissOrClose = true,
+                density = density,
+            ),
+        )
+
+        // Zero travel returns zero velocity; extreme ratios clamp to ±5 * distance.
+        assertEquals(0f, BottomSheetMath.clampDefaultSpringVelocity(0f, 5000f), 0.001f)
+        assertEquals(-500f, BottomSheetMath.clampDefaultSpringVelocity(100f, -2000f), 0.001f)
+        assertEquals(500f, BottomSheetMath.clampDefaultSpringVelocity(100f, 2000f), 0.001f)
+    }
 }

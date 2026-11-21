@@ -1,6 +1,7 @@
 import type { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import type { SolidPageProps } from 'solid_native/src/bridge';
+import { Lazy } from 'solid_native/src/Lazy';
 import { useAnimate } from 'solid_native/src/renderer';
 import { AnimationCurve } from 'valdi_core/src/AnimationOptions';
 import { Style } from 'valdi_core/src/Style';
@@ -145,7 +146,13 @@ export function HomePage(props: SolidPageProps<PageViewModel, PageContext>) {
   };
 
   return (
-    <scroll flexGrow={1} backgroundColor="#F3F6FA" showsVerticalScrollIndicator={true}>
+    <scroll
+      flexGrow={1}
+      backgroundColor="#F3F6FA"
+      showsVerticalScrollIndicator={true}
+      viewportExtensionTop={200}
+      viewportExtensionBottom={200}
+    >
       <view
         paddingTop={Math.max(props.viewModel().insets.top, 20) + 12}
         paddingBottom={Math.max(props.viewModel().insets.bottom, 16) + 24}
@@ -396,6 +403,12 @@ export function HomePage(props: SolidPageProps<PageViewModel, PageContext>) {
               </For>
             </view>
           </scroll>
+
+          <Lazy estimatedHeight={36} unmountWhenHidden={true} marginTop={10}>
+            <view padding={10} borderRadius={10} backgroundColor="#F8FAFC">
+              <label value="Lazy slot (viewport-mounted, recyclable)" font={systemFont(12)} color="#475569" />
+            </view>
+          </Lazy>
         </view>
 
         <view

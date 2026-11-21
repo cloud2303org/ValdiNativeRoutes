@@ -1350,6 +1350,164 @@ function runSuiteForMode(mode: TransportMode) {
     assert.equal(capturedRef.getNativeNode(), undefined);
     assert.equal(await capturedRef.takeSnapshot(), undefined);
   });
+
+  test(`[${mode}] 15. <Lazy> defers mount until visible, supports unmountWhenHidden with measured height, and nests cleanly`, async () => {
+    const h = createValdiTestHarness(mode);
+    const counters = {
+      onceMount: 0,
+      onceCleanup: 0,
+      dynMount: 0,
+      dynCleanup: 0,
+      chunkMount: 0,
+      chunkCleanup: 0,
+      itemMount: 0,
+      itemCleanup: 0,
+    };
+
+    h.compileInlineTsx(
+      'inline_test/LazyPage',
+      `
+      import { onCleanup } from 'solid-js';
+      import { Lazy } from 'solid_native/src/Lazy';
+
+      function TrackedChild(props) {
+        props.onMount();
+        onCleanup(() => props.onCleanup());
+        return <label value={props.text} />;
+      }
+
+      export function LazyPage(props) {
+        const c = props.viewModel().counters;
+        return (
+          <scroll viewportExtensionTop={200} viewportExtensionBottom={200}>
+            <Lazy height={80} accessibilityLabel="lazy-once">
+              <TrackedChild
+                text="once-mounted"
+                onMount={() => c.onceMount++}
+                onCleanup={() => c.onceCleanup++}
+              />
+            </Lazy>
+
+            <Lazy estimatedHeight={120} unmountWhenHidden={true} accessibilityLabel="lazy-dynamic">
+              <TrackedChild
+                text="dynamic-mounted"
+                onMount={() => c.dynMount++}
+                onCleanup={() => c.dynCleanup++}
+              />
+            </Lazy>
+
+            <Lazy estimatedHeight={400} unmountWhenHidden={true} accessibilityLabel="lazy-chunk">
+              {(() => {
+                c.chunkMount++;
+                onCleanup(() => c.chunkCleanup++);
+                return (
+                  <view>
+                    <Lazy height={40} unmountWhenHidden={true} accessibilityLabel="lazy-chunk-item">
+                      <TrackedChild
+                        text="nested-item-mounted"
+                        onMount={() => c.itemMount++}
+                        onCleanup={() => c.itemCleanup++}
+                      />
+                    </Lazy>
+                  </view>
+                );
+              })()}
+            </Lazy>
+          </scroll>
+        );
+      }
+      `,
+    );
+
+    h.manager.create('81', 'LazyPage@inline_test/LazyPage', { counters }, { back() {}, finish() {} });
+    const simTree = h.sim.getTree('81');
+    const findByA11y = (id: string) => [...simTree.nodes.values()].find(n => n.attrs.accessibilityLabel === id)!;
+
+    const onceLayout = findByA11y('lazy-once');
+    const dynLayout = findByA11y('lazy-dynamic');
+    const chunkLayout = findByA11y('lazy-chunk');
+    assert.ok(onceLayout && dynLayout && chunkLayout);
+    assert.equal(onceLayout.attrs.observeVisibility, true);
+    assert.equal(onceLayout.attrs.lazyLayout, true);
+    assert.equal(onceLayout.attrs.height, 80);
+    assert.equal(dynLayout.attrs.observeVisibility, true);
+    assert.equal(dynLayout.attrs.lazyLayout, false);
+    assert.equal(dynLayout.attrs.estimatedHeight, 120);
+    assert.equal(findByA11y('lazy-chunk-item'), undefined, 'Nested <Lazy> must not mount before chunk is visible');
+    assert.deepEqual(counters, {
+      onceMount: 0,
+      onceCleanup: 0,
+      dynMount: 0,
+      dynCleanup: 0,
+      chunkMount: 0,
+      chunkCleanup: 0,
+      itemMount: 0,
+      itemCleanup: 0,
+    });
+
+    const ack = () => {};
+
+    // 1. Default mount-once <Lazy>
+    simTree.visibilityObserver!([onceLayout.id], [], [], ack, 100);
+    await h.flushMicrotasks();
+    assert.equal(counters.onceMount, 1);
+    assert.ok(findNodeWithLabel(simTree, v => v === 'once-mounted'));
+
+    simTree.visibilityObserver!([], [onceLayout.id], [], ack, 200);
+    await h.flushMicrotasks();
+    assert.equal(counters.onceCleanup, 0, 'Default mount-once <Lazy> must keep subtree mounted when hidden');
+    assert.ok(findNodeWithLabel(simTree, v => v === 'once-mounted'));
+
+    // 2. Recyclable dynamic-height <Lazy estimatedHeight={120} unmountWhenHidden={true}>
+    simTree.visibilityObserver!([dynLayout.id], [], [], ack, 300);
+    await h.flushMicrotasks();
+    assert.equal(counters.dynMount, 1);
+    assert.equal(counters.dynCleanup, 0);
+    assert.ok(findNodeWithLabel(simTree, v => v === 'dynamic-mounted'));
+
+    // Measure actual height 168 -> must NOT emit extra bridge batch while mounted
+    const batchesBeforeMeasure = simTree.batches.length;
+    simTree.frameObserver!(new Float64Array([dynLayout.id, 0, 80, 370, 168]));
+    await h.flushMicrotasks();
+    assert.equal(simTree.batches.length, batchesBeforeMeasure);
+
+    // Hide dynamic <Lazy> -> unmounts child AND updates estimatedHeight to 168 in a single batch
+    const batchesBeforeHide = simTree.batches.length;
+    simTree.visibilityObserver!([], [dynLayout.id], [], ack, 400);
+    await h.flushMicrotasks();
+    assert.equal(counters.dynCleanup, 1);
+    assert.equal(findNodeWithLabel(simTree, v => v === 'dynamic-mounted'), undefined);
+    assert.equal(dynLayout.attrs.estimatedHeight, 168);
+    assert.equal(simTree.batches.length, batchesBeforeHide + 1);
+
+    // Show dynamic <Lazy> again -> remounts cleanly
+    simTree.visibilityObserver!([dynLayout.id], [], [], ack, 500);
+    await h.flushMicrotasks();
+    assert.equal(counters.dynMount, 2);
+    assert.ok(findNodeWithLabel(simTree, v => v === 'dynamic-mounted'));
+
+    // 3. Nested / chunked <Lazy>
+    simTree.visibilityObserver!([chunkLayout.id], [], [], ack, 600);
+    await h.flushMicrotasks();
+    assert.equal(counters.chunkMount, 1);
+    assert.equal(counters.itemMount, 0, 'Inner <Lazy> placeholder mounts without mounting item content');
+    const innerItemLayout = findByA11y('lazy-chunk-item');
+    assert.ok(innerItemLayout);
+
+    simTree.visibilityObserver!([innerItemLayout.id], [], [], ack, 700);
+    await h.flushMicrotasks();
+    assert.equal(counters.itemMount, 1);
+    assert.ok(findNodeWithLabel(simTree, v => v === 'nested-item-mounted'));
+
+    // Hide outer chunk -> unmounts both inner item and outer chunk cleanly
+    simTree.visibilityObserver!([], [chunkLayout.id], [], ack, 800);
+    await h.flushMicrotasks();
+    assert.equal(counters.itemCleanup, 1);
+    assert.equal(counters.chunkCleanup, 1);
+    assert.equal(findByA11y('lazy-chunk-item'), undefined);
+
+    h.manager.destroy('81');
+  });
 }
 
 test('[types] 14. Full 17-element JSX definitions typecheck and disallow direct children on <label>', () => {

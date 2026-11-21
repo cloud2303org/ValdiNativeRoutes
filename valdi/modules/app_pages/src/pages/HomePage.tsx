@@ -1,4 +1,5 @@
 import type { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
+import { appUIApi, BottomSheetProvider, ModalBottomSheet } from 'app_ui/src/index';
 import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import type { SolidPageProps } from 'solid_native/src/bridge';
 import { Lazy } from 'solid_native/src/Lazy';
@@ -83,6 +84,7 @@ function ActionButton(props: {
 
 export function HomePage(props: SolidPageProps<PageViewModel, PageContext>) {
   const animate = useAnimate();
+  const ui = appUIApi();
   const topInset = Math.max(props.insets.top, 20) + 12;
   const bottomInset = Math.max(props.insets.bottom, 16) + 24;
   const [localCount, setLocalCount] = createSignal(0);
@@ -90,6 +92,11 @@ export function HomePage(props: SolidPageProps<PageViewModel, PageContext>) {
   const [barExpanded, setBarExpanded] = createSignal(false);
   const [cardWidth, setCardWidth] = createSignal(0);
   const [cardVisible, setCardVisible] = createSignal(false);
+  const [sheetIndex, setSheetIndex] = createSignal(-1);
+  const [uiStatus, setUiStatus] = createSignal(
+    `Fixed insets: top=${Math.round(props.insets.top)} · bottom=${Math.round(props.insets.bottom)}`,
+  );
+  const [noteText, setNoteText] = createSignal('');
   const [nextItemId, setNextItemId] = createSignal(4);
   const [items, setItems] = createSignal<ListItem[]>([
     { id: 1, label: 'Alpha signal row' },
@@ -147,14 +154,58 @@ export function HomePage(props: SolidPageProps<PageViewModel, PageContext>) {
     refreshStats();
   };
 
+  const openNativeDialog = async () => {
+    try {
+      const res = await ui.showModal({
+        title: 'Native Dialog',
+        content: 'Window-level UIKit/Compose modal with keyboard avoidance.',
+        editable: true,
+        placeholderText: 'Type something...',
+      });
+      setUiStatus(res.confirm ? `Dialog confirmed: ${res.content || '(empty)'}` : 'Dialog canceled');
+    } catch (error) {
+      setUiStatus(`Dialog error: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const openNativeActionSheet = async () => {
+    try {
+      const res = await ui.showActionSheet({
+        alertText: 'Solid AppSheetOverlay',
+        itemList: ['Option A', 'Option B', 'Option C'],
+      });
+      setUiStatus(`ActionSheet picked #${res.tapIndex}`);
+    } catch {
+      setUiStatus('ActionSheet canceled');
+    }
+  };
+
+  const openNativePicker = async () => {
+    try {
+      const res = await ui.showPicker({
+        title: 'Pick City',
+        options: [
+          { value: 'sh', label: 'Shanghai' },
+          { value: 'hz', label: 'Hangzhou' },
+          { value: 'sz', label: 'Shenzhen' },
+        ],
+        value: 'sh',
+      });
+      setUiStatus(res.confirm ? `Picker confirmed: ${res.value}` : 'Picker canceled');
+    } catch (error) {
+      setUiStatus(`Picker error: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
   return (
-    <scroll
-      flexGrow={1}
-      backgroundColor="#F3F6FA"
-      showsVerticalScrollIndicator={true}
-      viewportExtensionTop={200}
-      viewportExtensionBottom={200}
-    >
+    <BottomSheetProvider>
+      <scroll
+        flexGrow={1}
+        backgroundColor="#F3F6FA"
+        showsVerticalScrollIndicator={true}
+        viewportExtensionTop={200}
+        viewportExtensionBottom={200}
+      >
       <view
         paddingTop={topInset}
         paddingBottom={bottomInset}
@@ -416,6 +467,52 @@ export function HomePage(props: SolidPageProps<PageViewModel, PageContext>) {
         <view
           padding={14}
           borderRadius={14}
+          backgroundColor="#FFFFFF"
+          borderWidth={1}
+          borderColor="#E2E8F0"
+          marginBottom={14}
+          flexDirection="column"
+        >
+          <label value="Native UI, BottomSheet & Keyboard" font={systemSemiboldFont(15)} color="#0F172A" marginBottom={6} />
+          <label value={uiStatus()} font={systemFont(12)} color="#475569" marginBottom={10} />
+          <view flexDirection="row" flexWrap="wrap" marginBottom={8}>
+            <ActionButton
+              title={sheetIndex() >= 0 ? 'Close Sheet' : 'Open Sheet'}
+              marginRight={8}
+              onTap={() => setSheetIndex(sheetIndex() >= 0 ? -1 : 0)}
+            />
+            <ActionButton title="Show Dialog" marginRight={8} onTap={openNativeDialog} />
+            <ActionButton title="ActionSheet" marginRight={8} onTap={openNativeActionSheet} />
+            <ActionButton title="Picker" onTap={openNativePicker} />
+          </view>
+          <view
+            paddingLeft={12}
+            paddingRight={12}
+            paddingTop={8}
+            paddingBottom={8}
+            borderRadius={10}
+            backgroundColor="#F8FAFC"
+            borderWidth={1}
+            borderColor="#CBD5E1"
+          >
+            <textfield
+              height={28}
+              font={systemFont(14)}
+              color="#0F172A"
+              placeholderColor="#94A3B8"
+              placeholder="Tap to test native keyboard lift (insets fixed)..."
+              value={noteText()}
+              onChange={event => {
+                setNoteText(event.text);
+                setUiStatus(`Input: ${event.text}`);
+              }}
+            />
+          </view>
+        </view>
+
+        <view
+          padding={14}
+          borderRadius={14}
           backgroundColor={accentColor()}
           alignItems="center"
           justifyContent="center"
@@ -429,5 +526,46 @@ export function HomePage(props: SolidPageProps<PageViewModel, PageContext>) {
         </view>
       </view>
     </scroll>
+
+      <ModalBottomSheet
+        index={sheetIndex()}
+        detents={['content', '65%']}
+        surfaceStyle={{
+          backgroundColor: '#FFFFFF',
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+        }}
+        onIndexChange={setSheetIndex}
+        onCloseRequest={() => setSheetIndex(-1)}
+      >
+        <view padding={24} paddingBottom={Math.max(props.insets.bottom, 16) + 16} flexDirection="column">
+          <view alignItems="center" marginBottom={14}>
+            <view width={36} height={4} borderRadius={2} backgroundColor="#CBD5E1" />
+          </view>
+          <label value="Solid 2.0 ModalBottomSheet" font={systemBoldFont(18)} color="#0F172A" marginBottom={6} />
+          <label
+            value={`Rendered via Solid BottomSheetPortalHost · Sum: ${sum()}`}
+            font={systemFont(14)}
+            color="#475569"
+            marginBottom={16}
+          />
+          <view flexDirection="row">
+            <ActionButton
+              title="Expand 65%"
+              flexGrow={1}
+              marginRight={8}
+              onTap={() => setSheetIndex(1)}
+            />
+            <ActionButton
+              title="Dismiss"
+              backgroundColor="#0F172A"
+              textColor="#FFFFFF"
+              flexGrow={1}
+              onTap={() => setSheetIndex(-1)}
+            />
+          </view>
+        </view>
+      </ModalBottomSheet>
+    </BottomSheetProvider>
   );
 }

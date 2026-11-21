@@ -22,6 +22,31 @@ enum AppImages {
         return SDWebImageManager(cache: cache, loader: downloader)
     }()
 
+    static func load(_ url: URL, completion: @escaping NativeImageLoading.Completion) -> NativeImageLoading.Cancellation? {
+        // Picked attachments are local files; caching them again would only duplicate them.
+        if url.isFileURL {
+            var task: DispatchWorkItem!
+            task = DispatchWorkItem {
+                guard !task.isCancelled else { return }
+                let image = UIImage(contentsOfFile: url.path)?.preparingForDisplay()
+                guard !task.isCancelled else { return }
+                DispatchQueue.main.async {
+                    guard !task.isCancelled else { return }
+                    MainActor.assumeIsolated { completion(image.map { .success($0) } ?? .failure(invalidImageError())) }
+                }
+            }
+            DispatchQueue.global(qos: .userInitiated).async(execute: task)
+            return { task.cancel() }
+        }
+        let operation = manager.loadImage(with: url, options: [.retryFailed], progress: nil) { image, _, error, _, finished, _ in
+            guard finished else { return }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { completion(image.map { .success($0) } ?? .failure(error ?? invalidImageError())) }
+            }
+        }
+        return operation.map { operation in { operation.cancel() } }
+    }
+
     nonisolated static func invalidImageError() -> NSError {
         NSError(domain: "AppImages", code: 1, userInfo: [NSLocalizedDescriptionKey: "图片无法显示"])
     }

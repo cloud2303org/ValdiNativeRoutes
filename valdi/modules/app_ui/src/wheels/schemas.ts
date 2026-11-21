@@ -1,4 +1,3 @@
-import dayjs from 'dayjs';
 import type { WheelTreeNode } from './WheelHost';
 import {
   type DatePickMode,
@@ -52,8 +51,14 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 
 /** The fields `value` has, now for the rest, clamped to the years and to real dates; as the native wheels read it. */
 function wheelTime(mode: DatePickMode, value: string, minYear: number, maxYear: number): string {
-  const now = dayjs();
-  let [year, month, day, hour, minute] = [now.year(), now.month() + 1, now.date(), now.hour(), now.minute()];
+  const now = new Date();
+  let [year, month, day, hour, minute] = [
+    now.getFullYear(),
+    now.getMonth() + 1,
+    now.getDate(),
+    now.getHours(),
+    now.getMinutes(),
+  ];
   let match: RegExpExecArray | null;
   if ((match = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?$/.exec(value))) {
     [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
@@ -84,7 +89,7 @@ export function timeWheel({
   minYear?: number | null;
   maxYear?: number | null;
 }) {
-  const currentYear = dayjs().year();
+  const currentYear = new Date().getFullYear();
   const resolvedMode: DatePickMode = mode ?? 'date';
   const min = minYear ?? currentYear - 5;
   const max = Math.max(min, maxYear ?? currentYear + 5);

@@ -24,8 +24,10 @@
     "modules": [
       "app_foundation",
       "native_common",
+      "theme_bridge",
       "solid_runtime",
       "solid_native",
+      "app_ui",
       "app_pages"
     ]
   },

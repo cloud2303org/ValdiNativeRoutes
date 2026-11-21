@@ -1,6 +1,6 @@
-import { Component } from 'valdi_core/src/Component';
+import { createMemo } from 'solid-js';
 import { Style } from 'valdi_core/src/Style';
-import { View } from 'valdi_tsx/src/NativeTemplateElements';
+import type { View } from 'valdi_tsx/src/NativeTemplateElements';
 import type { PickerOption } from '../AppUIHost';
 import type { ColumnWheelConfig, TimeWheelConfig, TreeWheelConfig } from './WheelHost';
 import type { DatePickMode } from 'native_common/src/pickerSchemas';
@@ -43,20 +43,21 @@ export interface ColumnPickerViewModel {
   onChange: (value: string) => void;
 }
 
-export class ColumnPicker extends Component<ColumnPickerViewModel> {
-  onRender(): void {
-    const { options, value } = this.viewModel;
-    const config: ColumnWheelConfig = schema.columnWheel({ options, value });
+export function ColumnPicker(props: ColumnPickerViewModel) {
+  const config = createMemo<ColumnWheelConfig>(() =>
+    schema.columnWheel({ options: props.options, value: props.value }),
+  );
+  const handleChange = (value: string) => props.onChange(value);
+
+  return (
     <custom-view
       iosClass="VRColumnWheelView"
       androidClass="io.valdiroutes.app.ColumnWheelView"
       style={styles.wheel}
-      config={config}
-      onChange={this.handleChange}
-    />;
-  }
-
-  private handleChange = (value: string) => this.viewModel.onChange(value);
+      config={config()}
+      onChange={handleChange}
+    />
+  );
 }
 
 export interface TimePickerViewModel {
@@ -70,21 +71,27 @@ export interface TimePickerViewModel {
   onChange: (value: string) => void;
 }
 
-export class TimePicker extends Component<TimePickerViewModel> {
-  onRender(): void {
-    const { mode, value, minYear, maxYear } = this.viewModel;
-    const config: TimeWheelConfig = schema.timeWheel({ mode, value, minYear, maxYear });
-    // 'datetime' adds the date / time switch above the wheels.
+export function TimePicker(props: TimePickerViewModel) {
+  const config = createMemo<TimeWheelConfig>(() =>
+    schema.timeWheel({
+      mode: props.mode,
+      value: props.value,
+      minYear: props.minYear,
+      maxYear: props.maxYear,
+    }),
+  );
+  const handleChange = (value: string) => props.onChange(value);
+
+  // 'datetime' adds the date / time switch above the wheels.
+  return (
     <custom-view
       iosClass="VRTimeWheelView"
       androidClass="io.valdiroutes.app.TimeWheelView"
-      style={config.mode === 'datetime' ? styles.dateTimeWheel : styles.wheel}
-      config={config}
-      onChange={this.handleChange}
-    />;
-  }
-
-  private handleChange = (value: string) => this.viewModel.onChange(value);
+      style={config().mode === 'datetime' ? styles.dateTimeWheel : styles.wheel}
+      config={config()}
+      onChange={handleChange}
+    />
+  );
 }
 
 export interface TreePickerViewModel {
@@ -97,20 +104,25 @@ export interface TreePickerViewModel {
 }
 
 /** Cascading wheels: changing a level resets the levels below it to their first option. */
-export class TreePicker extends Component<TreePickerViewModel> {
-  onRender(): void {
-    const { data, value, columns } = this.viewModel;
-    const config: TreeWheelConfig = schema.treeWheel({ data, value, columns });
+export function TreePicker(props: TreePickerViewModel) {
+  const config = createMemo<TreeWheelConfig>(() =>
+    schema.treeWheel({
+      data: props.data,
+      value: props.value,
+      columns: props.columns,
+    }),
+  );
+  const handleChange = (value: string[]) => props.onChange(value);
+
+  return (
     <custom-view
       iosClass="VRTreeWheelView"
       androidClass="io.valdiroutes.app.TreeWheelView"
       style={styles.wheel}
-      config={config}
-      onChange={this.handleChange}
-    />;
-  }
-
-  private handleChange = (value: string[]) => this.viewModel.onChange(value);
+      config={config()}
+      onChange={handleChange}
+    />
+  );
 }
 
 const styles = {

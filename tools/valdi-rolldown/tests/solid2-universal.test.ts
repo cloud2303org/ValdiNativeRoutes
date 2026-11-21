@@ -458,7 +458,48 @@ function createValdiTestHarness(platform = 2) {
         getSystemType: () => 'ios',
         isAndroid: () => false,
         isIOS: () => true,
+        isRTL: () => false,
+        isDarkMode: () => false,
+        observeDarkMode: () => ({ cancel() {} }),
       },
+    },
+    'valdi_core/src/BuildType': {
+      isDevBuild: () => true,
+      isDebugEnabled: () => false,
+    },
+    'app_ui/src/AppUI': {
+      getHost: () => ({}),
+    },
+    'theme_bridge/src/ThemeBridge': {
+      getHost: () => ({
+        getTokens: () => ({
+          light: {
+            surface: '#ffffff',
+            text: '#172033',
+            muted: '#667085',
+            hairline: '#ececec',
+            handle: '#D6DCE5',
+            scrim: 'rgba(16,24,40,0.32)',
+            buttonPrimary: '#1e62d0',
+            buttonOnPrimary: '#ffffff',
+            buttonSecondary: '#eef2f7',
+            buttonOnSecondary: '#1d2939',
+          },
+          dark: {
+            surface: '#1E1F23',
+            text: '#ffffff',
+            muted: '#969696',
+            hairline: '#2A2B32',
+            handle: '#969696',
+            scrim: 'rgba(0,0,0,0.75)',
+            buttonPrimary: '#377dff',
+            buttonOnPrimary: '#ffffff',
+            buttonSecondary: '#2c2e35',
+            buttonOnSecondary: '#f2f4f7',
+          },
+          shared: { radius: { sheet: 22 } },
+        }),
+      }),
     },
     'valdi_core/src/UncaughtErrorHandler': {
       UncaughtErrorHandlerResult: { CRASH_APPLICATION: 1, IGNORE: 0 },

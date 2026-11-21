@@ -8,5 +8,16 @@ NSArray<id<SCValdiVideoLoader>> *VRCreateNativeVideoLoaders(void) {
 }
 
 void VRRegisterNativeModules(SCValdiRuntime *runtime) {
-
+    {
+        Class factoryClass = NSClassFromString(@"VRAppUIModuleFactory");
+        if (!factoryClass || ![factoryClass conformsToProtocol:@protocol(SCNValdiCoreModuleFactory)])
+            [NSException raise:NSInternalInconsistencyException format:@"Missing Swift module factory: VRAppUIModuleFactory"];
+        [runtime registerNativeModuleFactory:[factoryClass new]];
+    }
+    {
+        Class factoryClass = NSClassFromString(@"VRThemeBridgeModuleFactory");
+        if (!factoryClass || ![factoryClass conformsToProtocol:@protocol(SCNValdiCoreModuleFactory)])
+            [NSException raise:NSInternalInconsistencyException format:@"Missing Swift module factory: VRThemeBridgeModuleFactory"];
+        [runtime registerNativeModuleFactory:[factoryClass new]];
+    }
 }

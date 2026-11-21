@@ -313,14 +313,10 @@ final class PageController: UIViewController {
 }
 
 /// Holds a page's root view and is the only place that handles the keyboard: the root view's bottom moves up by the
-/// keyboard height, and the bottom safe-area inset drops by the part of it the keyboard covers.
+/// keyboard height while page insets remain a fixed initial safe-area snapshot.
 final class PageContainerView: UIView {
     let entry: PageEntry
     private weak var navigator: Navigator?
-    /// Insets without the keyboard.
-    private var baseInsets = UIEdgeInsets.zero {
-        didSet { if baseInsets != oldValue { applyInsets() } }
-    }
     private var keyboardSubscription: KeyboardSubscription?
 
     init(entry: PageEntry, navigator: Navigator) {
@@ -332,31 +328,11 @@ final class PageContainerView: UIView {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    private static func insets(_ base: UIEdgeInsets) -> UIEdgeInsets {
-        var insets = base
-        insets.bottom = max(0, base.bottom - KeyboardObserver.shared.height)
-        return insets
-    }
-
     private func keyboardDidMove() {
         // A covered page is out of the window; it catches up when it comes back.
         guard window != nil else { return }
         setNeedsLayout()
         layoutIfNeeded()
-        applyInsets()
-    }
-
-    private func applyInsets() {
-        guard case .some = entry.rootView else { return }
-        let insets = Self.insets(baseInsets)
-        guard entry.appliedInsets != insets else { return }
-        entry.appliedInsets = insets
-        ValdiHost.shared.updateInsets(entry, insets: insets)
-    }
-
-    override func safeAreaInsetsDidChange() {
-        super.safeAreaInsetsDidChange()
-        baseInsets = safeAreaInsets
     }
 
     override func didMoveToWindow() {
@@ -368,7 +344,6 @@ final class PageContainerView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        baseInsets = safeAreaInsets
         // Created on the first layout, once the insets are known; never again for a page that has left.
         guard let rootView = entry.rootView ?? (entry.removed ? nil : createRootView()) else { return }
         if rootView.superview !== self { addSubview(rootView) }
@@ -379,7 +354,7 @@ final class PageContainerView: UIView {
 
     private func createRootView() -> SCValdiRootView? {
         guard let navigator else { return nil }
-        let insets = Self.insets(baseInsets)
+        let insets = safeAreaInsets
         let rootView = ValdiHost.shared.createPage(entry, insets: insets, navigator: navigator)
         entry.rootView = rootView
         entry.appliedInsets = insets

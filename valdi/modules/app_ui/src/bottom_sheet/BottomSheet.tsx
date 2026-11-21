@@ -1,13 +1,11 @@
-import { AnyRenderFunction } from 'valdi_core/src/AnyRenderFunction';
+import { createMemo, createRenderEffect, createSignal, onCleanup, Show, untrack } from 'solid-js';
 import { isDevBuild } from 'valdi_core/src/BuildType';
-import { StatefulComponent } from 'valdi_core/src/Component';
 import { Device } from 'valdi_core/src/Device';
 import { Style } from 'valdi_core/src/Style';
-import { DetachedSlot } from 'valdi_core/src/slot/DetachedSlot';
-import { Layout, View } from 'valdi_tsx/src/NativeTemplateElements';
+import type { Layout, View } from 'valdi_tsx/src/NativeTemplateElements';
 
 import { type BottomSheetConfig, BottomSheetCornerCurve, BottomSheetDetentKind } from './BottomSheetHost';
-import { BottomSheetPortalRegistry, resolveOptionalPortalRegistry } from './BottomSheetProvider';
+import { resolveOptionalPortalRegistry } from './BottomSheetProvider';
 import {
   ColorValue,
   Detent,
@@ -138,12 +136,12 @@ export interface BottomSheetProps {
    * Custom render function for the sheet surface (e.g. blur view or custom card material),
    * replacing the default `#ffffff` surface.
    */
-  surface?: AnyRenderFunction;
+  surface?: () => JSX.Element;
   /** Card shape (corner radii / curve), shadows (`boxShadow`, `elevation`, `shadow*`), and surface colors. */
   surfaceStyle?: SurfaceStyle;
   /** Style applied to the sheet's content wrapper. */
   style?: Style<View> | Style<Layout> | View;
-  children?: unknown;
+  children?: JSX.Element;
 }
 
 /** Internal props shared with `ModalBottomSheet`. */
@@ -211,14 +209,14 @@ interface BottomSheetHostNodeProps {
     borderWidth?: number;
     opacity?: number;
   };
-  surface?: AnyRenderFunction;
+  surface?: () => JSX.Element;
   contentStyle?: Style<View> | Style<Layout> | View;
   shouldRenderChildren: boolean;
   onIndexChange?: (index: number) => void;
   onSettle: (index: number) => void;
   onPositionChange?: (event: PositionChangeEvent) => void;
   onCloseRequest?: () => void;
-  children?: unknown;
+  children?: JSX.Element;
 }
 
 interface HostGeometryState {
@@ -229,47 +227,50 @@ interface HostGeometryState {
   contentRegionInset: number;
 }
 
-class BottomSheetHostNode extends StatefulComponent<BottomSheetHostNodeProps, HostGeometryState> {
-  private hostWidth = 0;
-  private lastCrowdedWarning: string | null = null;
+function BottomSheetHostNode(props: BottomSheetHostNodeProps) {
+  let hostWidth = 0;
+  let lastCrowdedWarning: string | null = null;
 
-  state: HostGeometryState = {
+  const [geometry, setGeometry] = createSignal<HostGeometryState>({
     hasNativeGeometry: false,
     contentRegionWidth: 0,
     contentRegionHeight: 0,
     surfaceHeight: 0,
     contentRegionInset: 0,
-  };
+  });
 
-  private warnAboutCrowdedInsets(): void {
+  const warnAboutCrowdedInsets = (): void => {
     if (!isDevBuild()) {
       return;
     }
-    const warning = crowdedInsetsWarning(this.viewModel.detents, this.hostWidth, this.viewModel.resolvedMaxWidth);
-    if (warning !== null && warning !== this.lastCrowdedWarning) {
+    const warning = crowdedInsetsWarning(props.detents, hostWidth, props.resolvedMaxWidth);
+    if (warning !== null && warning !== lastCrowdedWarning) {
       console.warn(warning);
     }
-    this.lastCrowdedWarning = warning;
-  }
+    lastCrowdedWarning = warning;
+  };
 
-  override onViewModelUpdate(previousViewModel?: BottomSheetHostNodeProps): void {
-    if (previousViewModel) {
-      this.warnAboutCrowdedInsets();
-    }
-  }
+  createRenderEffect(
+    () => ({ detents: props.detents, maxWidth: props.resolvedMaxWidth }),
+    () => {
+      if (hostWidth > 0) {
+        warnAboutCrowdedInsets();
+      }
+    },
+  );
 
-  private readonly handleNativeGeometry = (
+  const handleNativeGeometry = (
     contentRegionWidth: number,
     contentRegionHeight: number,
     surfaceHeight: number,
     contentRegionInset: number,
-    hostWidth = 0,
+    nextHostWidth = 0,
   ): void => {
-    if (hostWidth > 0) {
-      this.hostWidth = hostWidth;
+    if (nextHostWidth > 0) {
+      hostWidth = nextHostWidth;
     }
-    this.warnAboutCrowdedInsets();
-    const prev = this.state;
+    warnAboutCrowdedInsets();
+    const prev = geometry();
     if (
       prev.hasNativeGeometry &&
       Math.abs(prev.contentRegionWidth - contentRegionWidth) <= 0.01 &&
@@ -279,7 +280,7 @@ class BottomSheetHostNode extends StatefulComponent<BottomSheetHostNodeProps, Ho
     ) {
       return;
     }
-    this.setState({
+    setGeometry({
       hasNativeGeometry: true,
       contentRegionWidth,
       contentRegionHeight,
@@ -288,34 +289,39 @@ class BottomSheetHostNode extends StatefulComponent<BottomSheetHostNodeProps, Ho
     });
   };
 
-  private readonly handleNativeIndexChange = (index: number): void => {
-    this.viewModel.onIndexChange?.(index);
+  const handleNativeIndexChange = (index: number): void => {
+    props.onIndexChange?.(index);
   };
 
-  private readonly handleNativeSettle = (index: number): void => {
-    this.viewModel.onSettle(index);
+  const handleNativeSettle = (index: number): void => {
+    props.onSettle(index);
   };
 
-  private readonly handleNativePositionChange = (position: number, index: number): void => {
-    this.viewModel.onPositionChange?.({
+  const handleNativePositionChange = (position: number, index: number): void => {
+    props.onPositionChange?.({
       nativeEvent: { position, index },
     });
   };
 
-  private readonly handleNativeCloseRequest = (): void => {
-    this.viewModel.onCloseRequest?.();
+  const handleNativeCloseRequest = (): void => {
+    props.onCloseRequest?.();
   };
 
-  override onRender(): void {
-    const vm = this.viewModel;
-    const { hasNativeGeometry, contentRegionWidth, contentRegionHeight, surfaceHeight, contentRegionInset } =
-      this.state;
+  const resolvedContentStyle = createMemo<Style<View> | undefined>(() => {
+    const s = props.contentStyle;
+    if (!s) {
+      return undefined;
+    }
+    if (typeof (s as { toNative?: unknown }).toNative === 'function') {
+      return s as Style<View>;
+    }
+    return new Style<View>(s as View);
+  });
 
-    const regionWidth: number | `${number}%` = hasNativeGeometry ? contentRegionWidth : '100%';
-    const regionHeight: number | `${number}%` = hasNativeGeometry ? contentRegionHeight : '100%';
-    const resolvedSurfaceHeight: number | `${number}%` = hasNativeGeometry ? surfaceHeight : '100%';
-    const config: BottomSheetConfig = {
-      detents: vm.detents.map(d => ({
+  const config = createMemo<BottomSheetConfig>(() => {
+    const g = geometry();
+    return {
+      detents: props.detents.map(d => ({
         value: d.value,
         kind: DETENT_KIND_MAP[d.kind],
         programmatic: d.programmatic,
@@ -329,22 +335,24 @@ class BottomSheetHostNode extends StatefulComponent<BottomSheetHostNodeProps, Ho
         placementBias: d.placementBias,
         scrimOpacity: d.scrimOpacity,
       })),
-      detentIndex: vm.index,
-      animateIn: vm.animateIn,
-      animateContentHeight: vm.animateContentHeight,
-      modal: vm.modal,
-      windowOverlay: vm.windowOverlay,
-      openOrder: vm.openOrder,
-      scrollExpandCoordination: vm.scrollExpandCoordination,
-      scrollCollapseCoordination: vm.scrollCollapseCoordination,
-      settleDuration: vm.settleDurationSeconds,
-      hasCloseRequestHandler: vm.hasCloseRequestHandler,
-      scrimColorArgb: vm.scrimColorArgb,
-      scrimAccessibilityLabel: vm.scrimAccessibilityLabel,
-      surfaceCornerRadii: [...vm.surfaceCornerRadii],
+      detentIndex: props.index,
+      animateIn: props.animateIn,
+      animateContentHeight: props.animateContentHeight,
+      modal: props.modal,
+      windowOverlay: props.windowOverlay,
+      openOrder: props.openOrder,
+      scrollExpandCoordination: props.scrollExpandCoordination,
+      scrollCollapseCoordination: props.scrollCollapseCoordination,
+      settleDuration: props.settleDurationSeconds,
+      hasCloseRequestHandler: props.hasCloseRequestHandler,
+      scrimColorArgb: props.scrimColorArgb,
+      scrimAccessibilityLabel: props.scrimAccessibilityLabel,
+      surfaceCornerRadii: [...props.surfaceCornerRadii],
       surfaceCornerCurve:
-        vm.surfaceCornerCurve === 'continuous' ? BottomSheetCornerCurve.Continuous : BottomSheetCornerCurve.Circular,
-      surfaceShadows: vm.surfaceShadows.map(s => ({
+        props.surfaceCornerCurve === 'continuous'
+          ? BottomSheetCornerCurve.Continuous
+          : BottomSheetCornerCurve.Circular,
+      surfaceShadows: props.surfaceShadows.map(s => ({
         offsetX: s.offsetX,
         offsetY: s.offsetY,
         blurRadius: s.blurRadius,
@@ -353,11 +361,13 @@ class BottomSheetHostNode extends StatefulComponent<BottomSheetHostNodeProps, Ho
         opacity: s.opacity,
         excludesInterior: s.excludesInterior,
       })),
-      surfaceElevation: vm.surfaceElevation,
-      surfaceShadowColorArgb: vm.surfaceShadowColorArgb,
-      ...(hasNativeGeometry ? { committedContentRegionInset: contentRegionInset } : {}),
+      surfaceElevation: props.surfaceElevation,
+      surfaceShadowColorArgb: props.surfaceShadowColorArgb,
+      ...(g.hasNativeGeometry ? { committedContentRegionInset: g.contentRegionInset } : {}),
     };
+  });
 
+  return (
     <custom-view
       iosClass="VRBottomSheetView"
       androidClass="io.valdiroutes.app.BottomSheetView"
@@ -366,46 +376,49 @@ class BottomSheetHostNode extends StatefulComponent<BottomSheetHostNodeProps, Ho
       right={0}
       bottom={0}
       left={0}
-      config={config}
-      onNativeGeometry={this.handleNativeGeometry}
-      onNativeIndexChange={this.handleNativeIndexChange}
-      onNativeSettle={this.handleNativeSettle}
-      onNativePositionChange={vm.onPositionChange ? this.handleNativePositionChange : undefined}
-      onNativeCloseRequest={this.handleNativeCloseRequest}
+      config={config()}
+      onNativeGeometry={handleNativeGeometry}
+      onNativeIndexChange={handleNativeIndexChange}
+      onNativeSettle={handleNativeSettle}
+      onNativePositionChange={props.onPositionChange ? handleNativePositionChange : undefined}
+      onNativeCloseRequest={handleNativeCloseRequest}
     >
       <custom-view
         iosClass="VRBottomSheetSurfaceView"
         androidClass="io.valdiroutes.app.BottomSheetSurfaceView"
         position="absolute"
         top={0}
-        left={hasNativeGeometry ? contentRegionInset : 0}
-        width={regionWidth}
-        maxWidth={hasNativeGeometry ? undefined : vm.contentMaxWidth}
-        height={resolvedSurfaceHeight}
+        left={geometry().hasNativeGeometry ? geometry().contentRegionInset : 0}
+        width={geometry().hasNativeGeometry ? geometry().contentRegionWidth : '100%'}
+        maxWidth={geometry().hasNativeGeometry ? undefined : props.contentMaxWidth}
+        height={geometry().hasNativeGeometry ? geometry().surfaceHeight : '100%'}
       >
-        {vm.surface ? (
-          vm.surface()
-        ) : (
-          <view
-            flexGrow={1}
-            backgroundColor={vm.defaultSurfaceStyle.backgroundColor ?? '#ffffff'}
-            borderColor={vm.defaultSurfaceStyle.borderColor}
-            borderWidth={vm.defaultSurfaceStyle.borderWidth}
-            opacity={vm.defaultSurfaceStyle.opacity}
-          />
-        )}
+        <Show
+          when={props.surface}
+          fallback={
+            <view
+              flexGrow={1}
+              backgroundColor={props.defaultSurfaceStyle.backgroundColor ?? '#ffffff'}
+              borderColor={props.defaultSurfaceStyle.borderColor}
+              borderWidth={props.defaultSurfaceStyle.borderWidth}
+              opacity={props.defaultSurfaceStyle.opacity}
+            />
+          }
+        >
+          {surfaceFn => surfaceFn()()}
+        </Show>
       </custom-view>
       <custom-view
         iosClass="VRBottomSheetContentWrapperView"
         androidClass="io.valdiroutes.app.BottomSheetContentWrapperView"
-        marginLeft={hasNativeGeometry ? contentRegionInset : 0}
-        width={regionWidth}
-        maxWidth={hasNativeGeometry ? undefined : vm.contentMaxWidth}
-        height={regionHeight}
+        marginLeft={geometry().hasNativeGeometry ? geometry().contentRegionInset : 0}
+        width={geometry().hasNativeGeometry ? geometry().contentRegionWidth : '100%'}
+        maxWidth={geometry().hasNativeGeometry ? undefined : props.contentMaxWidth}
+        height={geometry().hasNativeGeometry ? geometry().contentRegionHeight : '100%'}
         flexShrink={0}
-        style={vm.contentStyle as Style<Layout> | undefined}
+        style={resolvedContentStyle()}
       >
-        {vm.shouldRenderChildren && <slot />}
+        <Show when={props.shouldRenderChildren}>{props.children}</Show>
         <custom-view
           iosClass="VRBottomSheetMarkerView"
           androidClass="io.valdiroutes.app.BottomSheetMarkerView"
@@ -413,13 +426,8 @@ class BottomSheetHostNode extends StatefulComponent<BottomSheetHostNodeProps, Ho
           flexShrink={0}
         />
       </custom-view>
-    </custom-view>;
-  }
-}
-
-interface BottomSheetState {
-  lazyMounted: boolean;
-  openOrder: number;
+    </custom-view>
+  );
 }
 
 let nextSheetInstanceId = 0;
@@ -431,175 +439,169 @@ let fallbackOverlayOpenOrderCounter = 0;
  * Renders inline inside its parent container while interactions pass through to sibling views above the sheet card.
  * For modal presentation with backdrop scrim, accessibility isolation, and dismissal gestures, use `ModalBottomSheet`.
  */
-export class BottomSheet extends StatefulComponent<BottomSheetProps, BottomSheetState> {
-  private readonly portalKey = `bottom-sheet-portal-${++nextSheetInstanceId}`;
-  private readonly portalSlot = new DetachedSlot();
-  private portalRegistry?: BottomSheetPortalRegistry;
-  private normalizedDetents: NormalizedDetent[] = [];
-  private resolvedMaxWidth = 0;
-  private wasClosed = true;
-  private isRegisteredInPortal = false;
+export function BottomSheetBase(props: BottomSheetInternalProps) {
+  const portalKey = `bottom-sheet-portal-${++nextSheetInstanceId}`;
+  const portalRegistry = resolveOptionalPortalRegistry();
 
-  state: BottomSheetState = {
-    lazyMounted: true,
-    openOrder: 0,
-  };
+  const modal = () => props.modal ?? false;
+  const windowOverlay = () => props.windowOverlay ?? false;
 
-  private get internalProps(): BottomSheetInternalProps {
-    return this.viewModel as BottomSheetInternalProps;
-  }
-
-  private allocateOpenOrder(): number {
-    if (this.portalRegistry) {
-      return this.portalRegistry.nextOpenOrder();
-    }
-    return ++fallbackOverlayOpenOrderCounter;
-  }
-
-  private isClosedAt(index: number): boolean {
-    const detent = this.normalizedDetents[index];
-    return index < 0 || (detent !== undefined && isNormalizedDetentClosed(detent));
-  }
-
-  private syncProps(isInitial: boolean): void {
-    const props = this.internalProps;
-    const modal = props.modal ?? false;
-    const windowOverlay = props.windowOverlay ?? false;
-    if (modal && !windowOverlay && !this.portalRegistry) {
+  const usesPortal = createMemo(() => {
+    const portal = modal() && !windowOverlay();
+    if (portal && !portalRegistry) {
       throw new Error('ModalBottomSheet must be used inside BottomSheetProvider, or pass windowOverlay={true}.');
     }
+    return portal;
+  });
 
+  const resolvedMaxWidth = createMemo(() => resolveMaxWidth(props.maxWidth));
+
+  const normalizedDetents = createMemo(() => {
     const isRTL = Device.isRTL();
-    this.resolvedMaxWidth = resolveMaxWidth(props.maxWidth);
-    const placementBias = resolvePlacement(props.placement, isRTL);
-    this.normalizedDetents = normalizeDetents(props.detents, isRTL, props.topInset, {
-      maxWidth: this.resolvedMaxWidth,
-      placementBias,
+    return normalizeDetents(props.detents, isRTL, props.topInset, {
+      maxWidth: resolvedMaxWidth(),
+      placementBias: resolvePlacement(props.placement, isRTL),
     });
-    validateIndex(props.index, this.normalizedDetents.length, modal);
+  });
+
+  const validatedIndex = createMemo(() => {
+    const detents = normalizedDetents();
+    validateIndex(props.index, detents.length, modal());
     validateSettleDuration(props.settleDuration);
+    return props.index;
+  });
 
-    const isClosedTarget = this.isClosedAt(props.index);
-    const lazy = props.lazy ?? false;
+  const isClosedAt = (index: number): boolean => {
+    const detent = normalizedDetents()[index];
+    return index < 0 || (detent !== undefined && isNormalizedDetentClosed(detent));
+  };
 
-    if (isInitial) {
-      const openOrder = !isClosedTarget ? this.allocateOpenOrder() : 0;
-      this.wasClosed = isClosedTarget;
-      this.state = {
-        lazyMounted: !lazy || !isClosedTarget,
-        openOrder,
-      };
-      this.syncPortalRegistration(modal && !windowOverlay, openOrder);
-      return;
+  const isClosedTarget = createMemo(() => isClosedAt(validatedIndex()));
+
+  let wasClosed = true;
+  let currentOpenOrder = 0;
+  const openOrder = createMemo(() => {
+    const closed = isClosedTarget();
+    if (wasClosed && !closed) {
+      currentOpenOrder = portalRegistry ? portalRegistry.nextOpenOrder() : ++fallbackOverlayOpenOrderCounter;
     }
+    wasClosed = closed;
+    return currentOpenOrder;
+  });
 
-    const nextOpenOrder = this.wasClosed && !isClosedTarget ? this.allocateOpenOrder() : this.state.openOrder;
-    this.wasClosed = isClosedTarget;
-    const nextLazyMounted = !lazy || !isClosedTarget || this.state.lazyMounted;
-
-    if (nextOpenOrder !== this.state.openOrder || nextLazyMounted !== this.state.lazyMounted) {
-      this.setState({
-        openOrder: nextOpenOrder,
-        lazyMounted: nextLazyMounted,
-      });
+  let openGeneration = 0;
+  let settledGeneration = 0;
+  const [closedGeneration, setClosedGeneration] = createSignal(0);
+  const activeGeneration = createMemo(() => {
+    if (!isClosedTarget() && openGeneration === settledGeneration) {
+      openGeneration += 1;
     }
-    this.syncPortalRegistration(modal && !windowOverlay, nextOpenOrder);
-  }
+    return openGeneration;
+  });
 
-  override onCreate(): void {
-    this.portalRegistry = resolveOptionalPortalRegistry();
-    this.syncProps(true);
-  }
-
-  override onViewModelUpdate(previousViewModel?: BottomSheetProps): void {
-    if (previousViewModel) {
-      this.syncProps(false);
+  const shouldRenderChildren = createMemo(() => {
+    const generation = activeGeneration();
+    if (!(props.lazy ?? false)) {
+      return true;
     }
-  }
-
-  override onDestroy(): void {
-    if (this.isRegisteredInPortal) {
-      this.portalRegistry?.unmount(this.portalKey);
-      this.isRegisteredInPortal = false;
+    if (!isClosedTarget()) {
+      return true;
     }
-  }
+    return generation > closedGeneration();
+  });
 
-  private syncPortalRegistration(usesPortal: boolean, openOrder: number): void {
-    if (usesPortal && this.portalRegistry) {
-      this.portalRegistry.upsert(this.portalKey, this.portalSlot, openOrder);
-      this.isRegisteredInPortal = true;
-    } else if (this.isRegisteredInPortal) {
-      this.portalRegistry?.unmount(this.portalKey);
-      this.isRegisteredInPortal = false;
-    }
-  }
-
-  private readonly handleSettle = (settledIndex: number): void => {
-    const props = this.internalProps;
-    if (props.lazy && settledIndex === props.index && this.isClosedAt(settledIndex) && this.state.lazyMounted) {
-      this.setState({ lazyMounted: false });
+  const handleSettle = (settledIndex: number): void => {
+    if (props.lazy && settledIndex === validatedIndex() && isClosedAt(settledIndex)) {
+      settledGeneration = openGeneration;
+      setClosedGeneration(settledGeneration);
     }
     props.onSettle?.(settledIndex);
   };
 
-  override onRender(): void {
-    const props = this.internalProps;
-    const modal = props.modal ?? false;
-    const windowOverlay = props.windowOverlay ?? false;
-    const usesPortal = modal && !windowOverlay;
-
-    const shouldRenderChildren = !(props.lazy ?? false) || !this.isClosedAt(props.index) || this.state.lazyMounted;
-    const { expand, collapse } = resolveScrollCoordination(props.scrollCoordination);
-    const resolvedSurface = resolveSurfaceStyle(props.surfaceStyle, Device.isRTL(), Device.isIOS());
-    const resolvedScrimColor = props.scrimColor ?? (modal ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0)');
-    const scrimColorArgb = parseColorToArgb(resolvedScrimColor, modal ? 0x66000000 : 0x00000000);
-
-    const widestDetent = this.normalizedDetents.find(detent => detent.widestCard);
+  const scrollCoord = createMemo(() => resolveScrollCoordination(props.scrollCoordination));
+  const resolvedSurface = createMemo(() => resolveSurfaceStyle(props.surfaceStyle, Device.isRTL(), Device.isIOS()));
+  const scrimColorArgb = createMemo(() => {
+    const isModal = modal();
+    const resolvedScrimColor = props.scrimColor ?? (isModal ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0)');
+    return parseColorToArgb(resolvedScrimColor, isModal ? 0x66000000 : 0x00000000);
+  });
+  const contentMaxWidth = createMemo(() => {
+    const widestDetent = normalizedDetents().find(detent => detent.widestCard);
     const contentLeft = widestDetent?.insetLeft ?? 0;
     const contentRight = widestDetent?.insetRight ?? 0;
-    const contentMaxWidth =
-      this.resolvedMaxWidth > 0 ? Math.max(0, this.resolvedMaxWidth - contentLeft - contentRight) : undefined;
+    const maxW = resolvedMaxWidth();
+    return maxW > 0 ? Math.max(0, maxW - contentLeft - contentRight) : undefined;
+  });
 
-    const renderHostNode = (): void => {
-      <BottomSheetHostNode
-        detents={this.normalizedDetents}
-        resolvedMaxWidth={this.resolvedMaxWidth}
-        contentMaxWidth={contentMaxWidth}
-        index={props.index}
-        animateIn={props.animateIn ?? true}
-        animateContentHeight={props.animateContentHeight ?? true}
-        modal={modal}
-        windowOverlay={windowOverlay}
-        openOrder={this.state.openOrder}
-        scrollExpandCoordination={expand}
-        scrollCollapseCoordination={collapse}
-        settleDurationSeconds={props.settleDuration !== undefined ? props.settleDuration / 1000 : 0}
-        hasCloseRequestHandler={props.onCloseRequest !== undefined}
-        scrimColorArgb={scrimColorArgb}
-        scrimAccessibilityLabel={props.scrimAccessibilityLabel ?? 'Dismiss'}
-        surfaceCornerRadii={resolvedSurface.cornerRadii}
-        surfaceCornerCurve={resolvedSurface.cornerCurve}
-        surfaceShadows={resolvedSurface.shadows}
-        surfaceElevation={resolvedSurface.elevation}
-        surfaceShadowColorArgb={resolvedSurface.shadowColorArgb}
-        defaultSurfaceStyle={resolvedSurface.viewStyle}
-        surface={props.surface}
-        contentStyle={props.style}
-        shouldRenderChildren={shouldRenderChildren}
-        onIndexChange={props.onIndexChange}
-        onSettle={this.handleSettle}
-        onPositionChange={props.onPositionChange}
-        onCloseRequest={props.onCloseRequest}
-      >
-        <slot />
-      </BottomSheetHostNode>;
-    };
+  // Eagerly validate portal requirements and initial index/detents synchronously during mount.
+  usesPortal();
+  validatedIndex();
 
-    if (usesPortal) {
-      this.portalSlot.slotted(renderHostNode);
-      return;
-    }
+  const renderHostNode = (): JSX.Element => (
+    <BottomSheetHostNode
+      detents={normalizedDetents()}
+      resolvedMaxWidth={resolvedMaxWidth()}
+      contentMaxWidth={contentMaxWidth()}
+      index={validatedIndex()}
+      animateIn={props.animateIn ?? true}
+      animateContentHeight={props.animateContentHeight ?? true}
+      modal={modal()}
+      windowOverlay={windowOverlay()}
+      openOrder={openOrder()}
+      scrollExpandCoordination={scrollCoord().expand}
+      scrollCollapseCoordination={scrollCoord().collapse}
+      settleDurationSeconds={props.settleDuration !== undefined ? props.settleDuration / 1000 : 0}
+      hasCloseRequestHandler={props.onCloseRequest !== undefined}
+      scrimColorArgb={scrimColorArgb()}
+      scrimAccessibilityLabel={props.scrimAccessibilityLabel ?? 'Dismiss'}
+      surfaceCornerRadii={resolvedSurface().cornerRadii}
+      surfaceCornerCurve={resolvedSurface().cornerCurve}
+      surfaceShadows={resolvedSurface().shadows}
+      surfaceElevation={resolvedSurface().elevation}
+      surfaceShadowColorArgb={resolvedSurface().shadowColorArgb}
+      defaultSurfaceStyle={resolvedSurface().viewStyle}
+      surface={props.surface}
+      contentStyle={props.style}
+      shouldRenderChildren={shouldRenderChildren()}
+      onIndexChange={props.onIndexChange}
+      onSettle={handleSettle}
+      onPositionChange={props.onPositionChange}
+      onCloseRequest={props.onCloseRequest}
+    >
+      {props.children}
+    </BottomSheetHostNode>
+  );
 
-    renderHostNode();
-  }
+  // Create the portal host node inside its own memo owner (keyed solely on usesPortal)
+  // so openOrder changes never dispose and recreate BottomSheetHostNode.
+  const portalHostElement = createMemo<JSX.Element | undefined>(() =>
+    usesPortal() ? untrack(renderHostNode) : undefined,
+  );
+
+  createRenderEffect(
+    () => ({ portal: usesPortal(), order: openOrder(), el: portalHostElement() }),
+    ({ portal, order, el }) => {
+      if (portal && portalRegistry && el !== undefined) {
+        portalRegistry.upsert(portalKey, el, order);
+      } else {
+        portalRegistry?.unmount(portalKey);
+      }
+    },
+  );
+
+  onCleanup(() => {
+    portalRegistry?.unmount(portalKey);
+  });
+
+  return <Show when={!usesPortal()}>{renderHostNode()}</Show>;
+}
+
+/**
+ * Non-modal bottom sheet component aligned 1:1 with `@swmansion/react-native-bottom-sheet` v1.1.0.
+ *
+ * Renders inline inside its parent container while interactions pass through to sibling views above the sheet card.
+ * For modal presentation with backdrop scrim, accessibility isolation, and dismissal gestures, use `ModalBottomSheet`.
+ */
+export function BottomSheet(props: BottomSheetProps) {
+  return <BottomSheetBase {...(props as unknown as BottomSheetInternalProps)}>{props.children}</BottomSheetBase>;
 }

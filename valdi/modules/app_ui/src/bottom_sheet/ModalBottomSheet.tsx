@@ -1,7 +1,5 @@
-import { Component } from 'valdi_core/src/Component';
-
-import { BottomSheet, BottomSheetProps } from './BottomSheet';
-import { ModalDetent } from './bottomSheetUtils';
+import { BottomSheetBase, type BottomSheetInternalProps, type BottomSheetProps } from './BottomSheet';
+import type { ModalDetent } from './bottomSheetUtils';
 
 /** Props for {@link ModalBottomSheet}. */
 export interface ModalBottomSheetProps extends Omit<BottomSheetProps, 'detents'> {
@@ -19,11 +17,10 @@ export interface ModalBottomSheetProps extends Omit<BottomSheetProps, 'detents'>
  * supports scrim tap / Back / Escape dismissal (`onCloseRequest`), and renders inside
  * the nearest `BottomSheetProvider` portal (or window-wide when `windowOverlay={true}`).
  */
-export class ModalBottomSheet extends Component<ModalBottomSheetProps> {
-  override onRender(): void {
-    const props = { ...this.viewModel, modal: true } as unknown as BottomSheetProps;
-    <BottomSheet {...props}>
-      <slot />
-    </BottomSheet>;
-  }
+export function ModalBottomSheet(props: ModalBottomSheetProps) {
+  return (
+    <BottomSheetBase {...(props as unknown as BottomSheetInternalProps)} modal={true}>
+      {props.children}
+    </BottomSheetBase>
+  );
 }

@@ -121,14 +121,18 @@ private fun StatusBarIcons(style: String) {
 @Composable
 private fun keyboardHeight(): Dp = with(LocalDensity.current) { WindowInsets.ime.getBottom(this).toDp() }
 
-/** Bottom inset for a page: the keyboard covers the navigation bar, so only the uncovered part remains. */
+/** Fixed initial insets for a page: system bars and display cutout without IME subtraction. */
 @Composable
 private fun pageInsets(): Insets {
     val density = LocalDensity.current
     val bars = WindowInsets.systemBars.union(WindowInsets.displayCutout)
-    val bottom = (bars.getBottom(density) - WindowInsets.ime.getBottom(density)).coerceAtLeast(0)
-    val top = bars.getTop(density)
-    return insetsOf(density, top = top, bottom = bottom, horizontal = bars, layoutDirection = LocalLayoutDirection.current)
+    return insetsOf(
+        density,
+        top = bars.getTop(density),
+        bottom = bars.getBottom(density),
+        horizontal = bars,
+        layoutDirection = LocalLayoutDirection.current,
+    )
 }
 
 /** Full-screen Valdi page: the page owns its background and insets; the keyboard shrinks its container. */
@@ -168,10 +172,6 @@ private fun ValdiPage(
         },
         update = { container ->
             container.acceptsInput = acceptsInput
-            if (entry.appliedInsets != insets) {
-                entry.appliedInsets = insets
-                ValdiHost.updateInsets(entry, insets)
-            }
         },
         onRelease = { container ->
             container.removeAllViews()
@@ -198,7 +198,7 @@ private fun insetsOf(density: Density, top: Int, bottom: Int, horizontal: Window
  * Default bars use the glass bar's measured footprint (including its system bottom inset).
  * Docked custom bars (`bar.height != null`) anchor at the bottom and add `height + safeAreaBottom` to page insets.
  * Full-viewport overlay custom bars (`overlay: true`, `bar.height == null`) pass system insets only.
- * In every mode, the soft keyboard shrinks the tab page container and deducts the covered bottom inset.
+ * In every mode, the soft keyboard shrinks the tab page container.
  */
 @Composable
 private fun TabsScreen(shell: PageEntry, navigator: Navigator) {
@@ -207,7 +207,6 @@ private fun TabsScreen(shell: PageEntry, navigator: Navigator) {
     val density = LocalDensity.current
     val bars = WindowInsets.systemBars.union(WindowInsets.displayCutout)
     val rawBottomDp = bars.getBottom(density) / density.density
-    val imeBottomDp = WindowInsets.ime.getBottom(density) / density.density
     val baseInsets = insetsOf(
         density,
         top = bars.getTop(density),
@@ -219,11 +218,11 @@ private fun TabsScreen(shell: PageEntry, navigator: Navigator) {
     when {
         bar.mode == "custom" && customHeight != null -> {
             val totalBarDp = customHeight + rawBottomDp
-            val insets = baseInsets.copy(bottom = (totalBarDp - imeBottomDp).coerceAtLeast(0f))
+            val insets = baseInsets.copy(bottom = totalBarDp)
             DockedCustomTabsScreen(shell, bar, selected, totalBarDp.dp, rawBottomDp.toDouble(), insets, navigator)
         }
         bar.mode == "custom" -> {
-            val insets = baseInsets.copy(bottom = (rawBottomDp - imeBottomDp).coerceAtLeast(0f))
+            val insets = baseInsets.copy(bottom = rawBottomDp)
             OverlayCustomTabsScreen(shell, bar, selected, rawBottomDp.toDouble(), insets, navigator)
         }
         else -> {
@@ -239,7 +238,7 @@ private fun TabsScreen(shell: PageEntry, navigator: Navigator) {
                 // Scaffold measures the entire bar, including safe padding, before composing the body.
                 // Do not apply this padding to the source bounds: native pixels must extend behind the glass.
                 val barBottomDp = maxOf(rawBottomDp, padding.calculateBottomPadding().value)
-                val insets = baseInsets.copy(bottom = (barBottomDp - imeBottomDp).coerceAtLeast(0f))
+                val insets = baseInsets.copy(bottom = barBottomDp)
                 Box(Modifier.fillMaxSize().hazeSource(hazeState).padding(bottom = keyboardHeight())) {
                     TabPage(shell, selected, insets, navigator)
                 }

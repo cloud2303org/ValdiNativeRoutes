@@ -315,6 +315,8 @@ final class Navigator {
                 setStatusBarStyle("auto")
             }
         }
+        // AppUI dialogs belong to the current front page, including a shell's selected tab.
+        MainActor.assumeIsolated { AppUI.shared.topPageChanged(frontPage?.id) }
         StartupSplashScreen.shared.contentDidChange()
     }
 

@@ -1,265 +1,536 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import vm from 'node:vm';
+import { transformSync } from '@babel/core';
+import solidBabelPlugin from '@solidjs/babel-plugin';
 import ts from 'typescript';
-import { unpack } from '../archive';
-import { appModule, buildModule, root, valdiSourceRoot } from '../pipeline';
-import { compileRuntimeModule } from '../runtime-module';
+import { appModule, buildModule } from '../pipeline';
 import { valdiTs } from '../valdiTs';
 
-const sourceRoot = valdiSourceRoot();
-assert.ok(sourceRoot, 'Prepare Valdi sources or set VALDI_SOURCE_ROOT');
-const modulePrefix = 'src/valdi_modules/src/valdi';
+const enum Opcode {
+  CREATE_ELEMENT = 1,
+  DESTROY_ELEMENT = 2,
+  SET_ROOT_ELEMENT = 3,
+  MOVE_ELEMENT_TO_PARENT = 4,
+  SET_ATTRIBUTE_UNDEFINED = 5,
+  SET_ATTRIBUTE_NULL = 6,
+  SET_ATTRIBUTE_FALSE = 7,
+  SET_ATTRIBUTE_TRUE = 8,
+  SET_ATTRIBUTE_INT = 9,
+  SET_ATTRIBUTE_DOUBLE = 10,
+  SET_ATTRIBUTE_ARRAY = 11,
+  SET_ATTRIBUTE_STYLE = 12,
+  SET_ATTRIBUTE_ATTACHED_VALUE = 13,
+  BEGIN_ANIMATIONS = 14,
+  END_ANIMATIONS = 15,
+  ON_LAYOUT_COMPLETE = 16,
+  CANCEL_ANIMATION = 17,
+  ON_NEXT_DRAW = 18,
+  DETACH_ELEMENT = 19,
+  INSERT_ELEMENT_BEFORE = 20,
+}
 
-const runtimeMode = process.env.BOTTOM_SHEET_RUNTIME ?? 'source';
-assert.ok(
-  ['source', 'android', 'ios'].includes(runtimeMode),
-  'BOTTOM_SHEET_RUNTIME must be source, android or ios',
-);
+type DecodedOp =
+  | { type: Opcode.CREATE_ELEMENT; id: number; viewClass: string }
+  | { type: Opcode.DESTROY_ELEMENT; id: number }
+  | { type: Opcode.SET_ROOT_ELEMENT; id: number }
+  | { type: Opcode.MOVE_ELEMENT_TO_PARENT; id: number; parentId: number; index: number }
+  | {
+      type:
+        | Opcode.SET_ATTRIBUTE_UNDEFINED
+        | Opcode.SET_ATTRIBUTE_NULL
+        | Opcode.SET_ATTRIBUTE_FALSE
+        | Opcode.SET_ATTRIBUTE_TRUE
+        | Opcode.SET_ATTRIBUTE_INT
+        | Opcode.SET_ATTRIBUTE_DOUBLE
+        | Opcode.SET_ATTRIBUTE_ARRAY
+        | Opcode.SET_ATTRIBUTE_STYLE
+        | Opcode.SET_ATTRIBUTE_ATTACHED_VALUE;
+      id: number;
+      attr: string;
+      injected: boolean;
+      value: unknown;
+    }
+  | { type: Opcode.DETACH_ELEMENT; id: number }
+  | { type: Opcode.INSERT_ELEMENT_BEFORE; id: number; parentId: number; beforeId: number };
 
-let sourceRuntimePromise: Promise<Map<string, Buffer>> | undefined;
+interface SimNode {
+  id: number;
+  viewClass: string;
+  parentId?: number;
+  children: number[];
+  attrs: Record<string, unknown>;
+}
 
-function buildSourceRuntimeModules(): Promise<Map<string, Buffer>> {
-  if (sourceRuntimePromise) return sourceRuntimePromise;
-  sourceRuntimePromise = (async () => {
-    const out = new Map<string, Buffer>();
-    const temporary = mkdtempSync(path.join(tmpdir(), 'bottom-sheet-runtime-'));
-    try {
-      const modules: [string, string][] = [
-        ['coreutils', 'SCCCoreutils'],
-        ['valdi_tsx', 'SCCValdiTsx'],
-        ['valdi_core', 'SCCValdiCore'],
-      ];
-      for (const [name, iosModuleName] of modules) {
-        const moduleDirectory = path.join(sourceRoot!, modulePrefix, name);
-        const sources = ['src', 'types']
-          .map(folder => path.join(moduleDirectory, folder))
-          .filter(existsSync)
-          .flatMap(folder => ts.sys.readDirectory(folder, ['.ts', '.tsx', '.js']));
-        const archivePath = path.join(temporary, `${name}.valdimodule`);
-        await compileRuntimeModule({
-          name,
-          frameworkRoot: sourceRoot!,
-          moduleDirectory,
-          sources,
-          outputs: [
-            {
-              relative: `android/debug/assets/${name}.valdimodule`,
-              path: archivePath,
-              directory: false,
-            },
-          ],
-          dependencies: [
-            'coreutils',
-            'drawing',
-            'jasmine',
-            'source_map',
-            'valdi_core',
-            'valdi_tsx',
-          ].map(module_name => ({
-            module_name,
-            module_path: '',
-            module_content: '',
-          })),
-          iosModuleName,
-          iosClassPrefix: '__valdi_unset_ios_class_prefix__',
-          androidClassPath: `com.snap.modules.${name}`,
-          disableAnnotations: false,
-          asyncStrictMode: false,
-          compilationMode: 'js',
-        });
-        for (const [file, content] of unpack(readFileSync(archivePath))) {
-          out.set(`${name}/${file}`, content);
+interface SimTree {
+  treeId: string;
+  rootId?: number;
+  nodes: Map<number, SimNode>;
+  batches: DecodedOp[][];
+}
+
+function createCppSimulator(initialPlatform: 1 | 2) {
+  const strings: string[] = [];
+  const attributes: string[] = [];
+  const cssRules: Record<string, unknown>[] = [];
+  const trees = new Map<string, SimTree>();
+
+  const getTree = (treeId: string): SimTree => {
+    let tree = trees.get(treeId);
+    if (!tree) {
+      tree = { treeId, nodes: new Map(), batches: [] };
+      trees.set(treeId, tree);
+    }
+    return tree;
+  };
+
+  const unlinkFromParent = (tree: SimTree, node: SimNode) => {
+    if (node.parentId === undefined) return;
+    const oldParent = tree.nodes.get(node.parentId);
+    if (oldParent) {
+      const idx = oldParent.children.indexOf(node.id);
+      if (idx >= 0) oldParent.children.splice(idx, 1);
+    }
+    node.parentId = undefined;
+  };
+
+  const destroySubtree = (tree: SimTree, id: number) => {
+    const node = tree.nodes.get(id);
+    if (!node) return;
+    tree.nodes.delete(id);
+    while (node.children.length > 0) {
+      const childId = node.children.pop()!;
+      const child = tree.nodes.get(childId);
+      if (child) child.parentId = undefined;
+      destroySubtree(tree, childId);
+    }
+    unlinkFromParent(tree, node);
+    if (tree.rootId === id) tree.rootId = undefined;
+  };
+
+  const applyRequest = (request: {
+    treeId: string;
+    descriptor: ArrayBuffer;
+    descriptorSize: number;
+    values: unknown[];
+  }) => {
+    const tree = getTree(String(request.treeId));
+    const dv = new DataView(request.descriptor);
+    const wordLen = request.descriptorSize;
+    const ops: DecodedOp[] = [];
+    let cur = 0;
+
+    while (cur < wordLen) {
+      const header = dv.getUint32(cur * 4, true);
+      cur++;
+      const opcode = header & 0xff;
+      const nodeId = opcode < 14 || opcode === 19 || opcode === 20 ? header >>> 8 : 0;
+
+      if (opcode === Opcode.CREATE_ELEMENT) {
+        const strId = dv.getUint32(cur * 4, true);
+        cur++;
+        const viewClass = strings[strId];
+        assert.ok(!tree.nodes.has(nodeId), `Duplicate element id ${nodeId}`);
+        tree.nodes.set(nodeId, { id: nodeId, viewClass, children: [], attrs: {} });
+        ops.push({ type: Opcode.CREATE_ELEMENT, id: nodeId, viewClass });
+      } else if (opcode === Opcode.DESTROY_ELEMENT) {
+        destroySubtree(tree, nodeId);
+        ops.push({ type: Opcode.DESTROY_ELEMENT, id: nodeId });
+      } else if (opcode === Opcode.SET_ROOT_ELEMENT) {
+        const node = tree.nodes.get(nodeId);
+        assert.ok(node);
+        unlinkFromParent(tree, node);
+        tree.rootId = nodeId;
+        ops.push({ type: Opcode.SET_ROOT_ELEMENT, id: nodeId });
+      } else if (opcode === Opcode.MOVE_ELEMENT_TO_PARENT) {
+        const parentId = dv.getUint32(cur * 4, true) & 0xffffff;
+        const index = dv.getUint32((cur + 1) * 4, true);
+        cur += 2;
+        const parent = tree.nodes.get(parentId)!;
+        const child = tree.nodes.get(nodeId)!;
+        unlinkFromParent(tree, child);
+        parent.children.splice(index, 0, child.id);
+        child.parentId = parent.id;
+        ops.push({ type: Opcode.MOVE_ELEMENT_TO_PARENT, id: nodeId, parentId, index });
+      } else if (opcode >= 5 && opcode <= 13) {
+        const attrHeader = dv.getUint32(cur * 4, true);
+        cur++;
+        const attrId = attrHeader & 0xffffff;
+        const injected = (attrHeader >>> 24) !== 0;
+        const attr = attributes[attrId];
+        const node = tree.nodes.get(nodeId)!;
+
+        let value: unknown;
+        if (opcode === Opcode.SET_ATTRIBUTE_UNDEFINED) value = undefined;
+        else if (opcode === Opcode.SET_ATTRIBUTE_NULL) value = null;
+        else if (opcode === Opcode.SET_ATTRIBUTE_FALSE) value = false;
+        else if (opcode === Opcode.SET_ATTRIBUTE_TRUE) value = true;
+        else if (opcode === Opcode.SET_ATTRIBUTE_INT) {
+          value = dv.getUint32(cur * 4, true);
+          cur++;
+        } else if (opcode === Opcode.SET_ATTRIBUTE_DOUBLE) {
+          value = dv.getFloat64(cur * 4, true);
+          cur += 2;
+        } else if (opcode === Opcode.SET_ATTRIBUTE_ARRAY) {
+          const len = dv.getUint32(cur * 4, true);
+          cur++;
+          const arr: unknown[] = [];
+          for (let i = 0; i < len; i++) {
+            arr.push(request.values[dv.getUint32(cur * 4, true)]);
+            cur++;
+          }
+          value = arr;
+        } else if (opcode === Opcode.SET_ATTRIBUTE_STYLE) {
+          const styleId = dv.getUint32(cur * 4, true);
+          cur++;
+          value = { __styleId: styleId, attrs: cssRules[styleId] };
+        } else {
+          const valIdx = dv.getUint32(cur * 4, true);
+          cur++;
+          value = request.values[valIdx];
         }
+
+        if (value === undefined) delete node.attrs[attr];
+        else node.attrs[attr] = value;
+        ops.push({ type: opcode as any, id: nodeId, attr, injected, value });
+      } else if (opcode === Opcode.BEGIN_ANIMATIONS) {
+        cur += 12;
+      } else if (opcode === Opcode.END_ANIMATIONS) {
+        // no-op
+      } else if (opcode === Opcode.ON_LAYOUT_COMPLETE || opcode === Opcode.CANCEL_ANIMATION || opcode === Opcode.ON_NEXT_DRAW) {
+        cur += 1;
+      } else if (opcode === Opcode.DETACH_ELEMENT) {
+        const node = tree.nodes.get(nodeId)!;
+        unlinkFromParent(tree, node);
+        if (tree.rootId === nodeId) tree.rootId = undefined;
+        ops.push({ type: Opcode.DETACH_ELEMENT, id: nodeId });
+      } else if (opcode === Opcode.INSERT_ELEMENT_BEFORE) {
+        const parentId = dv.getUint32(cur * 4, true) & 0xffffff;
+        const beforeId = dv.getUint32((cur + 1) * 4, true) & 0xffffff;
+        cur += 2;
+        const parent = tree.nodes.get(parentId)!;
+        const child = tree.nodes.get(nodeId)!;
+        unlinkFromParent(tree, child);
+        if (beforeId === 0) {
+          parent.children.push(child.id);
+        } else {
+          const idx = parent.children.indexOf(beforeId);
+          parent.children.splice(idx >= 0 ? idx : parent.children.length, 0, child.id);
+        }
+        child.parentId = parent.id;
+        ops.push({ type: Opcode.INSERT_ELEMENT_BEFORE, id: nodeId, parentId, beforeId });
+      } else {
+        throw new Error(`Unsupported opcode ${opcode}`);
       }
-      return out;
-    } finally {
-      rmSync(temporary, { recursive: true, force: true });
     }
-  })();
-  return sourceRuntimePromise;
-}
 
-async function loadRuntimeModules(platform: 1 | 2): Promise<Map<string, Buffer>> {
-  if (runtimeMode === 'source') return buildSourceRuntimeModules();
-  const out = new Map<string, Buffer>();
-  for (const name of ['valdi_core', 'coreutils', 'valdi_tsx']) {
-    const bytes =
-      platform === 1
-        ? execFileSync(
-            'unzip',
-            ['-p', path.join(root, 'android/app/libs/valdi_runtime.aar'), `assets/${name}.valdimodule`],
-            { maxBuffer: 32 * 1024 * 1024 },
-          )
-        : readFileSync(
-            path.join(
-              root,
-              'ios/Frameworks/ValdiRuntime.xcframework/ios-arm64/ValdiRuntime.framework',
-              `${name}.valdimodule`,
-            ),
-          );
-    for (const [file, content] of unpack(bytes)) {
-      out.set(`${name}/${file}`, content);
-    }
-  }
-  return out;
-}
+    tree.batches.push(ops);
+  };
 
-function createHost(platform: 1 | 2, entries: Map<string, Buffer>, runtimeEntries: Map<string, Buffer>) {
-  const modulesRoot = path.join(sourceRoot!, modulePrefix);
-  const cache = new Map<string, { exports: any }>();
-  const context = vm.createContext({
-    console,
-    setTimeout,
-    clearTimeout,
-    runtime: {
-      getCurrentPlatform: () => platform,
-      getCurrentContext: () => 'bottom-sheet-test',
-      internString: (v: string) => v,
-      getAttributeId: () => 0,
+  return {
+    trees,
+    getTree,
+    runtimeApi: {
+      getCurrentPlatform: () => initialPlatform,
+      internString: (str: string) => {
+        const idx = strings.indexOf(str);
+        if (idx >= 0) return idx;
+        strings.push(str);
+        return strings.length - 1;
+      },
+      getAttributeId: (name: string) => {
+        const idx = attributes.indexOf(name);
+        if (idx >= 0) return idx;
+        attributes.push(name);
+        return attributes.length - 1;
+      },
+      createCSSRule: (attrs: Record<string, unknown>) => {
+        cssRules.push({ ...attrs });
+        return cssRules.length - 1;
+      },
+      pushCurrentContext: (_id?: string) => {},
+      popCurrentContext: () => {},
+      submitRawRenderRequest: (request: any, cb?: () => void) => {
+        applyRequest(request);
+        cb?.();
+      },
     },
-  });
-  vm.runInContext('global = globalThis;', context);
+  };
+}
 
-  function load(id: string, from = ''): any {
-    if (id.startsWith('.')) {
-      id = path.posix.normalize(path.posix.join(path.posix.dirname(from), id));
-    }
-    id = id.replace(/\.js$/, '');
-    if (cache.has(id)) return cache.get(id)!.exports;
+let builtModulesPromise: Promise<Map<string, Buffer>> | undefined;
 
-    if (id === 'valdi_core/src/BuildType') {
-      return { isDevBuild: () => true, isDebugEnabled: () => false };
+function buildAllTargetModules(): Promise<Map<string, Buffer>> {
+  if (builtModulesPromise) return builtModulesPromise;
+  builtModulesPromise = (async () => {
+    const entries = new Map<string, Buffer>();
+    for (const name of ['solid_runtime', 'solid_native', 'app_ui', 'native_common', 'app_foundation']) {
+      const mod = appModule(name);
+      const plugin = valdiTs(mod);
+      try {
+        const diag = plugin.diagnostics();
+        assert.equal(diag, '', `Expected zero TypeScript diagnostics for ${name}:\n${diag}`);
+        const built = await buildModule(mod, plugin, false);
+        for (const [file, bytes] of built.entries) {
+          entries.set(`${name}/${file}`, bytes);
+        }
+      } finally {
+        plugin.dispose();
+      }
     }
-    if (id === 'valdi_core/src/DeviceBridge') {
-      return {
+    return entries;
+  })();
+  return builtModulesPromise;
+}
+
+function createSolidHost(platform: 1 | 2, entries: Map<string, Buffer>) {
+  const sim = createCppSimulator(platform);
+  const moduleCache = new Map<string, any>();
+  const memoryModules = new Map<string, string>();
+  const darkListeners = new Set<(dark: boolean) => void>();
+
+  const builtins: Record<string, any> = {
+    'valdi_core/src/ValdiRuntimeProvider': {
+      getValdiRuntime: () => sim.runtimeApi,
+    },
+    'valdi_core/src/NativeReferences': {
+      withLocalNativeRefs: (contextId: string, cb: () => any) => {
+        sim.runtimeApi.pushCurrentContext(contextId);
+        try {
+          return cb();
+        } finally {
+          sim.runtimeApi.popCurrentContext();
+        }
+      },
+      withGlobalNativeRefs: (_attribution: string, cb: () => any) => cb(),
+    },
+    'valdi_core/src/ModuleLoaderGlobal': {
+      getModuleLoader: () => moduleLoader,
+    },
+    'valdi_core/src/BuildType': {
+      isDevBuild: () => true,
+      isDebugEnabled: () => false,
+    },
+    'valdi_core/src/Device': {
+      Device: {
         getSystemType: () => (platform === 1 ? 'android' : 'ios'),
+        isAndroid: () => platform === 1,
+        isIOS: () => platform === 2,
         isRTL: () => false,
         isDarkMode: () => false,
-        observeDisplayInsetChange: () => ({ cancel() {} }),
-        observeDisplaySizeChange: () => ({ cancel() {} }),
-        observeDarkMode: () => ({ cancel() {} }),
-      };
-    }
-    if (id === 'valdi_core/src/debugging/DaemonClientManager') {
-      return { DaemonClientManager: class { addListener() {} } };
-    }
-    if (id === 'app_ui/src/AppUI') {
-      return {};
-    }
-    if (id === 'theme_bridge/src/ThemeBridge') {
-      const light = {
-        surface: '#ffffff',
-        text: '#172033',
-        muted: '#667085',
-        hairline: '#ececec',
-        handle: '#D6DCE5',
-        scrim: 'rgba(16,24,40,0.32)',
-        buttonPrimary: '#1e62d0',
-        buttonOnPrimary: '#ffffff',
-        buttonSecondary: '#eef2f7',
-        buttonOnSecondary: '#1d2939',
-      };
-      const dark = {
-        surface: '#1E1F23',
-        text: '#ffffff',
-        muted: '#969696',
-        hairline: '#2A2B32',
-        handle: '#969696',
-        scrim: 'rgba(0,0,0,0.75)',
-        buttonPrimary: '#377dff',
-        buttonOnPrimary: '#ffffff',
-        buttonSecondary: '#2c2e35',
-        buttonOnSecondary: '#f2f4f7',
-      };
-      return {
-        getHost: () => ({
-          getTokens: () => ({
-            light,
-            dark,
-            shared: { radius: { sheet: 22 } },
-          }),
-        }),
-      };
-    }
-
-    const bytes = entries.get(`${id}.js`) ?? runtimeEntries.get(`${id}.js`);
-    let code = bytes?.toString();
-    if (!code) {
-      const base = path.join(modulesRoot, id);
-      const file = [base + '.ts', base + '.tsx', base + '.js', base + '.d.ts'].find(existsSync);
-      assert.ok(file, `Missing runtime module ${id}`);
-      code = file.endsWith('.js')
-        ? readFileSync(file, 'utf8')
-        : ts.transpileModule(readFileSync(file, 'utf8'), {
-            fileName: file.replace(/\.d\.ts$/, '.ts'),
-            compilerOptions: {
-              target: ts.ScriptTarget.ES2021,
-              module: ts.ModuleKind.CommonJS,
+        observeDarkMode: (cb: (dark: boolean) => void) => {
+          darkListeners.add(cb);
+          return {
+            cancel() {
+              darkListeners.delete(cb);
             },
-          }).outputText;
-    }
+          };
+        },
+      },
+    },
+    'valdi_core/src/SystemFont': {
+      systemFont: (size: number) => `system ${size}`,
+      systemSemiboldFont: (size: number) => `system-semibold ${size}`,
+      systemBoldFont: (size: number) => `system-bold ${size}`,
+    },
+    'valdi_core/src/Style': {
+      Style: class Style<T> {
+        readonly attributes: T;
+        private native: number | undefined;
+        constructor(attributes: T) {
+          this.attributes = attributes;
+        }
+        toNative(convertFunc: (attributes: T) => number): number {
+          if (this.native === undefined) {
+            this.native = convertFunc(this.attributes);
+          }
+          return this.native;
+        }
+        extend(attributes: any) {
+          const next = attributes?.attributes ?? attributes;
+          return new (this.constructor as any)({ ...this.attributes, ...next });
+        }
+      },
+    },
+    'valdi_core/src/AnimationOptions': {
+      AnimationCurve: { Linear: 'linear', EaseIn: 'easeIn', EaseOut: 'easeOut', EaseInOut: 'easeInOut' },
+    },
+    'app_ui/src/AppUI': {
+      getHost: () => ({}),
+    },
+    'theme_bridge/src/ThemeBridge': {
+      getHost: () => ({
+        getTokens: () => ({
+          light: {
+            surface: '#ffffff',
+            text: '#172033',
+            muted: '#667085',
+            hairline: '#ececec',
+            handle: '#D6DCE5',
+            scrim: 'rgba(16,24,40,0.32)',
+            buttonPrimary: '#1e62d0',
+            buttonOnPrimary: '#ffffff',
+            buttonSecondary: '#eef2f7',
+            buttonOnSecondary: '#1d2939',
+          },
+          dark: {
+            surface: '#1E1F23',
+            text: '#ffffff',
+            muted: '#969696',
+            hairline: '#2A2B32',
+            handle: '#969696',
+            scrim: 'rgba(0,0,0,0.75)',
+            buttonPrimary: '#377dff',
+            buttonOnPrimary: '#ffffff',
+            buttonSecondary: '#2c2e35',
+            buttonOnSecondary: '#f2f4f7',
+          },
+          shared: { radius: { sheet: 22 } },
+        }),
+      }),
+    },
+  };
 
-    const mod = { exports: {} };
-    cache.set(id, mod);
-    vm.runInContext(`(function(require,module,exports){${code}\n})`, context, {
-      filename: id,
-    })((dep: string) => load(dep, id), mod, mod.exports);
+  const sandboxGlobals: Record<string, any> = {
+    console,
+    Promise,
+    queueMicrotask,
+    ArrayBuffer,
+    Uint8Array,
+    Int32Array,
+    Float64Array,
+    DataView,
+    Map,
+    Set,
+    WeakMap,
+    WeakSet,
+    Symbol,
+    Error,
+    TypeError,
+    RangeError,
+    Object,
+    Array,
+    Number,
+    String,
+    Boolean,
+    Math,
+    Date,
+    RegExp,
+    JSON,
+    runtime: sim.runtimeApi,
+    setTimeout,
+    clearTimeout,
+  };
+  sandboxGlobals.globalThis = sandboxGlobals;
+  const vmContext = vm.createContext(sandboxGlobals);
+
+  function resolveModuleKey(request: string, fromId?: string): string {
+    const clean = request.replace(/\.js$/, '');
+    if (builtins[clean] || memoryModules.has(clean)) return clean;
+    if (clean.startsWith('.') && fromId) {
+      return path.posix.normalize(path.posix.join(path.posix.dirname(fromId), clean));
+    }
+    return clean;
+  }
+
+  function loadModule(id: string): any {
+    const normalized = resolveModuleKey(id);
+    if (builtins[normalized]) return builtins[normalized];
+    if (moduleCache.has(normalized)) return moduleCache.get(normalized);
+
+    const code = memoryModules.get(normalized) ?? entries.get(`${normalized}.js`)?.toString();
+    assert.ok(code, `Missing compiled module ${normalized}`);
+
+    const mod = { exports: {} as any };
+    moduleCache.set(normalized, mod.exports);
+    const localRequire = (specifier: string) => loadModule(resolveModuleKey(specifier, normalized));
+    const fn = vm.runInContext(`(function(require, module, exports){${code}\n})`, vmContext, {
+      filename: `${normalized}.js`,
+    });
+    fn(localRequire, mod, mod.exports);
+    moduleCache.set(normalized, mod.exports);
     return mod.exports;
   }
 
-  const { jsx } = load('valdi_core/src/JSXBootstrap');
-  const { Renderer } = load('valdi_core/src/Renderer');
-  const { RendererTestDelegate } = load('valdi_test/test/RendererTestDelegate');
-  const delegate = new RendererTestDelegate();
-  const renderer = new Renderer('bottom-sheet-test', undefined, delegate);
-  return { load, jsx, renderer, delegate };
-}
+  const moduleLoader = {
+    load: (modulePath: string) => loadModule(modulePath),
+  };
+  sandboxGlobals.moduleLoader = moduleLoader;
 
-test('app_ui bottom_sheet aligns with @swmansion/react-native-bottom-sheet v1.1.0 API and Valdi runtime on Android and iOS', async () => {
-  const uiModule = appModule('app_ui');
-  const uiPlugin = valdiTs(uiModule);
-  const commonModule = appModule('native_common');
-  const commonPlugin = valdiTs(commonModule);
-  const foundationModule = appModule('app_foundation');
-  const foundationPlugin = valdiTs(foundationModule);
+  function compileInlineTsx(moduleId: string, tsxSource: string) {
+    const jsFromTs = ts.transpileModule(tsxSource, {
+      fileName: `${moduleId}.tsx`,
+      compilerOptions: {
+        jsx: ts.JsxEmit.Preserve,
+        target: ts.ScriptTarget.ES2020,
+        module: ts.ModuleKind.ESNext,
+      },
+    }).outputText;
 
-  const allEntries = new Map<string, Buffer>();
-  try {
-    assert.equal(uiPlugin.diagnostics(), '');
-    for (const [mod, plug] of [
-      [uiModule, uiPlugin],
-      [commonModule, commonPlugin],
-      [foundationModule, foundationPlugin],
-    ] as const) {
-      const built = await buildModule(mod, plug, false);
-      for (const [name, bytes] of built.entries) {
-        allEntries.set(`${mod.name}/${name}`, bytes);
-      }
-    }
-  } finally {
-    uiPlugin.dispose();
-    commonPlugin.dispose();
-    foundationPlugin.dispose();
+    const solidJs = transformSync(jsFromTs, {
+      filename: `${moduleId}.tsx`,
+      configFile: false,
+      babelrc: false,
+      plugins: [[solidBabelPlugin, { generate: 'universal', moduleName: 'solid_native/src/renderer', dev: false }]],
+    })?.code;
+    assert.ok(solidJs);
+
+    const cjsCode = ts.transpileModule(solidJs, {
+      fileName: `${moduleId}.js`,
+      compilerOptions: {
+        target: ts.ScriptTarget.ES2020,
+        module: ts.ModuleKind.CommonJS,
+        esModuleInterop: true,
+      },
+    }).outputText.replace(/require\((["'])solid-js\1\)/g, 'require("solid_runtime/src/solid")');
+
+    memoryModules.set(moduleId, cjsCode);
+    moduleCache.delete(moduleId);
+    return loadModule(moduleId);
   }
 
-  const platforms: (1 | 2)[] =
-    runtimeMode === 'android' ? [1] : runtimeMode === 'ios' ? [2] : [1, 2];
-  for (const platform of platforms) {
-    const runtimeEntries = await loadRuntimeModules(platform);
-    const h = createHost(platform, allEntries, runtimeEntries);
-    const api = h.load('app_ui/src/index');
-    const utils = h.load('app_ui/src/bottom_sheet/bottomSheetUtils');
-    const placement = h.load('app_ui/src/bottom_sheet/cardPlacement');
+  const bridge = loadModule('solid_native/src/bridge');
+  const manager = bridge.createRootComponentsManager();
 
-    // 1. Public exports exist on app_ui root
+  const flushMicrotasks = async () => {
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve();
+    }
+  };
+
+  return { sim, manager, loadModule, compileInlineTsx, flushMicrotasks };
+}
+
+function findNodes(tree: SimTree, predicate: (node: SimNode) => boolean): SimNode[] {
+  return [...tree.nodes.values()].filter(predicate);
+}
+
+function findByA11y(tree: SimTree, accessibilityId: string): SimNode {
+  const node = [...tree.nodes.values()].find(n => n.attrs.accessibilityId === accessibilityId);
+  assert.ok(node, `Missing element with accessibilityId=${accessibilityId}`);
+  return node;
+}
+
+test('app_ui bottom_sheet & wheels align with Solid 2.0 Universal on Android and iOS', async () => {
+  const allEntries = await buildAllTargetModules();
+
+  for (const platform of [1, 2] as const) {
+    const h = createSolidHost(platform, allEntries);
+    const api = h.loadModule('app_ui/src/index');
+    const wheels = h.loadModule('app_ui/src/wheels/WheelPickers');
+    const utils = h.loadModule('app_ui/src/bottom_sheet/bottomSheetUtils');
+    const placement = h.loadModule('app_ui/src/bottom_sheet/cardPlacement');
+
+    // 1. Public exports exist on app_ui root & wheels
     assert.equal(typeof api.BottomSheet, 'function');
     assert.equal(typeof api.ModalBottomSheet, 'function');
     assert.equal(typeof api.BottomSheetProvider, 'function');
+    assert.equal(typeof api.appUIApi, 'function');
+    assert.equal(typeof wheels.ColumnPicker, 'function');
+    assert.equal(typeof wheels.TimePicker, 'function');
+    assert.equal(typeof wheels.TreePicker, 'function');
 
     // 2. Detent normalization & v1.1.0 cardPlacement / validation rules
     assert.equal(placement.resolveMaxWidth(undefined), 0);
@@ -322,7 +593,6 @@ test('app_ui bottom_sheet aligns with @swmansion/react-native-bottom-sheet v1.1.
     assert.throws(() => utils.normalizeDetents([400, 200], false), /ascending/);
     assert.throws(() => utils.normalizeDetents(['content', 'content'], false), /at most one 'content'/);
 
-    // 3. SurfaceStyle & CSS boxShadow + settleDuration validation
     assert.doesNotThrow(() => utils.validateSettleDuration(undefined));
     assert.doesNotThrow(() => utils.validateSettleDuration(300));
     assert.throws(() => utils.validateSettleDuration(-10), /settleDuration/);
@@ -343,11 +613,9 @@ test('app_ui bottom_sheet aligns with @swmansion/react-native-bottom-sheet v1.1.
     assert.equal(surfaceResolved.shadows[0].blurRadius, 16);
     assert.equal(surfaceResolved.shadows[0].spreadDistance, 2);
 
-    // 4. Render BottomSheetProvider + ModalBottomSheet + BottomSheet in Valdi Renderer
+    // 3. Solid BottomSheetProvider + ModalBottomSheet (lazy mount + events + reorder without destroy)
     const expectedPortalClass =
-      platform === 1
-        ? 'io.valdiroutes.app.BottomSheetPortalHostView'
-        : 'VRBottomSheetPortalHostView';
+      platform === 1 ? 'io.valdiroutes.app.BottomSheetPortalHostView' : 'VRBottomSheetPortalHostView';
     const expectedSheetClass =
       platform === 1 ? 'io.valdiroutes.app.BottomSheetView' : 'VRBottomSheetView';
 
@@ -356,182 +624,191 @@ test('app_ui bottom_sheet aligns with @swmansion/react-native-bottom-sheet v1.1.
     const settleEvents: number[] = [];
     let closeRequests = 0;
 
-    const { Component } = h.load('valdi_core/src/Component');
-    const jsxRuntime = h.load('valdi_core/src/JSX').jsx;
-    const providerProto = jsxRuntime.makeComponentPrototype();
-    const modalProto = jsxRuntime.makeComponentPrototype();
-    const viewProto = jsxRuntime.makeNodePrototype('view', []);
-    const labelProto = jsxRuntime.makeNodePrototype('label', ['value', 'Sheet Body']);
+    h.compileInlineTsx(
+      'inline_test/BottomSheetHarness',
+      `
+      import { BottomSheetProvider, ModalBottomSheet } from 'app_ui/src/index';
 
-    class Harness extends Component {
-      declare viewModel: { modalIndex: number };
-      onRender(): void {
-        const { BottomSheetProvider, ModalBottomSheet } = api;
-        jsxRuntime.beginComponent(BottomSheetProvider, providerProto, undefined, undefined);
-        jsxRuntime.setUnnamedSlot(() => {
-          jsxRuntime.beginRender(viewProto, undefined);
-          jsxRuntime.endRender();
-          jsxRuntime.beginComponent(ModalBottomSheet, modalProto, undefined, undefined);
-          jsxRuntime.setViewModelProperties({
-            detents: [0, { value: 280, insets: { horizontal: 16 } }, '85%'],
-            index: this.viewModel.modalIndex,
-            maxWidth: 480,
-            placement: 'end',
-            lazy: true,
-            settleDuration: 400,
-            scrimColor: 'rgba(0, 0, 0, 0.5)',
-            onIndexChange: (i: number) => indexEvents.push(i),
-            onSettle: (i: number) => settleEvents.push(i),
-            onPositionChange: (e: any) => positionEvents.push(e),
-            onCloseRequest: () => {
-              closeRequests += 1;
-            },
-          });
-          jsxRuntime.setUnnamedSlot(() => {
-            jsxRuntime.beginRender(labelProto, undefined);
-            jsxRuntime.endRender();
-          });
-          jsxRuntime.endComponent();
-        });
-        jsxRuntime.endComponent();
+      export function BottomSheetHarness(props) {
+        const vm = props.viewModel;
+        return (
+          <BottomSheetProvider>
+            <view />
+            <ModalBottomSheet
+              detents={[0, { value: 280, insets: { start: 16, end: 16 } }, '85%']}
+              index={vm().sheetAIndex}
+              maxWidth={480}
+              placement="end"
+              lazy={true}
+              settleDuration={400}
+              scrimColor="rgba(0, 0, 0, 0.5)"
+              onIndexChange={i => vm().hooks.onIndexChange(i)}
+              onSettle={i => vm().hooks.onSettle(i)}
+              onPositionChange={e => vm().hooks.onPositionChange(e)}
+              onCloseRequest={() => vm().hooks.onCloseRequest()}
+            >
+              <label value="Sheet Body" />
+            </ModalBottomSheet>
+            <ModalBottomSheet
+              detents={[0, 320]}
+              index={vm().sheetBIndex}
+              accessibilityId="sheet-b"
+            >
+              <label value="Sheet B Body" />
+            </ModalBottomSheet>
+          </BottomSheetProvider>
+        );
       }
-    }
 
-    const harnessProto = jsxRuntime.makeComponentPrototype();
-
-    // Initial closed render (index=0 -> 0pt detent) with lazy=true:
-    // sheet host exists in portal, but 'Sheet Body' label is deferred!
-    h.renderer.renderRootComponent(Harness, harnessProto, { modalIndex: 0 }, undefined);
-
-    const initialEntries = h.delegate.requests.flatMap((r: any) => r.entries);
-    const createdClasses = initialEntries
-      .filter((e: any) => e.type === 'CreateElement')
-      .map((e: any) => e.className);
-    assert.ok(createdClasses.includes(expectedPortalClass), `Expected ${expectedPortalClass}`);
-    assert.ok(createdClasses.includes(expectedSheetClass), `Expected ${expectedSheetClass}`);
-    const initialLabels = initialEntries.filter(
-      (e: any) => e.type === 'SetElementAttribute' && e.name === 'value' && e.value === 'Sheet Body',
+      export function WindowOverlaySheet() {
+        return (
+          <ModalBottomSheet detents={['50%']} index={0} windowOverlay={true}>
+            <label value="Window" />
+          </ModalBottomSheet>
+        );
+      }
+      `,
     );
-    assert.equal(initialLabels.length, 0, 'lazy=true must defer children while closed at index=0');
 
-    // Verify detents wire format carries maxWidth & placementBias and pre-geometry children get maxWidth
-    const configAttr = initialEntries
-      .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'config')
-      .at(-1)?.value;
-    assert.equal(configAttr.detents[1].maxWidth, 480);
-    assert.equal(configAttr.detents[1].placementBias, 1);
-    assert.equal(configAttr.committedContentRegionInset, undefined);
-    const preGeomMaxWidths = initialEntries.filter(
-      (e: any) => e.type === 'SetElementAttribute' && e.name === 'maxWidth' && e.value === 480,
+    // Isolate the expected reactive throw in its own VM host so Solid 2.0's
+    // [REACTIVITY_HALTED] state does not poison subsequent assertions on `h`.
+    const hMissing = createSolidHost(platform, allEntries);
+    hMissing.compileInlineTsx(
+      'inline_test/MissingProviderSheet',
+      `
+      import { ModalBottomSheet } from 'app_ui/src/index';
+
+      export function MissingProviderSheet() {
+        return (
+          <ModalBottomSheet detents={['50%']} index={0}>
+            <label value="Orphan" />
+          </ModalBottomSheet>
+        );
+      }
+      `,
     );
-    assert.equal(preGeomMaxWidths.length, 2, 'SurfaceView and ContentWrapperView cap pre-geometry maxWidth');
 
-    // Open modal sheet to index=1 (280pt) -> lazy children mount and native callbacks wire through!
-    h.delegate.clear();
-    h.renderer.renderRootComponent(Harness, harnessProto, { modalIndex: 1 }, undefined);
-    const openEntries = h.delegate.requests.flatMap((r: any) => r.entries);
-    const openLabels = openEntries.filter(
-      (e: any) => e.type === 'SetElementAttribute' && e.name === 'value' && e.value === 'Sheet Body',
-    );
-    assert.equal(openLabels.length, 1, 'lazy children mount when index points to an open detent');
+    // ModalBottomSheet outside BottomSheetProvider throws unless windowOverlay={true}
+    assert.throws(() => {
+      hMissing.manager.create('missing-provider', 'MissingProviderSheet@inline_test/MissingProviderSheet', {}, {});
+    }, /BottomSheetProvider/);
 
-    // Locate native callbacks on the sheet element and exercise them
-    const allAttrs = [...initialEntries, ...openEntries].filter(
-      (e: any) => e.type === 'SetElementAttribute',
-    );
-    const onNativeGeom = allAttrs.filter((e: any) => e.name === 'onNativeGeometry').at(-1)?.value;
-    const onNativePos = allAttrs.filter((e: any) => e.name === 'onNativePositionChange').at(-1)?.value;
-    const onNativeIdx = allAttrs.filter((e: any) => e.name === 'onNativeIndexChange').at(-1)?.value;
-    const onNativeSettle = allAttrs.filter((e: any) => e.name === 'onNativeSettle').at(-1)?.value;
-    const onNativeClose = allAttrs.filter((e: any) => e.name === 'onNativeCloseRequest').at(-1)?.value;
-
-    assert.equal(typeof onNativeGeom, 'function');
-    h.delegate.clear();
-    onNativeGeom(480, 680, 800, 544, 1024);
-    const geomEntries = h.delegate.requests.flatMap((r: any) => r.entries);
-    const committedInset = geomEntries
-      .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'config')
-      .at(-1)?.value?.committedContentRegionInset;
-    assert.equal(committedInset, 544);
-
-    assert.equal(typeof onNativePos, 'function');
-    onNativePos(140, -0.5);
-    assert.equal(positionEvents.length, 1);
-    assert.deepEqual(JSON.parse(JSON.stringify(positionEvents[0])), {
-      nativeEvent: { position: 140, index: -0.5 },
+    assert.doesNotThrow(() => {
+      h.manager.create('window-overlay', 'WindowOverlaySheet@inline_test/BottomSheetHarness', {}, {});
     });
+    h.manager.destroy('window-overlay');
 
-    onNativeIdx(1);
+    const baseSheetVm = {
+      sheetAIndex: 0,
+      sheetBIndex: 0,
+      hooks: {
+        onIndexChange: (i: number) => indexEvents.push(i),
+        onSettle: (i: number) => settleEvents.push(i),
+        onPositionChange: (e: any) => positionEvents.push(e),
+        onCloseRequest: () => {
+          closeRequests += 1;
+        },
+      },
+    };
+    h.manager.create('bs-1', 'BottomSheetHarness@inline_test/BottomSheetHarness', baseSheetVm, {});
+
+    const sheetTree = h.sim.getTree('bs-1');
+    const portalHosts = findNodes(sheetTree, n => n.viewClass === expectedPortalClass);
+    const sheetViews = findNodes(sheetTree, n => n.viewClass === expectedSheetClass);
+    assert.equal(portalHosts.length, 1);
+    assert.equal(sheetViews.length, 2);
+
+    const portalHost = portalHosts[0];
+    const sheetA = sheetViews[0];
+    const sheetB = sheetViews[1];
+
+    // lazy=true defers 'Sheet Body' while closed at index=0
+    assert.equal(findNodes(sheetTree, n => n.attrs.value === 'Sheet Body').length, 0);
+
+    // Pre-geometry wire config carries maxWidth, placementBias=1, no committedContentRegionInset, and maxWidth=480 on Surface & ContentWrapper
+    const cfgA = sheetA.attrs.config as any;
+    assert.equal(cfgA.detents[1].maxWidth, 480);
+    assert.equal(cfgA.detents[1].placementBias, 1);
+    assert.equal(cfgA.committedContentRegionInset, undefined);
+    const sheetAChildren = sheetA.children.map(id => sheetTree.nodes.get(id)!);
+    assert.equal(
+      sheetAChildren.filter(n => n.attrs.maxWidth === 480).length,
+      2,
+      'SurfaceView and ContentWrapperView cap pre-geometry maxWidth',
+    );
+
+    // Open Sheet A to index=1 -> openOrder becomes 1 -> mounts 'Sheet Body' and moves Sheet A after Sheet B
+    const batchCountBeforeOpenA = sheetTree.batches.length;
+    h.manager.render('bs-1', { ...baseSheetVm, sheetAIndex: 1, sheetBIndex: 0 });
+    await h.flushMicrotasks();
+    assert.equal(findNodes(sheetTree, n => n.attrs.value === 'Sheet Body').length, 1);
+    assert.deepEqual(portalHost.children, [sheetB.id, sheetA.id]);
+
+    // Trigger native callbacks
+    (sheetA.attrs.onNativeGeometry as any)(480, 680, 800, 544, 1024);
+    await h.flushMicrotasks();
+    assert.equal((sheetA.attrs.config as any).committedContentRegionInset, 544);
+
+    (sheetA.attrs.onNativePositionChange as any)(140, -0.5);
+    assert.deepEqual(JSON.parse(JSON.stringify(positionEvents)), [{ nativeEvent: { position: 140, index: -0.5 } }]);
+
+    (sheetA.attrs.onNativeIndexChange as any)(1);
     assert.deepEqual(indexEvents, [1]);
 
-    onNativeSettle(1);
+    (sheetA.attrs.onNativeSettle as any)(1);
     assert.deepEqual(settleEvents, [1]);
 
-    onNativeClose();
+    (sheetA.attrs.onNativeCloseRequest as any)();
     assert.equal(closeRequests, 1);
+
+    // Now open Sheet B (openOrder becomes 2 > Sheet A's 1) -> reorders in portal WITHOUT destroying/recreating SheetView!
+    const batchesBeforeReorder = sheetTree.batches.length;
+    h.manager.render('bs-1', { ...baseSheetVm, sheetAIndex: 1, sheetBIndex: 1 });
+    await h.flushMicrotasks();
+    assert.deepEqual(portalHost.children, [sheetA.id, sheetB.id]);
+    const reorderOps = sheetTree.batches.slice(batchesBeforeReorder).flat();
+    assert.equal(
+      reorderOps.some(
+        op => (op.type === Opcode.CREATE_ELEMENT || op.type === Opcode.DESTROY_ELEMENT) && (op.id === sheetA.id || op.id === sheetB.id),
+      ),
+      false,
+      'Reordering sheets in portal must not destroy or recreate native BottomSheetView nodes',
+    );
+    assert.ok(
+      reorderOps.some(op => op.type === Opcode.INSERT_ELEMENT_BEFORE && op.parentId === portalHost.id),
+      'Reordering sheets must move existing node via INSERT_ELEMENT_BEFORE',
+    );
+
+    // Close Sheet A back to 0 -> 'Sheet Body' stays mounted until onNativeSettle(0)
+    h.manager.render('bs-1', { ...baseSheetVm, sheetAIndex: 0, sheetBIndex: 1 });
+    await h.flushMicrotasks();
+    assert.equal(
+      findNodes(sheetTree, n => n.attrs.value === 'Sheet Body').length,
+      1,
+      'lazy children remain mounted during close animation until settle',
+    );
+
+    (sheetA.attrs.onNativeSettle as any)(0);
+    await h.flushMicrotasks();
+    assert.equal(
+      findNodes(sheetTree, n => n.attrs.value === 'Sheet Body').length,
+      0,
+      'lazy children unmount after settling at closed detent',
+    );
+    assert.ok(batchCountBeforeOpenA > 0);
+    h.manager.destroy('bs-1');
   }
 });
 
-test('AppSheetOverlay renders actionSheet, picker, and datePicker exclusively via Valdi BottomSheet + WheelPickers on Android and iOS', async () => {
-  const uiModule = appModule('app_ui');
-  const uiPlugin = valdiTs(uiModule);
-  const commonModule = appModule('native_common');
-  const commonPlugin = valdiTs(commonModule);
-  const foundationModule = appModule('app_foundation');
-  const foundationPlugin = valdiTs(foundationModule);
+test('AppSheetOverlay runs through Solid createRootComponentsManager for ActionSheet, Picker, and DatePicker on Android and iOS', async () => {
+  const allEntries = await buildAllTargetModules();
+  const componentPath = 'AppSheetOverlay@app_ui/src/sheet_presenter/AppSheetOverlay';
 
-  const allEntries = new Map<string, Buffer>();
-  try {
-    assert.equal(uiPlugin.diagnostics(), '');
-    for (const [mod, plug] of [
-      [uiModule, uiPlugin],
-      [commonModule, commonPlugin],
-      [foundationModule, foundationPlugin],
-    ] as const) {
-      const built = await buildModule(mod, plug, false);
-      for (const [name, bytes] of built.entries) {
-        allEntries.set(`${mod.name}/${name}`, bytes);
-      }
-    }
-  } finally {
-    uiPlugin.dispose();
-    commonPlugin.dispose();
-    foundationPlugin.dispose();
-  }
+  for (const platform of [1, 2] as const) {
+    const h = createSolidHost(platform, allEntries);
 
-  function findAccessibilityTap(entries: any[], accessibilityId: string): () => void {
-    let targetElementId: number | undefined;
-    for (const entry of entries) {
-      if (
-        entry.type === 'SetElementAttribute' &&
-        entry.name === 'accessibilityId' &&
-        entry.value === accessibilityId
-      ) {
-        targetElementId = entry.id;
-      }
-    }
-    assert.notEqual(targetElementId, undefined, `Missing element with accessibilityId=${accessibilityId}`);
-    const tapAttr = entries
-      .filter(
-        (e: any) =>
-          e.type === 'SetElementAttribute' && e.id === targetElementId && e.name === 'onTap',
-      )
-      .at(-1);
-    assert.equal(typeof tapAttr?.value, 'function', `Missing onTap on ${accessibilityId}`);
-    return tapAttr.value;
-  }
-
-  const platforms: (1 | 2)[] =
-    runtimeMode === 'android' ? [1] : runtimeMode === 'ios' ? [2] : [1, 2];
-  for (const platform of platforms) {
-    const runtimeEntries = await loadRuntimeModules(platform);
-    // 1. ActionSheet inline (<=6 items) + selection -> close -> onDismissed
+    // 1. ActionSheet inline (<=6 items) -> select item 1 -> onSelect(1) & detentIndex=-1 -> settle(-1) -> onDismissed()
     {
-      const h = createHost(platform, allEntries, runtimeEntries);
-      const jsxRuntime = h.load('valdi_core/src/JSX').jsx;
-      const { AppSheetOverlay } = h.load('app_ui/src/sheet_presenter/AppSheetOverlay');
-      const proto = jsxRuntime.makeComponentPrototype();
-
       const selected: number[] = [];
       let dismissed = 0;
       const ctx = {
@@ -542,62 +819,48 @@ test('AppSheetOverlay renders actionSheet, picker, and datePicker exclusively vi
           dismissed += 1;
         },
       };
-
-      const baseVm = {
-        open: true,
-        kind: 'actionSheet',
-        title: '选择操作',
-        confirmText: '',
-        cancelText: '取消',
-        items: ['拍照', '从相册选择'],
-        options: [],
-        value: '',
-        dateMode: 'date',
-        minYear: 2020,
-        maxYear: 2030,
-        bottomInset: 24,
-      };
-
-      h.renderer.renderRootComponent(AppSheetOverlay, proto, baseVm, ctx);
-      const entries = h.delegate.requests.flatMap((r: any) => r.entries);
-      const scrollCreated = entries.filter(
-        (e: any) => e.type === 'CreateElement' && e.viewClass === 'SCValdiScrollView',
+      h.manager.create(
+        'overlay-as-1',
+        componentPath,
+        {
+          open: true,
+          kind: 'actionSheet',
+          title: '选择操作',
+          confirmText: '',
+          cancelText: '取消',
+          items: ['拍照', '从相册选择'],
+          options: [],
+          value: '',
+          dateMode: 'date',
+          minYear: 2020,
+          maxYear: 2030,
+          bottomInset: 24,
+        },
+        ctx,
       );
-      assert.equal(scrollCreated.length, 0, '<=6 items should render inline without scroll');
+      const tree = h.sim.getTree('overlay-as-1');
+      assert.equal(findNodes(tree, n => n.viewClass === 'scroll').length, 0);
 
-      const tapSecond = findAccessibilityTap(entries, 'action-sheet-item-1');
-      h.delegate.clear();
-      tapSecond();
+      const secondItem = findByA11y(tree, 'action-sheet-item-1');
+      (secondItem.attrs.onTap as () => void)();
+      await h.flushMicrotasks();
       assert.deepEqual(selected, [1]);
 
-      const closeEntries = h.delegate.requests.flatMap((r: any) => r.entries);
-      const reqIdx = closeEntries
-        .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'config')
-        .at(-1)?.value?.detentIndex;
-      assert.equal(reqIdx, -1);
+      const sheetClass = platform === 1 ? 'io.valdiroutes.app.BottomSheetView' : 'VRBottomSheetView';
+      const sheet = findNodes(tree, n => n.viewClass === sheetClass)[0];
+      assert.equal((sheet.attrs.config as any).detentIndex, -1);
 
-      const onNativeSettle = entries
-        .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'onNativeSettle')
-        .at(-1)?.value;
-      onNativeSettle(-1);
+      (sheet.attrs.onNativeSettle as any)(-1);
+      await h.flushMicrotasks();
       assert.equal(dismissed, 1);
+      h.manager.destroy('overlay-as-1');
     }
 
-    // 2. ActionSheet >6 items mounts Valdi <scroll>
+    // 2. ActionSheet > 6 items mounts <scroll>
     {
-      const h = createHost(platform, allEntries, runtimeEntries);
-      const jsxRuntime = h.load('valdi_core/src/JSX').jsx;
-      const { AppSheetOverlay } = h.load('app_ui/src/sheet_presenter/AppSheetOverlay');
-      const proto = jsxRuntime.makeComponentPrototype();
-      const ctx = {
-        onSelect: () => {},
-        onConfirm: () => {},
-        onCancel: () => {},
-        onDismissed: () => {},
-      };
-      h.renderer.renderRootComponent(
-        AppSheetOverlay,
-        proto,
+      h.manager.create(
+        'overlay-as-2',
+        componentPath,
         {
           open: true,
           kind: 'actionSheet',
@@ -612,36 +875,20 @@ test('AppSheetOverlay renders actionSheet, picker, and datePicker exclusively vi
           maxYear: 2030,
           bottomInset: 0,
         },
-        ctx,
+        { onSelect() {}, onConfirm() {}, onCancel() {}, onDismissed() {} },
       );
-      const entries = h.delegate.requests.flatMap((r: any) => r.entries);
-      const createdScroll = entries.some(
-        (e: any) => e.type === 'CreateElement' && String(e.className).includes('Scroll'),
-      );
-      assert.ok(createdScroll, '>6 action sheet items must mount a Valdi scroll container');
+      const tree = h.sim.getTree('overlay-as-2');
+      assert.ok(findNodes(tree, n => n.viewClass === 'scroll').length >= 1);
+      h.manager.destroy('overlay-as-2');
     }
 
-    // 3. ColumnPicker sheet: wheel change + confirm -> onConfirm(value, index) -> onDismissed
+    // 3. ColumnPicker sheet: wheel change -> confirm -> onConfirm(value, index) -> settle(-1) -> onDismissed()
     {
-      const h = createHost(platform, allEntries, runtimeEntries);
-      const jsxRuntime = h.load('valdi_core/src/JSX').jsx;
-      const { AppSheetOverlay } = h.load('app_ui/src/sheet_presenter/AppSheetOverlay');
-      const proto = jsxRuntime.makeComponentPrototype();
-
       const confirmed: Array<{ value: string; index: number }> = [];
       let dismissed = 0;
-      const ctx = {
-        onSelect: () => assert.fail('unexpected onSelect'),
-        onConfirm: (value: string, index: number) => confirmed.push({ value, index }),
-        onCancel: () => assert.fail('unexpected onCancel'),
-        onDismissed: () => {
-          dismissed += 1;
-        },
-      };
-
-      h.renderer.renderRootComponent(
-        AppSheetOverlay,
-        proto,
+      h.manager.create(
+        'overlay-picker',
+        componentPath,
         {
           open: true,
           kind: 'picker',
@@ -660,52 +907,39 @@ test('AppSheetOverlay renders actionSheet, picker, and datePicker exclusively vi
           maxYear: 2030,
           bottomInset: 16,
         },
-        ctx,
+        {
+          onSelect: () => assert.fail('unexpected onSelect'),
+          onConfirm: (value: string, index: number) => confirmed.push({ value, index }),
+          onCancel: () => assert.fail('unexpected onCancel'),
+          onDismissed: () => {
+            dismissed += 1;
+          },
+        },
       );
+      const tree = h.sim.getTree('overlay-picker');
+      const wheelClass = platform === 1 ? 'io.valdiroutes.app.ColumnWheelView' : 'VRColumnWheelView';
+      const wheel = findNodes(tree, n => n.viewClass === wheelClass)[0];
+      assert.ok(wheel, `Expected ${wheelClass}`);
+      (wheel.attrs.onChange as (v: string) => void)('sz');
+      await h.flushMicrotasks();
 
-      const entries = h.delegate.requests.flatMap((r: any) => r.entries);
-      const expectedWheelClass =
-        platform === 1 ? 'io.valdiroutes.app.ColumnWheelView' : 'VRColumnWheelView';
-      assert.ok(
-        entries.some((e: any) => e.type === 'CreateElement' && e.className === expectedWheelClass),
-        `Expected ${expectedWheelClass}`,
-      );
-
-      const wheelOnChange = entries
-        .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'onChange')
-        .at(-1)?.value;
-      assert.equal(typeof wheelOnChange, 'function');
-      wheelOnChange('sz');
-
-      const tapConfirm = findAccessibilityTap(entries, 'sheet-confirm-button');
-      tapConfirm();
+      const confirmBtn = findByA11y(tree, 'sheet-confirm-button');
+      (confirmBtn.attrs.onTap as () => void)();
+      await h.flushMicrotasks();
       assert.deepEqual(confirmed, [{ value: 'sz', index: 2 }]);
 
-      const onNativeSettle = entries
-        .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'onNativeSettle')
-        .at(-1)?.value;
-      onNativeSettle(-1);
+      const sheetClass = platform === 1 ? 'io.valdiroutes.app.BottomSheetView' : 'VRBottomSheetView';
+      const sheet = findNodes(tree, n => n.viewClass === sheetClass)[0];
+      (sheet.attrs.onNativeSettle as any)(-1);
+      await h.flushMicrotasks();
       assert.equal(dismissed, 1);
+      h.manager.destroy('overlay-picker');
     }
 
-    // 4. DatePicker sheet + host external cancellation (`open: false`) + pre-render `open: false`
+    // 4. DatePicker sheet + external host cancellation + initial open: false
     {
-      const h = createHost(platform, allEntries, runtimeEntries);
-      const jsxRuntime = h.load('valdi_core/src/JSX').jsx;
-      const { AppSheetOverlay } = h.load('app_ui/src/sheet_presenter/AppSheetOverlay');
-      const proto = jsxRuntime.makeComponentPrototype();
-
       let dismissed = 0;
-      const ctx = {
-        onSelect: () => {},
-        onConfirm: () => {},
-        onCancel: () => {},
-        onDismissed: () => {
-          dismissed += 1;
-        },
-      };
-
-      const vm = {
+      const baseVm = {
         open: true,
         kind: 'datePicker',
         title: '选择日期',
@@ -719,42 +953,148 @@ test('AppSheetOverlay renders actionSheet, picker, and datePicker exclusively vi
         maxYear: 2030,
         bottomInset: 0,
       };
-      h.renderer.renderRootComponent(AppSheetOverlay, proto, vm, ctx);
-      const entries = h.delegate.requests.flatMap((r: any) => r.entries);
-      const expectedTimeWheelClass =
-        platform === 1 ? 'io.valdiroutes.app.TimeWheelView' : 'VRTimeWheelView';
-      assert.ok(
-        entries.some((e: any) => e.type === 'CreateElement' && e.className === expectedTimeWheelClass),
-        `Expected ${expectedTimeWheelClass}`,
-      );
+      h.manager.create('overlay-dp', componentPath, baseVm, {
+        onSelect() {},
+        onConfirm() {},
+        onCancel() {},
+        onDismissed: () => {
+          dismissed += 1;
+        },
+      });
+      const tree = h.sim.getTree('overlay-dp');
+      const timeWheelClass = platform === 1 ? 'io.valdiroutes.app.TimeWheelView' : 'VRTimeWheelView';
+      assert.equal(findNodes(tree, n => n.viewClass === timeWheelClass).length, 1);
 
-      // Host cancels presentation externally (`open: false`)
-      h.delegate.clear();
-      h.renderer.renderRootComponent(AppSheetOverlay, proto, { ...vm, open: false }, ctx);
-      const cancelEntries = h.delegate.requests.flatMap((r: any) => r.entries);
-      const reqIdx = cancelEntries
-        .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'config')
-        .at(-1)?.value?.detentIndex;
-      assert.equal(reqIdx, -1);
+      h.manager.render('overlay-dp', { ...baseVm, open: false });
+      await h.flushMicrotasks();
+      const sheetClass = platform === 1 ? 'io.valdiroutes.app.BottomSheetView' : 'VRBottomSheetView';
+      const sheet = findNodes(tree, n => n.viewClass === sheetClass)[0];
+      assert.equal((sheet.attrs.config as any).detentIndex, -1);
 
-      const onNativeSettle = entries
-        .filter((e: any) => e.type === 'SetElementAttribute' && e.name === 'onNativeSettle')
-        .at(-1)?.value;
-      onNativeSettle(-1);
+      (sheet.attrs.onNativeSettle as any)(-1);
+      await h.flushMicrotasks();
       assert.equal(dismissed, 1);
+      h.manager.destroy('overlay-dp');
 
-      // Pre-render open: false dispatches onDismissed immediately without hanging
-      const h2 = createHost(platform, allEntries, runtimeEntries);
-      const jsx2 = h2.load('valdi_core/src/JSX').jsx;
-      const { AppSheetOverlay: Overlay2 } = h2.load('app_ui/src/sheet_presenter/AppSheetOverlay');
-      let preRenderDismissed = 0;
-      h2.renderer.renderRootComponent(
-        Overlay2,
-        jsx2.makeComponentPrototype(),
-        { ...vm, open: false },
-        { ...ctx, onDismissed: () => (preRenderDismissed += 1) },
+      let preDismissed = 0;
+      h.manager.create(
+        'overlay-closed',
+        componentPath,
+        { ...baseVm, open: false },
+        {
+          onSelect() {},
+          onConfirm() {},
+          onCancel() {},
+          onDismissed: () => {
+            preDismissed += 1;
+          },
+        },
       );
-      assert.equal(preRenderDismissed, 1);
+      assert.equal(preDismissed, 1);
+      h.manager.destroy('overlay-closed');
     }
+  }
+});
+
+test('Solid WheelPickers (ColumnPicker, TimePicker, TreePicker) reuse native <custom-view> on controlled updates on Android and iOS', async () => {
+  const allEntries = await buildAllTargetModules();
+
+  for (const platform of [1, 2] as const) {
+    const h = createSolidHost(platform, allEntries);
+    h.compileInlineTsx(
+      'inline_test/WheelHarness',
+      `
+      import { ColumnPicker, TimePicker, TreePicker } from 'app_ui/src/wheels/WheelPickers';
+
+      export function WheelHarness(props) {
+        const vm = props.viewModel;
+        return (
+          <view>
+            <ColumnPicker
+              options={['A;,', 'B']}
+              value={vm().col}
+              onChange={v => vm().onCol(v)}
+            />
+            <TimePicker
+              mode="date"
+              value={vm().date}
+              minYear={1900}
+              maxYear={2100}
+              onChange={v => vm().onDate(v)}
+            />
+            <TreePicker
+              data={[{ value: 'a', label: 'a;', children: [{ value: 'b', label: 'b,' }] }]}
+              value={vm().tree}
+              onChange={v => vm().onTree(v)}
+            />
+          </view>
+        );
+      }
+      `,
+    );
+
+    const received: Record<string, unknown[]> = { col: [], date: [], tree: [] };
+    const vm0 = {
+      col: 'A;,',
+      date: '2000-02-29',
+      tree: ['a', 'b'],
+      onCol: (v: string) => received.col.push(v),
+      onDate: (v: string) => received.date.push(v),
+      onTree: (v: string[]) => received.tree.push(v),
+    };
+    h.manager.create('wheels-1', 'WheelHarness@inline_test/WheelHarness', vm0, {});
+    const tree = h.sim.getTree('wheels-1');
+
+    const colClass = platform === 1 ? 'io.valdiroutes.app.ColumnWheelView' : 'VRColumnWheelView';
+    const timeClass = platform === 1 ? 'io.valdiroutes.app.TimeWheelView' : 'VRTimeWheelView';
+    const treeClass = platform === 1 ? 'io.valdiroutes.app.TreeWheelView' : 'VRTreeWheelView';
+
+    const colNode = findNodes(tree, n => n.viewClass === colClass)[0];
+    const timeNode = findNodes(tree, n => n.viewClass === timeClass)[0];
+    const treeNode = findNodes(tree, n => n.viewClass === treeClass)[0];
+    assert.ok(colNode && timeNode && treeNode);
+
+    assert.deepEqual(JSON.parse(JSON.stringify(colNode.attrs.config)), {
+      options: [
+        { value: 'A;,', label: 'A;,' },
+        { value: 'B', label: 'B' },
+      ],
+      value: 'A;,',
+    });
+    assert.deepEqual(JSON.parse(JSON.stringify(timeNode.attrs.config)), {
+      mode: 'date',
+      value: '2000-02-29',
+      minYear: 1900,
+      maxYear: 2100,
+    });
+    assert.deepEqual(JSON.parse(JSON.stringify(treeNode.attrs.config)), {
+      data: [{ value: 'a', label: 'a;', children: [{ value: 'b', label: 'b,' }] }],
+      value: ['a', 'b'],
+      columns: 3,
+    });
+
+    (colNode.attrs.onChange as (v: string) => void)('B');
+    (timeNode.attrs.onChange as (v: string) => void)('2000-03-01');
+    (treeNode.attrs.onChange as (v: string[]) => void)(['a']);
+    assert.deepEqual(JSON.parse(JSON.stringify(received)), {
+      col: ['B'],
+      date: ['2000-03-01'],
+      tree: [['a']],
+    });
+
+    const batchesBeforeUpdate = tree.batches.length;
+    h.manager.render('wheels-1', { ...vm0, col: 'B', date: '2000-03-01', tree: ['a'] });
+    await h.flushMicrotasks();
+    const updateOps = tree.batches.slice(batchesBeforeUpdate).flat();
+    assert.equal(
+      updateOps.some(op => op.type === Opcode.CREATE_ELEMENT || op.type === Opcode.DESTROY_ELEMENT),
+      false,
+      'Controlled wheel updates must reuse existing native custom-views',
+    );
+    assert.equal((colNode.attrs.config as any).value, 'B');
+    assert.equal((timeNode.attrs.config as any).value, '2000-03-01');
+    assert.deepEqual(JSON.parse(JSON.stringify((treeNode.attrs.config as any).value)), ['a', 'b']);
+
+    h.manager.destroy('wheels-1');
   }
 });

@@ -1,4 +1,4 @@
-import { Layout, View } from 'valdi_tsx/src/NativeTemplateElements';
+import type { View } from 'valdi_tsx/src/NativeTemplateElements';
 
 export type ColorValue = string;
 

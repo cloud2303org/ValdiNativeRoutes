@@ -24,6 +24,10 @@ final class ValdiHost {
         waiting.append(completion)
         guard waiting.count == 1 else { return }
         let runtime = self.runtime
+        MainActor.assumeIsolated {
+            AppUI.imageLoader = AppImages.load
+            AppUI.runtime = runtime
+        }
         VRRegisterNativeModules(runtime)
         AppNativeModules.register(runtime, navigationHost: navigationHost)
         // App-wide objects (api and the router) are created here, not in a page.
@@ -109,10 +113,6 @@ final class ValdiHost {
         // Android runtime exposes its views' accessibility by default.
         rootView.valdiContext?.enableAccessibility = true
         return rootView
-    }
-
-    func updateInsets(_ entry: PageEntry, insets: UIEdgeInsets) {
-        entry.rootView?.valdiContext?.viewModel = viewModel(entry, insets)
     }
 
     func createTabBar(_ bar: TabBar, shell: PageEntry, safeAreaBottom: CGFloat,

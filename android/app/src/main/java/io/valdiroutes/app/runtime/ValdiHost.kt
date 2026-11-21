@@ -243,13 +243,6 @@ object ValdiHost {
         }
     }
 
-    fun updateInsets(entry: PageEntry, insets: Insets) {
-        entry.rootView?.let { root ->
-            root.setViewModelUntyped(viewModel(entry, insets))
-            contentRevisions[root] = contentRevision(root) + 1
-        }
-    }
-
     internal fun createTabBar(
         context: Context, shell: PageEntry, bar: TabBar, selected: String, safeAreaBottom: Double, navigator: Navigator,
     ): CustomTabBar {

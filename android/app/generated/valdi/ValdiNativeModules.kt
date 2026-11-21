@@ -9,7 +9,10 @@ import com.snap.valdi.modules.ModuleFactoryRegistry
 
 object ValdiNativeModules {
     fun registerFactories(context: Context) {
-
+        val factory0 = io.valdiroutes.app_ui.AppUIModuleFactoryImpl(context.applicationContext)
+        ModuleFactoryRegistry.registerModuleFactory { factory0 }
+        val factory1 = io.valdiroutes.app.modules.theme_bridge.ThemeBridgeModuleFactoryImpl()
+        ModuleFactoryRegistry.registerModuleFactory { factory1 }
     }
 
     fun registerViewBinders(context: Context, runtime: ValdiRuntimeManager) {

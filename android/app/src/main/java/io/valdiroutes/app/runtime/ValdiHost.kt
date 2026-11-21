@@ -24,7 +24,6 @@ import io.valdiroutes.pages.TabBarContext
 import io.valdiroutes.pages.TabBarViewModel
 import io.valdiroutes.pages.RequestInitialContentDraw
 import java.util.WeakHashMap
-import kotlin.concurrent.thread
 
 /** One Valdi runtime for the whole app; every page is a root view inside it. */
 object ValdiHost {
@@ -39,15 +38,14 @@ object ValdiHost {
             io.valdiroutes.generated.ValdiNativeModules.registerFactories(app)
             AppNativeModules.register(app, navigationHost)
         }
-        // SupportValdiRuntimeManager.createWithSupportLibs, with the over-the-air module provider (ValdiOta.kt).
+        // SupportValdiRuntimeManager.createWithSupportLibs.
         StartupTrace.section("runtime.context_factories.register") {
             ModuleFactoryRegistry.registerModuleFactoriesFromContext(app)
         }
-        // Preserve argument evaluation order: tweaks, then OTA selection, then manager construction.
+        // Preserve argument evaluation order: tweaks, then manager construction.
         val tweaks = StartupTrace.section("runtime.tweaks.create") { ValdiTweaks() }
-        val moduleProvider = StartupTrace.section("ota.provider.select") { ValdiOta.start(app) }
         runtimeManager = StartupTrace.section("runtime.manager.create") {
-            ValdiRuntimeManager(app, tweaks = tweaks, customModuleProvider = moduleProvider, customLogger = StartupTrace.pageLogger())
+            ValdiRuntimeManager(app, tweaks = tweaks, customLogger = StartupTrace.pageLogger())
         }
         StartupTrace.section("runtime.video_asset_loader.register") {
             io.valdiroutes.generated.ValdiNativeModules.registerAssetLoaders(runtimeManager)
@@ -87,7 +85,6 @@ object ValdiHost {
                         // Includes lazy bridge property decoding and the existing native route validation.
                         val table = StartupTrace.section("routes.decode_and_validate") { RouteTable.from(declaration) }
                         StartupTrace.mark("routes.ready_on_js")
-                        thread(name = "ValdiOta") { ValdiOta.checkForUpdate() }
                         val mainDispatch = StartupTrace.start("routes.post_to_main_callback")
                         main.post {
                             StartupTrace.finish(mainDispatch)

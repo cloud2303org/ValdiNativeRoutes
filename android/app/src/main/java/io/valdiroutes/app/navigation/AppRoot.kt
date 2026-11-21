@@ -431,8 +431,6 @@ private fun resImage(name: String, data: String?): Painter {
         val bytes = android.util.Base64.decode(data, android.util.Base64.DEFAULT)
         BitmapPainter(BitmapFactory.decodeByteArray(bytes, 0, bytes.size).asImageBitmap())
     }
-    val file = remember(name) { ValdiOta.image("app_pages", name) }
-    if (file != null) return remember(file) { BitmapPainter(BitmapFactory.decodeFile(file.path).asImageBitmap()) }
     val context = LocalContext.current
     val id = remember(name) {
         context.resources.getIdentifier("app_pages_$name", "drawable", context.packageName).also {

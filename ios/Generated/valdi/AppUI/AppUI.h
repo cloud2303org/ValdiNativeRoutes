@@ -83,6 +83,24 @@
 
 
 //
+// VRAppModalOverlayContext.h
+//
+
+#import <ValdiRuntime/SCValdiMarshaller.h>
+
+#import <AppUITypes/AppUITypes.h>
+
+
+//
+// VRAppModalOverlayViewModel.h
+//
+
+#import <ValdiRuntime/SCValdiMarshaller.h>
+
+#import <AppUITypes/AppUITypes.h>
+
+
+//
 // VRAppSheetOverlayContext.h
 //
 

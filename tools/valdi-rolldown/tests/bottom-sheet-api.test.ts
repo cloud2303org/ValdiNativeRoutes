@@ -69,6 +69,8 @@ interface SimTree {
   rootId?: number;
   nodes: Map<number, SimNode>;
   batches: DecodedOp[][];
+  layoutCompletions: (() => void)[];
+  animationCompletions: ((wasCancelled: boolean) => void)[];
 }
 
 function createCppSimulator(initialPlatform: 1 | 2) {
@@ -80,7 +82,7 @@ function createCppSimulator(initialPlatform: 1 | 2) {
   const getTree = (treeId: string): SimTree => {
     let tree = trees.get(treeId);
     if (!tree) {
-      tree = { treeId, nodes: new Map(), batches: [] };
+      tree = { treeId, nodes: new Map(), batches: [], layoutCompletions: [], animationCompletions: [] };
       trees.set(treeId, tree);
     }
     return tree;
@@ -196,10 +198,22 @@ function createCppSimulator(initialPlatform: 1 | 2) {
         else node.attrs[attr] = value;
         ops.push({ type: opcode as any, id: nodeId, attr, injected, value });
       } else if (opcode === Opcode.BEGIN_ANIMATIONS) {
+        const completionIdx = dv.getUint32((cur + 10) * 4, true);
+        const completion = request.values[completionIdx];
+        if (typeof completion === 'function') {
+          tree.animationCompletions.push(completion as (wasCancelled: boolean) => void);
+        }
         cur += 12;
       } else if (opcode === Opcode.END_ANIMATIONS) {
         // no-op
-      } else if (opcode === Opcode.ON_LAYOUT_COMPLETE || opcode === Opcode.CANCEL_ANIMATION || opcode === Opcode.ON_NEXT_DRAW) {
+      } else if (opcode === Opcode.ON_LAYOUT_COMPLETE) {
+        const callbackIdx = dv.getUint32(cur * 4, true);
+        const cb = request.values[callbackIdx];
+        if (typeof cb === 'function') {
+          tree.layoutCompletions.push(cb as () => void);
+        }
+        cur += 1;
+      } else if (opcode === Opcode.CANCEL_ANIMATION || opcode === Opcode.ON_NEXT_DRAW) {
         cur += 1;
       } else if (opcode === Opcode.DETACH_ELEMENT) {
         const node = tree.nodes.get(nodeId)!;
@@ -364,10 +378,12 @@ function createSolidHost(platform: 1 | 2, entries: Map<string, Buffer>) {
       getHost: () => ({
         getTokens: () => ({
           light: {
+            canvas: '#f5f7fb',
             surface: '#ffffff',
             text: '#172033',
             muted: '#667085',
             hairline: '#ececec',
+            border: '#E8ECF1',
             handle: '#D6DCE5',
             scrim: 'rgba(16,24,40,0.32)',
             buttonPrimary: '#1e62d0',
@@ -376,10 +392,12 @@ function createSolidHost(platform: 1 | 2, entries: Map<string, Buffer>) {
             buttonOnSecondary: '#1d2939',
           },
           dark: {
+            canvas: '#121316',
             surface: '#1E1F23',
             text: '#ffffff',
             muted: '#969696',
             hairline: '#2A2B32',
+            border: '#2A2B32',
             handle: '#969696',
             scrim: 'rgba(0,0,0,0.75)',
             buttonPrimary: '#377dff',
@@ -992,6 +1010,228 @@ test('AppSheetOverlay runs through Solid createRootComponentsManager for ActionS
       );
       assert.equal(preDismissed, 1);
       h.manager.destroy('overlay-closed');
+    }
+  }
+});
+
+test('AppModalOverlay runs through Solid createRootComponentsManager for confirm, editable return, cancel, and host close on Android and iOS', async () => {
+  const allEntries = await buildAllTargetModules();
+  const componentPath = 'AppModalOverlay@app_ui/src/modal_presenter/AppModalOverlay';
+
+  const pumpLayout = async (tree: SimTree, flush: () => Promise<void>) => {
+    while (tree.layoutCompletions.length > 0) {
+      tree.layoutCompletions.shift()!();
+    }
+    await flush();
+  };
+
+  const pumpAnimations = async (tree: SimTree, flush: () => Promise<void>, wasCancelled = false) => {
+    while (tree.animationCompletions.length > 0) {
+      tree.animationCompletions.shift()!(wasCancelled);
+    }
+    await flush();
+  };
+
+  for (const platform of [1, 2] as const) {
+    const h = createSolidHost(platform, allEntries);
+
+    // 1. Editable modal: initial enter animation -> input edit -> confirm button -> exit animation -> onDismissed
+    {
+      const confirmed: string[] = [];
+      let dismissed = 0;
+      h.manager.create(
+        'modal-confirm',
+        componentPath,
+        {
+          open: true,
+          title: '确认输入',
+          content: '请输入名称',
+          showCancel: true,
+          confirmText: '确定',
+          cancelText: '取消',
+          editable: true,
+          placeholderText: '请输入',
+          defaultText: 'hi',
+          topInset: 24,
+          bottomInset: 16,
+        },
+        {
+          onConfirm: (content: string) => confirmed.push(content),
+          onCancel: () => assert.fail('unexpected onCancel'),
+          onDismissed: () => {
+            dismissed += 1;
+          },
+        },
+      );
+      const tree = h.sim.getTree('modal-confirm');
+      const scrim = findByA11y(tree, 'app-modal-scrim');
+      const card = findByA11y(tree, 'app-modal-card');
+      const input = findByA11y(tree, 'app-modal-input');
+      assert.equal(scrim.attrs.opacity, 0);
+      assert.equal(card.attrs.opacity, 0);
+      assert.equal(card.attrs.scaleX, 0.96);
+      assert.equal(input.attrs.value, 'hi');
+
+      await pumpLayout(tree, h.flushMicrotasks);
+      assert.equal(scrim.attrs.opacity, 1);
+      assert.equal(card.attrs.opacity, 1);
+      assert.equal(card.attrs.scaleX, 1);
+      assert.equal(card.attrs.scaleY, 1);
+
+      (input.attrs.onChange as (event: { text: string }) => void)({ text: 'hello' });
+      await h.flushMicrotasks();
+      assert.equal(input.attrs.value, 'hello');
+
+      const confirmBtn = findByA11y(tree, 'app-modal-confirm-button');
+      (confirmBtn.attrs.onTap as () => void)();
+      await h.flushMicrotasks();
+      assert.deepEqual(confirmed, ['hello']);
+      assert.equal(scrim.attrs.opacity, 0);
+      assert.equal(card.attrs.opacity, 0);
+      assert.equal(card.attrs.scaleX, 0.96);
+      assert.equal(dismissed, 0);
+
+      await pumpAnimations(tree, h.flushMicrotasks);
+      assert.equal(dismissed, 1);
+      h.manager.destroy('modal-confirm');
+    }
+
+    // 2. Editable modal Return key confirms with latest text and dismisses once
+    {
+      const confirmed: string[] = [];
+      let dismissed = 0;
+      h.manager.create(
+        'modal-return',
+        componentPath,
+        {
+          open: true,
+          title: '快捷确认',
+          content: '',
+          showCancel: false,
+          confirmText: '完成',
+          cancelText: '取消',
+          editable: true,
+          placeholderText: '输入内容',
+          defaultText: '',
+          topInset: 0,
+          bottomInset: 0,
+        },
+        {
+          onConfirm: (content: string) => confirmed.push(content),
+          onCancel: () => assert.fail('unexpected onCancel'),
+          onDismissed: () => {
+            dismissed += 1;
+          },
+        },
+      );
+      const tree = h.sim.getTree('modal-return');
+      await pumpLayout(tree, h.flushMicrotasks);
+
+      const input = findByA11y(tree, 'app-modal-input');
+      (input.attrs.onReturn as (event: { text: string }) => void)({ text: 'enter-done' });
+      await h.flushMicrotasks();
+      assert.deepEqual(confirmed, ['enter-done']);
+
+      await pumpAnimations(tree, h.flushMicrotasks);
+      assert.equal(dismissed, 1);
+      h.manager.destroy('modal-return');
+    }
+
+    // 3. Cancel button and scrim tap trigger onCancel and dismiss once
+    for (const targetA11y of ['app-modal-cancel-button', 'app-modal-scrim'] as const) {
+      let canceled = 0;
+      let dismissed = 0;
+      const treeId = `modal-${targetA11y}`;
+      h.manager.create(
+        treeId,
+        componentPath,
+        {
+          open: true,
+          title: '提示',
+          content: '确认关闭吗？',
+          showCancel: true,
+          confirmText: '确定',
+          cancelText: '取消',
+          editable: false,
+          placeholderText: '',
+          defaultText: '',
+          topInset: 0,
+          bottomInset: 0,
+        },
+        {
+          onConfirm: () => assert.fail('unexpected onConfirm'),
+          onCancel: () => {
+            canceled += 1;
+          },
+          onDismissed: () => {
+            dismissed += 1;
+          },
+        },
+      );
+      const tree = h.sim.getTree(treeId);
+      await pumpLayout(tree, h.flushMicrotasks);
+
+      const target = findByA11y(tree, targetA11y);
+      (target.attrs.onTap as () => void)();
+      await h.flushMicrotasks();
+      assert.equal(canceled, 1);
+
+      await pumpAnimations(tree, h.flushMicrotasks);
+      assert.equal(dismissed, 1);
+      h.manager.destroy(treeId);
+    }
+
+    // 4. Host-driven close (open: true -> false) + initial open: false
+    {
+      let dismissed = 0;
+      const baseModalVm = {
+        open: true,
+        title: '系统弹窗',
+        content: '外部取消测试',
+        showCancel: true,
+        confirmText: '确定',
+        cancelText: '取消',
+        editable: false,
+        placeholderText: '',
+        defaultText: '',
+        topInset: 0,
+        bottomInset: 0,
+      };
+      h.manager.create('modal-host-close', componentPath, baseModalVm, {
+        onConfirm: () => assert.fail('unexpected onConfirm'),
+        onCancel: () => assert.fail('unexpected onCancel'),
+        onDismissed: () => {
+          dismissed += 1;
+        },
+      });
+      const tree = h.sim.getTree('modal-host-close');
+      await pumpLayout(tree, h.flushMicrotasks);
+
+      h.manager.render('modal-host-close', { ...baseModalVm, open: false });
+      await h.flushMicrotasks();
+      const card = findByA11y(tree, 'app-modal-card');
+      assert.equal(card.attrs.opacity, 0);
+      assert.equal(dismissed, 0);
+
+      await pumpAnimations(tree, h.flushMicrotasks);
+      assert.equal(dismissed, 1);
+      h.manager.destroy('modal-host-close');
+
+      let preDismissed = 0;
+      h.manager.create(
+        'modal-pre-closed',
+        componentPath,
+        { ...baseModalVm, open: false },
+        {
+          onConfirm: () => assert.fail('unexpected onConfirm'),
+          onCancel: () => assert.fail('unexpected onCancel'),
+          onDismissed: () => {
+            preDismissed += 1;
+          },
+        },
+      );
+      assert.equal(preDismissed, 1);
+      h.manager.destroy('modal-pre-closed');
     }
   }
 });

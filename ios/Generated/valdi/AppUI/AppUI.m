@@ -93,6 +93,24 @@
 
 
 //
+// VRAppModalOverlayContext.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "AppUI.h"
+
+
+//
+// VRAppModalOverlayViewModel.m
+//
+
+#import <ValdiRuntime/SCValdiJSConversionUtils.h>
+
+#import "AppUI.h"
+
+
+//
 // VRAppSheetOverlayContext.m
 //
 

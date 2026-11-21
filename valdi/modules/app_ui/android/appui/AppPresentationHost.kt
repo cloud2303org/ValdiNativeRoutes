@@ -87,7 +87,7 @@ private class ValdiSheetSession(
 ) {
     var rootView: ValdiRootView? = null
     var lastOpen: Boolean? = null
-    var lastBottomInsetDp: Double = Double.NaN
+    var bottomInsetDp: Double = 0.0
 
     fun destroy() {
         val view = rootView
@@ -192,14 +192,14 @@ private fun ValdiSheetDialog(presentation: AppPresentation) {
         }
 
         val density = LocalDensity.current
-        val bottomInsetDp = (WindowInsets.navigationBars.getBottom(density) / density.density).toDouble()
+        val initialBottomInsetDp = (WindowInsets.navigationBars.getBottom(density) / density.density).toDouble()
         val open = presentation.open
 
         AndroidView(
             factory = { ctx ->
-                val initialVm = buildSheetOverlayViewModel(presentation.options, open, bottomInsetDp)
+                session.bottomInsetDp = initialBottomInsetDp
                 session.lastOpen = open
-                session.lastBottomInsetDp = bottomInsetDp
+                val initialVm = buildSheetOverlayViewModel(presentation.options, open, session.bottomInsetDp)
                 ValdiRootView(ctx).apply {
                     defaultFocusHighlightEnabled = false
                     setRetainsLayoutSpecsOnInvalidateLayout(true)
@@ -217,11 +217,10 @@ private fun ValdiSheetDialog(presentation: AppPresentation) {
             },
             modifier = Modifier.fillMaxSize(),
             update = { view ->
-                if (session.lastOpen != open || session.lastBottomInsetDp != bottomInsetDp) {
+                if (session.lastOpen != open) {
                     session.lastOpen = open
-                    session.lastBottomInsetDp = bottomInsetDp
                     view.setViewModelUntyped(
-                        buildSheetOverlayViewModel(presentation.options, open, bottomInsetDp),
+                        buildSheetOverlayViewModel(presentation.options, open, session.bottomInsetDp),
                     )
                 }
             },

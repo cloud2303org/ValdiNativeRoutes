@@ -157,8 +157,8 @@ export function HomePage(props: SolidPageProps<PageViewModel, PageContext>) {
   const openNativeDialog = async () => {
     try {
       const res = await ui.showModal({
-        title: 'Native Dialog',
-        content: 'Window-level UIKit/Compose modal with keyboard avoidance.',
+        title: 'Solid 2.0 Modal',
+        content: 'Window-level Solid AppModalOverlay with native keyboard avoidance.',
         editable: true,
         placeholderText: 'Type something...',
       });

@@ -1,13 +1,23 @@
 import UIKit
 import ValdiRuntime
 
+private let appModalOverlayComponentPath = "AppModalOverlay@app_ui/src/modal_presenter/AppModalOverlay"
 private let appSheetOverlayComponentPath = "AppSheetOverlay@app_ui/src/sheet_presenter/AppSheetOverlay"
 
-/// Presenters for `AppUI`: action sheets, column pickers, and date/time pickers render through the single Valdi
-/// bottom-sheet pipeline (`AppSheetOverlay`), while `previewImage` uses the fullscreen `ImagePreview` overlay.
+/// Presenters for `AppUI`: modal dialogs (`AppModalOverlay`) and sheets/pickers (`AppSheetOverlay`) render through the
+/// single Valdi pipeline, while `previewImage` uses the fullscreen `ImagePreview` overlay.
 /// `complete` runs once, after the close animation; the returned closure cancels (AppUI's queue owns the page).
 @MainActor
 enum AppPresenters {
+    static func presentModal(_ options: ModalOptions, in window: UIWindow,
+                             runtime: SCValdiRuntime,
+                             complete: @escaping (ModalResult) -> Void) throws -> () -> Void {
+        let session = try ValdiModalSession(options: options, window: window, runtime: runtime, complete: complete)
+        return { [weak session] in
+            session?.cancelFromHost()
+        }
+    }
+
     static func present(_ options: PresentationOptions, in window: UIWindow,
                         imageLoader: NativeImageLoading.Loader?,
                         complete: @escaping (PresentationResult) -> Void) throws -> () -> Void {
@@ -65,14 +75,14 @@ private final class ValdiSheetSession: UIView {
     private var isOpen = true
     private var completed = false
     private var outcome: PresentationResult
-    private var lastBottomInset: Double
+    private let bottomInset: Double
 
     init(options: PresentationOptions, window: UIWindow, runtime: SCValdiRuntime,
          complete: @escaping (PresentationResult) -> Void) throws {
         self.options = options
         self.complete = complete
         self.outcome = options.cancelled()
-        self.lastBottomInset = Double(window.safeAreaInsets.bottom)
+        self.bottomInset = Double(window.safeAreaInsets.bottom)
         super.init(frame: window.bounds)
         autoresizingMask = [.flexibleWidth, .flexibleHeight]
         backgroundColor = .clear
@@ -103,7 +113,7 @@ private final class ValdiSheetSession: UIView {
         // Valdi contexts hold componentContext weakly; retain strongly for the presentation lifetime.
         self.context = overlayContext
 
-        let initialVM = Self.makeViewModel(options: options, open: true, bottomInset: lastBottomInset)
+        let initialVM = Self.makeViewModel(options: options, open: true, bottomInset: bottomInset)
         guard let loaded = try runtime.loadView(
             withComponentPath: appSheetOverlayComponentPath,
             owner: nil,
@@ -128,16 +138,6 @@ private final class ValdiSheetSession: UIView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
-
-    override func safeAreaInsetsDidChange() {
-        super.safeAreaInsetsDidChange()
-        guard !completed else { return }
-        let nextBottom = Double(safeAreaInsets.bottom)
-        if abs(nextBottom - lastBottomInset) > 0.25 {
-            lastBottomInset = nextBottom
-            pushViewModel()
-        }
-    }
 
     private func handleSelect(_ index: Int) {
         guard isOpen, case let .actionSheet(sheetOptions) = options else { return }
@@ -187,7 +187,7 @@ private final class ValdiSheetSession: UIView {
 
     private func pushViewModel() {
         guard let valdiContext = rootView?.valdiContext, !valdiContext.destroyed else { return }
-        valdiContext.viewModel = Self.makeViewModel(options: options, open: isOpen, bottomInset: lastBottomInset)
+        valdiContext.viewModel = Self.makeViewModel(options: options, open: isOpen, bottomInset: bottomInset)
     }
 
     private static func makeViewModel(options: PresentationOptions, open: Bool,
@@ -241,6 +241,162 @@ private final class ValdiSheetSession: UIView {
         case .imagePreview:
             preconditionFailure("imagePreview uses ImagePreview presenter")
         }
+    }
+}
+
+@MainActor
+private final class ValdiModalSession: UIView {
+    private let options: ModalOptions
+    private let complete: (ModalResult) -> Void
+    private var context: VRAppModalOverlayContext?
+    private var rootView: SCValdiRootView?
+    private var keyboardSubscription: AppUIKeyboardSubscription?
+    private var isOpen = true
+    private var completed = false
+    private var outcome: ModalResult = .cancelled
+    private let topInset: Double
+    private let bottomInset: Double
+
+    init(options: ModalOptions, window: UIWindow, runtime: SCValdiRuntime,
+         complete: @escaping (ModalResult) -> Void) throws {
+        self.options = options
+        self.complete = complete
+        self.topInset = Double(window.safeAreaInsets.top)
+        self.bottomInset = Double(window.safeAreaInsets.bottom)
+        super.init(frame: window.bounds)
+        autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        backgroundColor = .clear
+        isOpaque = false
+        accessibilityViewIsModal = true
+
+        let overlayContext = VRAppModalOverlayContext(
+            onConfirm: { [weak self] content in
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { self?.handleConfirm(content: content) }
+                }
+            },
+            onCancel: { [weak self] in
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { self?.handleCancel() }
+                }
+            },
+            onDismissed: { [weak self] in
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { self?.handleDismissed() }
+                }
+            }
+        )
+        // Valdi contexts hold componentContext weakly; retain strongly for the presentation lifetime.
+        self.context = overlayContext
+
+        let initialVM = Self.makeViewModel(
+            options: options,
+            open: true,
+            topInset: topInset,
+            bottomInset: bottomInset
+        )
+        guard let loaded = try runtime.loadView(
+            withComponentPath: appModalOverlayComponentPath,
+            owner: nil,
+            viewModel: initialVM,
+            componentContext: overlayContext
+        ) as? SCValdiRootView else {
+            self.context = nil
+            throw AppUIFailure(message: "E_VALDI_MODAL_VIEW:Failed to load AppModalOverlay")
+        }
+
+        loaded.frame = bounds
+        loaded.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        loaded.backgroundColor = .clear
+        loaded.isOpaque = false
+        loaded.valdiContext?.enableAccessibility = true
+        self.rootView = loaded
+
+        addSubview(loaded)
+        window.addSubview(self)
+        AppUIKeyboardObserver.shared.prepare()
+        keyboardSubscription = AppUIKeyboardObserver.shared.observe { [weak self] _ in
+            self?.keyboardDidMove()
+        }
+        keyboardDidMove()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func keyboardDidMove() {
+        setNeedsLayout()
+        layoutIfNeeded()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let keyboard = AppUIKeyboardObserver.shared.height
+        rootView?.frame = CGRect(x: 0, y: 0, width: bounds.width, height: max(0, bounds.height - keyboard))
+    }
+
+    override func accessibilityPerformEscape() -> Bool {
+        handleCancel()
+        return true
+    }
+
+    private func handleConfirm(content: String) {
+        guard isOpen else { return }
+        outcome = ModalResult(confirm: true, cancel: false, content: options.editable ? content : "")
+        isOpen = false
+        endEditing(true)
+        pushViewModel()
+    }
+
+    private func handleCancel() {
+        guard isOpen else { return }
+        outcome = .cancelled
+        isOpen = false
+        endEditing(true)
+        pushViewModel()
+    }
+
+    func cancelFromHost() {
+        handleCancel()
+    }
+
+    private func handleDismissed() {
+        guard !completed else { return }
+        completed = true
+        keyboardSubscription = nil
+        let root = rootView
+        rootView = nil
+        root?.valdiContext?.destroy()
+        context = nil
+        removeFromSuperview()
+        complete(outcome)
+    }
+
+    private func pushViewModel() {
+        guard let valdiContext = rootView?.valdiContext, !valdiContext.destroyed else { return }
+        valdiContext.viewModel = Self.makeViewModel(
+            options: options,
+            open: isOpen,
+            topInset: topInset,
+            bottomInset: bottomInset
+        )
+    }
+
+    private static func makeViewModel(options: ModalOptions, open: Bool,
+                                      topInset: Double, bottomInset: Double) -> VRAppModalOverlayViewModel {
+        VRAppModalOverlayViewModel(
+            open: open,
+            title: options.title,
+            content: options.content,
+            showCancel: options.showCancel,
+            confirmText: options.confirmText,
+            cancelText: options.cancelText,
+            editable: options.editable,
+            placeholderText: options.placeholderText,
+            defaultText: options.defaultText,
+            topInset: topInset,
+            bottomInset: bottomInset
+        )
     }
 }
 

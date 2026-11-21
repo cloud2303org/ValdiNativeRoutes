@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@solidjs/universal": "2.0.3",
+    "dayjs": "1.11.23",
     "solid-js": "2.0.3"
   }
 }

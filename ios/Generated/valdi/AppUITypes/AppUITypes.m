@@ -143,6 +143,90 @@ NSArray<NSString *> * _Nonnull VRToastRequestIconGetAllCases() {
 
 
 //
+// VRAppModalOverlayContext.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "AppUITypes.h"
+
+@implementation VRAppModalOverlayContext
+
+@dynamic onConfirm;
+@dynamic onCancel;
+@dynamic onDismissed;
+
+- (instancetype _Nonnull)initWithOnConfirm:(VRAppModalOverlayContextOnConfirmBlock _Nonnull)onConfirm onCancel:(VRAppModalOverlayContextOnCancelBlock _Nonnull)onCancel onDismissed:(VRAppModalOverlayContextOnDismissedBlock _Nonnull)onDismissed
+{
+    return [super initWithFieldValues:nil, onConfirm, onCancel, onDismissed];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "onConfirm", .selName = nil, .type = "f(s)"},
+        {.name = "onCancel", .selName = nil, .type = "f()"},
+        {.name = "onDismissed", .selName = nil, .type = "f()"},
+        {.name = nil},
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
+// VRAppModalOverlayViewModel.m
+//
+
+#import <ValdiRuntime/SCValdiBuiltinTrampolines.h>
+#import <ValdiRuntime/SCValdiMarshallableObjectDescriptor.h>
+
+#import "AppUITypes.h"
+
+@implementation VRAppModalOverlayViewModel
+
+@dynamic open;
+@dynamic title;
+@dynamic content;
+@dynamic showCancel;
+@dynamic confirmText;
+@dynamic cancelText;
+@dynamic editable;
+@dynamic placeholderText;
+@dynamic defaultText;
+@dynamic topInset;
+@dynamic bottomInset;
+
+- (instancetype _Nonnull)initWithOpen:(BOOL)open title:(NSString * _Nonnull)title content:(NSString * _Nonnull)content showCancel:(BOOL)showCancel confirmText:(NSString * _Nonnull)confirmText cancelText:(NSString * _Nonnull)cancelText editable:(BOOL)editable placeholderText:(NSString * _Nonnull)placeholderText defaultText:(NSString * _Nonnull)defaultText topInset:(double)topInset bottomInset:(double)bottomInset
+{
+    return [super initWithFieldValues:nil, open, title, content, showCancel, confirmText, cancelText, editable, placeholderText, defaultText, topInset, bottomInset];
+}
+
++ (SCValdiMarshallableObjectDescriptor)valdiMarshallableObjectDescriptor
+{
+    static const SCValdiMarshallableObjectFieldDescriptor kFields[] = {
+        {.name = "open", .selName = nil, .type = "b"},
+        {.name = "title", .selName = nil, .type = "s"},
+        {.name = "content", .selName = nil, .type = "s"},
+        {.name = "showCancel", .selName = nil, .type = "b"},
+        {.name = "confirmText", .selName = nil, .type = "s"},
+        {.name = "cancelText", .selName = nil, .type = "s"},
+        {.name = "editable", .selName = nil, .type = "b"},
+        {.name = "placeholderText", .selName = nil, .type = "s"},
+        {.name = "defaultText", .selName = nil, .type = "s"},
+        {.name = "topInset", .selName = nil, .type = "d"},
+        {.name = "bottomInset", .selName = nil, .type = "d"},
+        {.name = nil},
+    };
+    return SCValdiMarshallableObjectDescriptorMake(kFields, nil, nil, SCValdiMarshallableObjectTypeClass);
+}
+
+@end
+
+
+//
 // VRAppSheetOverlayContext.m
 //
 

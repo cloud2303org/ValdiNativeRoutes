@@ -356,8 +356,6 @@ final class AppUI {
     private var pending: [Request] = []
     private var active: Request?
     private var activePageId: String?
-    private var dialog: AppDialogView?
-    private var dialogResult: ModalResult?
     private var topPageId: String?
     private let feedback = FeedbackHost()
 
@@ -479,11 +477,23 @@ final class AppUI {
         let requestId = request.id
         switch request.kind {
         case let .modal(options, _):
-            dialogResult = nil
-            let dialog = AppDialogView(options: options) { [weak self] result in self?.closeDialog(requestId, result) }
-            self.dialog = dialog
-            request.cancel = { [weak self] in self?.closeDialog(requestId, .cancelled) }
-            dialog.present(in: window)
+            guard let runtime = Self.runtime else {
+                active = nil
+                activePageId = nil
+                request.fail(AppUIFailure(message: "E_NO_VALDI_RUNTIME:Configure AppUI.runtime before presenting modals"))
+                return schedule()
+            }
+            do {
+                let cancel = try AppPresenters.presentModal(options, in: window, runtime: runtime) { [weak self] result in
+                    self?.finish(requestId, .modal(result))
+                }
+                if active === request { request.cancel = cancel }
+            } catch {
+                active = nil
+                activePageId = nil
+                request.fail(error)
+                schedule()
+            }
         case let .presentation(options, _):
             do {
                 let cancel = try AppPresenters.present(options, in: window, imageLoader: Self.imageLoader) { [weak self] result in
@@ -506,19 +516,10 @@ final class AppUI {
         request.cancel?()
     }
 
-    /// Animates the dialog out, then settles the request.
-    private func closeDialog(_ requestId: String, _ result: ModalResult) {
-        guard active?.id == requestId, dialogResult == nil, let dialog else { return }
-        dialogResult = result
-        dialog.dismiss { [weak self] in self?.finish(requestId, .modal(result)) }
-    }
-
     private func finish(_ requestId: String, _ reply: Reply) {
         guard let request = active, request.id == requestId else { return }
         active = nil
         activePageId = nil
-        dialog = nil
-        dialogResult = nil
         request.cancel = nil
         request.settle(reply)
         schedule()

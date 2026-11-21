@@ -87,7 +87,7 @@ private class ValdiSheetSession(
 ) {
     var rootView: ValdiRootView? = null
     var lastOpen: Boolean? = null
-    var bottomInsetDp: Double = 0.0
+    var lastBottomInsetDp: Double = Double.NaN
 
     fun destroy() {
         val view = rootView
@@ -187,19 +187,22 @@ private fun ValdiSheetDialog(presentation: AppPresentation) {
 
         val window = (dialogView.parent as? DialogWindowProvider)?.window
         SideEffect {
-            window?.setDimAmount(0f)
-            window?.setWindowAnimations(0)
+            window?.let {
+                it.setDimAmount(0f)
+                it.setWindowAnimations(0)
+                syncOverlayWindowSystemBars(it, it.decorView, AppUI.hostWindow)
+            }
         }
 
         val density = LocalDensity.current
-        val initialBottomInsetDp = (WindowInsets.navigationBars.getBottom(density) / density.density).toDouble()
+        val bottomInsetDp = (WindowInsets.navigationBars.getBottom(density) / density.density).toDouble()
         val open = presentation.open
 
         AndroidView(
             factory = { ctx ->
-                session.bottomInsetDp = initialBottomInsetDp
+                val initialVm = buildSheetOverlayViewModel(presentation.options, open, bottomInsetDp)
                 session.lastOpen = open
-                val initialVm = buildSheetOverlayViewModel(presentation.options, open, session.bottomInsetDp)
+                session.lastBottomInsetDp = bottomInsetDp
                 ValdiRootView(ctx).apply {
                     defaultFocusHighlightEnabled = false
                     setRetainsLayoutSpecsOnInvalidateLayout(true)
@@ -217,10 +220,11 @@ private fun ValdiSheetDialog(presentation: AppPresentation) {
             },
             modifier = Modifier.fillMaxSize(),
             update = { view ->
-                if (session.lastOpen != open) {
+                if (session.lastOpen != open || session.lastBottomInsetDp != bottomInsetDp) {
                     session.lastOpen = open
+                    session.lastBottomInsetDp = bottomInsetDp
                     view.setViewModelUntyped(
-                        buildSheetOverlayViewModel(presentation.options, open, session.bottomInsetDp),
+                        buildSheetOverlayViewModel(presentation.options, open, bottomInsetDp),
                     )
                 }
             },

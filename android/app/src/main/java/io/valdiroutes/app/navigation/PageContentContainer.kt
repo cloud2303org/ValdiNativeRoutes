@@ -14,14 +14,29 @@ import kotlin.math.roundToInt
 internal class PageContentContainer(context: Context) : FrameLayout(context) {
     private val normalFocusability = descendantFocusability
     private var imeBottomPx: Int = 0
+    private var lastHeight: Int = 0
     private var pendingRevealFocusedInput: Boolean = false
     private var lastAdjustedFocus: View? = null
+    private var trackedScrollView: ValdiScrollView? = null
     private val focusedLocation = IntArray(2)
     private val scrollLocation = IntArray(2)
+    private val scrollLayoutChangeListener = View.OnLayoutChangeListener { view, _, top, _, bottom, _, oldTop, _, oldBottom ->
+        val sv = view as? ValdiScrollView ?: return@OnLayoutChangeListener
+        val oldH = oldBottom - oldTop
+        val newH = bottom - top
+        if (newH > oldH) {
+            clampScrollViewOffset(sv)
+        } else if (newH < oldH && imeBottomPx > 0 && findFocus() != null) {
+            ensureFocusedInputVisible()
+        }
+    }
     private val focusChangeListener = ViewTreeObserver.OnGlobalFocusChangeListener { _, newFocus ->
-        if (newFocus != null && imeBottomPx > 0 && isDescendant(newFocus) && newFocus !== lastAdjustedFocus) {
-            pendingRevealFocusedInput = true
-            post { ensureFocusedInputVisible() }
+        if (newFocus != null && isDescendant(newFocus)) {
+            trackScrollView(findNearestVerticalScrollView(newFocus))
+            if (imeBottomPx > 0 && newFocus !== lastAdjustedFocus) {
+                pendingRevealFocusedInput = true
+                post { ensureFocusedInputVisible() }
+            }
         }
     }
 
@@ -38,19 +53,23 @@ internal class PageContentContainer(context: Context) : FrameLayout(context) {
     fun setKeyboardHeightPx(nextImeBottomPx: Int) {
         if (nextImeBottomPx == imeBottomPx) return
         val grew = nextImeBottomPx > imeBottomPx
+        val shrank = nextImeBottomPx < imeBottomPx
         imeBottomPx = nextImeBottomPx
         if (imeBottomPx <= 0) {
             pendingRevealFocusedInput = false
             lastAdjustedFocus = null
-            return
         }
         if (grew) {
+            findFocus()?.let { trackScrollView(findNearestVerticalScrollView(it)) }
             pendingRevealFocusedInput = true
             post {
                 if (pendingRevealFocusedInput) {
                     ensureFocusedInputVisible()
                 }
             }
+        } else if (shrank) {
+            clampAllVerticalScrollViews(this)
+            post { clampAllVerticalScrollViews(this) }
         }
     }
 
@@ -61,13 +80,48 @@ internal class PageContentContainer(context: Context) : FrameLayout(context) {
 
     override fun onDetachedFromWindow() {
         viewTreeObserver.removeOnGlobalFocusChangeListener(focusChangeListener)
+        trackScrollView(null)
         super.onDetachedFromWindow()
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
-        if (pendingRevealFocusedInput && imeBottomPx > 0) {
+        val newHeight = bottom - top
+        val grewHeight = lastHeight > 0 && newHeight > lastHeight
+        lastHeight = newHeight
+        if (grewHeight) {
+            clampAllVerticalScrollViews(this)
+            if (imeBottomPx <= 0) {
+                post { clampAllVerticalScrollViews(this) }
+            }
+        } else if (pendingRevealFocusedInput && imeBottomPx > 0) {
             ensureFocusedInputVisible()
+        }
+    }
+
+    private fun trackScrollView(sv: ValdiScrollView?) {
+        if (trackedScrollView === sv) return
+        trackedScrollView?.removeOnLayoutChangeListener(scrollLayoutChangeListener)
+        trackedScrollView = sv
+        sv?.addOnLayoutChangeListener(scrollLayoutChangeListener)
+    }
+
+    private fun clampScrollViewOffset(sv: ValdiScrollView) {
+        if (sv.height <= 0 || sv.horizontalScroll) return
+        val maxOffset = (sv.contentHeight - sv.height).coerceAtLeast(0)
+        if (sv.contentOffsetY > maxOffset || sv.unclampedContentOffsetY > maxOffset) {
+            sv.setContentOffset(sv.contentOffsetX, maxOffset, 0f, 0f, false)
+        }
+    }
+
+    private fun clampAllVerticalScrollViews(view: View) {
+        if (view is ValdiScrollView && !view.horizontalScroll) {
+            clampScrollViewOffset(view)
+        }
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                clampAllVerticalScrollViews(view.getChildAt(i))
+            }
         }
     }
 
@@ -85,6 +139,7 @@ internal class PageContentContainer(context: Context) : FrameLayout(context) {
         if (imeBottomPx <= 0) return
         val focused = findFocus() ?: return
         val sv = findNearestVerticalScrollView(focused) ?: return
+        trackScrollView(sv)
         if (sv.height <= 0 || focused.height <= 0) return
 
         focused.getLocationInWindow(focusedLocation)

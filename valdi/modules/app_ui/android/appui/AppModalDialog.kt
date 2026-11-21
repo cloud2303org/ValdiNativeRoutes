@@ -53,6 +53,8 @@ private class ValdiModalSession(
     var rootView: ValdiRootView? = null
     var cardView: View? = null
     var lastOpen: Boolean? = null
+    var lastTopInsetDp: Double = Double.NaN
+    var lastBottomInsetDp: Double = Double.NaN
     var topInsetDp: Double = 0.0
     var bottomInsetDp: Double = 0.0
     var imeBottomPx: Int = 0
@@ -75,15 +77,19 @@ private class ValdiModalSession(
         if (root.height <= 0 || card.height <= 0) return
 
         val density = root.resources.displayMetrics.density
-        val marginPx = 24f * density
-        val minTop = safeTopPx + marginPx
-        val visibleBottom = root.height - maxOf(navBottomPx, imeBottomPx) - marginPx
+        val topMarginPx = 24f * density
+        val keyboardClearancePx = 16f * density
+        val minTop = safeTopPx + topMarginPx
+        val visibleBottom = root.height - maxOf(navBottomPx + topMarginPx, imeBottomPx + keyboardClearancePx)
         val desiredLift = if (imeBottomPx > 0 && visibleBottom > minTop) {
             val restingTop = offsetTopInAncestor(card, root)
-            val targetTop = ((minTop + visibleBottom - card.height) * 0.5f)
-                .coerceAtLeast(minTop)
-                .coerceAtMost(restingTop)
-            targetTop - restingTop
+            val restingBottom = restingTop + card.height
+            if (restingBottom > visibleBottom) {
+                val targetTop = (visibleBottom - card.height).coerceAtLeast(minTop)
+                (targetTop - restingTop).coerceAtMost(0f)
+            } else {
+                0f
+            }
         } else {
             0f
         }
@@ -225,7 +231,7 @@ private fun ValdiModalDialog(modal: ModalPresentation) {
                 win.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
                 @Suppress("DEPRECATION")
                 win.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-                WindowCompat.setDecorFitsSystemWindows(win, false)
+                syncOverlayWindowSystemBars(win, win.decorView, AppUI.hostWindow)
             }
         }
 
@@ -234,14 +240,16 @@ private fun ValdiModalDialog(modal: ModalPresentation) {
         val safeTopPx = safeTopInsets.getTop(density)
         val navBottomPx = WindowInsets.navigationBars.getBottom(density)
         val imeBottomPx = WindowInsets.ime.getBottom(density)
-        val initialTopInsetDp = (safeTopPx / density.density).toDouble()
-        val initialBottomInsetDp = (navBottomPx / density.density).toDouble()
+        val topInsetDp = (safeTopPx / density.density).toDouble()
+        val bottomInsetDp = (navBottomPx / density.density).toDouble()
         val open = modal.open
 
         AndroidView(
             factory = { ctx ->
-                session.topInsetDp = initialTopInsetDp
-                session.bottomInsetDp = initialBottomInsetDp
+                session.topInsetDp = topInsetDp
+                session.bottomInsetDp = bottomInsetDp
+                session.lastTopInsetDp = topInsetDp
+                session.lastBottomInsetDp = bottomInsetDp
                 session.safeTopPx = safeTopPx
                 session.navBottomPx = navBottomPx
                 session.imeBottomPx = imeBottomPx
@@ -272,15 +280,23 @@ private fun ValdiModalDialog(modal: ModalPresentation) {
                 session.safeTopPx = safeTopPx
                 session.navBottomPx = navBottomPx
                 session.imeBottomPx = imeBottomPx
+                session.topInsetDp = topInsetDp
+                session.bottomInsetDp = bottomInsetDp
                 session.applyCardKeyboardLift()
-                if (session.lastOpen != open) {
+                if (
+                    session.lastOpen != open ||
+                    session.lastTopInsetDp != topInsetDp ||
+                    session.lastBottomInsetDp != bottomInsetDp
+                ) {
                     session.lastOpen = open
+                    session.lastTopInsetDp = topInsetDp
+                    session.lastBottomInsetDp = bottomInsetDp
                     view.setViewModelUntyped(
                         buildModalOverlayViewModel(
                             modal.options,
                             open = open,
-                            topInsetDp = session.topInsetDp,
-                            bottomInsetDp = session.bottomInsetDp,
+                            topInsetDp = topInsetDp,
+                            bottomInsetDp = bottomInsetDp,
                         ),
                     )
                 }

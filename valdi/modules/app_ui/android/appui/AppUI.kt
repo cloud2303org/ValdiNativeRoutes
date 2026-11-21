@@ -1,11 +1,17 @@
 package io.valdiroutes.app_ui.appui
 
+import android.graphics.Color
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.view.View
+import android.view.Window
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.view.WindowCompat
 import io.valdiroutes.app_ui.ui.AttachmentAsset
 import io.valdiroutes.app_ui.ui.AttachmentPicker
 import io.valdiroutes.app_ui.ui.CodeScanner
@@ -191,6 +197,10 @@ object AppUI {
     /** Shared Valdi runtime configured at startup so sheet presentations render through Valdi TSX. */
     var runtime: com.snap.valdi.ValdiRuntime? = null
 
+    /** Foreground Activity window used by overlay Dialogs to match system bar contrast and appearance. */
+    internal val hostWindow: Window?
+        get() = activity?.window
+
     /** The modal to draw, if any. */
     var modal by mutableStateOf<ModalPresentation?>(null)
         private set
@@ -364,5 +374,38 @@ object AppUI {
         presentation = null
         request.done(Result.success(result))
         schedule()
+    }
+}
+
+/**
+ * Keeps overlay Dialog windows edge-to-edge with transparent system bars, disabled Q+ contrast
+ * scrims, and the same light/dark bar icon appearance as [hostWindow] so opening a sheet or dialog
+ * never flashes or recolors the status/navigation bars.
+ */
+internal fun syncOverlayWindowSystemBars(dialogWindow: Window, dialogView: View, hostWindow: Window?) {
+    WindowCompat.setDecorFitsSystemWindows(dialogWindow, false)
+    dialogWindow.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+    dialogWindow.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+    @Suppress("DEPRECATION")
+    dialogWindow.statusBarColor = Color.TRANSPARENT
+    @Suppress("DEPRECATION")
+    dialogWindow.navigationBarColor = Color.TRANSPARENT
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        val attrs = dialogWindow.attributes
+        if (attrs.layoutInDisplayCutoutMode != WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES) {
+            attrs.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            dialogWindow.attributes = attrs
+        }
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        dialogWindow.isStatusBarContrastEnforced = false
+        dialogWindow.isNavigationBarContrastEnforced = false
+    }
+    if (hostWindow != null) {
+        val hostController = WindowCompat.getInsetsController(hostWindow, hostWindow.decorView)
+        WindowCompat.getInsetsController(dialogWindow, dialogView).apply {
+            isAppearanceLightStatusBars = hostController.isAppearanceLightStatusBars
+            isAppearanceLightNavigationBars = hostController.isAppearanceLightNavigationBars
+        }
     }
 }

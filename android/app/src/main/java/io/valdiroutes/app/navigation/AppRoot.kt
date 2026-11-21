@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCompositionContext
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -51,7 +52,9 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
@@ -61,9 +64,43 @@ import dev.chrisbanes.haze.hazeSource
 import io.valdiroutes.app_ui.appui.AppModalHost
 import io.valdiroutes.app_ui.appui.AppPresentationHost
 import io.valdiroutes.app_ui.appui.AppUI
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun AppRoot(navigator: Navigator, started: Boolean) {
+    val hostView = LocalView.current
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+    val bars = WindowInsets.systemBars.union(WindowInsets.displayCutout)
+    val topPx = bars.getTop(density)
+    val bottomPx = bars.getBottom(density)
+    val leftPx = bars.getLeft(density, layoutDirection)
+    val rightPx = bars.getRight(density, layoutDirection)
+    val composeHasInsets = topPx > 0 || bottomPx > 0 || leftPx > 0 || rightPx > 0
+    var insetsReady by remember(hostView) {
+        mutableStateOf(composeHasInsets)
+    }
+    if (!insetsReady && composeHasInsets) {
+        insetsReady = true
+    }
+    LaunchedEffect(hostView, insetsReady) {
+        if (insetsReady) return@LaunchedEffect
+        ViewCompat.requestApplyInsets(hostView)
+        // Allow Compose's WindowInsetsHolder to process the dispatched insets; cap wait for immersive 0-inset devices.
+        withFrameNanos {}
+        val currentRoot = ViewCompat.getRootWindowInsets(hostView)
+            ?.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+        val currentRootZero = currentRoot != null &&
+            currentRoot.top == 0 && currentRoot.bottom == 0 && currentRoot.left == 0 && currentRoot.right == 0
+        if (currentRootZero) {
+            insetsReady = true
+        } else {
+            delay(150)
+            insetsReady = true
+        }
+    }
+    if (!insetsReady) return
+
     // Each page carries its own transition (NativeRouteAnimations); 'default' falls back to Nav3's. As in
     // ExpoNativeRoutes, every NavEntry is remembered: one rebuilt when the stack pops retargets the transition, and the
     // outgoing page's content was released and recreated empty, so it vanished instead of sliding out.

@@ -1,0 +1,5 @@
+{
+  "language_title": { "defaultMessage": "语言" },
+  "language_greeting": { "defaultMessage": "你好，{name}" },
+  "language_system": { "defaultMessage": "跟随系统" }
+}

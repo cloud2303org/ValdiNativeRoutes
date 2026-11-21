@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/airbnb/lottie-web",
+  "commit": "bede03d25d232826e0c9dca1733d542d8a7754fb",
+  "path": "demo/gatin/data.json",
+  "license": "MIT",
+  "sha256": "48724c6f89fc278bfc182e8b70b7f77fb78e0c19819d6ec6aa79cbde432d1f79",
+  "width": 800,
+  "height": 800,
+  "frameRate": 25,
+  "durationSeconds": 3.2
+}

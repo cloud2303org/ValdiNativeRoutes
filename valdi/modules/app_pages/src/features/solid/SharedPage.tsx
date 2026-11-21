@@ -2,8 +2,8 @@ import type { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { createSignal, onCleanup } from 'solid-js';
 import type { SolidPageProps } from 'solid_native/src/bridge';
 import { systemBoldFont, systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
-import { router } from '../router';
-import { accentColor, cycleAccent, globalCount, setGlobalCount } from '../sharedState';
+import { router } from '../../router';
+import { accentColor, cycleAccent, globalCount, setGlobalCount } from '../../sharedState';
 
 let nextSharedPageInstance = 0;
 const [disposedInstances, setDisposedInstances] = createSignal(0);

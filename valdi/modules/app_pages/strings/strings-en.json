@@ -1,0 +1,5 @@
+{
+  "language_title": { "defaultMessage": "Language" },
+  "language_greeting": { "defaultMessage": "Hello, {name}" },
+  "language_system": { "defaultMessage": "Follow system" }
+}

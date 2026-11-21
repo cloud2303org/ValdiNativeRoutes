@@ -11,6 +11,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -58,6 +61,8 @@ class MainActivity : ComponentActivity() {
             // This measures only the setContent call, not composition, root inflation, or content displayed.
             StartupTrace.section("activity.setContent.call") {
                 if (!startupFailed) setContent {
+                    WindowInsets.systemBars
+                    WindowInsets.displayCutout
                     navigator?.let {
                         AppRoot(it, started)
                         SideEffect { initialContentSplash?.onContentComposed() }

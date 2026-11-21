@@ -4,3 +4,15 @@
 #import <AppUI/AppUI.h>
 #import <AppUITypes/AppUITypes.h>
 #import "../../../valdi/modules/app_ui/ios/wheels/WheelObjectBinding.h"
+#import <AppVideo/AppVideo.h>
+#import <AppVideoTypes/AppVideoTypes.h>
+#import "../../../valdi/modules/app_video/ios/VRVideoService.h"
+#import "../../../valdi/modules/app_video/ios/VRVideoSource.h"
+#import <MMKVStorage/MMKVStorage.h>
+#import <MMKVStorageTypes/MMKVStorageTypes.h>
+#import <Nfc/Nfc.h>
+#import <NfcTypes/NfcTypes.h>
+#import <Permissions/Permissions.h>
+#import <PermissionsTypes/PermissionsTypes.h>
+#import <Wifi/Wifi.h>
+#import <WifiTypes/WifiTypes.h>

@@ -6,9 +6,11 @@ valdi_module(
         "src/**/*.ts",
         "src/**/*.tsx",
     ]),
+    res = glob(["res/**/*.png"]),
     visibility = ["//visibility:public"],
     deps = [
         "//modules/app_foundation:app_foundation_compiled",
+        "//modules/app_ui:app_ui_compiled",
         "//modules/solid_native:solid_native_compiled",
         "//modules/solid_runtime:solid_runtime_compiled",
         "@valdi//src/valdi_modules/src/valdi/native_web",

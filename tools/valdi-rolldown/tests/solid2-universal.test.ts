@@ -828,3 +828,70 @@ function runSuiteForMode(mode: TransportMode) {
 }
 
 runSuiteForMode('compat');
+runSuiteForMode('native-solid');
+
+test('[native-solid] 8. Default transport uses native-solid raw tags, INSERT_ELEMENT_BEFORE (20), and DETACH_ELEMENT (19) re-attach', () => {
+  const h = createValdiTestHarness('native-solid');
+  const defaultMgr = h.bridge.createRootComponentsManager();
+  defaultMgr.create('77', 'HomePage@app_pages/src/pages/HomePage', makePageViewModel('home', 'p77'), {
+    back() {},
+    finish() {},
+  });
+  assert.equal(defaultMgr.getBatchStats('77')?.mode, 'native-solid');
+  const defaultTree = h.sim.getTree('77');
+  assert.equal(
+    defaultTree.batches[0].some(op => op.type === Opcode.MOVE_ELEMENT_TO_PARENT),
+    false,
+    'native-solid must use INSERT_ELEMENT_BEFORE instead of MOVE_ELEMENT_TO_PARENT',
+  );
+  assert.ok(
+    defaultTree.batches[0].some(op => op.type === Opcode.CREATE_ELEMENT && op.viewClass === 'view'),
+    'native-solid must send raw "view" tag',
+  );
+  defaultMgr.destroy('77');
+
+  const { NativeTree } = h.loadModule('solid_native/src/native-tree');
+  const { ValdiBinarySink } = h.loadModule('solid_native/src/transport');
+  const sink = new ValdiBinarySink('20', 'native-solid', h.sim.runtimeApi);
+  const tree = new NativeTree(sink);
+
+  const a = tree.create('label', { value: 'A' });
+  const b = tree.create('view', { backgroundColor: '#123456' });
+  const c = tree.create('label', { value: 'C' });
+
+  // Batch 1: initial [A, C]
+  tree.insert(tree.root, a);
+  tree.insert(tree.root, c);
+  tree.flush();
+  const simTree = h.sim.getTree('20');
+  assert.deepEqual(simTree.nodes.get(tree.root.id)?.children, [a.id, c.id]);
+  assert.ok(simTree.batches[0].every(op => op.type !== Opcode.MOVE_ELEMENT_TO_PARENT));
+  assert.ok(simTree.batches[0].some(op => op.type === Opcode.INSERT_ELEMENT_BEFORE && op.id === a.id && op.beforeId === 0));
+
+  // Batch 2: insert B before C
+  tree.insert(tree.root, b, c);
+  tree.flush();
+  assert.deepEqual(simTree.nodes.get(tree.root.id)?.children, [a.id, b.id, c.id]);
+  assert.ok(
+    simTree.batches[1].some(
+      op => op.type === Opcode.INSERT_ELEMENT_BEFORE && op.id === b.id && op.parentId === tree.root.id && op.beforeId === c.id,
+    ),
+  );
+
+  // Batch 3: detach B cleanly (no DESTROY_ELEMENT)
+  tree.remove(tree.root, b);
+  tree.flush();
+  assert.deepEqual(simTree.nodes.get(tree.root.id)?.children, [a.id, c.id]);
+  assert.equal(simTree.nodes.has(b.id), true, 'Detached node must survive across batches');
+  assert.deepEqual(simTree.batches[2], [{ type: Opcode.DETACH_ELEMENT, id: b.id }]);
+
+  // Batch 4: re-attach surviving B before A (no duplicate CREATE_ELEMENT, no DESTROY_ELEMENT)
+  tree.insert(tree.root, b, a);
+  tree.flush();
+  assert.deepEqual(simTree.nodes.get(tree.root.id)?.children, [b.id, a.id, c.id]);
+  assert.deepEqual(simTree.batches[3], [
+    { type: Opcode.INSERT_ELEMENT_BEFORE, id: b.id, parentId: tree.root.id, beforeId: a.id },
+  ]);
+
+  tree.dispose();
+});

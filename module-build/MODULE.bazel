@@ -12,44 +12,36 @@ single_version_override(
     patch_strip = 1,
 )
 
-# -- Maintained Valdi fork (upstream main: aed1249d) -----------------------
-# Framework customizations and Hermes build inputs live in the pinned Valdi fork source.
-# Pin immutable commits; scripts/maintainer/upstream.mjs updates this and the matching registry together.
-VALDI_REPOSITORY = "cloud2303org/Valdi"
-VALDI_COMMIT = "70fa9c63a04fbbaa2ddafb53400c0eea6fd5ca27"
-VALDI_URL = "https://github.com/" + VALDI_REPOSITORY + "/archive/" + VALDI_COMMIT + ".tar.gz"
-VALDI_PREFIX = "Valdi-" + VALDI_COMMIT
+# -- Maintained Valdi fork (local checkout: feat/solid2-universal) ---------
+VALDI_LOCAL_PATH = "/Users/cloud/project/Valdi-native-web"
 
 bazel_dep(name = "valdi", version = "0.1")
-archive_override(
+local_path_override(
     module_name = "valdi",
-    urls = [VALDI_URL],
-    strip_prefix = VALDI_PREFIX,
+    path = VALDI_LOCAL_PATH,
 )
 
-# Valdi internal sub-modules: local_path_override in Valdi's own MODULE.bazel
-# only takes effect when Valdi is the root module. Consumers must provide
-# archive_override entries that point into the Valdi release archive.
+# Valdi internal sub-modules pointed to the same local checkout.
 bazel_dep(name = "android_macros")
-archive_override(module_name = "android_macros", urls = [VALDI_URL], strip_prefix = VALDI_PREFIX + "/bzl/macros")
+local_path_override(module_name = "android_macros", path = VALDI_LOCAL_PATH + "/bzl/macros")
 
 bazel_dep(name = "snap_macros")
-archive_override(module_name = "snap_macros", urls = [VALDI_URL], strip_prefix = VALDI_PREFIX + "/bzl/valdi/snap_macros")
+local_path_override(module_name = "snap_macros", path = VALDI_LOCAL_PATH + "/bzl/valdi/snap_macros")
 
 bazel_dep(name = "snap_client_toolchains")
-archive_override(module_name = "snap_client_toolchains", urls = [VALDI_URL], strip_prefix = VALDI_PREFIX + "/bzl/toolchains")
+local_path_override(module_name = "snap_client_toolchains", path = VALDI_LOCAL_PATH + "/bzl/toolchains")
 
 bazel_dep(name = "snap_platforms")
-archive_override(module_name = "snap_platforms", urls = [VALDI_URL], strip_prefix = VALDI_PREFIX + "/bzl/platforms")
+local_path_override(module_name = "snap_platforms", path = VALDI_LOCAL_PATH + "/bzl/platforms")
 
 bazel_dep(name = "skia_user_config")
-archive_override(module_name = "skia_user_config", urls = [VALDI_URL], strip_prefix = VALDI_PREFIX + "/third-party/skia_user_config")
+local_path_override(module_name = "skia_user_config", path = VALDI_LOCAL_PATH + "/third-party/skia_user_config")
 
 bazel_dep(name = "rules_hdrs")
-archive_override(module_name = "rules_hdrs", urls = [VALDI_URL], strip_prefix = VALDI_PREFIX + "/third-party/rules_hdrs")
+local_path_override(module_name = "rules_hdrs", path = VALDI_LOCAL_PATH + "/third-party/rules_hdrs")
 
 bazel_dep(name = "valdi_toolchain")
-archive_override(module_name = "valdi_toolchain", urls = [VALDI_URL], strip_prefix = VALDI_PREFIX + "/bin")
+local_path_override(module_name = "valdi_toolchain", path = VALDI_LOCAL_PATH + "/bin")
 
 # -- C++ toolchains (Apple CC before LLVM for ObjC priority) ------------------
 valdi_toolchains = use_extension("@valdi//bzl:valdi_toolchains.bzl", "valdi_toolchains")

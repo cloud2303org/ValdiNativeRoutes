@@ -26,7 +26,7 @@ interface PageSession {
   };
 }
 
-let activeTransportMode: TransportMode = 'compat';
+let activeTransportMode: TransportMode = 'native-solid';
 
 export function setDefaultTransportMode(mode: TransportMode): void {
   activeTransportMode = mode;

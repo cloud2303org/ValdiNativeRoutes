@@ -82,9 +82,9 @@ class BottomSheetCoreTest {
 
     @Test
     fun criticalSpringOmegaScalesWithSettleDurationAndVelocity() {
-        // Default 0.25s settleDuration -> omega = 8 / 0.25 = 32
+        // Default 0.45s settleDuration -> omega = 8 / 0.45 = 17.777...
         assertEquals(
-            8f / 0.25f,
+            8f / 0.45f,
             BottomSheetMath.computeCriticalSpringOmega(
                 distancePx = 300f,
                 initialVelocityPxPerSec = 0f,
@@ -93,24 +93,24 @@ class BottomSheetCoreTest {
             0.001f,
         )
 
-        // Custom 0.45s settleDuration -> omega = 8 / 0.45 = 17.777...
+        // Custom 0.25s settleDuration -> omega = 32
         assertEquals(
-            8f / 0.45f,
+            32f,
             BottomSheetMath.computeCriticalSpringOmega(
                 distancePx = 300f,
                 initialVelocityPxPerSec = 0f,
-                settleDurationSeconds = 0.45f,
+                settleDurationSeconds = 0.25f,
             ),
             0.001f,
         )
 
-        // Fast initial velocity overrides base omega (`|v0| / |d| = 6000 / 100 = 60 > 32`).
+        // Fast initial velocity overrides base omega (`|v0| / |d| = 6000 / 100 = 60 > 17.78`).
         assertEquals(
             60f,
             BottomSheetMath.computeCriticalSpringOmega(
                 distancePx = 100f,
                 initialVelocityPxPerSec = -6000f,
-                settleDurationSeconds = 0.25f,
+                settleDurationSeconds = 0.45f,
             ),
             0.001f,
         )
@@ -377,38 +377,5 @@ class BottomSheetCoreTest {
                 openHeightPx = 220f,
             ),
         )
-    }
-
-    @Test
-    fun flickThresholdDismissesTallSheetAndClampsDefaultSpringVelocity() {
-        val tallSheetDetents = listOf(DetentSpec(heightPx = 1872))
-        val density = 3f
-        // Downward flick below 600 dp/s (1800 px/s at 3x) settles back to detent 0.
-        assertEquals(
-            0,
-            BottomSheetMath.resolveReleaseTargetIndex(
-                detents = tallSheetDetents,
-                currentOpenHeightPx = 1650f,
-                velocityYPxPerSec = 1700f,
-                canDismissOrClose = true,
-                density = density,
-            ),
-        )
-        // Downward flick above 600 dp/s (1800 px/s at 3x) dismisses cleanly even from near top.
-        assertEquals(
-            -1,
-            BottomSheetMath.resolveReleaseTargetIndex(
-                detents = tallSheetDetents,
-                currentOpenHeightPx = 1650f,
-                velocityYPxPerSec = 1900f,
-                canDismissOrClose = true,
-                density = density,
-            ),
-        )
-
-        // Zero travel returns zero velocity; extreme ratios clamp to ±5 * distance.
-        assertEquals(0f, BottomSheetMath.clampDefaultSpringVelocity(0f, 5000f), 0.001f)
-        assertEquals(-500f, BottomSheetMath.clampDefaultSpringVelocity(100f, -2000f), 0.001f)
-        assertEquals(500f, BottomSheetMath.clampDefaultSpringVelocity(100f, 2000f), 0.001f)
     }
 }

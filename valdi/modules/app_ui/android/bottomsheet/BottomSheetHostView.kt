@@ -10,7 +10,6 @@ import androidx.core.view.NestedScrollingParent3
 import androidx.core.view.NestedScrollingParentHelper
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.dynamicanimation.animation.DynamicAnimation
 import androidx.dynamicanimation.animation.FloatValueHolder
 import androidx.dynamicanimation.animation.SpringAnimation
 import androidx.dynamicanimation.animation.SpringForce
@@ -75,7 +74,7 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
     var interactionEnabled: Boolean = true
     var scrollExpandCoordination: ScrollCoordinationLevel = ScrollCoordinationLevel.HANDOFF
     var scrollCollapseCoordination: ScrollCoordinationLevel = ScrollCoordinationLevel.HANDOFF
-    var settleDurationSeconds: Float = 0f
+    var settleDurationSeconds: Float = BottomSheetMath.DEFAULT_SETTLE_DURATION_SECONDS
     var committedContentRegionInsetDp: Float? = null
         set(value) {
             if (field == value) return
@@ -784,12 +783,20 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
         if (resolvedDetents.isEmpty()) return
         val maxTotal = resolvedDetents.last().totalHeightPx
         val minTotal = if (canUserDismissOrRequestClose()) 0f else resolvedDetents.first().totalHeightPx
-        val minOffset = containerHeightPx - maxTotal
-        val maxOffset = containerHeightPx - minTotal
-        val nextOffset = (sheetOffsetY + dyPx).coerceIn(minOffset, maxOffset)
-        if (nextOffset != sheetOffsetY) {
-            setSheetOffsetYInternal(nextOffset)
+
+        val currentUnclampedOpen = containerHeightPx - sheetOffsetY - dyPx
+        val nextOpen = when {
+            currentUnclampedOpen > maxTotal -> {
+                maxTotal + BottomSheetMath.rubberBand(currentUnclampedOpen - maxTotal, containerHeightPx * 0.35f)
+            }
+            currentUnclampedOpen < minTotal -> {
+                if (minTotal <= 0f) 0f
+                else (minTotal - BottomSheetMath.rubberBand(minTotal - currentUnclampedOpen, minTotal.coerceAtLeast(1f)))
+                    .coerceAtLeast(0f)
+            }
+            else -> currentUnclampedOpen
         }
+        setSheetOffsetYInternal(containerHeightPx - nextOpen)
     }
 
     /**
@@ -862,7 +869,6 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
             currentOpenHeightPx = openHeightPx,
             velocityYPxPerSec = velocityYPxPerSec,
             canDismissOrClose = canUserDismissOrRequestClose(),
-            density = density,
         )
 
         if (releaseIndex == -1 && hasCloseRequestHandler) {
@@ -961,19 +967,30 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
         startSpringTo(targetOffset, initialVelocityPxPerSec, clamped)
     }
 
-    private fun draggableOffsetBounds(): Pair<Float, Float> {
-        if (resolvedDetents.isEmpty()) return 0f to containerHeightPx.toFloat()
-        val maxTotal = resolvedDetents.last().totalHeightPx
-        val minTotal = if (canUserDismissOrRequestClose()) 0f else resolvedDetents.first().totalHeightPx
-        return (containerHeightPx - maxTotal) to (containerHeightPx - minTotal)
-    }
-
     private fun startSpringTo(
         targetOffsetPx: Float,
         initialVelocityPxPerSec: Float,
         targetIndex: Int,
     ) {
         cancelSpring()
+        val startOffset = sheetOffsetY - targetOffsetPx
+        val distance = targetOffsetPx - sheetOffsetY
+        val omega = BottomSheetMath.computeCriticalSpringOmega(
+            distancePx = distance,
+            initialVelocityPxPerSec = initialVelocityPxPerSec,
+            settleDurationSeconds = settleDurationSeconds,
+        )
+        val clampedVelocity = BottomSheetMath.clampSpringInitialVelocity(
+            startOffsetPx = startOffset,
+            initialVelocityPxPerSec = initialVelocityPxPerSec,
+            omega = omega,
+        )
+        val endOffset = BottomSheetMath.computeSpringEndOffset(
+            startOffsetPx = startOffset,
+            clampedInitialVelocityPxPerSec = clampedVelocity,
+            omega = omega,
+        )
+        val stiffness = (omega * omega).coerceAtLeast(1f)
 
         var finished = false
         fun finishSettle() {
@@ -991,75 +1008,30 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
         }
 
         springValueHolder.value = sheetOffsetY
-        val spring = if (settleDurationSeconds <= 0f) {
-            val distance = targetOffsetPx - sheetOffsetY
-            val clampedVelocity = BottomSheetMath.clampDefaultSpringVelocity(
-                distancePx = distance,
-                initialVelocityPxPerSec = initialVelocityPxPerSec,
-            )
-            val (rangeMin, rangeMax) = draggableOffsetBounds()
-            SpringAnimation(springValueHolder).apply {
-                setStartVelocity(clampedVelocity)
-                minimumVisibleChange = DynamicAnimation.MIN_VISIBLE_CHANGE_PIXELS
-                setMinValue(minOf(rangeMin, sheetOffsetY, targetOffsetPx))
-                setMaxValue(maxOf(rangeMax, sheetOffsetY, targetOffsetPx))
-                spring = SpringForce(targetOffsetPx).apply {
-                    this.stiffness = BottomSheetMath.DEFAULT_SPRING_STIFFNESS
-                    this.dampingRatio = SpringForce.DAMPING_RATIO_NO_BOUNCY
-                }
-                addUpdateListener { _, value, _ ->
-                    setSheetOffsetYInternal(value)
-                }
-                addEndListener { _, canceled, _, _ ->
-                    if (!canceled) {
-                        finishSettle()
-                    }
+        val spring = SpringAnimation(springValueHolder).apply {
+            setStartVelocity(clampedVelocity)
+            minimumVisibleChange = BottomSheetMath.SETTLE_MIN_VISIBLE_CHANGE
+            spring = SpringForce(targetOffsetPx).apply {
+                this.stiffness = stiffness
+                this.dampingRatio = SpringForce.DAMPING_RATIO_NO_BOUNCY
+            }
+            addUpdateListener { animation, value, _ ->
+                val (scaledPosition, settled) = BottomSheetMath.scaleSpringPosition(
+                    rawValuePx = value,
+                    targetValuePx = targetOffsetPx,
+                    startOffsetPx = startOffset,
+                    endOffsetPx = endOffset,
+                )
+                if (!settled) {
+                    setSheetOffsetYInternal(scaledPosition)
+                } else {
+                    animation.cancel()
+                    finishSettle()
                 }
             }
-        } else {
-            val startOffset = sheetOffsetY - targetOffsetPx
-            val distance = targetOffsetPx - sheetOffsetY
-            val omega = BottomSheetMath.computeCriticalSpringOmega(
-                distancePx = distance,
-                initialVelocityPxPerSec = initialVelocityPxPerSec,
-                settleDurationSeconds = settleDurationSeconds,
-            )
-            val clampedVelocity = BottomSheetMath.clampSpringInitialVelocity(
-                startOffsetPx = startOffset,
-                initialVelocityPxPerSec = initialVelocityPxPerSec,
-                omega = omega,
-            )
-            val endOffset = BottomSheetMath.computeSpringEndOffset(
-                startOffsetPx = startOffset,
-                clampedInitialVelocityPxPerSec = clampedVelocity,
-                omega = omega,
-            )
-            val stiffness = (omega * omega).coerceAtLeast(1f)
-            SpringAnimation(springValueHolder).apply {
-                setStartVelocity(clampedVelocity)
-                minimumVisibleChange = BottomSheetMath.SETTLE_MIN_VISIBLE_CHANGE
-                spring = SpringForce(targetOffsetPx).apply {
-                    this.stiffness = stiffness
-                    this.dampingRatio = SpringForce.DAMPING_RATIO_NO_BOUNCY
-                }
-                addUpdateListener { animation, value, _ ->
-                    val (scaledPosition, settled) = BottomSheetMath.scaleSpringPosition(
-                        rawValuePx = value,
-                        targetValuePx = targetOffsetPx,
-                        startOffsetPx = startOffset,
-                        endOffsetPx = endOffset,
-                    )
-                    if (!settled) {
-                        setSheetOffsetYInternal(scaledPosition)
-                    } else {
-                        animation.cancel()
-                        finishSettle()
-                    }
-                }
-                addEndListener { _, canceled, _, _ ->
-                    if (!canceled) {
-                        finishSettle()
-                    }
+            addEndListener { _, canceled, _, _ ->
+                if (!canceled) {
+                    finishSettle()
                 }
             }
         }
@@ -1095,17 +1067,10 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
         val cardRight = span.right
         val cardHeight = (openPx - insets.bottom).coerceAtLeast(0f)
         val hasCardGaps = insets.isInset || cardLeft > 0.5f || cardRight < hostWidthPx - 0.5f
-        val needsDynamicBottomClip =
-            insets.bottom > 0.5f ||
-            cornerRadiiPx[2] > 0.5f ||
-            cornerRadiiPx[3] > 0.5f ||
-            topShadowView.hasShadows ||
-            cardElevationPx > 0.5f
-        val clipBottom = if (needsDynamicBottomClip) cardHeight else containerHeightPx.toFloat()
 
         sheetContainer.translationY = sheetOffsetY
         clipContainer.setClipsToCard(hasCardGaps || cardShadows.isNotEmpty() || cardElevationPx > 0f)
-        clipContainer.setCard(cardLeft, 0f, cardRight, clipBottom)
+        clipContainer.setCard(cardLeft, 0f, cardRight, cardHeight)
 
         // Position surface and content wrapper at committedContentRegionInset so content doesn't reflow horizontally during drag.
         val committedLeftPx = (committedContentRegionInsetDp ?: 0f) * density

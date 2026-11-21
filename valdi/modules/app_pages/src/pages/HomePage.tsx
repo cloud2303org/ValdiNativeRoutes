@@ -54,12 +54,14 @@ function ActionButton(props: {
   backgroundColor?: string;
   textColor?: string;
   flexGrow?: number;
+  minWidth?: number;
   marginRight?: number;
   onTap: () => void;
 }) {
   return (
     <view
       flexGrow={props.flexGrow}
+      minWidth={props.minWidth}
       marginRight={props.marginRight}
       marginBottom={8}
       paddingTop={10}
@@ -419,6 +421,7 @@ export function HomePage(props: SolidPageProps<PageViewModel, PageContext>) {
             <label value="Style, Animate & Scroll" font={systemSemiboldFont(15)} color="#0F172A" />
             <ActionButton
               title={barExpanded() ? 'Collapse Box' : 'Animate Box'}
+              minWidth={116}
               backgroundColor="#EEF2FF"
               textColor="#3730A3"
               onTap={() => {

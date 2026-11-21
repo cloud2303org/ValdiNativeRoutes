@@ -1,12 +1,16 @@
 package io.valdiroutes.app_ui.appui
 
+import android.graphics.Color as AndroidColor
+import android.graphics.drawable.ColorDrawable
 import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.annotation.Keep
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
@@ -25,9 +29,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog as WindowDialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
 import com.snap.valdi.RenderBackend
 import com.snap.valdi.ValdiContextConfiguration
 import com.snap.valdi.views.ValdiRootView
+import com.snap.valdi.views.ValdiView
 import io.valdiroutes.app_ui.AppModalOverlayContext
 import io.valdiroutes.app_ui.AppModalOverlayViewModel
 
@@ -45,15 +51,91 @@ private class ValdiModalSession(
     @Keep val context: AppModalOverlayContext,
 ) {
     var rootView: ValdiRootView? = null
+    var cardView: View? = null
     var lastOpen: Boolean? = null
     var topInsetDp: Double = 0.0
     var bottomInsetDp: Double = 0.0
+    var imeBottomPx: Int = 0
+    var safeTopPx: Int = 0
+    var navBottomPx: Int = 0
+    private var layoutListener: View.OnLayoutChangeListener? = null
+
+    fun attachRoot(view: ValdiRootView) {
+        rootView = view
+        val listener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            applyCardKeyboardLift()
+        }
+        layoutListener = listener
+        view.addOnLayoutChangeListener(listener)
+    }
+
+    fun applyCardKeyboardLift() {
+        val root = rootView ?: return
+        val card = resolveCardView(root) ?: return
+        if (root.height <= 0 || card.height <= 0) return
+
+        val density = root.resources.displayMetrics.density
+        val marginPx = 24f * density
+        val minTop = safeTopPx + marginPx
+        val visibleBottom = root.height - maxOf(navBottomPx, imeBottomPx) - marginPx
+        val desiredLift = if (imeBottomPx > 0 && visibleBottom > minTop) {
+            val restingTop = offsetTopInAncestor(card, root)
+            val targetTop = ((minTop + visibleBottom - card.height) * 0.5f)
+                .coerceAtLeast(minTop)
+                .coerceAtMost(restingTop)
+            targetTop - restingTop
+        } else {
+            0f
+        }
+        if (card.translationY != desiredLift) {
+            card.translationY = desiredLift
+        }
+    }
+
+    private fun resolveCardView(root: View): View? {
+        val cached = cardView
+        if (cached != null && cached.isAttachedToWindow) return cached
+        val found = findModalCard(root)
+        cardView = found
+        return found
+    }
 
     fun destroy() {
         val view = rootView
+        val listener = layoutListener
+        layoutListener = null
+        cardView = null
         rootView = null
+        if (view != null && listener != null) {
+            view.removeOnLayoutChangeListener(listener)
+        }
         view?.destroy()
     }
+}
+
+private fun findModalCard(view: View): View? {
+    if (view is ValdiView && view.valdiViewNode?.getAttribute("accessibilityId") == "app-modal-card") {
+        return view
+    }
+    if (view is ViewGroup) {
+        for (i in 0 until view.childCount) {
+            findModalCard(view.getChildAt(i))?.let { return it }
+        }
+    }
+    return null
+}
+
+private fun offsetTopInAncestor(descendant: View, ancestor: View): Float {
+    var top = 0f
+    var current: View? = descendant
+    while (current != null && current !== ancestor) {
+        top += current.top.toFloat()
+        if (current !== descendant) {
+            top += current.translationY
+        }
+        current = current.parent as? View
+    }
+    return top
 }
 
 @Composable
@@ -136,20 +218,33 @@ private fun ValdiModalDialog(modal: ModalPresentation) {
 
         val window = (dialogView.parent as? DialogWindowProvider)?.window
         SideEffect {
-            window?.setDimAmount(0f)
-            window?.setWindowAnimations(0)
+            window?.let { win ->
+                win.setDimAmount(0f)
+                win.setWindowAnimations(0)
+                win.setBackgroundDrawable(ColorDrawable(AndroidColor.TRANSPARENT))
+                win.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
+                @Suppress("DEPRECATION")
+                win.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+                WindowCompat.setDecorFitsSystemWindows(win, false)
+            }
         }
 
         val density = LocalDensity.current
         val safeTopInsets = WindowInsets.statusBars.union(WindowInsets.displayCutout)
-        val initialTopInsetDp = (safeTopInsets.getTop(density) / density.density).toDouble()
-        val initialBottomInsetDp = (WindowInsets.navigationBars.getBottom(density) / density.density).toDouble()
+        val safeTopPx = safeTopInsets.getTop(density)
+        val navBottomPx = WindowInsets.navigationBars.getBottom(density)
+        val imeBottomPx = WindowInsets.ime.getBottom(density)
+        val initialTopInsetDp = (safeTopPx / density.density).toDouble()
+        val initialBottomInsetDp = (navBottomPx / density.density).toDouble()
         val open = modal.open
 
         AndroidView(
             factory = { ctx ->
                 session.topInsetDp = initialTopInsetDp
                 session.bottomInsetDp = initialBottomInsetDp
+                session.safeTopPx = safeTopPx
+                session.navBottomPx = navBottomPx
+                session.imeBottomPx = imeBottomPx
                 session.lastOpen = open
                 val initialVm = buildModalOverlayViewModel(
                     modal.options,
@@ -160,7 +255,7 @@ private fun ValdiModalDialog(modal: ModalPresentation) {
                 ValdiRootView(ctx).apply {
                     defaultFocusHighlightEnabled = false
                     setRetainsLayoutSpecsOnInvalidateLayout(true)
-                    session.rootView = this
+                    session.attachRoot(this)
                     runtime.inflateViewAsync(
                         this,
                         APP_MODAL_OVERLAY_COMPONENT,
@@ -172,8 +267,12 @@ private fun ValdiModalDialog(modal: ModalPresentation) {
                     )
                 }
             },
-            modifier = Modifier.fillMaxSize().imePadding(),
+            modifier = Modifier.fillMaxSize(),
             update = { view ->
+                session.safeTopPx = safeTopPx
+                session.navBottomPx = navBottomPx
+                session.imeBottomPx = imeBottomPx
+                session.applyCardKeyboardLift()
                 if (session.lastOpen != open) {
                     session.lastOpen = open
                     view.setViewModelUntyped(

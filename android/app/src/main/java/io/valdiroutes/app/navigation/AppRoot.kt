@@ -114,12 +114,16 @@ private fun StatusBarIcons(style: String) {
     }
 }
 
+@Composable
+private fun pageKeyboardHeightPx(): Int =
+    if (AppUI.modal != null) 0 else WindowInsets.ime.getBottom(LocalDensity.current)
+
 /**
  * The keyboard height, read once here and applied explicitly by the page containers.
  * The edge-to-edge window is never resized, so pages account for the IME themselves.
  */
 @Composable
-private fun keyboardHeight(): Dp = with(LocalDensity.current) { WindowInsets.ime.getBottom(this).toDp() }
+private fun pageKeyboardHeight(): Dp = with(LocalDensity.current) { pageKeyboardHeightPx().toDp() }
 
 /** Fixed initial insets for a page: system bars and display cutout without IME subtraction. */
 @Composable
@@ -138,8 +142,9 @@ private fun pageInsets(): Insets {
 /** Full-screen Valdi page: the page owns its background and insets; the keyboard shrinks its container. */
 @Composable
 private fun ValdiScreen(entry: PageEntry, navigator: Navigator) {
-    Box(Modifier.fillMaxSize().padding(bottom = keyboardHeight())) {
-        ValdiPage(entry, pageInsets(), navigator, Modifier.fillMaxSize())
+    val imeBottomPx = pageKeyboardHeightPx()
+    Box(Modifier.fillMaxSize().padding(bottom = pageKeyboardHeight())) {
+        ValdiPage(entry, pageInsets(), navigator, Modifier.fillMaxSize(), imeBottomPx = imeBottomPx)
     }
 }
 
@@ -149,6 +154,7 @@ private fun ValdiPage(
     insets: Insets,
     navigator: Navigator,
     modifier: Modifier,
+    imeBottomPx: Int = 0,
     acceptsInput: Boolean = true,
     prepareTab: Boolean = false,
     onTabReady: () -> Unit = {},
@@ -162,6 +168,7 @@ private fun ValdiPage(
         factory = { context ->
             PageContentContainer(context).apply {
                 this.acceptsInput = acceptsInput
+                setKeyboardHeightPx(imeBottomPx)
                 val rootView = entry.rootView ?: ValdiHost.createPage(context, entry, insets, navigator).also {
                     entry.rootView = it
                     entry.appliedInsets = insets
@@ -172,6 +179,7 @@ private fun ValdiPage(
         },
         update = { container ->
             container.acceptsInput = acceptsInput
+            container.setKeyboardHeightPx(imeBottomPx)
         },
         onRelease = { container ->
             container.removeAllViews()
@@ -239,8 +247,9 @@ private fun TabsScreen(shell: PageEntry, navigator: Navigator) {
                 // Do not apply this padding to the source bounds: native pixels must extend behind the glass.
                 val barBottomDp = maxOf(rawBottomDp, padding.calculateBottomPadding().value)
                 val insets = baseInsets.copy(bottom = barBottomDp)
-                Box(Modifier.fillMaxSize().hazeSource(hazeState).padding(bottom = keyboardHeight())) {
-                    TabPage(shell, selected, insets, navigator)
+                val imeBottomPx = pageKeyboardHeightPx()
+                Box(Modifier.fillMaxSize().hazeSource(hazeState).padding(bottom = pageKeyboardHeight())) {
+                    TabPage(shell, selected, insets, navigator, imeBottomPx)
                 }
             }
         }
@@ -248,7 +257,7 @@ private fun TabsScreen(shell: PageEntry, navigator: Navigator) {
 }
 
 @Composable
-private fun TabPage(shell: PageEntry, selected: String, insets: Insets, navigator: Navigator) {
+private fun TabPage(shell: PageEntry, selected: String, insets: Insets, navigator: Navigator, imeBottomPx: Int = 0) {
     val bar = requireNotNull(navigator.tabBar) { "No tab bar" }
     val latestInsets = rememberUpdatedState(insets)
     val isTop = navigator.stack.lastOrNull() === shell
@@ -266,6 +275,7 @@ private fun TabPage(shell: PageEntry, selected: String, insets: Insets, navigato
                     if (page.definition.kind == "valdi") {
                         ValdiPage(
                             page, latestInsets.value, navigator, Modifier.fillMaxSize(),
+                            imeBottomPx = imeBottomPx,
                             acceptsInput = selection.displayed == page.route && latestIsTop.value,
                             prepareTab = true,
                             onTabReady = {
@@ -338,8 +348,9 @@ private fun DockedCustomTabsScreen(
     navigator: Navigator,
 ) {
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().padding(bottom = keyboardHeight())) {
-            TabPage(shell, selected, insets, navigator)
+        val imeBottomPx = pageKeyboardHeightPx()
+        Box(Modifier.fillMaxSize().padding(bottom = pageKeyboardHeight())) {
+            TabPage(shell, selected, insets, navigator, imeBottomPx)
         }
         key(shell.id) {
             AndroidView(
@@ -382,8 +393,9 @@ private fun OverlayCustomTabsScreen(
 ) {
     val composition = rememberCompositionContext()
     val pageContent by rememberUpdatedState<@Composable () -> Unit>({
-        Box(Modifier.fillMaxSize().padding(bottom = keyboardHeight())) {
-            TabPage(shell, selected, insets, navigator)
+        val imeBottomPx = pageKeyboardHeightPx()
+        Box(Modifier.fillMaxSize().padding(bottom = pageKeyboardHeight())) {
+            TabPage(shell, selected, insets, navigator, imeBottomPx)
         }
     })
     key(shell.id) {

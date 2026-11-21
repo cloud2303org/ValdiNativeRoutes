@@ -20,6 +20,8 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+private const val CLOSE_REQUEST_RESPONSE_GRACE_MS = 80L
+
 /**
  * Core Android sheet engine aligned with `@swmansion/react-native-bottom-sheet` v1.1.0,
  * adapted idiomatically to Valdi's layout, gesture recognizer, and custom-view lifecycle.
@@ -102,6 +104,24 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
     private var isNestedDragging: Boolean = false
     private var springAnimation: SpringAnimation? = null
     private val springValueHolder = FloatValueHolder(0f)
+    private var pendingCloseRequestActive: Boolean = false
+    private var pendingCloseRequestVelocityPxPerSec: Float = 0f
+    private var pendingCloseRequestToken: Int = 0
+    private val pendingCloseBounceRunnable = Runnable {
+        if (!pendingCloseRequestActive) return@Runnable
+        pendingCloseRequestActive = false
+        pendingCloseRequestVelocityPxPerSec = 0f
+        if (isDraggingSheet || isNestedDragging || rawRequestedIndex < 0 || resolvedDetents.isEmpty()) {
+            return@Runnable
+        }
+        val bounceIndex = resolvedDetents.indexOfFirst { !it.programmatic }.takeIf { it >= 0 } ?: 0
+        snapToIndex(
+            index = bounceIndex,
+            initialVelocityPxPerSec = 0f,
+            animated = true,
+            emitIndexCallback = bounceIndex != lastReportedIndex,
+        )
+    }
 
     private var lastGeometry: DoubleArray? = null
     private var lastPosition: DoubleArray? = null
@@ -146,7 +166,7 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
 
         // Hit-test host only when touching presented card or active modal scrim.
         installValdiHitTest(this) { xPx, yPx -> isPointInteractive(xPx, yPx) }
-        installValdiHitTest(sheetContainer) { xPx, yPx -> isPointInPresentedCard(xPx, yPx) }
+        installValdiHitTest(sheetContainer) { xPx, yPx -> isLocalPointInPresentedCard(xPx, yPx) }
 
         sheetGestureRecognizer = SheetValdiGestureRecognizer(sheetContainer, this)
         ViewUtils.addGestureRecognizer(sheetContainer, sheetGestureRecognizer)
@@ -329,7 +349,12 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
             resolveDetentsAndEmitGeometry()
             val clamped = clampRequestedIndex(requestedIndex)
             if (clamped != prevTargetIndex) {
-                snapToIndex(clamped, initialVelocityPxPerSec = 0f, animated = true, emitIndexCallback = false)
+                snapToIndex(
+                    clamped,
+                    initialVelocityPxPerSec = consumePendingCloseVelocity(clamped),
+                    animated = true,
+                    emitIndexCallback = false,
+                )
             } else {
                 reanchorInitializedPresentation(
                     desiredIndex = clamped,
@@ -375,19 +400,27 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
             return
         }
 
+        val hadPendingClose = pendingCloseRequestActive
+        val pendingVelocity = consumePendingCloseVelocity(clamped)
         if (
+            !hadPendingClose &&
             clamped == currentTargetIndex &&
             prevRaw == index &&
             (isAnimating || isDraggingSheet || abs(targetOffsetForIndex(clamped) - sheetOffsetY) < 0.5f)
         ) {
             return
         }
-        if (clamped != currentTargetIndex || (!isAnimating && !isDraggingSheet && targetOffsetForIndex(clamped) != sheetOffsetY)) {
-            snapToIndex(clamped, initialVelocityPxPerSec = 0f, animated = true, emitIndexCallback = false)
+        if (
+            hadPendingClose ||
+            clamped != currentTargetIndex ||
+            (!isAnimating && !isDraggingSheet && targetOffsetForIndex(clamped) != sheetOffsetY)
+        ) {
+            snapToIndex(clamped, initialVelocityPxPerSec = pendingVelocity, animated = true, emitIndexCallback = false)
         }
     }
 
     fun resetForRecycling() {
+        cancelPendingCloseRequest()
         cancelSpring()
         isDraggingSheet = false
         isNestedDragging = false
@@ -478,8 +511,11 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
         if (!isPresented) return false
         val localY = yPx - sheetContainer.translationY
         val localX = xPx - sheetContainer.translationX
-        return clipContainer.cardContains(localX, localY)
+        return isLocalPointInPresentedCard(localX, localY)
     }
+
+    fun isLocalPointInPresentedCard(localX: Float, localY: Float): Boolean =
+        isPresented && clipContainer.cardContains(localX, localY)
 
     fun isScrimInteractiveAt(xPx: Float, yPx: Float): Boolean =
         modal && isPresented && scrimCanvas.isScrimVisible && !isPointInPresentedCard(xPx, yPx)
@@ -731,6 +767,7 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
     // ---- Dragging & Snapping ----
 
     internal fun onSheetDragBegan() {
+        cancelPendingCloseRequest()
         cancelSpring()
         isDraggingSheet = true
     }
@@ -820,9 +857,17 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
         )
 
         if (releaseIndex == -1 && hasCloseRequestHandler) {
-            // Notify caller via onCloseRequest; if it synchronously closed the sheet, continue closing with release velocity.
+            // Notify caller via onCloseRequest; Valdi JS runs async so wait briefly before bouncing back.
+            cancelPendingCloseRequest()
+            val token = pendingCloseRequestToken
+            pendingCloseRequestActive = true
+            pendingCloseRequestVelocityPxPerSec = velocityYPxPerSec
             onCloseRequest?.invoke()
+            if (token != pendingCloseRequestToken || !pendingCloseRequestActive) {
+                return
+            }
             if (rawRequestedIndex < 0) {
+                cancelPendingCloseRequest()
                 snapToIndex(
                     index = -1,
                     initialVelocityPxPerSec = velocityYPxPerSec,
@@ -831,13 +876,7 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
                 )
                 return
             }
-            val bounceIndex = resolvedDetents.indexOfFirst { !it.programmatic }.takeIf { it >= 0 } ?: 0
-            snapToIndex(
-                index = bounceIndex,
-                initialVelocityPxPerSec = velocityYPxPerSec,
-                animated = true,
-                emitIndexCallback = bounceIndex != lastReportedIndex,
-            )
+            postDelayed(pendingCloseBounceRunnable, CLOSE_REQUEST_RESPONSE_GRACE_MS)
             return
         }
 
@@ -852,6 +891,20 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
             animated = true,
             emitIndexCallback = true,
         )
+    }
+
+    private fun cancelPendingCloseRequest() {
+        pendingCloseRequestActive = false
+        pendingCloseRequestVelocityPxPerSec = 0f
+        pendingCloseRequestToken++
+        removeCallbacks(pendingCloseBounceRunnable)
+    }
+
+    private fun consumePendingCloseVelocity(targetIndex: Int): Float {
+        if (!pendingCloseRequestActive) return 0f
+        val velocity = if (targetIndex < 0) pendingCloseRequestVelocityPxPerSec else 0f
+        cancelPendingCloseRequest()
+        return velocity
     }
 
     private fun snapToIndex(
@@ -1098,6 +1151,7 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
     override fun onNestedScrollAccepted(child: View, target: View, axes: Int, type: Int) {
         nestedScrollingParentHelper.onNestedScrollAccepted(child, target, axes, type)
         if (type == ViewCompat.TYPE_TOUCH) {
+            cancelPendingCloseRequest()
             cancelSpring()
             isNestedDragging = true
         }
@@ -1164,6 +1218,7 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
     override fun getNestedScrollAxes(): Int = nestedScrollingParentHelper.nestedScrollAxes
 
     override fun onDetachedFromWindow() {
+        cancelPendingCloseRequest()
         cancelSpring()
         super.onDetachedFromWindow()
     }

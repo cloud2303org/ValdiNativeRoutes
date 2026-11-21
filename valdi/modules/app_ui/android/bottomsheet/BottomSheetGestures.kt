@@ -73,10 +73,12 @@ internal class SheetValdiGestureRecognizer(
     private var coordinatedScrollView: ValdiScrollView? = null
     private var coordinatedScrollRecognizer: ScrollViewDragGestureRecognizer? = null
     private var panMode: SheetPanMode = SheetPanMode.UNDECIDED
+    private var exclusiveSheetTakeover = false
+    private var startedHostDrag = false
     private var pinnedScrollOffsetY: Int = 0
     private var savedVerticalScrollBarEnabled: Boolean? = null
 
-    override fun shouldCancelOtherGesturesOnStart(): Boolean = true
+    override fun shouldCancelOtherGesturesOnStart(): Boolean = coordinatedScrollView == null
 
     override fun shouldPreventInterceptTouchEvent(): Boolean = true
 
@@ -97,7 +99,7 @@ internal class SheetValdiGestureRecognizer(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 resetTracking()
-                if (!host.canStartSheetGesture() || !host.isPointInPresentedCard(event.x, event.y)) {
+                if (!host.canStartSheetGesture() || !host.isLocalPointInPresentedCard(event.x, event.y)) {
                     rejected = true
                     updateState(ValdiGestureRecognizerState.FAILED)
                     return
@@ -137,14 +139,16 @@ internal class SheetValdiGestureRecognizer(
                 val totalDy = event.rawY - downRawY
 
                 if (!slopExceeded) {
-                    if (abs(totalDx) > touchSlop && abs(totalDx) > abs(totalDy)) {
+                    val distSq = totalDx * totalDx + totalDy * totalDy
+                    val slopSq = touchSlop.toFloat() * touchSlop.toFloat()
+                    if (distSq <= slopSq) {
+                        lastRawY = event.rawY
+                        return
+                    }
+                    if (abs(totalDx) > abs(totalDy)) {
                         // Horizontal drag (e.g. horizontal carousel/scroll inside sheet): yield cleanly.
                         rejected = true
                         updateState(ValdiGestureRecognizerState.FAILED)
-                        return
-                    }
-                    if (abs(totalDy) <= touchSlop) {
-                        lastRawY = event.rawY
                         return
                     }
                     slopExceeded = true
@@ -166,6 +170,7 @@ internal class SheetValdiGestureRecognizer(
                     }
 
                     lastRawY = event.rawY
+                    startedHostDrag = true
                     host.onSheetDragBegan()
                     updateState(ValdiGestureRecognizerState.BEGAN)
                     return
@@ -184,6 +189,7 @@ internal class SheetValdiGestureRecognizer(
 
             MotionEvent.ACTION_UP -> {
                 if (slopExceeded && !rejected && isActive) {
+                    startedHostDrag = false
                     val tracker = velocityTracker
                     tracker?.let {
                         addRawMovement(it, event)
@@ -192,14 +198,22 @@ internal class SheetValdiGestureRecognizer(
                     val vy = tracker?.yVelocity ?: 0f
                     finishCoordinatedDrag(event, vy)
                     updateState(ValdiGestureRecognizerState.ENDED)
-                } else if (!rejected) {
-                    updateState(ValdiGestureRecognizerState.FAILED)
+                } else {
+                    if (startedHostDrag) {
+                        startedHostDrag = false
+                        restoreScrollBar()
+                        host.onSheetDragCancelled()
+                    }
+                    if (!rejected) {
+                        updateState(ValdiGestureRecognizerState.FAILED)
+                    }
                 }
                 recycleTracker()
             }
 
             MotionEvent.ACTION_CANCEL -> {
-                if (slopExceeded && !rejected && isActive) {
+                if (startedHostDrag) {
+                    startedHostDrag = false
                     restoreScrollBar()
                     host.onSheetDragCancelled()
                 }
@@ -210,12 +224,21 @@ internal class SheetValdiGestureRecognizer(
     }
 
     override fun onProcess() {
-        // State transitions and host updates happen synchronously in onUpdate for 1-frame latency.
+        // Re-pin after ScrollViewDragGestureRecognizer.onProcess() runs earlier in Step 5 of this frame.
+        if (isActive && panMode == SheetPanMode.SHEET) {
+            coordinatedScrollView?.let(::pinScrollOffset)
+        }
     }
 
     override fun onReset(event: MotionEvent) {
         super.onReset(event)
-        restoreScrollBar()
+        if (startedHostDrag) {
+            startedHostDrag = false
+            restoreScrollBar()
+            host.onSheetDragCancelled()
+        } else {
+            restoreScrollBar()
+        }
         resetTracking()
     }
 
@@ -240,15 +263,18 @@ internal class SheetValdiGestureRecognizer(
             ScrollCoordinationLevel.INITIAL -> {
                 if (draggingUp) {
                     if (atTop && sheetCanExpand) {
-                        // Sheet claims this gesture exclusively; cancel scroll view's recognizer if active.
-                        coordinatedScrollView = null
+                        // Keep coordinatedScrollView so canRecognizeSimultaneously stays true if the
+                        // ScrollView recognizer also crosses slop; pin the ScrollView in place instead.
+                        exclusiveSheetTakeover = true
+                        pinnedScrollOffsetY = sv.contentOffsetY
                         SheetPanMode.SHEET
                     } else {
                         null
                     }
                 } else {
                     if (atTop) {
-                        coordinatedScrollView = null
+                        exclusiveSheetTakeover = true
+                        pinnedScrollOffsetY = sv.contentOffsetY
                         SheetPanMode.SHEET
                     } else {
                         null
@@ -256,6 +282,7 @@ internal class SheetValdiGestureRecognizer(
                 }
             }
             ScrollCoordinationLevel.HANDOFF -> {
+                exclusiveSheetTakeover = false
                 pinnedScrollOffsetY = sv.contentOffsetY
                 if (draggingUp) {
                     if (atTop && sheetCanExpand) SheetPanMode.SHEET else SheetPanMode.SCROLL
@@ -269,6 +296,13 @@ internal class SheetValdiGestureRecognizer(
     private fun handleMoveDelta(dy: Float) {
         val sv = coordinatedScrollView
         if (sv == null) {
+            host.onSheetDragBy(dy)
+            return
+        }
+
+        if (exclusiveSheetTakeover) {
+            panMode = SheetPanMode.SHEET
+            pinScrollOffset(sv)
             host.onSheetDragBy(dy)
             return
         }
@@ -363,6 +397,8 @@ internal class SheetValdiGestureRecognizer(
     private fun resetTracking() {
         slopExceeded = false
         rejected = false
+        exclusiveSheetTakeover = false
+        startedHostDrag = false
         coordinatedScrollView = null
         coordinatedScrollRecognizer = null
         panMode = SheetPanMode.UNDECIDED

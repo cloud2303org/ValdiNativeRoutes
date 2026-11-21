@@ -2,7 +2,7 @@
 <resources>
     <!-- Pages own their backgrounds. Only the system splash draws a shared launch background. -->
     <style name="Theme.ValdiNativeRoutes" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@null</item>
+        <item name="android:windowBackground">@color/page_background</item>
         <!-- Valdi and native components select their own dark palettes. -->
         <item name="android:forceDarkAllowed">false</item>
     </style>

@@ -5,6 +5,8 @@ import { systemBoldFont, systemFont, systemSemiboldFont } from 'valdi_core/src/S
 import { accentColor, cycleAccent, globalCount, setGlobalCount } from '../sharedState';
 
 export function SharedPage(props: SolidPageProps<PageViewModel, PageContext>) {
+  const topInset = Math.max(props.insets.top, 20) + 12;
+  const bottomInset = Math.max(props.insets.bottom, 16) + 24;
   const [aliveSeconds, setAliveSeconds] = createSignal(0);
 
   const timer = setInterval(() => {
@@ -15,8 +17,8 @@ export function SharedPage(props: SolidPageProps<PageViewModel, PageContext>) {
   return (
     <scroll flexGrow={1} backgroundColor="#F3F6FA" showsVerticalScrollIndicator={true}>
       <view
-        paddingTop={Math.max(props.viewModel().insets.top, 20) + 12}
-        paddingBottom={Math.max(props.viewModel().insets.bottom, 16) + 24}
+        paddingTop={topInset}
+        paddingBottom={bottomInset}
         paddingLeft={16}
         paddingRight={16}
         flexDirection="column"

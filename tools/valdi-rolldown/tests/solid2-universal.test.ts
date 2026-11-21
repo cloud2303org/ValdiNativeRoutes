@@ -1648,3 +1648,91 @@ test('8. Default transport uses raw tags, INSERT_ELEMENT_BEFORE (20), and DETACH
 
   tree.dispose();
 });
+
+test('16. Fixed props.insets/props.params ignore keyboard inset churn, while onPageShow/onPageHide/whilePageVisible track visibility events', async () => {
+  const h = createValdiTestHarness();
+  const events: string[] = [];
+
+  h.compileInlineTsx(
+    'inline_test/FixedInsetsLifecyclePage',
+    `
+    import { onPageHide, onPageShow, whilePageVisible } from 'solid_native/src/bridge';
+
+    export function FixedInsetsLifecyclePage(props) {
+      const log = props.params.events;
+      onPageShow(reason => log.push('show:' + reason));
+      onPageHide(reason => log.push('hide:' + reason));
+      whilePageVisible(() => {
+        log.push('effect:start');
+        return () => log.push('effect:stop');
+      });
+
+      return (
+        <view paddingTop={props.insets.top} paddingBottom={props.insets.bottom}>
+          <label value={"Param=" + props.params.title} />
+        </view>
+      );
+    }
+    `,
+  );
+
+  const vm0 = {
+    ...makePageViewModel('fixed', 'p16'),
+    params: { title: 'Inbox', events },
+    insets: { top: 47, bottom: 34, left: 0, right: 0 },
+    visible: true,
+    visibilityReason: 'navigation',
+  };
+
+  h.manager.create('16', 'FixedInsetsLifecyclePage@inline_test/FixedInsetsLifecyclePage', vm0, {
+    back() {},
+    finish() {},
+  });
+
+  const simTree = h.sim.getTree('16');
+  const rootCard = [...simTree.nodes.values()].find(n => n.attrs.paddingTop === 47)!;
+  assert.ok(rootCard);
+  assert.equal(rootCard.attrs.paddingBottom, 34);
+  assert.deepEqual(collectLabels(simTree), ['Param=Inbox']);
+  assert.deepEqual(events, ['show:navigation', 'effect:start']);
+
+  // Simulate per-frame keyboard insets updates: zero native batches, zero layout change, no duplicate events
+  const batchesAfterMount = simTree.batches.length;
+  h.manager.render('16', { ...vm0, insets: { top: 47, bottom: 20, left: 0, right: 0 } });
+  h.manager.render('16', { ...vm0, insets: { top: 47, bottom: 0, left: 0, right: 0 } });
+  await h.flushMicrotasks();
+  assert.equal(simTree.batches.length, batchesAfterMount, 'Keyboard inset updates must not trigger re-layout batches');
+  assert.equal(rootCard.attrs.paddingBottom, 34);
+  assert.deepEqual(events, ['show:navigation', 'effect:start']);
+
+  // Cover page -> stops whilePageVisible then fires onPageHide('covered')
+  h.manager.render('16', { ...vm0, insets: { top: 47, bottom: 0, left: 0, right: 0 }, visible: false, visibilityReason: 'covered' });
+  await h.flushMicrotasks();
+  assert.equal(simTree.batches.length, batchesAfterMount);
+  assert.deepEqual(events, ['show:navigation', 'effect:start', 'effect:stop', 'hide:covered']);
+
+  // Return to foreground -> fires onPageShow('foreground') then restarts whilePageVisible
+  h.manager.render('16', { ...vm0, insets: { top: 47, bottom: 34, left: 0, right: 0 }, visible: true, visibilityReason: 'foreground' });
+  await h.flushMicrotasks();
+  assert.equal(simTree.batches.length, batchesAfterMount);
+  assert.deepEqual(events, [
+    'show:navigation',
+    'effect:start',
+    'effect:stop',
+    'hide:covered',
+    'show:foreground',
+    'effect:start',
+  ]);
+
+  // Destroy page -> stops whilePageVisible without firing onPageHide
+  h.manager.destroy('16');
+  assert.deepEqual(events, [
+    'show:navigation',
+    'effect:start',
+    'effect:stop',
+    'hide:covered',
+    'show:foreground',
+    'effect:start',
+    'effect:stop',
+  ]);
+});

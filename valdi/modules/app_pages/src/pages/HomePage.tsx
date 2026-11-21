@@ -83,6 +83,8 @@ function ActionButton(props: {
 
 export function HomePage(props: SolidPageProps<PageViewModel, PageContext>) {
   const animate = useAnimate();
+  const topInset = Math.max(props.insets.top, 20) + 12;
+  const bottomInset = Math.max(props.insets.bottom, 16) + 24;
   const [localCount, setLocalCount] = createSignal(0);
   const [showPanel, setShowPanel] = createSignal(true);
   const [barExpanded, setBarExpanded] = createSignal(false);
@@ -154,8 +156,8 @@ export function HomePage(props: SolidPageProps<PageViewModel, PageContext>) {
       viewportExtensionBottom={200}
     >
       <view
-        paddingTop={Math.max(props.viewModel().insets.top, 20) + 12}
-        paddingBottom={Math.max(props.viewModel().insets.bottom, 16) + 24}
+        paddingTop={topInset}
+        paddingBottom={bottomInset}
         paddingLeft={16}
         paddingRight={16}
         flexDirection="column"

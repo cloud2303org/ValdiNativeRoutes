@@ -138,8 +138,7 @@ private fun AppModalDialog(modal: ModalPresentation) {
             window?.let {
                 it.setDimAmount(0f)
                 it.setWindowAnimations(0)
-                // The scrim darkens the whole screen, status bar included, so the dialog window keeps its theme's
-                // default (light icons) and no appearance override is needed here.
+                syncOverlayWindowSystemBars(it, it.decorView, AppUI.hostWindow)
             }
         }
         DialogLayout(scrim.value, onBackdrop = { close(false) }) {

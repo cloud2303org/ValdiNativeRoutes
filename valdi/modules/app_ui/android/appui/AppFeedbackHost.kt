@@ -22,7 +22,6 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
-import androidx.core.view.WindowCompat
 import kotlin.math.roundToInt
 
 /** Two independent slots, the timed toast above the loading. A mask swallows touches and Back. */
@@ -128,16 +127,8 @@ class AppFeedbackHost(private val activity: Activity) {
         dialog.window!!.apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             setDimAmount(0f)
-            // Edge to edge like the activity, drawing transparent bar backgrounds; otherwise the dialog window paints
-            // the system bars black under whatever page is showing.
-            WindowCompat.setDecorFitsSystemWindows(this, false)
-            addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
-            @Suppress("DEPRECATION")
-            statusBarColor = Color.TRANSPARENT
-            @Suppress("DEPRECATION")
-            navigationBarColor = Color.TRANSPARENT
-            if (Build.VERSION.SDK_INT >= 29) isNavigationBarContrastEnforced = false
-            // The overlay keeps its theme's default bar-icon appearance; no override is needed here.
+            syncOverlayWindowSystemBars(this, decorView, activity.window)
+            addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
             addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
             // Without a mask touches go through and the keyboard keeps its focus. A mask takes the focus (for Back) but
             // isn't the keyboard's target: it has nothing to type in, and the keyboard would show for it.

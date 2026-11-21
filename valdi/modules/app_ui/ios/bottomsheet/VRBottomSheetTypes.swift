@@ -169,7 +169,8 @@ struct VRBSCriticalSpring {
 
 enum VRBSMath {
     static let releaseProjectionSeconds: CGFloat = 0.1
-    static let defaultSettleDurationSeconds: CGFloat = 0.45
+    static let defaultSettleDurationSeconds: CGFloat = 0.25
+    static let flickVelocityThresholdPointsPerSec: CGFloat = 600.0
     static let settleFraction: CGFloat = 8.0
     static let maxSpringOmega: CGFloat = 100.0
     static let minSettleDurationSeconds: CGFloat = 0.001
@@ -231,33 +232,29 @@ enum VRBSMath {
         canDismissOrClose: Bool
     ) -> Int {
         guard !detents.isEmpty else { return -1 }
-        let projectedHeight = currentOpenHeight - velocityYPointsPerSec * releaseProjectionSeconds
-        var bestIndex = -1
-        var bestDistance = CGFloat.greatestFiniteMagnitude
-
+        var candidates: [(index: Int, height: CGFloat)] = []
+        candidates.reserveCapacity(detents.count + 1)
         if canDismissOrClose {
-            bestIndex = -1
-            bestDistance = abs(projectedHeight)
+            candidates.append((-1, 0))
         }
-
         for (i, spec) in detents.enumerated() where !spec.programmatic {
-            let dist = abs(projectedHeight - spec.totalHeight)
-            if dist < bestDistance {
-                bestDistance = dist
-                bestIndex = i
+            candidates.append((i, spec.totalHeight))
+        }
+        if candidates.isEmpty {
+            for (i, spec) in detents.enumerated() {
+                candidates.append((i, spec.totalHeight))
             }
         }
 
-        if bestIndex == -1 && !canDismissOrClose {
-            for (i, spec) in detents.enumerated() {
-                let dist = abs(projectedHeight - spec.totalHeight)
-                if dist < bestDistance {
-                    bestDistance = dist
-                    bestIndex = i
-                }
-            }
+        if velocityYPointsPerSec < -flickVelocityThresholdPointsPerSec {
+            return candidates.first(where: { $0.height > currentOpenHeight + 0.5 })?.index
+                ?? candidates.last!.index
         }
-        return bestIndex
+        if velocityYPointsPerSec > flickVelocityThresholdPointsPerSec {
+            return candidates.last(where: { $0.height < currentOpenHeight - 0.5 })?.index
+                ?? candidates.first!.index
+        }
+        return candidates.min(by: { abs($0.height - currentOpenHeight) < abs($1.height - currentOpenHeight) })!.index
     }
 
     static func computeFractionalIndex(detents: [VRBSDetentSpec], openHeight: CGFloat) -> CGFloat {
@@ -320,14 +317,6 @@ enum VRBSMath {
             }
         }
         return min(1, max(0, detents.last?.scrimOpacity ?? 0))
-    }
-
-    static func rubberBand(overshoot: CGFloat, dimension: CGFloat) -> CGFloat {
-        guard dimension > 0, overshoot != 0 else { return 0 }
-        let sign: CGFloat = overshoot < 0 ? -1 : 1
-        let absOvershoot = abs(overshoot)
-        let c: CGFloat = 0.55
-        return sign * (1.0 - (1.0 / ((absOvershoot * c / dimension) + 1.0))) * dimension
     }
 }
 

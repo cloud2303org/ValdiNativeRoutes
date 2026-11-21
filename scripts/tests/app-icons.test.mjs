@@ -80,9 +80,35 @@ test('a single authored PNG generates valid iOS and Android PNGs at the required
     const { data } = await sharp(path.join(root, file)).raw().toBuffer({ resolveWithObject: true });
     assert.deepEqual([...data.subarray(0, 3)], [0x12, 0x3a, 0xbc]);
   }
+  for (const [density, size] of Object.entries({ mdpi: 108, hdpi: 162, xhdpi: 216, xxhdpi: 324, xxxhdpi: 432 })) {
+    const file = `android/app/build/generated/valdi-app/res/mipmap-${density}/ic_launcher_foreground.png`;
+    const png = await sharp(path.join(root, file)).metadata();
+    assert.equal(png.format, 'png');
+    assert.equal(png.width, size);
+    assert.equal(png.height, size);
+    assert.equal(png.hasAlpha, false);
+  }
+  for (const [density, size] of Object.entries({ mdpi: 288, hdpi: 432, xhdpi: 576, xxhdpi: 864, xxxhdpi: 1024 })) {
+    const file = `android/app/build/generated/valdi-app/res/drawable-${density}/valdi_splash_logo.png`;
+    const png = await sharp(path.join(root, file)).metadata();
+    assert.equal(png.format, 'png');
+    assert.equal(png.width, size);
+    assert.equal(png.height, size);
+    assert.equal(png.hasAlpha, false);
+  }
+  for (const name of ['ic_launcher.xml', 'ic_launcher_round.xml']) {
+    const xml = readFileSync(path.join(root, 'android/app/build/generated/valdi-app/res/mipmap-anydpi-v26', name), 'utf8');
+    assert.match(xml, /@color\/valdi_launcher_background/);
+    assert.match(xml, /@mipmap\/ic_launcher_foreground/);
+  }
+  const colorsXml = readFileSync(
+    path.join(root, 'android/app/build/generated/valdi-app/res/values/valdi_launcher_colors.xml'),
+    'utf8',
+  );
+  assert.match(colorsXml, /<color name="valdi_launcher_background">#123abc<\/color>/);
   const cached = JSON.parse(readFileSync(path.join(root, manifest)));
   assert.equal(cached.sourceHash, sha256(original));
-  assert.equal(Object.keys(cached.outputs).length, 12);
+  assert.equal(Object.keys(cached.outputs).length, 25);
   for (const [file, hash] of Object.entries(cached.outputs)) {
     assert.equal(hash, sha256(readFileSync(path.join(root, file))), file);
   }
@@ -115,6 +141,10 @@ test('source replacement is detected even when source mtime and dimensions stay 
   }
   const { data } = await sharp(path.join(root, mdpi)).raw().toBuffer({ resolveWithObject: true });
   assert.deepEqual([...data.subarray(0, 3)], [0xe7, 0x38, 0x51]);
+  assert.match(
+    readFileSync(path.join(root, 'android/app/build/generated/valdi-app/res/values/valdi_launcher_colors.xml'), 'utf8'),
+    /#e73851/,
+  );
 });
 
 test('the cache repairs missing/corrupt PNGs and catalog metadata without touching unrelated files', async t => {

@@ -3,7 +3,6 @@ package io.valdiroutes.app
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
-import android.os.Build
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -12,7 +11,6 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.ComponentDialog
 import androidx.annotation.Keep
-import androidx.core.view.WindowCompat
 import com.snap.valdi.ValdiRuntimeManager
 import com.snap.valdi.attributes.AttributesBinder
 import com.snap.valdi.attributes.AttributesBindingContext
@@ -27,6 +25,7 @@ import io.valdiroutes.app_ui.BottomSheetCardShadow
 import io.valdiroutes.app_ui.BottomSheetConfig
 import io.valdiroutes.app_ui.BottomSheetDetent
 import io.valdiroutes.app_ui.BottomSheetDetentKind
+import io.valdiroutes.app_ui.appui.syncOverlayWindowSystemBars
 import io.valdiroutes.app_ui.ui.applyWheelConfigOrReset
 import kotlin.math.roundToInt
 
@@ -313,18 +312,14 @@ class BottomSheetView(context: Context) :
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
             )
-            win.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            WindowCompat.setDecorFitsSystemWindows(win, false)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                win.attributes = win.attributes.apply {
-                    layoutInDisplayCutoutMode =
-                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-                }
-            }
+            syncOverlayWindowSystemBars(win, win.decorView, activity.window)
         }
         overlayDialog = dialog
         updateOverlayWindowFlags()
         dialog.show()
+        dialog.window?.let { win ->
+            syncOverlayWindowSystemBars(win, win.decorView, activity.window)
+        }
     }
 
     private fun updateOverlayWindowFlags() {
@@ -394,7 +389,7 @@ class BottomSheetView(context: Context) :
         hostView.settleDurationSeconds = if (config.settleDuration > 0.0) {
             config.settleDuration.toFloat()
         } else {
-            BottomSheetMath.DEFAULT_SETTLE_DURATION_SECONDS
+            0f
         }
         hostView.hasCloseRequestHandler = config.hasCloseRequestHandler
         hostView.setScrimColorArgb(config.scrimColorArgb.toLong().toInt())
@@ -429,7 +424,7 @@ class BottomSheetView(context: Context) :
         hostView.modal = false
         hostView.scrollExpandCoordination = ScrollCoordinationLevel.HANDOFF
         hostView.scrollCollapseCoordination = ScrollCoordinationLevel.HANDOFF
-        hostView.settleDurationSeconds = BottomSheetMath.DEFAULT_SETTLE_DURATION_SECONDS
+        hostView.settleDurationSeconds = 0f
         hostView.hasCloseRequestHandler = false
         hostView.setScrimColorArgb(BottomSheetScrimCanvasView.DEFAULT_SCRIM_COLOR)
         hostView.setScrimAccessibilityLabel(ScrimDismissView.DEFAULT_LABEL)

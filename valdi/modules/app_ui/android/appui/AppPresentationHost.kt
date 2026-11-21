@@ -187,8 +187,11 @@ private fun ValdiSheetDialog(presentation: AppPresentation) {
 
         val window = (dialogView.parent as? DialogWindowProvider)?.window
         SideEffect {
-            window?.setDimAmount(0f)
-            window?.setWindowAnimations(0)
+            window?.let {
+                it.setDimAmount(0f)
+                it.setWindowAnimations(0)
+                syncOverlayWindowSystemBars(it, it.decorView, AppUI.hostWindow)
+            }
         }
 
         val density = LocalDensity.current

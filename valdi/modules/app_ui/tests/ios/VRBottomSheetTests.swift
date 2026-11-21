@@ -57,15 +57,16 @@ final class VRBottomSheetTests: XCTestCase {
     }
 
     func testCriticalSpringSettlesMonotonicallyWithoutOvershoot() {
+        XCTAssertEqual(VRBSMath.defaultSettleDurationSeconds, 0.25, accuracy: 0.0001)
         let start = 1000.0
         let spring = VRBSCriticalSpring(
             current: 600,
             target: 200,
             initialVelocity: 0,
-            settleDuration: 0.45,
+            settleDuration: VRBSMath.defaultSettleDurationSeconds,
             startTime: start
         )
-        XCTAssertEqual(spring.omega, 8.0 / 0.45, accuracy: 0.001)
+        XCTAssertEqual(spring.omega, 8.0 / 0.25, accuracy: 0.001)
 
         var lastPos: CGFloat = 600
         for step in 1...30 {
@@ -276,5 +277,29 @@ final class VRBottomSheetTests: XCTestCase {
         XCTAssertTrue(host.isPresented)
         XCTAssertFalse(host.isSettling)
         XCTAssertEqual(host.openHeight, 300, accuracy: 0.5)
+    }
+
+    func testFlickThresholdDismissesTallModalSheet() {
+        let tallDetents = [VRBSDetentSpec(height: 624)]
+        // Downward flick below 600 pt/s near top snaps back to detent 0.
+        XCTAssertEqual(
+            VRBSMath.resolveReleaseTargetIndex(
+                detents: tallDetents,
+                currentOpenHeight: 550,
+                velocityYPointsPerSec: 550,
+                canDismissOrClose: true
+            ),
+            0
+        )
+        // Downward flick above 600 pt/s dismisses tall sheet cleanly.
+        XCTAssertEqual(
+            VRBSMath.resolveReleaseTargetIndex(
+                detents: tallDetents,
+                currentOpenHeight: 550,
+                velocityYPointsPerSec: 700,
+                canDismissOrClose: true
+            ),
+            -1
+        )
     }
 }

@@ -278,6 +278,9 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
     private var hasMeasuredContentHeight: Bool = false
 
     private var sheetOffsetY: CGFloat = 0
+    private var awaitingCloseRequestConfirm: Bool = false
+    private var closeRequestSettledClosed: Bool = false
+    private var closeRequestTimeoutWorkItem: DispatchWorkItem?
     private var activeSpring: VRBSCriticalSpring?
     private var activeSpringTargetIndex: Int = -1
     private var displayLink: CADisplayLink?
@@ -364,6 +367,7 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
     deinit {
         clipContainer.onSubviewHierarchyChanged = nil
         scrimAccessibilityView.onActivate = nil
+        cancelPendingCloseRequest()
         stopSpring()
     }
 
@@ -460,6 +464,11 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
         if detentsChanged || modalChanged {
             let prevPresented = isPresented
             let prevTargetIndex = currentTargetIndex
+            let confirmingClose = awaitingCloseRequestConfirm && requestedIndex < 0
+            let settledClosedDuringCloseConfirm = confirmingClose && closeRequestSettledClosed
+            if awaitingCloseRequestConfirm {
+                cancelPendingCloseRequest()
+            }
             rawRequestedIndex = requestedIndex
             guard containerSize.width > 0 && containerSize.height > 0 else {
                 if modalChanged {
@@ -479,6 +488,19 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
             }
             resolveDetentsAndEmitGeometry(statusTop: currentStatusBarTopInset())
             let clamped = clampRequestedIndex(requestedIndex)
+            if confirmingClose {
+                currentTargetIndex = clamped
+                lastReportedIndex = clamped
+                if settledClosedDuringCloseConfirm {
+                    syncAccessibility()
+                    onPresentationChanged?()
+                    onSettleChanged?(clamped)
+                } else if modalChanged || isPresented != prevPresented {
+                    syncAccessibility()
+                    onPresentationChanged?()
+                }
+                return
+            }
             if clamped != prevTargetIndex {
                 snapToIndex(clamped, initialVelocity: 0, animated: true, emitIndexCallback: false)
             } else {
@@ -512,6 +534,7 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
         let prevRaw = rawRequestedIndex
         rawRequestedIndex = index
         if rawDetents.isEmpty {
+            cancelPendingCloseRequest()
             if index < 0 && sawOpenRequestBeforeInit {
                 sawOpenRequestBeforeInit = false
                 onSettleChanged?(-1)
@@ -520,10 +543,28 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
         }
         let clamped = clampRequestedIndex(index)
         if !animated && hasInitializedPresentation {
+            cancelPendingCloseRequest()
             if containerSize.height > 0 {
                 snapToIndex(clamped, initialVelocity: 0, animated: false, emitIndexCallback: false)
             }
             return
+        }
+        if hasInitializedPresentation && awaitingCloseRequestConfirm {
+            if clamped < 0 {
+                let alreadySettled = closeRequestSettledClosed
+                cancelPendingCloseRequest()
+                currentTargetIndex = clamped
+                lastReportedIndex = clamped
+                if alreadySettled {
+                    syncAccessibility()
+                    onPresentationChanged?()
+                    onSettleChanged?(clamped)
+                } else if activeSpring == nil && !isDraggingSheet && abs(targetOffset(for: clamped) - sheetOffsetY) > 0.5 {
+                    snapToIndex(clamped, initialVelocity: 0, animated: animated, emitIndexCallback: false)
+                }
+                return
+            }
+            cancelPendingCloseRequest()
         }
         if hasInitializedPresentation &&
             clamped == currentTargetIndex &&
@@ -546,6 +587,7 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
     }
 
     func resetForRecycling() {
+        cancelPendingCloseRequest()
         stopSpring()
         isDraggingSheet = false
         rawDetents = []
@@ -913,6 +955,13 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
         onCloseRequest?()
     }
 
+    private func cancelPendingCloseRequest() {
+        awaitingCloseRequestConfirm = false
+        closeRequestSettledClosed = false
+        closeRequestTimeoutWorkItem?.cancel()
+        closeRequestTimeoutWorkItem = nil
+    }
+
     private func handleDismissTrigger() {
         guard isPresented else { return }
         if hasCloseRequestHandler {
@@ -924,6 +973,7 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
 
     private func settleFromRelease(velocityYPointsPerSec: CGFloat) {
         guard !resolvedDetents.isEmpty else { return }
+        cancelPendingCloseRequest()
         let releaseIndex = VRBSMath.resolveReleaseTargetIndex(
             detents: resolvedDetents,
             currentOpenHeight: openHeight,
@@ -937,13 +987,31 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
                 snapToIndex(-1, initialVelocity: velocityYPointsPerSec, animated: true, emitIndexCallback: false)
                 return
             }
-            let bounceIndex = resolvedDetents.firstIndex(where: { !$0.programmatic }) ?? 0
-            snapToIndex(
-                bounceIndex,
-                initialVelocity: velocityYPointsPerSec,
-                animated: true,
-                emitIndexCallback: bounceIndex != lastReportedIndex
-            )
+            awaitingCloseRequestConfirm = true
+            closeRequestSettledClosed = false
+            currentTargetIndex = -1
+            lastReportedIndex = -1
+            let target = targetOffset(for: -1)
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self, self.awaitingCloseRequestConfirm else { return }
+                self.cancelPendingCloseRequest()
+                let bounceIndex = self.resolvedDetents.firstIndex(where: { !$0.programmatic }) ?? 0
+                self.snapToIndex(
+                    bounceIndex,
+                    initialVelocity: 0,
+                    animated: true,
+                    emitIndexCallback: bounceIndex != self.lastReportedIndex
+                )
+            }
+            closeRequestTimeoutWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: workItem)
+            if abs(target - sheetOffsetY) < 0.5 {
+                stopSpring()
+                setSheetOffsetYInternal(target)
+                closeRequestSettledClosed = true
+            } else {
+                startSpring(to: target, initialVelocity: velocityYPointsPerSec, targetIndex: -1)
+            }
             return
         }
 
@@ -1027,6 +1095,10 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
         if step.settled {
             let settledIdx = activeSpringTargetIndex
             stopSpring()
+            if settledIdx == -1 && awaitingCloseRequestConfirm {
+                closeRequestSettledClosed = true
+                return
+            }
             syncAccessibility()
             onPresentationChanged?()
             onSettleChanged?(settledIdx)
@@ -1262,6 +1334,7 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
     @objc private func handleSheetPan(_ pan: VRBSSheetPanGestureRecognizer) {
         switch pan.state {
         case .began:
+            cancelPendingCloseRequest()
             stopSpring()
             isDraggingSheet = true
             lastPanTranslationY = pan.translation(in: self).y
@@ -1372,21 +1445,12 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
         guard let first = resolvedDetents.first, let last = resolvedDetents.last else { return }
         let maxTotal = last.totalHeight
         let minTotal = canUserDismissOrRequestClose ? 0 : first.totalHeight
-        let proposedOpen = containerSize.height - sheetOffsetY - dy
-
-        let nextOpen: CGFloat
-        if proposedOpen > maxTotal {
-            nextOpen = maxTotal + VRBSMath.rubberBand(overshoot: proposedOpen - maxTotal, dimension: containerSize.height * 0.35)
-        } else if proposedOpen < minTotal {
-            if minTotal <= 0 {
-                nextOpen = 0
-            } else {
-                nextOpen = max(0, minTotal - VRBSMath.rubberBand(overshoot: minTotal - proposedOpen, dimension: max(1, minTotal)))
-            }
-        } else {
-            nextOpen = proposedOpen
+        let minOffset = containerSize.height - maxTotal
+        let maxOffset = containerSize.height - minTotal
+        let nextOffset = min(maxOffset, max(minOffset, sheetOffsetY + dy))
+        if nextOffset != sheetOffsetY {
+            setSheetOffsetYInternal(nextOffset)
         }
-        setSheetOffsetYInternal(containerSize.height - nextOpen)
     }
 
     private func applyDragDeltaClampedToTop(_ dy: CGFloat) -> CGFloat {

@@ -114,16 +114,29 @@ private fun StatusBarIcons(style: String) {
     }
 }
 
-@Composable
-private fun pageKeyboardHeightPx(): Int =
-    if (AppUI.modal != null) 0 else WindowInsets.ime.getBottom(LocalDensity.current)
+private class ModalImeLatch {
+    var suppressed: Boolean = false
+}
 
 /**
- * The keyboard height, read once here and applied explicitly by the page containers.
- * The edge-to-edge window is never resized, so pages account for the IME themselves.
+ * The keyboard height, read once per screen container so the edge-to-edge window
+ * never resizes while pages account for the IME themselves.
+ * While a modal dialog is open—and until the IME finishes collapsing after it
+ * closes—the underlying page sees 0 so transient dialog IME teardown cannot
+ * jitter the page behind it.
  */
 @Composable
-private fun pageKeyboardHeight(): Dp = with(LocalDensity.current) { pageKeyboardHeightPx().toDp() }
+private fun rememberPageKeyboardHeightPx(): Int {
+    val rawImePx = WindowInsets.ime.getBottom(LocalDensity.current)
+    val modalOpen = AppUI.modal != null
+    val latch = remember { ModalImeLatch() }
+    if (modalOpen) {
+        latch.suppressed = true
+    } else if (rawImePx == 0) {
+        latch.suppressed = false
+    }
+    return if (modalOpen || latch.suppressed) 0 else rawImePx
+}
 
 /** Fixed initial insets for a page: system bars and display cutout without IME subtraction. */
 @Composable
@@ -142,8 +155,9 @@ private fun pageInsets(): Insets {
 /** Full-screen Valdi page: the page owns its background and insets; the keyboard shrinks its container. */
 @Composable
 private fun ValdiScreen(entry: PageEntry, navigator: Navigator) {
-    val imeBottomPx = pageKeyboardHeightPx()
-    Box(Modifier.fillMaxSize().padding(bottom = pageKeyboardHeight())) {
+    val imeBottomPx = rememberPageKeyboardHeightPx()
+    val imeBottomDp = with(LocalDensity.current) { imeBottomPx.toDp() }
+    Box(Modifier.fillMaxSize().padding(bottom = imeBottomDp)) {
         ValdiPage(entry, pageInsets(), navigator, Modifier.fillMaxSize(), imeBottomPx = imeBottomPx)
     }
 }
@@ -247,8 +261,9 @@ private fun TabsScreen(shell: PageEntry, navigator: Navigator) {
                 // Do not apply this padding to the source bounds: native pixels must extend behind the glass.
                 val barBottomDp = maxOf(rawBottomDp, padding.calculateBottomPadding().value)
                 val insets = baseInsets.copy(bottom = barBottomDp)
-                val imeBottomPx = pageKeyboardHeightPx()
-                Box(Modifier.fillMaxSize().hazeSource(hazeState).padding(bottom = pageKeyboardHeight())) {
+                val imeBottomPx = rememberPageKeyboardHeightPx()
+                val imeBottomDp = with(LocalDensity.current) { imeBottomPx.toDp() }
+                Box(Modifier.fillMaxSize().hazeSource(hazeState).padding(bottom = imeBottomDp)) {
                     TabPage(shell, selected, insets, navigator, imeBottomPx)
                 }
             }
@@ -348,8 +363,9 @@ private fun DockedCustomTabsScreen(
     navigator: Navigator,
 ) {
     Box(Modifier.fillMaxSize()) {
-        val imeBottomPx = pageKeyboardHeightPx()
-        Box(Modifier.fillMaxSize().padding(bottom = pageKeyboardHeight())) {
+        val imeBottomPx = rememberPageKeyboardHeightPx()
+        val imeBottomDp = with(LocalDensity.current) { imeBottomPx.toDp() }
+        Box(Modifier.fillMaxSize().padding(bottom = imeBottomDp)) {
             TabPage(shell, selected, insets, navigator, imeBottomPx)
         }
         key(shell.id) {
@@ -393,8 +409,9 @@ private fun OverlayCustomTabsScreen(
 ) {
     val composition = rememberCompositionContext()
     val pageContent by rememberUpdatedState<@Composable () -> Unit>({
-        val imeBottomPx = pageKeyboardHeightPx()
-        Box(Modifier.fillMaxSize().padding(bottom = pageKeyboardHeight())) {
+        val imeBottomPx = rememberPageKeyboardHeightPx()
+        val imeBottomDp = with(LocalDensity.current) { imeBottomPx.toDp() }
+        Box(Modifier.fillMaxSize().padding(bottom = imeBottomDp)) {
             TabPage(shell, selected, insets, navigator, imeBottomPx)
         }
     })

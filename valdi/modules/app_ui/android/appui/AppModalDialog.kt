@@ -14,12 +14,16 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
+import android.view.inputmethod.InputMethodManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -29,7 +33,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog as WindowDialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
-import androidx.core.view.WindowCompat
+import kotlinx.coroutines.delay
 import com.snap.valdi.RenderBackend
 import com.snap.valdi.ValdiContextConfiguration
 import com.snap.valdi.views.ValdiRootView
@@ -60,6 +64,7 @@ private class ValdiModalSession(
     var imeBottomPx: Int = 0
     var safeTopPx: Int = 0
     var navBottomPx: Int = 0
+    var closing: Boolean = false
     private var layoutListener: View.OnLayoutChangeListener? = null
 
     fun attachRoot(view: ValdiRootView) {
@@ -72,6 +77,8 @@ private class ValdiModalSession(
     }
 
     fun applyCardKeyboardLift() {
+        // Freeze the card's vertical offset while closing so the fading modal doesn't chase the collapsing IME.
+        if (closing) return
         val root = rootView ?: return
         val card = resolveCardView(root) ?: return
         if (root.height <= 0 || card.height <= 0) return
@@ -149,13 +156,11 @@ private fun ValdiModalDialog(modal: ModalPresentation) {
     val runtime = checkNotNull(AppUI.runtime) { "E_NO_VALDI_RUNTIME:Configure AppUI.runtime before presenting modals" }
     val requestId = modal.requestId
 
-    val focusManager = LocalFocusManager.current
-    val keyboard = LocalSoftwareKeyboardController.current
-    LaunchedEffect(modal.open) {
-        if (!modal.open) {
-            focusManager.clearFocus(force = true)
-            keyboard?.hide()
-        }
+    var overlayDismissed by remember(requestId) { mutableStateOf(false) }
+
+    // Ensure the host Activity doesn't retain stale focus/IME ownership behind the modal Dialog.
+    LaunchedEffect(requestId) {
+        AppUI.clearHostFocusAndHideKeyboard()
     }
 
     val session = remember(requestId) {
@@ -174,7 +179,7 @@ private fun ValdiModalDialog(modal: ModalPresentation) {
                 },
                 onDismissed = {
                     AppUI.onMain {
-                        AppUI.modalClosed(requestId)
+                        overlayDismissed = true
                     }
                 },
             ),
@@ -244,8 +249,40 @@ private fun ValdiModalDialog(modal: ModalPresentation) {
         val bottomInsetDp = (navBottomPx / density.density).toDouble()
         val open = modal.open
 
+        val dialogFocusManager = LocalFocusManager.current
+        val dialogKeyboard = LocalSoftwareKeyboardController.current
+        LaunchedEffect(open) {
+            session.closing = !open
+            if (!open) {
+                dialogFocusManager.clearFocus(force = true)
+                val target = session.rootView ?: dialogView
+                target.findFocus()?.clearFocus()
+                if (target.hasFocus()) {
+                    target.clearFocus()
+                }
+                val token = target.windowToken ?: dialogView.windowToken
+                if (token != null) {
+                    target.context.getSystemService(InputMethodManager::class.java)
+                        ?.hideSoftInputFromWindow(token, 0)
+                }
+                dialogKeyboard?.hide()
+            }
+        }
+
+        // Wait for the IME hide animation inside the Dialog window to finish before tearing down
+        // the Dialog; otherwise WindowManager cancels the hide animation mid-flight and transfers
+        // IME control back to MainActivity, briefly flashing the keyboard over the page behind it.
+        LaunchedEffect(overlayDismissed, imeBottomPx) {
+            if (!overlayDismissed) return@LaunchedEffect
+            if (imeBottomPx > 0) {
+                delay(350L)
+            }
+            AppUI.modalClosed(requestId)
+        }
+
         AndroidView(
             factory = { ctx ->
+                session.closing = !open
                 session.topInsetDp = topInsetDp
                 session.bottomInsetDp = bottomInsetDp
                 session.lastTopInsetDp = topInsetDp
@@ -277,6 +314,7 @@ private fun ValdiModalDialog(modal: ModalPresentation) {
             },
             modifier = Modifier.fillMaxSize(),
             update = { view ->
+                session.closing = !open
                 session.safeTopPx = safeTopPx
                 session.navBottomPx = navBottomPx
                 session.imeBottomPx = imeBottomPx

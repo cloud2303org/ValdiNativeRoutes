@@ -7,6 +7,7 @@ import android.os.Looper
 import android.view.View
 import android.view.Window
 import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -200,6 +201,21 @@ object AppUI {
     /** Foreground Activity window used by overlay Dialogs to match system bar contrast and appearance. */
     internal val hostWindow: Window?
         get() = activity?.window
+
+    /** Clears focus and hides the soft keyboard on the foreground Activity window before modal transitions. */
+    internal fun clearHostFocusAndHideKeyboard() {
+        val hostActivity = activity ?: return
+        val window = hostActivity.window ?: return
+        val decor = window.decorView
+        val focused = window.currentFocus ?: decor.findFocus()
+        focused?.clearFocus()
+        if (decor.hasFocus()) {
+            decor.clearFocus()
+        }
+        val token = (focused ?: decor).windowToken ?: return
+        hostActivity.getSystemService(InputMethodManager::class.java)
+            ?.hideSoftInputFromWindow(token, 0)
+    }
 
     /** The modal to draw, if any. */
     var modal by mutableStateOf<ModalPresentation?>(null)

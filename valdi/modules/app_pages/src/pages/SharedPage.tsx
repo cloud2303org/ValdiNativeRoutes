@@ -24,7 +24,7 @@ export function SharedPage(props: SolidPageProps<PageViewModel, PageContext>) {
         <view padding={16} borderRadius={16} backgroundColor="#0F172A" marginBottom={14} flexDirection="column">
           <label value="Page 2 — Independent Solid Root" font={systemBoldFont(18)} color="#FFFFFF" marginBottom={6} />
           <label
-            value={`Root #${props.contextId} · Transport: ${props.tree.sink.mode}`}
+            value={`Root #${props.contextId} · Solid 2.0 Native`}
             font={systemFont(12)}
             color="#94A3B8"
           />

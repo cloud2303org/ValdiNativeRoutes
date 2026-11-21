@@ -10,8 +10,6 @@ import ts from 'typescript';
 const repoRoot = path.resolve(import.meta.dirname, '../../..');
 const outRoot = path.join(repoRoot, 'tools/valdi-rolldown/out');
 
-type TransportMode = 'compat' | 'native-solid';
-
 const enum Opcode {
   CREATE_ELEMENT = 1,
   DESTROY_ELEMENT = 2,
@@ -413,7 +411,7 @@ function createCppSimulator(initialPlatform = 2) {
   };
 }
 
-function createValdiTestHarness(mode: TransportMode = 'compat', platform = 2) {
+function createValdiTestHarness(platform = 2) {
   const sim = createCppSimulator(platform);
   const contextStack: (string | undefined)[] = [];
   sim.runtimeApi.pushCurrentContext = (id?: string) => {
@@ -638,8 +636,7 @@ function createValdiTestHarness(mode: TransportMode = 'compat', platform = 2) {
   }
 
   const bridge = loadModule('solid_native/src/bridge');
-  bridge.setDefaultTransportMode(mode);
-  const manager = bridge.createRootComponentsManager(mode);
+  const manager = bridge.createRootComponentsManager();
 
   const flushMicrotasks = async () => {
     for (let i = 0; i < 6; i++) {
@@ -714,47 +711,42 @@ function makePageViewModel(route: string, pageId: string) {
   };
 }
 
-function runSuiteForMode(mode: TransportMode) {
-  test(`[${mode}] 1. Babel universal compilation compiles JSX with staticProps & reactive props`, async () => {
-    const h = createValdiTestHarness(mode);
-    const solid = h.loadModule('solid_runtime/src/solid');
-    const [count, setCount] = solid.createSignal(1);
+test('1. Babel universal compilation compiles JSX with staticProps & reactive props', async () => {
+  const h = createValdiTestHarness();
+  const solid = h.loadModule('solid_runtime/src/solid');
+  const [count, setCount] = solid.createSignal(1);
 
-    h.compileInlineTsx(
-      'inline_test/StaticPropsPage',
-      `
-      export function StaticPropsPage(props) {
-        return (
-          <view backgroundColor="#FFFFFF" padding={12}>
-            <label value={"Count=" + props.viewModel().count} color="#111111" />
-          </view>
-        );
-      }
-      `,
-    );
-
-    h.manager.create('10', 'StaticPropsPage@inline_test/StaticPropsPage', { count: count() }, { back() {}, finish() {} });
-    const tree = h.sim.getTree('10');
-    assert.ok(tree.rootId !== undefined);
-    assert.deepEqual(collectLabels(tree), ['Count=1']);
-
-    const viewNode = [...tree.nodes.values()].find(n => n.attrs.padding === 12);
-    assert.ok(viewNode);
-    assert.equal(viewNode.attrs.backgroundColor, '#FFFFFF');
-    if (mode === 'compat') {
-      assert.equal(viewNode.viewClass, 'SCValdiView');
-    } else {
-      assert.equal(viewNode.viewClass, 'view');
+  h.compileInlineTsx(
+    'inline_test/StaticPropsPage',
+    `
+    export function StaticPropsPage(props) {
+      return (
+        <view backgroundColor="#FFFFFF" padding={12}>
+          <label value={"Count=" + props.viewModel().count} color="#111111" />
+        </view>
+      );
     }
+    `,
+  );
 
-    h.manager.render('10', { count: 42 });
-    await h.flushMicrotasks();
-    assert.deepEqual(collectLabels(tree), ['Count=42']);
-    h.manager.destroy('10');
-  });
+  h.manager.create('10', 'StaticPropsPage@inline_test/StaticPropsPage', { count: count() }, { back() {}, finish() {} });
+  const tree = h.sim.getTree('10');
+  assert.ok(tree.rootId !== undefined);
+  assert.deepEqual(collectLabels(tree), ['Count=1']);
 
-  test(`[${mode}] 2. Multi-signal updates auto-batch into a single RenderRequest via microtask without batch()`, async () => {
-    const h = createValdiTestHarness(mode);
+  const viewNode = [...tree.nodes.values()].find(n => n.attrs.padding === 12);
+  assert.ok(viewNode);
+  assert.equal(viewNode.attrs.backgroundColor, '#FFFFFF');
+  assert.equal(viewNode.viewClass, 'view');
+
+  h.manager.render('10', { count: 42 });
+  await h.flushMicrotasks();
+  assert.deepEqual(collectLabels(tree), ['Count=42']);
+  h.manager.destroy('10');
+});
+
+test('2. Multi-signal updates auto-batch into a single RenderRequest via microtask without batch()', async () => {
+  const h = createValdiTestHarness();
     const solid = h.loadModule('solid_runtime/src/solid');
     const [a, setA] = solid.createSignal('A0');
     const [b, setB] = solid.createSignal('B0');
@@ -798,8 +790,8 @@ function runSuiteForMode(mode: TransportMode) {
     h.manager.destroy('11');
   });
 
-  test(`[${mode}] 3. Per-page Solid roots + single shared solid_runtime on compiled app_pages`, async () => {
-    const h = createValdiTestHarness(mode);
+test('3. Per-page Solid roots + single shared solid_runtime on compiled app_pages', async () => {
+  const h = createValdiTestHarness();
     const routesMod = h.loadModule('app_pages/src/routes');
     assert.equal(routesMod.routes.pages.home.component, 'HomePage@app_pages/src/pages/HomePage');
     assert.equal(routesMod.routes.pages.shared.component, 'SharedPage@app_pages/src/pages/SharedPage');
@@ -840,8 +832,8 @@ function runSuiteForMode(mode: TransportMode) {
     h.manager.destroy('1');
   });
 
-  test(`[${mode}] 4. <Show> conditional mount/unmount across repeated cycles without sentinel views or OOB`, async () => {
-    const h = createValdiTestHarness(mode);
+test('4. <Show> conditional mount/unmount across repeated cycles without sentinel views or OOB', async () => {
+  const h = createValdiTestHarness();
     h.manager.create('1', 'HomePage@app_pages/src/pages/HomePage', makePageViewModel('home', 'p1'), { back() {}, finish() {} });
     const tree = h.sim.getTree('1');
 
@@ -866,8 +858,8 @@ function runSuiteForMode(mode: TransportMode) {
     h.manager.destroy('1');
   });
 
-  test(`[${mode}] 5. <For> keyed list append, prepend, reverse, rotate, remove middle, clear`, async () => {
-    const h = createValdiTestHarness(mode);
+test('5. <For> keyed list append, prepend, reverse, rotate, remove middle, clear', async () => {
+  const h = createValdiTestHarness();
     h.manager.create('1', 'HomePage@app_pages/src/pages/HomePage', makePageViewModel('home', 'p1'), { back() {}, finish() {} });
     const tree = h.sim.getTree('1');
 
@@ -941,12 +933,12 @@ function runSuiteForMode(mode: TransportMode) {
     h.manager.destroy('1');
   });
 
-  test(`[${mode}] 6. Text child policy rejects non-empty text and keeps "" as pure-JS sentinel`, () => {
-    const h = createValdiTestHarness(mode);
-    const renderer = h.loadModule('solid_native/src/renderer');
-    const tree = new (h.loadModule('solid_native/src/native-tree').NativeTree)(
-      new (h.loadModule('solid_native/src/transport').ValdiBinarySink)('99', mode, h.sim.runtimeApi),
-    );
+test('6. Text child policy rejects non-empty text and keeps "" as pure-JS sentinel', () => {
+  const h = createValdiTestHarness();
+  const renderer = h.loadModule('solid_native/src/renderer');
+  const tree = new (h.loadModule('solid_native/src/native-tree').NativeTree)(
+    new (h.loadModule('solid_native/src/transport').ValdiBinarySink)('99', h.sim.runtimeApi),
+  );
 
     const dispose = renderer.render(
       () =>
@@ -968,8 +960,8 @@ function runSuiteForMode(mode: TransportMode) {
     tree.dispose();
   });
 
-  test(`[${mode}] 7. onNextDraw emits ON_NEXT_DRAW opcode for splash screen dismissal`, () => {
-    const h = createValdiTestHarness(mode);
+test('7. onNextDraw emits ON_NEXT_DRAW opcode for splash screen dismissal', () => {
+  const h = createValdiTestHarness();
     h.manager.create('1', 'HomePage@app_pages/src/pages/HomePage', makePageViewModel('home', 'p1'), { back() {}, finish() {} });
     const simTree = h.sim.getTree('1');
     let drawn = false;
@@ -982,8 +974,8 @@ function runSuiteForMode(mode: TransportMode) {
     h.manager.destroy('1');
   });
 
-  test(`[${mode}] 9. Style objects emit SET_ATTRIBUTE_STYLE (12) and reuse cached native CSS rule ids`, async () => {
-    const h = createValdiTestHarness(mode);
+test('9. Style objects emit SET_ATTRIBUTE_STYLE (12) and reuse cached native CSS rule ids', async () => {
+  const h = createValdiTestHarness();
     const { Style } = h.loadModule('valdi_core/src/Style');
 
     h.compileInlineTsx(
@@ -1020,9 +1012,9 @@ function runSuiteForMode(mode: TransportMode) {
     assert.ok(Style);
   });
 
-  test(`[${mode}] 10. <custom-view> resolves platform class names and viewFactory -> Deferred`, () => {
-    // iOS (platform = 2)
-    const iosHarness = createValdiTestHarness(mode, 2);
+test('10. <custom-view> resolves platform class names and viewFactory -> Deferred', () => {
+  // iOS (platform = 2)
+  const iosHarness = createValdiTestHarness(2);
     iosHarness.compileInlineTsx(
       'inline_test/CustomViewPage',
       `
@@ -1052,7 +1044,7 @@ function runSuiteForMode(mode: TransportMode) {
     iosHarness.manager.destroy('41');
 
     // Android (platform = 1)
-    const androidHarness = createValdiTestHarness(mode, 1);
+    const androidHarness = createValdiTestHarness(1);
     androidHarness.compileInlineTsx(
       'inline_test/CustomViewPage',
       `
@@ -1069,8 +1061,8 @@ function runSuiteForMode(mode: TransportMode) {
     androidHarness.manager.destroy('42');
   });
 
-  test(`[${mode}] 11. Visibility/viewport observers, $onLayout, and onLayoutComplete dispatch & acknowledger safety`, async () => {
-    const h = createValdiTestHarness(mode);
+test('11. Visibility/viewport observers, $onLayout, and onLayoutComplete dispatch & acknowledger safety', async () => {
+  const h = createValdiTestHarness();
     const solid = h.loadModule('solid_runtime/src/solid');
     const [trackVis, setTrackVis] = solid.createSignal(true);
     const events: any[] = [];
@@ -1192,8 +1184,8 @@ function runSuiteForMode(mode: TransportMode) {
     h.manager.destroy('51');
   });
 
-  test(`[${mode}] 12. Native animate() / useAnimate() / cancel() emit BEGIN_ANIMATIONS (14), mutations, END_ANIMATIONS (15), CANCEL_ANIMATION (17)`, async () => {
-    const h = createValdiTestHarness(mode);
+test('12. Native animate() / useAnimate() / cancel() emit BEGIN_ANIMATIONS (14), mutations, END_ANIMATIONS (15), CANCEL_ANIMATION (17)', async () => {
+  const h = createValdiTestHarness();
     const solid = h.loadModule('solid_runtime/src/solid');
     const [preWidth, setPreWidth] = solid.createSignal(50);
     const [animWidth, setAnimWidth] = solid.createSignal(100);
@@ -1306,8 +1298,8 @@ function runSuiteForMode(mode: TransportMode) {
     h.manager.destroy('62');
   });
 
-  test(`[${mode}] 13. Imperative NativeElement helpers getFrame, getNativeView, getNativeNode, takeSnapshot`, async () => {
-    const h = createValdiTestHarness(mode);
+test('13. Imperative NativeElement helpers getFrame, getNativeView, getNativeNode, takeSnapshot', async () => {
+  const h = createValdiTestHarness();
     let capturedRef: any;
 
     h.compileInlineTsx(
@@ -1351,73 +1343,73 @@ function runSuiteForMode(mode: TransportMode) {
     assert.equal(await capturedRef.takeSnapshot(), undefined);
   });
 
-  test(`[${mode}] 15. <Lazy> defers mount until visible, supports unmountWhenHidden with measured height, and nests cleanly`, async () => {
-    const h = createValdiTestHarness(mode);
-    const counters = {
-      onceMount: 0,
-      onceCleanup: 0,
-      dynMount: 0,
-      dynCleanup: 0,
-      chunkMount: 0,
-      chunkCleanup: 0,
-      itemMount: 0,
-      itemCleanup: 0,
-    };
+test('15. <Lazy> recycles offscreen subtrees by default with measured height and supports unmountWhenHidden={false}', async () => {
+  const h = createValdiTestHarness();
+  const counters = {
+    onceMount: 0,
+    onceCleanup: 0,
+    dynMount: 0,
+    dynCleanup: 0,
+    chunkMount: 0,
+    chunkCleanup: 0,
+    itemMount: 0,
+    itemCleanup: 0,
+  };
 
-    h.compileInlineTsx(
-      'inline_test/LazyPage',
-      `
-      import { onCleanup } from 'solid-js';
-      import { Lazy } from 'solid_native/src/Lazy';
+  h.compileInlineTsx(
+    'inline_test/LazyPage',
+    `
+    import { onCleanup } from 'solid-js';
+    import { Lazy } from 'solid_native/src/Lazy';
 
-      function TrackedChild(props) {
-        props.onMount();
-        onCleanup(() => props.onCleanup());
-        return <label value={props.text} />;
-      }
+    function TrackedChild(props) {
+      props.onMount();
+      onCleanup(() => props.onCleanup());
+      return <label value={props.text} />;
+    }
 
-      export function LazyPage(props) {
-        const c = props.viewModel().counters;
-        return (
-          <scroll viewportExtensionTop={200} viewportExtensionBottom={200}>
-            <Lazy height={80} accessibilityLabel="lazy-once">
-              <TrackedChild
-                text="once-mounted"
-                onMount={() => c.onceMount++}
-                onCleanup={() => c.onceCleanup++}
-              />
-            </Lazy>
+    export function LazyPage(props) {
+      const c = props.viewModel().counters;
+      return (
+        <scroll viewportExtensionTop={200} viewportExtensionBottom={200}>
+          <Lazy height={80} unmountWhenHidden={false} accessibilityLabel="lazy-once">
+            <TrackedChild
+              text="once-mounted"
+              onMount={() => c.onceMount++}
+              onCleanup={() => c.onceCleanup++}
+            />
+          </Lazy>
 
-            <Lazy estimatedHeight={120} unmountWhenHidden={true} accessibilityLabel="lazy-dynamic">
-              <TrackedChild
-                text="dynamic-mounted"
-                onMount={() => c.dynMount++}
-                onCleanup={() => c.dynCleanup++}
-              />
-            </Lazy>
+          <Lazy estimatedHeight={120} accessibilityLabel="lazy-dynamic">
+            <TrackedChild
+              text="dynamic-mounted"
+              onMount={() => c.dynMount++}
+              onCleanup={() => c.dynCleanup++}
+            />
+          </Lazy>
 
-            <Lazy estimatedHeight={400} unmountWhenHidden={true} accessibilityLabel="lazy-chunk">
-              {(() => {
-                c.chunkMount++;
-                onCleanup(() => c.chunkCleanup++);
-                return (
-                  <view>
-                    <Lazy height={40} unmountWhenHidden={true} accessibilityLabel="lazy-chunk-item">
-                      <TrackedChild
-                        text="nested-item-mounted"
-                        onMount={() => c.itemMount++}
-                        onCleanup={() => c.itemCleanup++}
-                      />
-                    </Lazy>
-                  </view>
-                );
-              })()}
-            </Lazy>
-          </scroll>
-        );
-      }
-      `,
-    );
+          <Lazy estimatedHeight={400} accessibilityLabel="lazy-chunk">
+            {(() => {
+              c.chunkMount++;
+              onCleanup(() => c.chunkCleanup++);
+              return (
+                <view>
+                  <Lazy height={40} accessibilityLabel="lazy-chunk-item">
+                    <TrackedChild
+                      text="nested-item-mounted"
+                      onMount={() => c.itemMount++}
+                      onCleanup={() => c.itemCleanup++}
+                    />
+                  </Lazy>
+                </view>
+              );
+            })()}
+          </Lazy>
+        </scroll>
+      );
+    }
+    `,
+  );
 
     h.manager.create('81', 'LazyPage@inline_test/LazyPage', { counters }, { back() {}, finish() {} });
     const simTree = h.sim.getTree('81');
@@ -1508,9 +1500,8 @@ function runSuiteForMode(mode: TransportMode) {
 
     h.manager.destroy('81');
   });
-}
 
-test('[types] 14. Full 17-element JSX definitions typecheck and disallow direct children on <label>', () => {
+test('14. Full 17-element JSX definitions typecheck and disallow direct children on <label>', () => {
   const tsconfigPath = path.join(repoRoot, 'valdi/modules/app_pages/tsconfig.json');
   const configResult = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
   assert.equal(configResult.error, undefined);
@@ -1592,17 +1583,14 @@ test('[types] 14. Full 17-element JSX definitions typecheck and disallow direct 
   assert.ok(badDiags.length > 0, '<label> with direct child text must fail typecheck');
 });
 
-runSuiteForMode('compat');
-runSuiteForMode('native-solid');
-
-test('[native-solid] 8. Default transport uses native-solid raw tags, INSERT_ELEMENT_BEFORE (20), and DETACH_ELEMENT (19) re-attach', () => {
-  const h = createValdiTestHarness('native-solid');
+test('8. Default transport uses raw tags, INSERT_ELEMENT_BEFORE (20), and DETACH_ELEMENT (19) re-attach', () => {
+  const h = createValdiTestHarness();
   const defaultMgr = h.bridge.createRootComponentsManager();
   defaultMgr.create('77', 'HomePage@app_pages/src/pages/HomePage', makePageViewModel('home', 'p77'), {
     back() {},
     finish() {},
   });
-  assert.equal(defaultMgr.getBatchStats('77')?.mode, 'native-solid');
+  assert.ok(defaultMgr.getBatchStats('77')!.totalOps > 0);
   const defaultTree = h.sim.getTree('77');
   assert.equal(
     defaultTree.batches[0].some(op => op.type === Opcode.MOVE_ELEMENT_TO_PARENT),
@@ -1617,7 +1605,7 @@ test('[native-solid] 8. Default transport uses native-solid raw tags, INSERT_ELE
 
   const { NativeTree } = h.loadModule('solid_native/src/native-tree');
   const { ValdiBinarySink } = h.loadModule('solid_native/src/transport');
-  const sink = new ValdiBinarySink('20', 'native-solid', h.sim.runtimeApi);
+  const sink = new ValdiBinarySink('20', h.sim.runtimeApi);
   const tree = new NativeTree(sink);
 
   const a = tree.create('label', { value: 'A' });

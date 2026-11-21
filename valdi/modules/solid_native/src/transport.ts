@@ -9,8 +9,6 @@ import type { NativeNode } from 'valdi_tsx/src/NativeNode';
 import type { NativeView } from 'valdi_tsx/src/NativeView';
 import type { PropertyList } from 'valdi_tsx/src/PropertyList';
 
-export type TransportMode = 'compat' | 'native-solid';
-
 export const enum EntryOpcode {
   CREATE_ELEMENT = 1,
   DESTROY_ELEMENT = 2,
@@ -35,14 +33,12 @@ export const enum EntryOpcode {
 }
 
 export interface BatchStats {
-  mode: TransportMode;
   batches: number;
   totalOps: number;
   lastBatchOps: number;
 }
 
 export interface NativeSink {
-  readonly mode: TransportMode;
   readonly stats: BatchStats;
   getPlatform?(): number;
   run<T>(action: () => T): T;
@@ -50,8 +46,7 @@ export interface NativeSink {
   end(): void;
   create(id: number, tag: string): void;
   setRoot(id: number): void;
-  move(id: number, parentId: number, index: number): void;
-  insertBefore?(id: number, parentId: number, anchorId: number): void;
+  insertBefore(id: number, parentId: number, anchorId: number): void;
   detach(id: number): void;
   destroy(id: number): void;
   set(id: number, name: string, value: unknown): void;
@@ -125,55 +120,8 @@ class CommandBuffer {
   }
 }
 
-const IOS_VIEW_CLASSES: Record<string, string> = {
-  layout: 'Layout',
-  view: 'SCValdiView',
-  label: 'SCValdiLabel',
-  scroll: 'SCValdiScrollView',
-  image: 'SCValdiImageView',
-  video: 'SCValdiVideoView',
-  webview: 'SCValdiWebView',
-  button: 'UIButton',
-  spinner: 'SCValdiSpinnerView',
-  blur: 'SCValdiBlurView',
-  glass: 'SCValdiGlassView',
-  textfield: 'SCValdiTextField',
-  textview: 'SCValdiTextView',
-  textanimationgroup: 'SCValdiTextAnimationGroup',
-  shape: 'SCValdiShapeView',
-  animatedimage: 'SCValdiAnimatedContentView',
-};
-
-const ANDROID_VIEW_CLASSES: Record<string, string> = {
-  layout: 'Layout',
-  view: 'com.snap.valdi.views.ValdiView',
-  label: 'com.snap.valdi.views.ValdiTextView',
-  scroll: 'com.snap.valdi.views.ValdiScrollView',
-  image: 'com.snap.valdi.views.ValdiImageView',
-  video: 'com.snap.valdi.views.ValdiVideoView',
-  webview: 'com.snap.valdi.modules.webview.ValdiWebView',
-  button: 'android.widget.Button',
-  spinner: 'com.snap.valdi.views.ValdiSpinnerView',
-  blur: 'com.snap.valdi.views.ValdiView',
-  glass: 'com.snap.valdi.views.ValdiView',
-  textfield: 'com.snap.valdi.views.ValdiEditText',
-  textview: 'com.snap.valdi.views.ValdiEditTextMultiline',
-  textanimationgroup: 'com.snap.valdi.views.ValdiTextAnimationGroup',
-  shape: 'com.snap.valdi.views.ShapeView',
-  animatedimage: 'com.snap.valdi.views.AnimatedImageView',
-};
-
-const STAGING_CONTAINER_ID = 0xffffff;
-
 function nonEmptyString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-export function resolveCompatViewClass(tag: string, platform: number): string {
-  // 1 = Android, 2 = iOS, 3 = MacOS, 4 = Web, 5 = Linux
-  if (platform === 1) return ANDROID_VIEW_CLASSES[tag] ?? tag;
-  if (platform === 2 || platform === 3 || platform === 5) return IOS_VIEW_CLASSES[tag] ?? tag;
-  return tag;
 }
 
 export function resolveCustomViewClass(props: Record<string, unknown>, platform: number): string {
@@ -207,7 +155,7 @@ function isValdiStyle(value: unknown): value is IStyle<unknown> {
 }
 
 export class ValdiBinarySink implements NativeSink {
-  readonly stats: BatchStats;
+  readonly stats: BatchStats = { batches: 0, totalOps: 0, lastBatchOps: 0 };
   private readonly bufferPool = [new CommandBuffer(1024)];
   private buffer = this.bufferPool.pop()!;
   private values: any[] = [];
@@ -217,25 +165,14 @@ export class ValdiBinarySink implements NativeSink {
   private opsInCurrentBatch = 0;
   private pendingFrameObserver?: NativeFrameObserver;
   private pendingVisibilityObserver?: NativeVisibilityObserver;
-  private stagingCreated = false;
   private destroyed = false;
   private readonly platform: number;
 
-  readonly insertBefore?: (id: number, parentId: number, anchorId: number) => void;
-
   constructor(
     readonly treeId: string,
-    readonly mode: TransportMode = 'compat',
     private readonly runtime: ValdiRuntime = getValdiRuntime(),
   ) {
     this.platform = runtime.getCurrentPlatform();
-    this.stats = { mode, batches: 0, totalOps: 0, lastBatchOps: 0 };
-    if (mode === 'native-solid') {
-      this.insertBefore = (id, parentId, anchorId) => {
-        this.opsInCurrentBatch++;
-        this.buffer.putU32_3(EntryOpcode.INSERT_ELEMENT_BEFORE | (id << 8), parentId, anchorId);
-      };
-    }
   }
 
   getPlatform(): number {
@@ -302,9 +239,8 @@ export class ValdiBinarySink implements NativeSink {
   }
 
   create(id: number, tag: string): void {
-    const viewClass = this.mode === 'compat' ? resolveCompatViewClass(tag, this.platform) : tag;
     this.opsInCurrentBatch++;
-    this.buffer.putU32_2(EntryOpcode.CREATE_ELEMENT | (id << 8), this.intern(viewClass));
+    this.buffer.putU32_2(EntryOpcode.CREATE_ELEMENT | (id << 8), this.intern(tag));
   }
 
   setRoot(id: number): void {
@@ -312,23 +248,14 @@ export class ValdiBinarySink implements NativeSink {
     this.buffer.putU32(EntryOpcode.SET_ROOT_ELEMENT | (id << 8));
   }
 
-  move(id: number, parentId: number, index: number): void {
+  insertBefore(id: number, parentId: number, anchorId: number): void {
     this.opsInCurrentBatch++;
-    this.buffer.putU32_3(EntryOpcode.MOVE_ELEMENT_TO_PARENT | (id << 8), parentId, index);
+    this.buffer.putU32_3(EntryOpcode.INSERT_ELEMENT_BEFORE | (id << 8), parentId, anchorId);
   }
 
   detach(id: number): void {
     this.opsInCurrentBatch++;
-    if (this.mode === 'native-solid') {
-      this.buffer.putU32(EntryOpcode.DETACH_ELEMENT | (id << 8));
-      return;
-    }
-    if (!this.stagingCreated) {
-      this.stagingCreated = true;
-      const viewClass = resolveCompatViewClass('view', this.platform);
-      this.buffer.putU32_2(EntryOpcode.CREATE_ELEMENT | (STAGING_CONTAINER_ID << 8), this.intern(viewClass));
-    }
-    this.buffer.putU32_3(EntryOpcode.MOVE_ELEMENT_TO_PARENT | (id << 8), STAGING_CONTAINER_ID, 0);
+    this.buffer.putU32(EntryOpcode.DETACH_ELEMENT | (id << 8));
   }
 
   destroy(id: number): void {

@@ -77,13 +77,14 @@ export function moduleConfig(name: string): ModuleConfig {
 
 export function appModule(name: string): ValdiModule {
   const config = moduleConfig(name);
+  const jsxBackend = config.jsxBackend ?? (existsSync(path.join(modulesDir, 'solid_native')) ? 'solid' : undefined);
   return {
     name,
     dir: path.join(modulesDir, name),
     generatedDirs: [genDir(name)],
     // The npm packages its sources import (valdi/package.json, pinned by valdi/pnpm-lock.yaml) are bundled into it.
     nodeModules: path.join(valdi, 'node_modules'),
-    ...(config.jsxBackend ? { jsxBackend: config.jsxBackend } : {}),
+    ...(jsxBackend ? { jsxBackend } : {}),
   };
 }
 

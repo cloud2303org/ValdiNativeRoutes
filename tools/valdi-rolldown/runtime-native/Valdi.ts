@@ -8,7 +8,7 @@ import type { ValdiRuntime } from 'valdi_core/src/ValdiRuntime';
 declare const runtime: ValdiRuntime;
 declare const require: (path: string, disableProxy?: boolean) => any;
 
-let manager: (IRootComponentsManager & { rootComponents?: Record<string, any> }) | undefined;
+let manager: (IRootComponentsManager & { rootComponents: Record<string, any> }) | undefined;
 
 export function makeRootComponentsManager(): IRootComponentsManager {
   // Delayed until C++ requests its first context so all app archives are registered.
@@ -16,7 +16,7 @@ export function makeRootComponentsManager(): IRootComponentsManager {
 }
 
 export function getLastRootComponentsManager():
-  | (IRootComponentsManager & { rootComponents?: Record<string, any> })
+  | (IRootComponentsManager & { rootComponents: Record<string, any> })
   | undefined {
   return manager;
 }

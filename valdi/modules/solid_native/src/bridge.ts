@@ -4,7 +4,7 @@ import { getModuleLoader } from 'valdi_core/src/ModuleLoaderGlobal';
 import { withLocalNativeRefs } from 'valdi_core/src/NativeReferences';
 import { NativeTree } from './native-tree';
 import { createComponent, render, RenderContext } from './renderer';
-import { ValdiBinarySink, type BatchStats, type TransportMode } from './transport';
+import { ValdiBinarySink, type BatchStats } from './transport';
 
 export interface SolidPageProps<ViewModel = any, Context = any> {
   viewModel: Accessor<ViewModel>;
@@ -24,16 +24,6 @@ interface PageSession {
   renderer: {
     onNextDraw(cb: () => void): void;
   };
-}
-
-let activeTransportMode: TransportMode = 'native-solid';
-
-export function setDefaultTransportMode(mode: TransportMode): void {
-  activeTransportMode = mode;
-}
-
-export function getDefaultTransportMode(): TransportMode {
-  return activeTransportMode;
 }
 
 function parseComponentPath(componentPath: string): { modulePath: string; symbol: string } {
@@ -62,9 +52,7 @@ export interface SolidRootComponentsManager extends IRootComponentsManager {
   getBatchStats(contextId: string): BatchStats | undefined;
 }
 
-export function createRootComponentsManager(
-  mode: TransportMode = activeTransportMode,
-): SolidRootComponentsManager {
+export function createRootComponentsManager(): SolidRootComponentsManager {
   const rootComponents: Record<string, PageSession> = {};
 
   return {
@@ -76,7 +64,7 @@ export function createRootComponentsManager(
 
     create(contextId: string, componentPath: string, viewModel: any, componentContext: any): void {
       const Page = resolvePageComponent(componentPath);
-      const sink = new ValdiBinarySink(contextId, mode);
+      const sink = new ValdiBinarySink(contextId);
       const tree = new NativeTree(sink);
       const [vm, setVm] = createSignal<any>(viewModel);
 

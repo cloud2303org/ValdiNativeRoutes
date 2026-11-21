@@ -37,7 +37,7 @@ export interface LazyProps extends Pick<Layout, LazyLayoutKeys> {
   estimatedWidth?: number;
   estimatedHeight?: number;
   lazyLayout?: boolean;
-  /** Unmount subtree when scrolled out of viewport + buffer while preserving last measured size. */
+  /** Unmount subtree when scrolled out of viewport + buffer while preserving last measured size (default: true). */
   unmountWhenHidden?: boolean;
   fallback?: SolidElement;
   onVisibilityChanged?: (isVisible: boolean, eventTime: EventTime) => void;
@@ -61,7 +61,8 @@ export function Lazy(props: LazyProps): JSX.Element {
   let lastMeasuredHeight: number | undefined;
   let lastMeasuredWidth: number | undefined;
 
-  const shouldRender = () => (props.unmountWhenHidden ? visible() : wasEverVisible());
+  const shouldUnmount = () => props.unmountWhenHidden !== false;
+  const shouldRender = () => (shouldUnmount() ? visible() : wasEverVisible());
 
   const effectiveEstimatedHeight = () =>
     props.height === undefined ? (placeholderHeight() ?? props.estimatedHeight) : props.estimatedHeight;
@@ -78,7 +79,7 @@ export function Lazy(props: LazyProps): JSX.Element {
     if (isVisible) {
       setWasEverVisible(true);
       setVisible(true);
-    } else if (props.unmountWhenHidden) {
+    } else if (shouldUnmount()) {
       if (props.height === undefined && lastMeasuredHeight !== undefined && lastMeasuredHeight > 0) {
         setPlaceholderHeight(lastMeasuredHeight);
       }

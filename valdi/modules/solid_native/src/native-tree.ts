@@ -44,7 +44,6 @@ type HostOp =
       type: 'insert';
       node: NativeElement;
       parent: NativeElement;
-      index: number;
       anchor?: NativeElement;
     }
   | { type: 'detach'; node: NativeElement }
@@ -75,7 +74,6 @@ export class NativeTree {
   private flushScheduled = false;
   private flushing = false;
   private materialized = new Set<NativeElement>();
-  private detachedInBatch = new Set<NativeElement>();
   private disposedNodes = new Set<NativeElement>();
   private observedVisibilityNodes = new Set<NativeElement>();
   private elementsById = new Map<number, NativeElement>();
@@ -237,19 +235,15 @@ export class NativeTree {
     this.materialize(parent);
     this.materialize(node);
     this.disposedNodes.delete(node);
-    this.detachedInBatch.delete(node);
 
     this.unlink(node);
     this.link(parent, node, anchor);
 
-    const nativeAnchor = this.nextMaterializedSibling(node);
-    const nativeIndex = this.sink.insertBefore ? 0 : this.countPrecedingMaterializedSiblings(node);
     this.enqueue({
       type: 'insert',
       node,
       parent,
-      index: nativeIndex,
-      anchor: nativeAnchor,
+      anchor: this.nextMaterializedSibling(node),
     });
   }
 
@@ -258,7 +252,6 @@ export class NativeTree {
     this.unlink(node);
     if (node.kind === 'sentinel') return;
     if (this.materialized.has(node)) {
-      this.detachedInBatch.add(node);
       this.enqueue({ type: 'detach', node });
     }
   }
@@ -359,20 +352,13 @@ export class NativeTree {
     if (!this.alive || this.flushing) return;
     const registerVisibility =
       this.needsVisibilityObserver && !this.visibilityObserverRegistered && Boolean(this.sink.observeVisibility);
-    if (
-      this.operations.length === 0 &&
-      this.disposedNodes.size === 0 &&
-      this.detachedInBatch.size === 0 &&
-      !registerVisibility
-    ) {
+    if (this.operations.length === 0 && this.disposedNodes.size === 0 && !registerVisibility) {
       return;
     }
 
     this.flushing = true;
     const ops = this.operations;
-    const detached = this.detachedInBatch;
     this.operations = [];
-    this.detachedInBatch = new Set();
 
     try {
       this.sink.run(() => {
@@ -406,11 +392,7 @@ export class NativeTree {
               this.sink.set(op.node.id, op.key, op.value);
               break;
             case 'insert':
-              if (this.sink.insertBefore) {
-                this.sink.insertBefore(op.node.id, op.parent.id, op.anchor ? op.anchor.id : 0);
-              } else {
-                this.sink.move(op.node.id, op.parent.id, op.index);
-              }
+              this.sink.insertBefore(op.node.id, op.parent.id, op.anchor ? op.anchor.id : 0);
               break;
             case 'detach':
               this.sink.detach(op.node.id);
@@ -433,8 +415,6 @@ export class NativeTree {
           }
         }
 
-        // Destroy nodes whose Solid owner was disposed and that are no longer attached,
-        // or in compat mode release still-detached nodes at batch end so staging does not leak.
         const toDestroySet = new Set<NativeElement>();
         for (const node of this.disposedNodes) {
           if (this.materialized.has(node) && !this.isAttachedToRoot(node)) {
@@ -442,14 +422,6 @@ export class NativeTree {
           }
         }
         this.disposedNodes.clear();
-
-        if (this.sink.mode === 'compat') {
-          for (const node of detached) {
-            if (this.materialized.has(node) && !this.isAttachedToRoot(node)) {
-              toDestroySet.add(node);
-            }
-          }
-        }
 
         for (const node of toDestroySet) {
           if (!this.materialized.has(node)) continue;
@@ -481,7 +453,6 @@ export class NativeTree {
     if (!this.alive) return;
     this.alive = false;
     this.operations = [];
-    this.detachedInBatch.clear();
     this.disposedNodes.clear();
     this.observedVisibilityNodes.clear();
     this.materialized.clear();
@@ -622,7 +593,6 @@ export class NativeTree {
     if (node === this.root) {
       this.enqueue({ type: 'root', node });
     }
-    let idx = 0;
     for (let child = node.firstChild; child; child = child.nextSibling) {
       if (child.kind !== 'element') continue;
       this.materialize(child);
@@ -630,7 +600,6 @@ export class NativeTree {
         type: 'insert',
         node: child,
         parent: node,
-        index: idx++,
         anchor: undefined,
       });
     }
@@ -677,16 +646,6 @@ export class NativeTree {
       }
     }
     return undefined;
-  }
-
-  private countPrecedingMaterializedSiblings(node: NativeElement): number {
-    let count = 0;
-    for (let cur = node.previousSibling; cur; cur = cur.previousSibling) {
-      if (cur.kind === 'element' && this.materialized.has(cur)) {
-        count++;
-      }
-    }
-    return count;
   }
 
   private enqueue(op: HostOp): void {

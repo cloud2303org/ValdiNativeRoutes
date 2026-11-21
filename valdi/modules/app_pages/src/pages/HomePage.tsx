@@ -174,7 +174,7 @@ export function HomePage(props: SolidPageProps<PageViewModel, PageContext>) {
             marginBottom={6}
           />
           <label
-            value={`Engine: ${JS_ENGINE} · Mode: ${props.tree.sink.mode} · Root #${props.contextId}`}
+            value={`Engine: ${JS_ENGINE} · Root #${props.contextId}`}
             font={systemFont(12)}
             color="#94A3B8"
             marginBottom={6}
@@ -404,7 +404,7 @@ export function HomePage(props: SolidPageProps<PageViewModel, PageContext>) {
             </view>
           </scroll>
 
-          <Lazy estimatedHeight={36} unmountWhenHidden={true} marginTop={10}>
+          <Lazy estimatedHeight={36} marginTop={10}>
             <view padding={10} borderRadius={10} backgroundColor="#F8FAFC">
               <label value="Lazy slot (viewport-mounted, recyclable)" font={systemFont(12)} color="#475569" />
             </view>

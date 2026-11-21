@@ -68,9 +68,23 @@ test('every official module template compiles with the Node backend and preserve
     } else {
       assert.ok([...archive.keys()].some(name => name.endsWith('.js')));
     }
+    if (template === 'ui_component') {
+      const tsxPath = path.join(created.directory, 'src/SampleUiComponentComponent.tsx');
+      assert.ok(existsSync(tsxPath));
+      const tsxSource = readFileSync(tsxPath, 'utf8');
+      assert.doesNotMatch(tsxSource, /valdi_core\/src\/Component/);
+      const js = [...archive.entries()].find(([name]) => name.endsWith('SampleUiComponentComponent.js'))?.[1].toString() ?? '';
+      assert.match(js, /solid_native\/src\/renderer/);
+      assert.match(js, /solid_runtime\/src\/solid/);
+    }
     if (template === 'polyglot_view_module') {
       assert.ok(existsSync(path.join(created.directory, 'macos', `SC${config.iosModuleName}NativeView.m`)));
       assert.ok(existsSync(path.join(created.directory, 'web/PolyglotWeb.ts')));
+      const customViewSource = readFileSync(path.join(created.directory, 'src/PolyglotCustomView.tsx'), 'utf8');
+      assert.match(customViewSource, /\breturn\s*\(/);
+      assert.doesNotMatch(customViewSource, /valdi_tsx\/src\/JSX/);
+      const customViewJs = archive.get('src/PolyglotCustomView.js')?.toString() ?? '';
+      assert.match(customViewJs, /solid_native\/src\/renderer/);
     }
     if (template !== 'ui_component') {
       const build = readFileSync(path.join(created.directory, 'BUILD.bazel'), 'utf8');

@@ -1,5 +1,5 @@
 // Initialize a new application from this template: rebrand app identity / native host packages,
-// and optionally strip optional demo modules into a minimal 6-module starter (--minimal).
+// and optionally strip optional demo modules into a minimal starter (--minimal).
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -17,6 +17,8 @@ export const CORE_MODULES = [
   'app_pages',
   'app_ui',
   'native_common',
+  'solid_native',
+  'solid_runtime',
   'theme_bridge',
 ];
 
@@ -173,7 +175,7 @@ function renameIosHostTarget(root, prevName, nextName) {
 
 function writeMinimalStarterPages(appPagesDir, displayName) {
   for (const entry of ['assets', 'cpp', 'module.json', 'src/cpp', 'src/database', 'src/state', 'src/features',
-    'res/tab_device@3x.png', 'res/tab_device_on@3x.png']) {
+    'src/pages', 'src/sharedState.ts', 'res/tab_device@3x.png', 'res/tab_device_on@3x.png']) {
     rmSync(path.join(appPagesDir, entry), { recursive: true, force: true });
   }
 
@@ -225,8 +227,7 @@ export const api: AppApi = new Proxy({} as Record<string, unknown>, {
 }) as unknown as AppApi;
 `);
 
-  write('src/routes.ts', `import res from 'app_pages/res';
-import { defineRoutes, valdiPage } from 'app_foundation/src/navigation/config';
+  write('src/routes.ts', `import { defineRoutes, valdiPage } from 'app_foundation/src/navigation/config';
 import { DetailPage } from './features/detail/DetailPage';
 import { ExplorePage } from './features/explore/ExplorePage';
 import { HomePage } from './features/home/HomePage';
@@ -241,187 +242,282 @@ export const routes = defineRoutes({
     explore: valdiPage({ component: ExplorePage, title: '示例' }),
     detail: valdiPage<{ id: number; from: string }, { visited: number }>({ component: DetailPage, title: '详情' }),
   },
-  tabs: {
-    initial: 'home',
-    items: [
-      { route: 'home', text: '首页', icon: res.tabHome, selectedIcon: res.tabHomeOn },
-      { route: 'explore', text: '示例', icon: res.tabComponents, selectedIcon: res.tabComponentsOn },
-    ],
-  },
 });
 `);
 
-  const escapedTitle = JSON.stringify(displayName);
-  write('src/features/home/HomePage.tsx', `import { Style } from 'valdi_core/src/Style';
-import { systemFont } from 'valdi_core/src/SystemFont';
-import { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
-import { getInfo } from 'app_ota/src';
-import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
-import { Page } from 'app_foundation/src/page/PageComponent';
-import { Button } from '../../components/Button';
-import { PageHeader } from '../../components/PageHeader';
-import { color, tokens } from '../../components/theme';
-import { Router, type RouteViewModel } from '../../router';
-import { api } from '../../services/api';
+  write('src/components/StarterUI.tsx', `import { Show } from 'solid-js';
+import { Style } from 'valdi_core/src/Style';
+import { systemBoldFont, systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
+import type { Label, View } from 'valdi_tsx/src/NativeTemplateElements';
 
-interface State {
-  bundleVersion: string;
-  lastResult: string;
+export function HeaderBar(props: {
+  title: string;
+  subtitle?: string;
+  topInset: number;
+  onBack?: () => void;
+}) {
+  return (
+    <view style={uiStyles.headerWrap}>
+      <view style={uiStyles.header} paddingTop={props.topInset + 12}>
+        <view style={uiStyles.headerRow}>
+          <Show when={Boolean(props.onBack)}>
+            <view style={uiStyles.backBtn} onTap={() => props.onBack?.()}>
+              <label style={uiStyles.backText} value="← 返回" />
+            </view>
+          </Show>
+          <label style={uiStyles.headerTitle} value={props.title} numberOfLines={1} />
+        </view>
+        <Show when={Boolean(props.subtitle)}>
+          <label style={uiStyles.headerSubtitle} value={props.subtitle!} numberOfLines={0} />
+        </Show>
+      </view>
+      <view style={uiStyles.hairline} />
+    </view>
+  );
 }
 
-/**
- * @Component({viewModel: 'PageViewModel', context: 'PageContext'})
- * @ExportModel({ios: 'VRHomePage', android: 'io.valdiroutes.pages.HomePage'})
- */
-export class HomePage extends Page<PageViewModel, State, PageContext> {
-  declare readonly viewModel: Readonly<RouteViewModel<'home'>>;
+export function StarterButton(props: {
+  id?: string;
+  title: string;
+  secondary?: boolean;
+  onTap: () => void;
+}) {
+  return (
+    <view
+      style={props.secondary ? uiStyles.secondaryBtn : uiStyles.primaryBtn}
+      accessibilityId={props.id}
+      accessibilityCategory="button"
+      accessibilityLabel={props.title}
+      onTap={props.onTap}
+    >
+      <label
+        style={props.secondary ? uiStyles.secondaryLabel : uiStyles.primaryLabel}
+        value={props.title}
+        numberOfLines={1}
+      />
+    </view>
+  );
+}
 
-  state: State = { bundleVersion: '-', lastResult: '尚未打开详情页' };
+const uiStyles = {
+  headerWrap: new Style<View>({
+    width: '100%',
+    backgroundColor: '#ffffff',
+  }),
+  header: new Style<View>({
+    width: '100%',
+    paddingLeft: 16,
+    paddingRight: 16,
+    paddingBottom: 14,
+  }),
+  hairline: new Style<View>({
+    width: '100%',
+    height: 1,
+    backgroundColor: '#e8ecf1',
+  }),
+  headerRow: new Style<View>({
+    flexDirection: 'row',
+    alignItems: 'center',
+  }),
+  backBtn: new Style<View>({
+    paddingRight: 12,
+    paddingTop: 4,
+    paddingBottom: 4,
+  }),
+  backText: new Style<Label>({
+    color: '#1e62d0',
+    font: systemSemiboldFont(15),
+  }),
+  headerTitle: new Style<Label>({
+    color: '#172033',
+    font: systemBoldFont(20),
+    flexShrink: 1,
+  }),
+  headerSubtitle: new Style<Label>({
+    color: '#667085',
+    font: systemFont(13),
+    marginTop: 4,
+  }),
+  primaryBtn: new Style<View>({
+    width: '100%',
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#1e62d0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  }),
+  secondaryBtn: new Style<View>({
+    width: '100%',
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#eef2f7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  }),
+  primaryLabel: new Style<Label>({
+    color: '#ffffff',
+    font: systemSemiboldFont(16),
+  }),
+  secondaryLabel: new Style<Label>({
+    color: '#1d2939',
+    font: systemSemiboldFont(16),
+  }),
+};
+`);
 
-  private get router(): Router {
-    return new Router(this.context);
-  }
+  const escapedTitle = JSON.stringify(displayName);
+  write('src/features/home/HomePage.tsx', `import { getInfo } from 'app_ota/src/index';
+import type { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
+import { createSignal, onCleanup } from 'solid-js';
+import type { SolidPageProps } from 'solid_native/src/bridge';
+import { Style } from 'valdi_core/src/Style';
+import { systemFont } from 'valdi_core/src/SystemFont';
+import type { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
+import { HeaderBar, StarterButton } from '../../components/StarterUI';
+import { Router } from '../../router';
+import { api } from '../../services/api';
 
-  onCreate(): void {
-    void getInfo()
-      .then(info => this.setState({ bundleVersion: info.bundleVersion }))
-      .catch(() => {});
-  }
+export function HomePage(props: SolidPageProps<PageViewModel, PageContext>) {
+  const vm = props.initialViewModel;
+  const insets = props.insets;
+  const pageRouter = new Router(props.context);
 
-  onRender(): void {
-    const { insets } = this.viewModel;
-    <view style={styles.page}>
-      <scroll style={styles.scroll}>
-        <view
-          style={styles.content}
-          paddingTop={insets.top + tokens.space.lg}
-          paddingBottom={insets.bottom + tokens.space.xl}
-          paddingLeft={insets.left + tokens.space.lg}
-          paddingRight={insets.right + tokens.space.lg}
-        >
-          <PageHeader title={${escapedTitle}} subtitle={\`Bundle: \${this.state.bundleVersion}\`} />
-          <label style={styles.note} numberOfLines={0} value={this.state.lastResult} />
-          <Button id="detail" title="打开详情页（带返回值）" onTap={this.handleOpenDetail} />
-          <Button id="modal" title="打开原生确认弹窗" secondary={true} onTap={this.handleModal} />
-          <Button id="toast" title="显示原生 Toast" secondary={true} onTap={this.handleToast} />
-        </view>
-      </scroll>
-    </view>;
-  }
+  const [bundleVersion, setBundleVersion] = createSignal('-');
+  const [lastResult, setLastResult] = createSignal('尚未打开详情页');
 
-  private handleOpenDetail = async () => {
-    const result = await this.router.pushForResult('detail', { id: 1, from: '首页' });
-    if (result) {
-      this.setState({ lastResult: \`详情页返回：最深访问到第 \${result.visited} 层\` });
+  let active = true;
+  onCleanup(() => {
+    active = false;
+  });
+
+  void getInfo()
+    .then(info => {
+      if (active) setBundleVersion(info.bundleVersion);
+    })
+    .catch(() => {});
+
+  const handleOpenDetail = async () => {
+    const result = await pageRouter.pushForResult('detail', { id: 1, from: '首页' });
+    if (result && active) {
+      setLastResult(\`详情页返回：最深访问到第 \${result.visited} 层\`);
     }
   };
 
-  private handleModal = async () => {
+  const handleModal = async () => {
     const reply = await api.showModal({ title: '欢迎使用', content: '原生导航与 AppUI 已就绪。' });
     if (reply.confirm) {
       await api.showToast({ title: '已确认', icon: 'success' });
     }
   };
 
-  private handleToast = () => {
+  const handleToast = () => {
     void api.showToast({ title: 'Hello Valdi', icon: 'none' });
   };
+
+  return (
+    <view style={styles.page}>
+      <HeaderBar title={${escapedTitle}} subtitle={\`Bundle: \${bundleVersion()} · \${vm.route}\`} topInset={insets.top} />
+      <scroll style={styles.scroll}>
+        <view
+          style={styles.content}
+          paddingBottom={insets.bottom + 24}
+          paddingLeft={insets.left + 16}
+          paddingRight={insets.right + 16}
+        >
+          <label style={styles.note} numberOfLines={0} value={lastResult()} />
+          <StarterButton id="detail" title="打开详情页（带返回值）" onTap={handleOpenDetail} />
+          <StarterButton id="explore" title="打开交互示例页" secondary={true} onTap={() => pageRouter.push('explore')} />
+          <StarterButton id="modal" title="打开原生确认弹窗" secondary={true} onTap={handleModal} />
+          <StarterButton id="toast" title="显示原生 Toast" secondary={true} onTap={handleToast} />
+        </view>
+      </scroll>
+    </view>
+  );
 }
 
 const styles = {
   page: new Style<View>({
     width: '100%',
     height: '100%',
-    backgroundColor: color.canvas,
+    backgroundColor: '#f5f7fb',
   }),
   scroll: new Style<ScrollView>({
     width: '100%',
     height: 0,
     flexGrow: 1,
   }),
-  content: new Style<View>({}),
+  content: new Style<View>({
+    paddingTop: 16,
+  }),
   note: new Style<Label>({
-    color: color.muted,
+    color: '#667085',
     font: systemFont(14),
-    marginBottom: tokens.space.lg,
+    marginBottom: 16,
   }),
 };
 `);
 
-  write('src/features/explore/ExplorePage.tsx', `import { Style } from 'valdi_core/src/Style';
+  write('src/features/explore/ExplorePage.tsx', `import type { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
+import { createSignal } from 'solid-js';
+import type { SolidPageProps } from 'solid_native/src/bridge';
+import { Style } from 'valdi_core/src/Style';
 import { systemFont } from 'valdi_core/src/SystemFont';
-import { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
-import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
-import { Page } from 'app_foundation/src/page/PageComponent';
-import { Button } from '../../components/Button';
-import { NavigationBar } from '../../components/NavigationBar';
-import { color, tokens } from '../../components/theme';
-import { router, type RouteViewModel } from '../../router';
+import type { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
+import { HeaderBar, StarterButton } from '../../components/StarterUI';
+import { router } from '../../router';
 import { api } from '../../services/api';
 
-interface State {
-  selected: string;
-}
+export function ExplorePage(props: SolidPageProps<PageViewModel, PageContext>) {
+  const insets = props.insets;
+  const [selected, setSelected] = createSignal('未选择');
 
-/**
- * @Component({viewModel: 'PageViewModel', context: 'PageContext'})
- * @ExportModel({ios: 'VRExplorePage', android: 'io.valdiroutes.pages.ExplorePage'})
- */
-export class ExplorePage extends Page<PageViewModel, State, PageContext> {
-  declare readonly viewModel: Readonly<RouteViewModel<'explore'>>;
-
-  state: State = { selected: '未选择' };
-
-  onRender(): void {
-    const { insets } = this.viewModel;
-    <view style={styles.page}>
-      <NavigationBar title="交互示例" topInset={insets.top} />
-      <scroll style={styles.scroll}>
-        <view
-          style={styles.content}
-          paddingBottom={insets.bottom + tokens.space.xl}
-          paddingLeft={insets.left + tokens.space.lg}
-          paddingRight={insets.right + tokens.space.lg}
-        >
-          <label style={styles.note} value={\`当前选择：\${this.state.selected}\`} />
-          <Button id="picker" title="原生滚轮选择器" onTap={this.handlePicker} />
-          <Button id="sheet" title="原生操作菜单" secondary={true} onTap={this.handleActionSheet} />
-          <Button id="home" title="切换到首页 Tab" secondary={true} onTap={this.handleSwitchHome} />
-        </view>
-      </scroll>
-    </view>;
-  }
-
-  private handlePicker = async () => {
+  const handlePicker = async () => {
     const result = await api.showPicker({
       title: '选择环境',
       options: ['开发环境', '预发环境', '生产环境'],
     });
     if (result.confirm) {
-      this.setState({ selected: result.value });
+      setSelected(result.value);
     }
   };
 
-  private handleActionSheet = async () => {
+  const handleActionSheet = async () => {
     try {
       const items = ['刷新数据', '复制链接', '分享页面'] as const;
       const result = await api.showActionSheet({ itemList: items });
-      this.setState({ selected: items[result.tapIndex] ?? '未知' });
+      setSelected(items[result.tapIndex] ?? '未知');
     } catch {
       // User dismissed action sheet.
     }
   };
 
-  private handleSwitchHome = () => {
-    router.switchTab('home');
-  };
+  return (
+    <view style={styles.page}>
+      <HeaderBar title="交互示例" topInset={insets.top} onBack={() => router.back()} />
+      <scroll style={styles.scroll}>
+        <view
+          style={styles.content}
+          paddingBottom={insets.bottom + 24}
+          paddingLeft={insets.left + 16}
+          paddingRight={insets.right + 16}
+        >
+          <label style={styles.note} value={\`当前选择：\${selected()}\`} />
+          <StarterButton id="picker" title="原生滚轮选择器" onTap={handlePicker} />
+          <StarterButton id="sheet" title="原生操作菜单" secondary={true} onTap={handleActionSheet} />
+          <StarterButton id="back" title="返回上一页" secondary={true} onTap={() => router.back()} />
+        </view>
+      </scroll>
+    </view>
+  );
 }
 
 const styles = {
   page: new Style<View>({
     width: '100%',
     height: '100%',
-    backgroundColor: color.canvas,
+    backgroundColor: '#f5f7fb',
   }),
   scroll: new Style<ScrollView>({
     width: '100%',
@@ -429,101 +525,82 @@ const styles = {
     flexGrow: 1,
   }),
   content: new Style<View>({
-    paddingTop: tokens.space.lg,
+    paddingTop: 16,
   }),
   note: new Style<Label>({
-    color: color.text,
+    color: '#172033',
     font: systemFont(15),
-    marginBottom: tokens.space.lg,
+    marginBottom: 16,
   }),
 };
 `);
 
-  write('src/features/detail/DetailPage.tsx', `import { Style } from 'valdi_core/src/Style';
+  write('src/features/detail/DetailPage.tsx', `import type { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
+import { createSignal, onCleanup } from 'solid-js';
+import type { SolidPageProps } from 'solid_native/src/bridge';
+import { Style } from 'valdi_core/src/Style';
 import { systemFont } from 'valdi_core/src/SystemFont';
-import { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
-import { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
-import { Page } from 'app_foundation/src/page/PageComponent';
-import { Button } from '../../components/Button';
-import { NavigationBar } from '../../components/NavigationBar';
-import { color, tokens } from '../../components/theme';
-import { Router, router, type RouteViewModel } from '../../router';
+import type { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
+import { HeaderBar, StarterButton } from '../../components/StarterUI';
+import { Router, router, type RouteParams } from '../../router';
 
-interface State {
-  deepest: number;
-  pages: string;
-}
+export function DetailPage(props: SolidPageProps<PageViewModel, PageContext>) {
+  const insets = props.insets;
+  const pageRouter = new Router(props.context);
+  const { id, from } = props.params as RouteParams['detail'];
+  const { pageId } = props.initialViewModel;
 
-/**
- * @Component({viewModel: 'PageViewModel', context: 'PageContext'})
- * @ExportModel({ios: 'VRDetailPage', android: 'io.valdiroutes.pages.DetailPage'})
- */
-export class DetailPage extends Page<PageViewModel, State, PageContext> {
-  declare readonly viewModel: Readonly<RouteViewModel<'detail'>>;
+  const [deepest, setDeepest] = createSignal(id);
+  const [pages, setPages] = createSignal('');
 
-  state: State = { deepest: 0, pages: '' };
+  let active = true;
+  onCleanup(() => {
+    active = false;
+  });
 
-  private get router(): Router {
-    return new Router(this.context);
-  }
+  void router.getCurrentPages().then(stack => {
+    if (active) {
+      setPages(\`当前栈：\${stack.map(item => item.route).join(' → ')}\`);
+    }
+  });
 
-  onCreate(): void {
-    void router.getCurrentPages().then(stack => {
-      this.setState({ pages: \`当前栈：\${stack.map(item => item.route).join(' → ')}\` });
-    });
-  }
-
-  onRender(): void {
-    const { insets, pageId } = this.viewModel;
-    const { id, from } = this.viewModel.params;
-    const deepest = Math.max(this.state.deepest, id);
-
-    <view style={styles.page}>
-      <NavigationBar title={\`详情 #\${id}\`} topInset={insets.top} onBack={this.handleBack} />
-      <scroll style={styles.scroll}>
-        <view
-          style={styles.content}
-          paddingBottom={insets.bottom + tokens.space.xl}
-          paddingLeft={insets.left + tokens.space.lg}
-          paddingRight={insets.right + tokens.space.lg}
-        >
-          <label style={styles.text} value={\`来自 \${from} · \${pageId}\`} />
-          <label style={styles.text} numberOfLines={0} value={this.state.pages} />
-          <Button id="next" title={\`继续压栈详情 #\${id + 1}\`} onTap={this.handleNext} />
-          <Button id="finish" title={\`带结果返回（第 \${deepest} 层）\`} secondary={true} onTap={this.handleFinish} />
-          <Button id="root" title="回到根页面" secondary={true} onTap={this.handlePopToRoot} />
-        </view>
-      </scroll>
-    </view>;
-  }
-
-  private handleBack = () => {
-    this.router.back();
-  };
-
-  private handleNext = async () => {
-    const { id } = this.viewModel.params;
-    const result = await this.router.pushForResult('detail', { id: id + 1, from: \`详情 #\${id}\` });
-    if (result) {
-      this.setState({ deepest: Math.max(this.state.deepest, result.visited) });
+  const handleNext = async () => {
+    const result = await pageRouter.pushForResult('detail', { id: id + 1, from: \`详情 #\${id}\` });
+    if (result && active) {
+      setDeepest(prev => Math.max(prev, result.visited));
     }
   };
 
-  private handleFinish = () => {
-    const { id } = this.viewModel.params;
-    this.router.finish<'detail'>({ visited: Math.max(this.state.deepest, id) });
+  const handleFinish = () => {
+    pageRouter.finish<'detail'>({ visited: Math.max(deepest(), id) });
   };
 
-  private handlePopToRoot = () => {
-    router.popToRoot();
-  };
+  return (
+    <view style={styles.page}>
+      <HeaderBar title={\`详情 #\${id}\`} topInset={insets.top} onBack={() => pageRouter.back()} />
+      <scroll style={styles.scroll}>
+        <view
+          style={styles.content}
+          paddingBottom={insets.bottom + 24}
+          paddingLeft={insets.left + 16}
+          paddingRight={insets.right + 16}
+        >
+          <label style={styles.text} value={\`来自 \${from} · \${pageId}\`} />
+          <label style={styles.text} numberOfLines={0} value={pages()} />
+          <StarterButton id="next" title={\`继续压栈详情 #\${id + 1}\`} onTap={handleNext} />
+          <StarterButton id="finish" title={\`带结果返回（第 \${deepest()} 层）\`} secondary={true} onTap={handleFinish} />
+          <StarterButton id="root" title="回到根页面" secondary={true} onTap={() => router.popToRoot()} />
+        </view>
+      </scroll>
+    </view>
+  );
 }
 
 const styles = {
   page: new Style<View>({
     width: '100%',
     height: '100%',
-    backgroundColor: color.canvas,
+    backgroundColor: '#f5f7fb',
   }),
   scroll: new Style<ScrollView>({
     width: '100%',
@@ -531,12 +608,12 @@ const styles = {
     flexGrow: 1,
   }),
   content: new Style<View>({
-    paddingTop: tokens.space.md,
+    paddingTop: 12,
   }),
   text: new Style<Label>({
-    color: color.text,
+    color: '#172033',
     font: systemFont(15),
-    marginBottom: tokens.space.md,
+    marginBottom: 12,
   }),
 };
 `);
@@ -724,7 +801,7 @@ Options:
   --ios-id <id>              iOS bundleIdentifier (defaults to --app-id)
   --namespace <package>      Android host Kotlin namespace (defaults to --app-id)
   --ios-prefix <PREFIX>      iOS class prefix for new modules (2-10 uppercase chars, e.g. AC)
-  --minimal                  Strip optional demo/hardware modules into a clean 6-module starter
+  --minimal                  Strip optional demo/hardware modules into a clean minimal starter
   --dry-run                  Validate and preview planned changes without writing files
   --skip-ios-project         Skip regenerating Xcode project on macOS
   --yes, -y                  Run non-interactively using provided flags / defaults

@@ -9,9 +9,9 @@ import { readAppConfig } from '../../scripts/lib/app-config.mjs';
 const help = `Usage: pnpm new-module [name] [--template <template>] [--ios-language objc|swift] [--swiftui] [--android-context] [--skip-checks]
 
 Templates:
-  ui_component             Valdi TSX component
+  ui_component             Solid 2.0 Universal TSX component
   polyglot_bridge_module   TypeScript API + Kotlin/Objective-C implementations
-  polyglot_view_module     custom-view + Kotlin/Objective-C native views
+  polyglot_view_module     Solid 2.0 custom-view + Kotlin/Objective-C/Swift native views
   cpp_bridge_module        TypeScript API + shared C++ implementation (repository template)
 
 With no --template, an interactive terminal offers the template choices.

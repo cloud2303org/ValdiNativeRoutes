@@ -45,13 +45,17 @@ function fixture(t: TestContext) {
     symlinkSync(path.join(path.resolve(import.meta.dirname, '..'), name), path.join(tool, name), 'junction');
   }
   const modules = path.join(directory, 'valdi/modules');
-  // The real, portable calculator declaration/config exercises the capitalized iOS module name and module factory.
-  const calculator = path.resolve(import.meta.dirname, '../../../valdi/modules/calculator');
-  for (const name of ['module.json', 'src/Calculator.d.ts']) {
-    mkdirSync(path.dirname(path.join(modules, 'calculator', name)), { recursive: true });
-    cpSync(path.join(calculator, name), path.join(modules, 'calculator', name));
-  }
-  assert.equal(JSON.parse(readFileSync(path.join(calculator, 'module.json'), 'utf8')).nativeBuild, 'bazel');
+  // An inline Bazel bridge declaration/config exercises the capitalized iOS module name and module factory.
+  put(path.join(modules, 'calculator/module.json'), JSON.stringify({
+    nativeBuild: 'bazel',
+    iosModuleName: 'Calculator',
+    androidModuleFactory: 'com.snap.modules.calculator.CalculatorModuleFactoryImpl',
+    iosModuleFactory: 'CalculatorCreateModuleFactory',
+  }));
+  put(path.join(modules, 'calculator/src/Calculator.d.ts'), [
+    '/** @ExportModule */',
+    'export declare function multiply(left: number, right: number): number;',
+  ].join('\n'));
   put(path.join(directory, 'package.json'), JSON.stringify({ valdi: { modules: ['calculator', 'host', 'shared', 'runtime_cpp'] } }));
   put(path.join(modules, 'host/module.json'), JSON.stringify({ nativeBuild: 'host', iosModuleName: 'Host' }));
   put(path.join(modules, 'host/src/index.ts'), [

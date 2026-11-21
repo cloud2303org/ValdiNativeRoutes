@@ -58,6 +58,49 @@ export function createModule({
     }
   };
   if (template !== 'cpp_bridge_module') copy(original);
+  if (template === 'ui_component') {
+    copied.delete('src/NewModuleComponent.tsx');
+    copied.set(`src/${pascal}Component.tsx`, `import { createSignal } from 'solid-js';
+import { Style } from 'valdi_core/src/Style';
+import { systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
+import type { Label, View } from 'valdi_tsx/src/NativeTemplateElements';
+
+export interface ${pascal}Props {
+  title: string;
+}
+
+export function ${pascal}Component(props: ${pascal}Props) {
+  const [count, setCount] = createSignal(0);
+
+  return (
+    <view style={styles.root} onTap={() => setCount(c => c + 1)}>
+      <label style={styles.title} value={props.title} />
+      <label style={styles.counter} value={\`Count: \${count()}\`} />
+    </view>
+  );
+}
+
+const styles = {
+  root: new Style<View>({
+    backgroundColor: '#f8fafc',
+    width: '100%',
+    height: '100%',
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  }),
+  title: new Style<Label>({
+    font: systemSemiboldFont(20),
+    color: '#0f172a',
+  }),
+  counter: new Style<Label>({
+    font: systemFont(15),
+    color: '#475569',
+    marginTop: 8,
+  }),
+};
+`);
+  }
   const config: Record<string, string | boolean> = { template, iosModuleName: pascal };
   if (polyglot) config.nativeBuild = 'bazel';
   if (template === 'cpp_bridge_module') config.nativeBuild = 'cpp';
@@ -100,6 +143,29 @@ FOUNDATION_EXPORT id<SCNValdiCoreModuleFactory> _Nonnull ${config.iosModuleFacto
     }
     const view = 'android/PolyglotNativeView.kt';
     copied.set(view, copied.get(view)!.replace('class PolyglotNativeView(', '@androidx.annotation.Keep\nclass PolyglotNativeView('));
+    copied.set('src/PolyglotCustomView.tsx', `export type PolyglotCustomViewProps = JSX.IntrinsicElements['custom-view'];
+
+/**
+ * Polyglot custom-view wrapper for Solid 2.0 Universal.
+ *
+ * Each platform resolves the view by class name:
+ *  - Android: ReflectionViewFactory creates PolyglotNativeView(context)
+ *  - iOS:     ObjC/Swift class linked via ios_deps / swift_srcs
+ *  - macOS:   NSClassFromString() linked via macos_deps
+ *  - Web:     webPolyglotViews factory in web/ auto-registered at bundle time
+ */
+export function PolyglotCustomView(props: PolyglotCustomViewProps) {
+  return (
+    <custom-view
+      androidClass={'com.snap.modules.${name}.PolyglotNativeView'}
+      iosClass={'${nativeName}'}
+      macosClass={'${nativeName}'}
+      webClass={'${pascal}WebView'}
+      {...props}
+    />
+  );
+}
+`);
   }
   if (polyglot && iosLanguage === 'swift') {
     config.iosLanguage = 'swift';

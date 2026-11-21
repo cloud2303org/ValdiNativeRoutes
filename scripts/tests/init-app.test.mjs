@@ -24,7 +24,6 @@ function seedHostFixture(t) {
     'ios/project.yml',
     'ios/ValdiRoutes/App.swift',
     'ios/ValdiRoutes/Info.plist',
-    'ios/ValdiRoutes/Features/Picker/PickerScreen.swift',
     'ios/ValdiRoutes/ValdiRoutes-Bridging-Header.h',
     'ios/Tests/run-route-payload-tests.sh',
     'ios/Tests/run-startup-splash-state-tests.sh',
@@ -33,6 +32,8 @@ function seedHostFixture(t) {
     mkdirSync(path.dirname(dest), { recursive: true });
     cpSync(path.join(repository, relative), dest);
   }
+  mkdirSync(path.join(fixture, 'ios/ValdiRoutes/Features/Picker'), { recursive: true });
+  writeFileSync(path.join(fixture, 'ios/ValdiRoutes/Features/Picker/PickerScreen.swift'), '// sample\n');
   const pkg = JSON.parse(readFileSync(path.join(fixture, 'package.json'), 'utf8'));
   delete pkg.valdi.app.icon;
   pkg.valdi.modules = ['app_pages'];
@@ -151,8 +152,8 @@ test('rebranding relocates Android packages, updates shared module imports, rena
 test('--minimal strips optional modules and demo clutter while typechecking, passing codegen --check, and building', t => {
   const fixture = seedHostFixture(t);
 
-  // Copy the 6 core modules plus representative optional modules (host, bazel, cpp) and generated bindings.
-  for (const mod of [...CORE_MODULES, 'app_video', 'app_vision', 'bluetooth', 'calculator', 'permissions']) {
+  // Copy the core modules plus representative optional modules (host, bazel, cpp) and generated bindings.
+  for (const mod of [...CORE_MODULES, 'app_video', 'app_vision', 'bluetooth', 'permissions']) {
     cpSync(path.join(repository, 'valdi/modules', mod), path.join(fixture, 'valdi/modules', mod), {
       recursive: true,
       dereference: false,
@@ -188,7 +189,7 @@ test('--minimal strips optional modules and demo clutter while typechecking, pas
   for (const name of ['node_modules', 'vendor']) {
     symlinkSync(path.join(toolSrc, name), path.join(toolDst, name), 'junction');
   }
-  for (const entry of ['codegen', 'archive.ts', 'build.ts', 'codegen.ts', 'cpp-modules.ts', 'editor-config.ts',
+  for (const entry of ['codegen', 'runtime-native', 'archive.ts', 'build.ts', 'codegen.ts', 'cpp-modules.ts', 'editor-config.ts',
     'hermes.ts', 'localization.ts', 'module-build.ts', 'module-selection.ts', 'modules.mjs', 'package.json',
     'pipeline.ts', 'resources.ts', 'routes-transform.ts', 'runtime-module-ids.ts', 'tsconfig.ts',
     'typecheck.ts', 'typescript-project.ts', 'valdiTs.ts']) {
@@ -196,7 +197,7 @@ test('--minimal strips optional modules and demo clutter while typechecking, pas
   }
 
   const pkg = JSON.parse(readFileSync(path.join(fixture, 'package.json'), 'utf8'));
-  pkg.valdi.modules = [...CORE_MODULES, 'app_video', 'app_vision', 'bluetooth', 'calculator', 'permissions'];
+  pkg.valdi.modules = [...CORE_MODULES, 'app_video', 'app_vision', 'bluetooth', 'permissions'];
   writeFileSync(path.join(fixture, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`);
 
   initApp({
@@ -217,7 +218,6 @@ test('--minimal strips optional modules and demo clutter while typechecking, pas
     'valdi/modules/app_video',
     'valdi/modules/app_vision',
     'valdi/modules/bluetooth',
-    'valdi/modules/calculator',
     'valdi/modules/permissions',
     'valdi/modules/app_pages/assets',
     'valdi/modules/app_pages/cpp',

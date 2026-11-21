@@ -714,7 +714,7 @@ export const invalid: number = asset.url;
   assert.equal(f.pipeline.writeTsconfig(f.own, f.modules), false, 'regeneration is idempotent');
 });
 
-test('real CalculatorComponent gets Valdi IntrinsicElements and dayjs types through either module entry', async t => {
+test('Solid TSX component gets Solid IntrinsicElements and dayjs types through either module entry', async t => {
   const f = await fixture(t);
   const live = await import('../pipeline');
   const sources = live.valdiSourceRoot();
@@ -723,44 +723,54 @@ test('real CalculatorComponent gets Valdi IntrinsicElements and dayjs types thro
     JSON.parse(readFileSync(path.join(sources, 'modules/_configs/base.tsconfig.json'), 'utf8')).compilerOptions;
   assert.deepEqual(upstreamScalars, scalarOptions, 'bootstrap scalar options match the actual pinned upstream base');
   process.env.VALDI_SOURCE_ROOT = sources;
-  // Use the real authored TSX and framework declarations, with resource types
-  // confined to this fixture. No application source/config/link is rewritten.
   rmSync(path.join(f.own.dir, 'src'), { recursive: true });
-  symlinkSync(path.join(root, 'valdi/modules/calculator/src'), path.join(f.own.dir, 'src'), 'dir');
+  put(path.join(f.own.dir, 'src/SolidSample.tsx'), `import res from 'own/res';
+import dayjs from 'dayjs';
+import { createSignal } from 'solid-js';
+import { systemFont, systemSemiboldFont } from 'valdi_core/src/SystemFont';
+
+export function SolidSample() {
+  const [result, setResult] = createSignal('Ready');
+  return (
+    <view padding={24} backgroundColor="#f8fafc" flexGrow={1}>
+      <label value="Solid Sample" font={systemSemiboldFont(26)} color="#0f172a" />
+      <image src={res.logo} width={40} height={40} marginTop={16} />
+      <label value={\`npm dayjs: \${dayjs('2026-10-29').format('YYYY-MM-DD')}\`} font={systemFont(14)} marginTop={8} />
+      <view onTap={() => setResult('Tapped')} padding={16} marginTop={24} backgroundColor="#2563eb" borderRadius={12}>
+        <label value={result()} font={systemSemiboldFont(18)} color="white" />
+      </view>
+    </view>
+  );
+}
+`);
   put(path.join(f.own.generatedDirs[0], 'res.ts'),
-    "import { Asset } from 'valdi_core/src/Asset'; declare const res: { readonly calculator: Asset }; export default res;\n");
+    "import { Asset } from 'valdi_core/src/Asset'; declare const res: { readonly logo: Asset }; export default res;\n");
   symlinkSync(realpathSync(path.join(root, 'valdi/node_modules/dayjs')),
     path.join(f.own.nodeModules!, 'dayjs'), 'junction');
-  const calculator = { ...f.own, name: 'calculator' };
+  symlinkSync(realpathSync(path.join(root, 'valdi/node_modules/solid-js')),
+    path.join(f.own.nodeModules!, 'solid-js'), 'junction');
+  const solidNative = { name: 'solid_native', dir: path.join(root, 'valdi/modules/solid_native'), generatedDirs: [] };
+  const sample = { ...f.own, jsxBackend: 'solid' as const };
   const alias = path.join(f.directory, 'module-build/modules');
   mkdirSync(path.dirname(alias), { recursive: true });
   symlinkSync(path.join(f.directory, 'valdi/modules'), alias, 'dir');
-  f.pipeline.writeTsconfig(calculator, [calculator]);
-  for (const dir of [calculator.dir, path.join(alias, 'own')]) {
-    const config = parsed({ ...calculator, dir }).config;
+  f.pipeline.writeTsconfig(sample, [sample, solidNative]);
+  for (const dir of [sample.dir, path.join(alias, 'own')]) {
+    const config = parsed({ ...sample, dir }).config;
     const program = ts.createProgram(config.fileNames, config.options);
     assert.deepEqual(ts.getPreEmitDiagnostics(program).map(d => ({
       code: d.code, text: ts.flattenDiagnosticMessageText(d.messageText, '\n'),
     })), [], dir);
     assert.ok(program.getSourceFiles().some(file => /dayjs\/index\.d\.ts$/.test(file.fileName)));
-    const jsx = program.getSourceFiles().find(file => /valdi_tsx\/src\/JSX\.ts$/.test(file.fileName));
-    assert.ok(jsx, 'the real framework supplies JSX, not a permissive fixture declaration');
-    let intrinsic: ts.InterfaceDeclaration | undefined;
-    const visit = (node: ts.Node) => {
-      if (ts.isInterfaceDeclaration(node) && node.name.text === 'IntrinsicElements') intrinsic = node;
-      ts.forEachChild(node, visit);
-    };
-    visit(jsx);
-    assert.ok(intrinsic);
-    const checker = program.getTypeChecker();
-    const view = checker.getTypeAtLocation(intrinsic).getProperty('view');
-    assert.ok(view);
-    assert.ok(!(checker.getTypeOfSymbolAtLocation(view, intrinsic).flags & ts.TypeFlags.Any));
+    const jsx = program.getSourceFiles().find(file => /solid_native\/src\/jsx\.d\.ts$/.test(file.fileName));
+    assert.ok(jsx, 'solid_native supplies IntrinsicElements declarations');
+    const viewSym = program.getTypeChecker().resolveName('JSX', undefined, ts.SymbolFlags.Namespace, false);
+    assert.ok(viewSym);
   }
-  put(path.join(calculator.dir, 'invalid.tsx'), 'export const invalid = <view definitelyInvalidValdiProp={1} />;\n');
-  const invalid = parsed({ ...calculator, dir: path.join(alias, 'own') }).config;
+  put(path.join(sample.dir, 'invalid.tsx'), 'export const invalid = <view definitelyInvalidValdiProp={1} />;\n');
+  const invalid = parsed({ ...sample, dir: path.join(alias, 'own') }).config;
   assert.ok(ts.getPreEmitDiagnostics(ts.createProgram([
-    ...invalid.fileNames, path.join(calculator.dir, 'invalid.tsx'),
+    ...invalid.fileNames, path.join(sample.dir, 'invalid.tsx'),
   ], invalid.options)).some(d => d.code === 2322));
 });
 
@@ -810,11 +820,11 @@ test('real WheelPickers resolves shared dayjs types through physical and logical
     const file = path.join(directory, 'src/wheels/WheelPickers.tsx');
     const resolved = ts.resolveModuleName('dayjs', file, config.options, ts.sys).resolvedModule;
     assert.ok(resolved && /dayjs\/index\.d\.ts$/.test(resolved.resolvedFileName));
-    const program = ts.createProgram([file], config.options);
+    const program = ts.createProgram(config.fileNames, config.options);
     assert.deepEqual(ts.getPreEmitDiagnostics(program).map(d => ({
       code: d.code, text: ts.flattenDiagnosticMessageText(d.messageText, '\n'),
     })), [], directory);
-    assert.ok(program.getSourceFiles().some(source => /valdi_tsx\/src\/JSX\.ts$/.test(source.fileName)));
+    assert.ok(program.getSourceFiles().some(source => /solid_native\/src\/jsx\.d\.ts$/.test(source.fileName)));
   }
 });
 

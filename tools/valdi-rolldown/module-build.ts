@@ -10,6 +10,7 @@ import {
   buildModule,
   inlineSourceMaps,
   moduleConfig,
+  modulesDir,
   precompile,
   sourceMapJson,
   valdiSourceRoot,
@@ -60,6 +61,9 @@ export async function compileNodeModule(
   const originalConfigFile = path.join(original.dir, 'module.json');
   const originalConfig = existsSync(originalConfigFile)
     ? JSON.parse(readFileSync(originalConfigFile, 'utf8')) : moduleConfig(name);
+  const solidNativeDir = path.join(modulesDir, 'solid_native');
+  const hasSolidNative = existsSync(solidNativeDir);
+  const jsxBackend = original.jsxBackend ?? originalConfig.jsxBackend ?? (hasSolidNative ? 'solid' : undefined);
   const temporary = realpathSync(mkdtempSync(path.join(tmpdir(), `node-valdi-${name}-`)));
   try {
     symlinkSync(original.nodeModules!, path.join(temporary, 'node_modules'), 'dir');
@@ -81,14 +85,24 @@ export async function compileNodeModule(
       makeWritable(generated);
       return { ...source, dir, generatedDirs: [generated] };
     };
-    const module = staged({ ...original, generatedDirs: [] });
+    const stagedModule = staged({ ...original, generatedDirs: [] });
+    const module: ValdiModule = jsxBackend ? { ...stagedModule, jsxBackend } : stagedModule;
     const stagedDependencies = dependencies.map(staged);
     if (existsSync(path.join(original.dir, 'res'))) {
       const stagedRes = path.join(module.dir, 'res');
       cpSync(path.join(original.dir, 'res'), stagedRes, { recursive: true });
       makeWritable(stagedRes);
     }
-    writeTsconfig(module, [module, ...stagedDependencies]);
+    const configModules: ValdiModule[] = [module, ...stagedDependencies];
+    if (
+      jsxBackend === 'solid' &&
+      hasSolidNative &&
+      module.name !== 'solid_native' &&
+      !stagedDependencies.some(dep => dep.name === 'solid_native')
+    ) {
+      configModules.push({ name: 'solid_native', dir: solidNativeDir, generatedDirs: [] });
+    }
+    writeTsconfig(module, configModules);
     const images = await findImages(module);
     const fonts = findFonts(module) ?? [];
     writeResTs(module, images, module.generatedDirs[0], fonts);

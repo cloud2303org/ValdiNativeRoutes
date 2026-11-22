@@ -25,6 +25,7 @@ import io.valdiroutes.app_ui.BottomSheetCardShadow
 import io.valdiroutes.app_ui.BottomSheetConfig
 import io.valdiroutes.app_ui.BottomSheetDetent
 import io.valdiroutes.app_ui.BottomSheetDetentKind
+import io.valdiroutes.app_ui.appui.AppUI
 import io.valdiroutes.app_ui.appui.syncOverlayWindowSystemBars
 import io.valdiroutes.app_ui.ui.applyWheelConfigOrReset
 import kotlin.math.roundToInt
@@ -55,6 +56,10 @@ internal class BottomSheetDialogRootView(
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (hostView.modal && hostView.isPresented) {
+            touchDispatcher.dispatchTouch(event)
+            return true
+        }
         if (event.actionMasked == MotionEvent.ACTION_DOWN && !hostView.isPointInteractive(event.x, event.y)) {
             return false
         }
@@ -122,7 +127,7 @@ class BottomSheetView(context: Context) :
         addView(hostView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
         installValdiHitTest(this) { xPx, yPx ->
-            !windowOverlay && hostView.isPointInteractive(xPx, yPx)
+            hostView.parent === this && hostView.isPointInteractive(xPx, yPx)
         }
 
         hostView.onGeometryChanged = { widthDp, heightDp, surfaceDp, insetDp, hostWidthDp ->
@@ -274,7 +279,7 @@ class BottomSheetView(context: Context) :
 
     private fun ensureOverlayDialogShown() {
         if (overlayDialog?.isShowing == true) return
-        val activity = context.findActivity() ?: return
+        val activity = findHostActivity() ?: return
         if (activity.isFinishing || activity.isDestroyed) return
 
         (hostView.parent as? ViewGroup)?.removeView(hostView)
@@ -288,7 +293,7 @@ class BottomSheetView(context: Context) :
         )
         dialogRoot = root
 
-        val dialog = object : ComponentDialog(activity, android.R.style.Theme_Translucent_NoTitleBar_Fullscreen) {
+        val dialog = object : ComponentDialog(activity, android.R.style.Theme_Translucent_NoTitleBar) {
             override fun dispatchKeyEvent(event: KeyEvent): Boolean {
                 if (overlayCloseController.handleKeyEvent(event.keyCode, event)) return true
                 return super.dispatchKeyEvent(event)
@@ -308,6 +313,8 @@ class BottomSheetView(context: Context) :
         )
         dialog.window?.let { win ->
             win.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            win.setDimAmount(0f)
+            win.setWindowAnimations(0)
             win.setLayout(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -320,6 +327,7 @@ class BottomSheetView(context: Context) :
         dialog.window?.let { win ->
             syncOverlayWindowSystemBars(win, win.decorView, activity.window)
         }
+        AppUI.overlayShown()
     }
 
     private fun updateOverlayWindowFlags() {
@@ -330,7 +338,11 @@ class BottomSheetView(context: Context) :
         } else {
             win.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
         }
-        win.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
+        if (hostView.isModalPresented || (hostView.modal && requestedToPresentInOverlay)) {
+            win.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
+        } else {
+            win.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
+        }
     }
 
     private fun teardownOverlayDialog() {
@@ -403,6 +415,11 @@ class BottomSheetView(context: Context) :
 
         val nextIndex = config.detentIndex.toInt()
         requestedToPresentInOverlay = nextIndex >= 0
+        // Reparent hostView into the overlay ComponentDialog before applyPresentationConfig starts
+        // the opening spring, avoiding any detachment jump or cancellation mid-animation.
+        if (windowOverlay && requestedToPresentInOverlay && isAttachedToWindow) {
+            ensureOverlayDialogShown()
+        }
         hostView.applyPresentationConfig(
             modal = config.modal,
             animateIn = config.animateIn,

@@ -10,6 +10,26 @@ import { buildModule, genDir, inlineSourceMaps, modulesDir, root } from './pipel
 import { addFontEntries, assetCatalog, findFonts, findImages, writeResTs, type Font, type Image } from './resources';
 import { sourceFiles, valdiTs, type ValdiModule } from './valdiTs';
 
+/** Runtime singletons whose mid-session reload creates duplicate Solid contexts and breaks mount lookups. */
+export const HOT_RELOAD_EXCLUDED_BUNDLES = new Set(['solid_runtime', 'solid_native']);
+
+/** Filter out bundles that must not be hot-reloaded mid-session while reporting which bundles were skipped. */
+export function filterHotReloadResources(resources: DevResource[]): {
+  deliverable: DevResource[];
+  skippedBundles: string[];
+} {
+  const deliverable: DevResource[] = [];
+  const skipped = new Set<string>();
+  for (const resource of resources) {
+    if (HOT_RELOAD_EXCLUDED_BUNDLES.has(resource.bundle)) {
+      skipped.add(resource.bundle);
+    } else {
+      deliverable.push(resource);
+    }
+  }
+  return { deliverable, skippedBundles: [...skipped] };
+}
+
 /** What changed since the last build, per module. */
 export interface Pending {
   files: Set<string>;

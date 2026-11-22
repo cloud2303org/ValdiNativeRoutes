@@ -5,6 +5,8 @@ import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import androidx.dynamicanimation.animation.FlingAnimation
+import androidx.dynamicanimation.animation.FloatValueHolder
 import com.snap.valdi.callable.ValdiFunction
 import com.snap.valdi.extensions.ViewUtils
 import com.snap.valdi.utils.InternedString
@@ -15,6 +17,7 @@ import com.snap.valdi.views.touches.ValdiGestureRecognizer
 import com.snap.valdi.views.touches.ValdiGestureRecognizerState
 import io.valdiroutes.app_ui.ui.OwnsVerticalDrags
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 private val HIT_TEST_X_KEY = InternedString.create("x")
 private val HIT_TEST_Y_KEY = InternedString.create("y")
@@ -61,6 +64,8 @@ internal class SheetValdiGestureRecognizer(
 ) : ValdiGestureRecognizer(view) {
 
     private val touchSlop: Int = ViewConfiguration.get(view.context).scaledTouchSlop
+    private val minFlingVelocity: Float =
+        ViewConfiguration.get(view.context).scaledMinimumFlingVelocity.toFloat()
     private var activePointerId = MotionEvent.INVALID_POINTER_ID
     private var downRawX = 0f
     private var downRawY = 0f
@@ -75,12 +80,16 @@ internal class SheetValdiGestureRecognizer(
     private var coordinatedScrollRecognizer: ScrollViewDragGestureRecognizer? = null
     private var panMode: SheetPanMode = SheetPanMode.UNDECIDED
     private var exclusiveScrollClaim: Boolean = false
+    private var scrollClaimedBySheet: Boolean = false
+    private var savedScrollEnabled: Boolean? = null
     private var startedHostDrag = false
     private var pinnedScrollOffsetY: Int = 0
+    private var manualScrollOffsetY: Float = 0f
     private var savedVerticalScrollBarEnabled: Boolean? = null
+    private var scrollFlingAnimation: FlingAnimation? = null
 
     override fun shouldCancelOtherGesturesOnStart(): Boolean =
-        coordinatedScrollView == null || exclusiveScrollClaim
+        coordinatedScrollView == null || exclusiveScrollClaim || panMode == SheetPanMode.SHEET
 
     override fun shouldPreventInterceptTouchEvent(): Boolean = true
 
@@ -100,6 +109,7 @@ internal class SheetValdiGestureRecognizer(
     override fun onUpdate(event: MotionEvent) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                cancelScrollFling()
                 resetTracking()
                 if (!host.canStartSheetGesture() || !host.isLocalPointInPresentedCard(event.x, event.y)) {
                     rejected = true
@@ -120,6 +130,7 @@ internal class SheetValdiGestureRecognizer(
 
                 coordinatedScrollView = findInnermostVerticalValdiScrollView(view, event.x, event.y)
                 pinnedScrollOffsetY = coordinatedScrollView?.contentOffsetY ?: 0
+                manualScrollOffsetY = pinnedScrollOffsetY.toFloat()
                 panMode = SheetPanMode.UNDECIDED
 
                 velocityTracker = VelocityTracker.obtain().also {
@@ -177,6 +188,9 @@ internal class SheetValdiGestureRecognizer(
                     lastRawY = curY
                     startedHostDrag = true
                     host.onSheetDragBegan()
+                    if (panMode == SheetPanMode.SHEET) {
+                        coordinatedScrollView?.let { markScrollClaimedOnStart(it) }
+                    }
                     if (exclusiveScrollClaim) {
                         coordinatedScrollView?.let { pinScrollOffset(it) }
                     }
@@ -196,7 +210,7 @@ internal class SheetValdiGestureRecognizer(
                     return
                 }
 
-                handleMoveDelta(dy)
+                handleMoveDelta(dy, event)
                 updateState(ValdiGestureRecognizerState.CHANGED)
             }
 
@@ -219,9 +233,10 @@ internal class SheetValdiGestureRecognizer(
                     updateState(ValdiGestureRecognizerState.ENDED)
                 } else {
                     activePointerId = MotionEvent.INVALID_POINTER_ID
+                    restoreScrollBar()
+                    restoreScrollEnabled()
                     if (startedHostDrag) {
                         startedHostDrag = false
-                        restoreScrollBar()
                         host.onSheetDragCancelled()
                     }
                     if (!rejected) {
@@ -243,9 +258,10 @@ internal class SheetValdiGestureRecognizer(
 
             MotionEvent.ACTION_CANCEL -> {
                 activePointerId = MotionEvent.INVALID_POINTER_ID
+                restoreScrollBar()
+                restoreScrollEnabled()
                 if (startedHostDrag) {
                     startedHostDrag = false
-                    restoreScrollBar()
                     host.onSheetDragCancelled()
                 }
                 recycleTracker()
@@ -264,18 +280,19 @@ internal class SheetValdiGestureRecognizer(
 
     override fun onReset(event: MotionEvent) {
         super.onReset(event)
+        restoreScrollBar()
+        restoreScrollEnabled()
         if (startedHostDrag) {
             startedHostDrag = false
-            restoreScrollBar()
             host.onSheetDragCancelled()
-        } else {
-            restoreScrollBar()
         }
         resetTracking()
     }
 
     override fun onDestroy() {
+        cancelScrollFling()
         restoreScrollBar()
+        restoreScrollEnabled()
         recycleTracker()
         super.onDestroy()
     }
@@ -312,16 +329,23 @@ internal class SheetValdiGestureRecognizer(
             }
             ScrollCoordinationLevel.HANDOFF -> {
                 pinnedScrollOffsetY = sv.contentOffsetY
+                manualScrollOffsetY = pinnedScrollOffsetY.toFloat()
                 if (draggingUp) {
                     if (atTop && sheetCanExpand) SheetPanMode.SHEET else SheetPanMode.SCROLL
                 } else {
-                    if (atTop) SheetPanMode.SHEET else SheetPanMode.SCROLL
+                    if (sv.contentOffsetY <= initialTotalDy) {
+                        pinnedScrollOffsetY = 0
+                        manualScrollOffsetY = 0f
+                        SheetPanMode.SHEET
+                    } else {
+                        SheetPanMode.SCROLL
+                    }
                 }
             }
         }
     }
 
-    private fun handleMoveDelta(dy: Float) {
+    private fun handleMoveDelta(dy: Float, event: MotionEvent) {
         val sv = coordinatedScrollView
         if (sv == null) {
             host.onSheetDragBy(dy)
@@ -344,7 +368,14 @@ internal class SheetValdiGestureRecognizer(
                 host.onSheetDragBy(dy)
             } else {
                 restoreScrollBar()
-                pinnedScrollOffsetY = sv.contentOffsetY
+                if (scrollClaimedBySheet) {
+                    manualScrollOffsetY = (manualScrollOffsetY - dy).coerceIn(0f, maxScrollOffsetY(sv).toFloat())
+                    pinnedScrollOffsetY = manualScrollOffsetY.roundToInt()
+                    sv.setContentOffset(sv.contentOffsetX, pinnedScrollOffsetY, 0f, 0f, false)
+                } else {
+                    pinnedScrollOffsetY = sv.contentOffsetY
+                    manualScrollOffsetY = pinnedScrollOffsetY.toFloat()
+                }
             }
             return
         }
@@ -353,6 +384,9 @@ internal class SheetValdiGestureRecognizer(
         if (draggingUp) {
             // Upward drag (finger moves up, dy < 0): expand sheet first up to highest detent, then scroll content.
             if (host.canSheetExpandFurther()) {
+                if (!scrollClaimedBySheet) {
+                    claimScrollOwnershipFromRecognizer(sv, event, sv.contentOffsetY)
+                }
                 panMode = SheetPanMode.SHEET
                 val leftoverDy = host.onSheetDragByClampedToTop(dy)
                 pinScrollOffset(sv)
@@ -360,26 +394,65 @@ internal class SheetValdiGestureRecognizer(
                     // Reached top detent mid-frame: feed remaining upward delta into scrollView!
                     panMode = SheetPanMode.SCROLL
                     restoreScrollBar()
-                    val maxOffset = maxScrollOffsetY(sv)
-                    val nextOffset = (pinnedScrollOffsetY + (-leftoverDy).toInt()).coerceIn(0, maxOffset)
-                    pinnedScrollOffsetY = nextOffset
-                    sv.setContentOffset(sv.contentOffsetX, nextOffset, 0f, 0f, false)
+                    val maxOffset = maxScrollOffsetY(sv).toFloat()
+                    manualScrollOffsetY = (manualScrollOffsetY - leftoverDy).coerceIn(0f, maxOffset)
+                    pinnedScrollOffsetY = manualScrollOffsetY.roundToInt()
+                    sv.setContentOffset(sv.contentOffsetX, pinnedScrollOffsetY, 0f, 0f, false)
                 }
             } else {
                 panMode = SheetPanMode.SCROLL
                 restoreScrollBar()
-                pinnedScrollOffsetY = sv.contentOffsetY
+                if (scrollClaimedBySheet) {
+                    val maxOffset = maxScrollOffsetY(sv).toFloat()
+                    manualScrollOffsetY = (manualScrollOffsetY - dy).coerceIn(0f, maxOffset)
+                    pinnedScrollOffsetY = manualScrollOffsetY.roundToInt()
+                    sv.setContentOffset(sv.contentOffsetX, pinnedScrollOffsetY, 0f, 0f, false)
+                } else {
+                    pinnedScrollOffsetY = sv.contentOffsetY
+                    manualScrollOffsetY = pinnedScrollOffsetY.toFloat()
+                }
             }
         } else {
             // Downward drag (finger moves down, dy > 0): scroll content back to 0 first, then collapse sheet.
-            val currentOffsetY = sv.contentOffsetY
-            if (panMode == SheetPanMode.SCROLL && currentOffsetY > 0) {
-                restoreScrollBar()
-                pinnedScrollOffsetY = currentOffsetY
+            if (panMode == SheetPanMode.SCROLL) {
+                if (scrollClaimedBySheet) {
+                    val (consumed, sheetLeftover) = BottomSheetMath.splitCollapseScrollDelta(manualScrollOffsetY, dy)
+                    manualScrollOffsetY = (manualScrollOffsetY - consumed).coerceAtLeast(0f)
+                    pinnedScrollOffsetY = manualScrollOffsetY.roundToInt()
+                    if (sheetLeftover > 0f || manualScrollOffsetY <= 0f) {
+                        panMode = SheetPanMode.SHEET
+                        pinnedScrollOffsetY = 0
+                        manualScrollOffsetY = 0f
+                        pinScrollOffset(sv)
+                        if (sheetLeftover > 0f) {
+                            host.onSheetDragBy(sheetLeftover)
+                        }
+                    } else {
+                        restoreScrollBar()
+                        sv.setContentOffset(sv.contentOffsetX, pinnedScrollOffsetY, 0f, 0f, false)
+                    }
+                } else {
+                    val remaining = sv.contentOffsetY.coerceAtLeast(0).toFloat()
+                    if (remaining > dy) {
+                        restoreScrollBar()
+                        pinnedScrollOffsetY = remaining.toInt()
+                        manualScrollOffsetY = remaining
+                    } else {
+                        val (_, sheetLeftover) = BottomSheetMath.splitCollapseScrollDelta(remaining, dy)
+                        panMode = SheetPanMode.SHEET
+                        claimScrollOwnershipFromRecognizer(sv, event, 0)
+                        pinScrollOffset(sv)
+                        if (sheetLeftover > 0f) {
+                            host.onSheetDragBy(sheetLeftover)
+                        }
+                    }
+                }
             } else {
-                // Scroll view reached top (or we were already moving the sheet): lock scroll at 0 and move sheet!
-                panMode = SheetPanMode.SHEET
+                if (!scrollClaimedBySheet) {
+                    claimScrollOwnershipFromRecognizer(sv, event, 0)
+                }
                 pinnedScrollOffsetY = 0
+                manualScrollOffsetY = 0f
                 pinScrollOffset(sv)
                 host.onSheetDragBy(dy)
             }
@@ -388,7 +461,9 @@ internal class SheetValdiGestureRecognizer(
 
     private fun finishCoordinatedDrag(event: MotionEvent, velocityYPxPerSec: Float) {
         val sv = coordinatedScrollView
+        val wasClaimed = scrollClaimedBySheet
         restoreScrollBar()
+        restoreScrollEnabled()
         if (sv != null) {
             if (!host.isAtRestingDetent() || panMode == SheetPanMode.SHEET) {
                 // Prevent scroll view from flinging while sheet snaps to its target detent.
@@ -398,10 +473,38 @@ internal class SheetValdiGestureRecognizer(
             } else {
                 // Sheet stayed stationary at a resting detent while content scrolled: let scroll view fling naturally.
                 host.onSheetDragSettledAtRest()
+                if (wasClaimed && abs(velocityYPxPerSec) >= minFlingVelocity) {
+                    startManualScrollFling(sv, velocityYPxPerSec)
+                }
             }
         } else {
             host.onSheetDragEnded(velocityYPxPerSec)
         }
+    }
+
+    private fun markScrollClaimedOnStart(sv: ValdiScrollView) {
+        if (!scrollClaimedBySheet) {
+            scrollClaimedBySheet = true
+            if (savedScrollEnabled == null) {
+                savedScrollEnabled = sv.scrollEnabled
+            }
+            sv.scrollEnabled = false
+        }
+        pinScrollOffset(sv)
+    }
+
+    private fun claimScrollOwnershipFromRecognizer(sv: ValdiScrollView, event: MotionEvent, pinY: Int) {
+        if (scrollClaimedBySheet) return
+        scrollClaimedBySheet = true
+        if (savedScrollEnabled == null) {
+            savedScrollEnabled = sv.scrollEnabled
+        }
+        sv.scrollEnabled = false
+        coordinatedScrollRecognizer?.cancel(event)
+        coordinatedScrollRecognizer = null
+        pinnedScrollOffsetY = pinY
+        manualScrollOffsetY = pinY.toFloat()
+        sv.setContentOffset(sv.contentOffsetX, pinY, 0f, 0f, false)
     }
 
     private fun pinScrollOffset(sv: ValdiScrollView) {
@@ -420,7 +523,45 @@ internal class SheetValdiGestureRecognizer(
         savedVerticalScrollBarEnabled = null
     }
 
+    private fun restoreScrollEnabled() {
+        val saved = savedScrollEnabled ?: return
+        coordinatedScrollView?.scrollEnabled = saved
+        savedScrollEnabled = null
+    }
+
+    private fun startManualScrollFling(sv: ValdiScrollView, velocityYPxPerSec: Float) {
+        cancelScrollFling()
+        val maxOffset = maxScrollOffsetY(sv).toFloat()
+        if (maxOffset <= 0f) return
+        val startOffset = manualScrollOffsetY.coerceIn(0f, maxOffset)
+        val holder = FloatValueHolder(startOffset)
+        // Velocity in screen Y is inverted relative to contentOffsetY (dragging up negative -> increases offsetY).
+        val fling = FlingAnimation(holder)
+            .setStartVelocity(-velocityYPxPerSec)
+            .setMinValue(0f)
+            .setMaxValue(maxOffset)
+            .setFriction(1.1f)
+        fling.addUpdateListener { _, value, _ ->
+            sv.setContentOffset(sv.contentOffsetX, value.roundToInt(), 0f, 0f, false)
+        }
+        fling.addEndListener { anim, _, _, _ ->
+            if (scrollFlingAnimation === anim) {
+                scrollFlingAnimation = null
+            }
+        }
+        scrollFlingAnimation = fling
+        fling.start()
+    }
+
+    private fun cancelScrollFling() {
+        val active = scrollFlingAnimation ?: return
+        scrollFlingAnimation = null
+        active.cancel()
+    }
+
     private fun resetTracking() {
+        restoreScrollBar()
+        restoreScrollEnabled()
         activePointerId = MotionEvent.INVALID_POINTER_ID
         slopExceeded = false
         rejected = false
@@ -429,7 +570,9 @@ internal class SheetValdiGestureRecognizer(
         coordinatedScrollRecognizer = null
         panMode = SheetPanMode.UNDECIDED
         exclusiveScrollClaim = false
+        scrollClaimedBySheet = false
         pinnedScrollOffsetY = 0
+        manualScrollOffsetY = 0f
         recycleTracker()
     }
 
@@ -452,10 +595,10 @@ internal class SheetValdiGestureRecognizer(
     }
 
     private fun maxScrollOffsetY(sv: ValdiScrollView): Int =
-        (sv.contentHeight - sv.height).coerceAtLeast(0)
+        (sv.contentHeight - sv.height + ValdiScrollViewInsets.getBottomInset(sv)).coerceAtLeast(0)
 
     private fun canScrollVerticallyInSomeDirection(sv: ValdiScrollView): Boolean =
-        sv.scrollEnabled && !sv.horizontalScroll && (sv.contentHeight > sv.height || sv.contentOffsetY > 0)
+        sv.scrollEnabled && !sv.horizontalScroll && (maxScrollOffsetY(sv) > 0 || sv.contentOffsetY > 0)
 }
 
 /**

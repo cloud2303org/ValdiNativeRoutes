@@ -67,6 +67,7 @@ object ValdiHost {
             runtimeManager.registerGlobalAttributesBinder(ValdiWheelBinder(TimeWheelView::class.java))
             runtimeManager.registerGlobalAttributesBinder(ValdiWheelBinder(TreeWheelView::class.java))
             BottomSheetBinders.register(runtimeManager)
+            KeyboardBinders.register(runtimeManager)
             io.valdiroutes.app_ui.appui.AppUI.runtime = runtimeManager.mainRuntime
         }
         val scopeRequest = StartupTrace.start("hosts.request_to_js_callback")
@@ -237,6 +238,13 @@ object ValdiHost {
                 )
             }
             rootView
+        }
+    }
+
+    fun updateInsets(entry: PageEntry, insets: Insets) {
+        entry.rootView?.let { root ->
+            root.setViewModelUntyped(viewModel(entry, insets))
+            contentRevisions[root] = contentRevision(root) + 1
         }
     }
 

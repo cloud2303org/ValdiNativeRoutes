@@ -337,6 +337,7 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
 
         sheetContainer.backgroundColor = .clear
         sheetContainer.clipsToBounds = false
+        sheetContainer.isHidden = true
         sheetContainer.addSubview(clipContainer)
         addSubview(sheetContainer)
 
@@ -1061,6 +1062,10 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
+        let shouldHideSheet = open <= 0.5
+        if sheetContainer.isHidden != shouldHideSheet {
+            sheetContainer.isHidden = shouldHideSheet
+        }
         sheetContainer.center = CGPoint(
             x: hostWidth * 0.5,
             y: containerSize.height * 0.5 + sheetOffsetY
@@ -1359,11 +1364,16 @@ final class VRBottomSheetHostingView: UIView, UIGestureRecognizerDelegate {
                 restoreScrollIndicator()
                 pinnedContentOffsetY = sv.contentOffset.y
             } else {
+                let effectiveDy = (panMode == .scroll && sv.contentOffset.y < minOffsetY)
+                    ? min(dy, minOffsetY - sv.contentOffset.y)
+                    : dy
                 panMode = .sheet
                 cancelChildTapTouchesIfNeeded(pan)
                 pinnedContentOffsetY = minOffsetY
                 pinScrollView(sv, to: minOffsetY)
-                applyDragDelta(dy)
+                if effectiveDy > 0 {
+                    applyDragDelta(effectiveDy)
+                }
             }
         }
     }

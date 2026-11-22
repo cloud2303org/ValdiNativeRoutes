@@ -53,7 +53,7 @@ export type ScrollCoordinationMode = 'none' | 'initial' | 'handoff';
 
 /**
  * Either a single {@link ScrollCoordinationMode} applied to both directions or
- * per-direction modes (`expand` defaults to `'handoff'`, `collapse` to `'initial'`).
+ * per-direction modes (`expand` and `collapse` both default to `'handoff'`).
  */
 export type ScrollCoordination =
   | ScrollCoordinationMode
@@ -128,7 +128,7 @@ export interface BottomSheetProps {
   scrimColor?: ColorValue;
   /** Accessibility label announced for the scrim dismiss button. @default 'Dismiss' */
   scrimAccessibilityLabel?: string;
-  /** Scroll gesture coordination strategy. @default { expand: 'handoff', collapse: 'initial' } */
+  /** Scroll gesture coordination strategy. @default { expand: 'handoff', collapse: 'handoff' } */
   scrollCoordination?: ScrollCoordination;
   /**
    * Settle spring duration in milliseconds (`>= 0`).
@@ -173,7 +173,7 @@ function resolveScrollCoordination(prop: ScrollCoordination | undefined): {
   if (prop === undefined) {
     return {
       expand: SCROLL_COORDINATION_LEVEL.handoff,
-      collapse: SCROLL_COORDINATION_LEVEL.initial,
+      collapse: SCROLL_COORDINATION_LEVEL.handoff,
     };
   }
   if (typeof prop === 'string') {
@@ -182,7 +182,7 @@ function resolveScrollCoordination(prop: ScrollCoordination | undefined): {
   }
   return {
     expand: SCROLL_COORDINATION_LEVEL[prop.expand ?? 'handoff'],
-    collapse: SCROLL_COORDINATION_LEVEL[prop.collapse ?? 'initial'],
+    collapse: SCROLL_COORDINATION_LEVEL[prop.collapse ?? 'handoff'],
   };
 }
 

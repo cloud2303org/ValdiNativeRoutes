@@ -49,18 +49,23 @@ function fixture(initialDark = false) {
     getState: () => statePromise,
     dispose: () => calls.push('dispose'),
   };
-  class Page {
-    viewModel = { pageId: 'test-webview' };
-    state: Record<string, unknown> = {};
-    updates = 0;
-    setState(value: Record<string, unknown>) {
-      this.updates++;
-      Object.assign(this.state, value);
-    }
-  }
+
+  let updates = 0;
+  const signals: Array<() => any> = [];
+  const cleanups: Array<() => void> = [];
+  const buttons = new Map<string, () => void>();
+  const React = {
+    Fragment: Symbol('Fragment'),
+    createElement(type: unknown, props: Record<string, any> | null) {
+      if (type === 'Button' && props?.id && typeof props.onTap === 'function') {
+        buttons.set(props.id, props.onTap);
+      }
+      return { type, props };
+    },
+  };
   const exports: Record<string, any> = {};
-  // Transpile the real page without rendering JSX. Only platform/UI boundaries
-  // are collaborators; lifecycle methods and callback guards execute unchanged.
+  // Transpile the real page without full Solid bundling; only platform/UI boundaries
+  // are collaborators so lifecycle methods and callback guards execute unchanged.
   const dependencies: Record<string, unknown> = {
     'valdi_core/src/Style': { Style: class {} },
     'valdi_core/src/Device': {
@@ -75,9 +80,23 @@ function fixture(initialDark = false) {
     },
     'valdi_core/src/SystemFont': { systemFont: () => 'font' },
     'valdi_webview/src/WebView': { WebView: { createController: () => controller } },
-    'app_foundation/src/page/PageComponent': { Page },
-    '../../components/Button': {},
-    '../../components/NavigationBar': {},
+    'solid-js': {
+      createSignal<T>(initial: T) {
+        let value = initial;
+        const get = () => value;
+        signals.push(get);
+        const set = (next: T | ((prev: T) => T)) => {
+          value = typeof next === 'function' ? (next as (prev: T) => T)(value) : next;
+          updates++;
+          return value;
+        };
+        return [get, set];
+      },
+      onCleanup: (fn: () => void) => cleanups.push(fn),
+    },
+    '../../components/Button': { Button: 'Button' },
+    '../../components/NavigationBar': { NavigationBar: 'NavigationBar' },
+    '../../components/usePageStatusBar': { usePageStatusBar: () => () => {} },
     '../../components/theme': {
       color: {},
       tokens: { font: {}, space: {} },
@@ -87,16 +106,39 @@ function fixture(initialDark = false) {
       },
     },
   };
-  vm.runInNewContext(`(function(require,exports){${code}\n})`)(
+  vm.runInNewContext(`(function(require,exports,React){${code}\n})`)(
     (name: string) => {
       assert.ok(name in dependencies, name);
       return dependencies[name];
     },
     exports,
+    React,
   );
-  const page = new exports.WebViewPage();
+  exports.WebViewPage({
+    contextId: 'test-webview',
+    insets: { top: 0, bottom: 0, left: 0, right: 0 },
+    initialViewModel: { pageId: 'test-webview', insets: { top: 0, bottom: 0, left: 0, right: 0 } },
+    viewModel: () => ({ pageId: 'test-webview' }),
+    params: {},
+    context: { back() {}, finish() {} },
+  });
+  const [getPhase, getMessage, getResult, getNavigation] = signals;
   return {
-    page, calls, documents,
+    calls,
+    documents,
+    state: () => ({
+      phase: getPhase(),
+      message: getMessage(),
+      result: getResult(),
+      navigation: getNavigation(),
+    }),
+    updates: () => updates,
+    handleLoad: () => buttons.get('webview-load')?.(),
+    handleEvaluate: () => buttons.get('webview-evaluate')?.(),
+    handleState: () => buttons.get('webview-state')?.(),
+    destroy: () => {
+      for (const fn of cleanups) fn();
+    },
     changeTheme: (value: boolean) => { dark = value; themeCallback(value); },
     themeCancelled: () => themeCancelled,
     listener: () => listener,
@@ -108,34 +150,32 @@ function fixture(initialDark = false) {
 
 test('WebView page installs the bridge before loading and forwards native results', async () => {
   const f = fixture();
-  f.page.onCreate();
   assert.deepEqual(f.calls, ['listen', 'load']);
   f.listener().onLoadCompleted();
-  assert.equal(f.page.state.phase, '离线页面已加载');
+  assert.equal(f.state().phase, '离线页面已加载');
   f.listener().onMessage('from page');
-  assert.equal(f.page.state.message, 'from page');
-  f.page.handleEvaluate();
+  assert.equal(f.state().message, 'from page');
+  f.handleEvaluate();
   assert.equal(f.calls.at(-1), 'document.title');
   f.evaluation()({ value: '"Valdi WebView"' });
-  assert.equal(f.page.state.result, '"Valdi WebView"');
-  f.page.handleState();
+  assert.equal(f.state().result, '"Valdi WebView"');
+  f.handleState();
   f.resolveState({ canGoBack: false, canGoForward: true, loading: false });
   await Promise.resolve();
-  assert.match(f.page.state.navigation, /后退 false · 前进 true · 加载中 false/);
-  f.page.onDestroy();
+  assert.match(f.state().navigation, /后退 false · 前进 true · 加载中 false/);
+  f.destroy();
   assert.deepEqual(f.calls.slice(-2), ['clear', 'dispose']);
 });
 
 test('WebView page ignores already captured listener, evaluation and state callbacks after destruction', async () => {
   for (const reject of [false, true]) {
     const f = fixture();
-    f.page.onCreate();
     const listener = f.listener();
-    f.page.handleEvaluate();
+    f.handleEvaluate();
     const evaluation = f.evaluation();
-    f.page.handleState();
-    f.page.onDestroy();
-    const updates = f.page.updates;
+    f.handleState();
+    f.destroy();
+    const updates = f.updates();
     listener.onMessage('late');
     listener.onLoadCompleted();
     listener.onLoadFailed('late failure');
@@ -143,15 +183,14 @@ test('WebView page ignores already captured listener, evaluation and state callb
     if (reject) f.rejectState(new Error('late state'));
     else f.resolveState({ canGoBack: true, canGoForward: true, loading: true });
     await Promise.resolve();
-    assert.equal(f.page.updates, updates);
+    assert.equal(f.updates(), updates);
   }
 });
 
 test('WebView page disposes even if clearing the listener throws', () => {
   const f = fixture();
-  f.page.onCreate();
   f.failClear();
-  assert.throws(() => f.page.onDestroy(), /clear failed/);
+  assert.throws(() => f.destroy(), /clear failed/);
   assert.deepEqual(f.calls.slice(-2), ['clear', 'dispose']);
   assert.equal(f.themeCancelled(), true);
 });
@@ -159,7 +198,6 @@ test('WebView page disposes even if clearing the listener throws', () => {
 test('offline HTML starts with the current appearance and both native token palettes', () => {
   for (const dark of [false, true]) {
     const f = fixture(dark);
-    f.page.onCreate();
     assert.match(f.documents[0], new RegExp(`data-valdi-theme="${dark ? 'dark' : 'light'}"`));
     assert.match(f.documents[0], /color-scheme:light;--page-text:#172033;--page-background:#f5f7fb/);
     assert.match(f.documents[0], /color-scheme:dark;--page-text:#edf2f7;--page-background:#101114/);
@@ -170,7 +208,6 @@ test('offline HTML starts with the current appearance and both native token pale
 
 test('theme changes update the document in place and are reapplied after a load race', () => {
   const f = fixture();
-  f.page.onCreate();
   let documentTheme = 'light';
   const document = {
     documentElement: {
@@ -191,12 +228,12 @@ test('theme changes update the document in place and are reapplied after a load 
   applyLastScript();
   assert.equal(documentTheme, 'dark');
   assert.equal(f.documents.length, 1);
-  f.page.handleLoad();
+  f.handleLoad();
   assert.match(f.documents[1], /data-valdi-theme="dark"/);
   f.changeTheme(false);
   applyLastScript();
   assert.equal(documentTheme, 'light');
-  f.page.onDestroy();
+  f.destroy();
   assert.equal(f.themeCancelled(), true);
   const calls = f.calls.length;
   f.changeTheme(true); // Already queued callback arriving after cancellation.

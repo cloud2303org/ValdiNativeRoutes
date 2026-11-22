@@ -24,8 +24,9 @@ export interface PageViewModel {
   /** 'push'; 'tab' for a page shown in the tab shell (routes.tabs), which has nothing to close. */
   presentation: string;
   /**
-   * Fixed initial safe-area insets snapshot captured when the page mounts (not reduced when the keyboard opens;
-   * the host handles keyboard avoidance directly by resizing the page container).
+   * System safe-area insets for the page (updates on orientation or safe-area changes; never reduced when the keyboard
+   * opens — pages handle keyboard avoidance themselves via `app_ui` keyboard components such as `KeyboardStickyView`,
+   * `KeyboardAvoidingView`, and `KeyboardAwareScrollView`).
    * Default tabs retain the official platform container's insets. A custom tab root absolutely overlays pages:
    * only system safe area goes to pages; the host never measures or adds the custom bar's height.
    * Business code shares its chosen bar height and content padding.

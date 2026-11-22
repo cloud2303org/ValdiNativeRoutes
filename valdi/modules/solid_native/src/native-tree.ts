@@ -339,6 +339,10 @@ export class NativeTree {
     return this.sink.getNativeNode(node.id);
   }
 
+  getElementById(id: number): NativeElement | undefined {
+    return this.elementsById.get(id);
+  }
+
   takeElementSnapshot(node: NativeElement): Promise<string | undefined> {
     if (!this.alive || node.kind !== 'element' || !this.materialized.has(node) || !this.sink.takeSnapshot) {
       return Promise.resolve(undefined);
@@ -560,6 +564,7 @@ export class NativeTree {
   private unmaterializeSubtree(node: NativeElement): void {
     this.materialized.delete(node);
     this.observedVisibilityNodes.delete(node);
+    this.elementsById.delete(node.id);
     for (let child = node.firstChild; child; child = child.nextSibling) {
       if (child.kind === 'element') {
         this.unmaterializeSubtree(child);

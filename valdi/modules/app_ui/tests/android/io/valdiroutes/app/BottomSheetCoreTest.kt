@@ -411,4 +411,13 @@ class BottomSheetCoreTest {
         assertEquals(-500f, BottomSheetMath.clampDefaultSpringVelocity(100f, -2000f), 0.001f)
         assertEquals(500f, BottomSheetMath.clampDefaultSpringVelocity(100f, 2000f), 0.001f)
     }
+
+    @Test
+    fun splitCollapseScrollDeltaHandsOffExactLeftoverAtTop() {
+        assertEquals(20f to 0f, BottomSheetMath.splitCollapseScrollDelta(remainingScrollPx = 50f, dyPx = 20f))
+        assertEquals(20f to 0f, BottomSheetMath.splitCollapseScrollDelta(remainingScrollPx = 20f, dyPx = 20f))
+        assertEquals(12f to 18f, BottomSheetMath.splitCollapseScrollDelta(remainingScrollPx = 12f, dyPx = 30f))
+        assertEquals(0f to 15f, BottomSheetMath.splitCollapseScrollDelta(remainingScrollPx = 0f, dyPx = 15f))
+        assertEquals(0f to 0f, BottomSheetMath.splitCollapseScrollDelta(remainingScrollPx = 20f, dyPx = -5f))
+    }
 }

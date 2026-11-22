@@ -11,9 +11,17 @@ const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const generatorHash = digest(readFileSync(script));
 const catalog = 'ios/Generated/AppAssets.xcassets';
 const manifestPath = 'ios/Generated/AppIcons.json';
+const launcherColorsPath = 'android/app/build/generated/valdi-app/res/values/valdi_launcher_colors.xml';
 const pngSignature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const json = value => Buffer.from(JSON.stringify(value, null, 2) + '\n');
 const info = { author: 'xcode', version: 1 };
+const adaptiveIconXml = Buffer.from(
+  '<?xml version="1.0" encoding="utf-8"?>\n' +
+  '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n' +
+  '    <background android:drawable="@color/valdi_launcher_background" />\n' +
+  '    <foreground android:drawable="@mipmap/ic_launcher_foreground" />\n' +
+  '</adaptive-icon>\n',
+);
 const images = [
   { file: `${catalog}/AppIcon.appiconset/AppIcon.png`, size: 1024, opaque: true },
   ...[1, 2, 3].map(scale => ({
@@ -22,6 +30,18 @@ const images = [
   ...Object.entries({ mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 })
     .map(([density, size]) => ({
       file: `android/app/build/generated/valdi-app/res/mipmap-${density}/ic_launcher.png`, size,
+    })),
+  ...Object.entries({ mdpi: 108, hdpi: 162, xhdpi: 216, xxhdpi: 324, xxxhdpi: 432 })
+    .map(([density, size]) => ({
+      file: `android/app/build/generated/valdi-app/res/mipmap-${density}/ic_launcher_foreground.png`,
+      size,
+      opaque: true,
+    })),
+  ...Object.entries({ mdpi: 288, hdpi: 432, xhdpi: 576, xxhdpi: 864, xxxhdpi: 1024 })
+    .map(([density, size]) => ({
+      file: `android/app/build/generated/valdi-app/res/drawable-${density}/valdi_splash_logo.png`,
+      size,
+      opaque: true,
     })),
 ];
 const descriptions = {
@@ -36,6 +56,8 @@ const descriptions = {
     })),
     info,
   }),
+  'android/app/build/generated/valdi-app/res/mipmap-anydpi-v26/ic_launcher.xml': adaptiveIconXml,
+  'android/app/build/generated/valdi-app/res/mipmap-anydpi-v26/ic_launcher_round.xml': adaptiveIconXml,
 };
 
 const invalid = reason => new Error(`package.json valdi.app: invalid icon: ${reason}`);
@@ -103,7 +125,7 @@ export function syncAppIcons(root = repository, icon) {
   if (icon === undefined) return;
   const source = readAppIcon(root, icon);
   const base = realpathSync(root);
-  const files = [...images.map(image => image.file), ...Object.keys(descriptions)];
+  const files = [...images.map(image => image.file), ...Object.keys(descriptions), launcherColorsPath];
   for (const file of [...files, manifestPath]) checkTarget(base, file);
   const require = createRequire(import.meta.url);
   let sharpEntry;
@@ -136,8 +158,14 @@ export function syncAppIcons(root = repository, icon) {
     throw invalid(`PNG generation failed: ${(child.error?.message || child.stderr || `child exit ${child.status}`).trim()}`);
   }
   const rendered = JSON.parse(child.stdout);
-  const outputs = { ...descriptions };
-  for (const { file } of images) outputs[file] = Buffer.from(rendered[file], 'base64');
+  const outputs = {
+    ...descriptions,
+    [launcherColorsPath]: Buffer.from(
+      '<?xml version="1.0" encoding="utf-8"?>\n' +
+      `<resources>\n    <color name="valdi_launcher_background">${rendered.backgroundColor}</color>\n</resources>\n`,
+    ),
+  };
+  for (const { file } of images) outputs[file] = Buffer.from(rendered.images[file], 'base64');
   const manifest = json({
     ...identity,
     outputs: Object.fromEntries(Object.entries(outputs).map(([file, bytes]) => [file, digest(bytes)])),
@@ -151,6 +179,32 @@ export function syncAppIcons(root = repository, icon) {
   }
 }
 
+function sampleCornerBackgroundHex(data, channels) {
+  let r;
+  let g;
+  let b;
+  let a = 255;
+  if (channels <= 2) {
+    r = data[0];
+    g = data[0];
+    b = data[0];
+    if (channels === 2) a = data[1];
+  } else {
+    r = data[0];
+    g = data[1];
+    b = data[2];
+    if (channels >= 4) a = data[3];
+  }
+  if (a < 255) {
+    const alpha = a / 255;
+    const inv = 1 - alpha;
+    r = Math.round(r * alpha + 255 * inv);
+    g = Math.round(g * alpha + 255 * inv);
+    b = Math.round(b * alpha + 255 * inv);
+  }
+  return '#' + [r, g, b].map(value => value.toString(16).padStart(2, '0')).join('');
+}
+
 async function render(sharpEntry) {
   const { default: sharp } = await import(pathToFileURL(sharpEntry).href);
   const source = readFileSync(0);
@@ -159,11 +213,14 @@ async function render(sharpEntry) {
     .raw().toBuffer({ resolveWithObject: true });
   const outputs = {};
   for (const { file, size, opaque } of images) {
-    let image = sharp(data, { raw: metadata }).resize(size, size, { fit: 'inside' });
+    let image = sharp(data, { raw: metadata }).resize(size, size, { fit: 'inside', kernel: 'lanczos3' });
     if (opaque) image = image.flatten({ background: '#ffffff' });
     outputs[file] = (await image.png().toBuffer()).toString('base64');
   }
-  process.stdout.write(JSON.stringify(outputs));
+  process.stdout.write(JSON.stringify({
+    images: outputs,
+    backgroundColor: sampleCornerBackgroundHex(data, metadata.channels),
+  }));
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === script) {

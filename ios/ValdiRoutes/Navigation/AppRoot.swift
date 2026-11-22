@@ -1,7 +1,8 @@
 import UIKit
 
-/// Holds the page stack once the route table has loaded, and presents the full-screen cover. Nothing in UIKit avoids
-/// the keyboard: KeyboardObserver reports its height continuously, and each page container pads itself (PageContainerView).
+/// Holds the page stack once the route table has loaded, and presents the full-screen cover. Pages handle their own
+/// keyboard avoidance through `app_ui` keyboard components (`KeyboardStickyView`, `KeyboardAvoidingView`,
+/// `KeyboardAwareScrollView`).
 final class RootController: UIViewController {
     private var navigator: Navigator?
     private var splash: InitialContentSplashOverlay?
@@ -312,44 +313,45 @@ final class PageController: UIViewController {
     }
 }
 
-/// Holds a page's root view and is the only place that handles the keyboard: the root view's bottom moves up by the
-/// keyboard height while page insets remain a fixed initial safe-area snapshot.
+/// Holds a page's root view sized edge-to-edge to its container; pages handle keyboard avoidance themselves.
 final class PageContainerView: UIView {
     let entry: PageEntry
     private weak var navigator: Navigator?
-    private var keyboardSubscription: KeyboardSubscription?
 
     init(entry: PageEntry, navigator: Navigator) {
         self.entry = entry
         self.navigator = navigator
         super.init(frame: .zero)
-        keyboardSubscription = KeyboardObserver.shared.observe { [weak self] _ in self?.keyboardDidMove() }
     }
 
     required init?(coder: NSCoder) { fatalError() }
-
-    private func keyboardDidMove() {
-        // A covered page is out of the window; it catches up when it comes back.
-        guard window != nil else { return }
-        setNeedsLayout()
-        layoutIfNeeded()
-    }
-
-    override func didMoveToWindow() {
-        super.didMoveToWindow()
-        guard window != nil else { return }
-        KeyboardObserver.shared.prepare()
-        keyboardDidMove()
-    }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         // Created on the first layout, once the insets are known; never again for a page that has left.
         guard let rootView = entry.rootView ?? (entry.removed ? nil : createRootView()) else { return }
         if rootView.superview !== self { addSubview(rootView) }
-        let keyboard = KeyboardObserver.shared.height
-        rootView.frame = CGRect(x: 0, y: 0, width: bounds.width, height: max(0, bounds.height - keyboard))
+        rootView.frame = bounds
+        syncInsets()
         StartupSplashScreen.shared.contentDidChange()
+    }
+
+    override func safeAreaInsetsDidChange() {
+        super.safeAreaInsetsDidChange()
+        syncInsets()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        syncInsets()
+    }
+
+    private func syncInsets() {
+        guard entry.rootView != nil, window != nil else { return }
+        let insets = safeAreaInsets
+        guard entry.appliedInsets != insets else { return }
+        entry.appliedInsets = insets
+        ValdiHost.shared.updateInsets(entry, insets: insets)
     }
 
     private func createRootView() -> SCValdiRootView? {

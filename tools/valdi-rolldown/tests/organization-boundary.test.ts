@@ -130,8 +130,6 @@ test('feature route metadata uses canonical feature IDs without evaluating featu
   assert.deepEqual(components.sort(), expected.sort());
   assert.equal(declaration.root, '$tabs');
   assert.equal(declaration.routes.find((route: any) => route.route === 'picker').nativeName, 'picker');
-  assert.equal(declaration.routes.find((route: any) => route.route === 'calculator').component,
-    'CalculatorComponent@calculator/src/CalculatorComponent');
   assert.deepEqual(loaded, [
     'app_pages/src/routes',
     'app_foundation/src/navigation/config',

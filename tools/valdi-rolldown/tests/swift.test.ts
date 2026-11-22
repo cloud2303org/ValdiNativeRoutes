@@ -70,7 +70,7 @@ test('Swift-only and dual bindings cover official schemas and compile against th
   mkdirSync(path.join(dir, 'src'));
   writeFileSync(path.join(dir, 'src/index.tsx'), swiftFixture);
   writeFileSync(path.join(dir, 'src/Calculator.d.ts'), '/** @ExportModule */\nexport declare function multiply(left: number, right: number): number;\n');
-  const module = { name: 'swift_fixture', dir, generatedDirs: [], nodeModules: path.join(root, 'valdi/node_modules') };
+  const module = { name: 'swift_fixture', dir, generatedDirs: [], nodeModules: path.join(root, 'valdi/node_modules'), jsxBackend: 'valdi' as const };
   for (const language of ['swift', 'both'] as const) {
     const out = path.join(dir, language);
     await compileNodeModule(module, out, 'SwiftFixture', 'debug', [], language);

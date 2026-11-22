@@ -1,5 +1,5 @@
 import type { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
-import { appUIApi, BottomSheetProvider, ModalBottomSheet } from 'app_ui/src/index';
+import { appUIApi, BottomSheetProvider, KeyboardAwareScrollView, ModalBottomSheet } from 'app_ui/src/index';
 import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import type { SolidPageProps } from 'solid_native/src/bridge';
 import { Lazy } from 'solid_native/src/Lazy';
@@ -12,6 +12,13 @@ import { NavigationBar } from '../../components/NavigationBar';
 import { usePageStatusBar } from '../../components/usePageStatusBar';
 import { router } from '../../router';
 import { accentColor, cycleAccent, globalCount, setGlobalCount } from '../../sharedState';
+
+const demoScrollStyle = new Style<View>({
+  width: '100%',
+  height: 0,
+  flexGrow: 1,
+  backgroundColor: '#F3F6FA',
+});
 
 const parityCardStyle = new Style<View>({
   padding: 14,
@@ -91,7 +98,6 @@ export function SolidDemoPage(props: SolidPageProps<PageViewModel, PageContext>)
   const ui = appUIApi();
   usePageStatusBar(props, 'auto');
 
-  const bottomInset = Math.max(props.insets.bottom, 16) + 24;
   const [localCount, setLocalCount] = createSignal(0);
   const [showPanel, setShowPanel] = createSignal(true);
   const [barExpanded, setBarExpanded] = createSignal(false);
@@ -99,7 +105,7 @@ export function SolidDemoPage(props: SolidPageProps<PageViewModel, PageContext>)
   const [cardVisible, setCardVisible] = createSignal(false);
   const [sheetIndex, setSheetIndex] = createSignal(-1);
   const [uiStatus, setUiStatus] = createSignal(
-    `Fixed insets: top=${Math.round(props.insets.top)} · bottom=${Math.round(props.insets.bottom)}`,
+    `Safe-area insets: top=${Math.round(props.insets.top)} · bottom=${Math.round(props.insets.bottom)}`,
   );
   const [noteText, setNoteText] = createSignal('');
   const [nextItemId, setNextItemId] = createSignal(4);
@@ -206,19 +212,18 @@ export function SolidDemoPage(props: SolidPageProps<PageViewModel, PageContext>)
     <BottomSheetProvider>
       <view width="100%" height="100%" backgroundColor="#F3F6FA" flexDirection="column">
         <NavigationBar title="Solid 2.0 特性演示" topInset={props.insets.top} onBack={() => props.context.back()} />
-        <scroll
-          height={0}
-          flexGrow={1}
-          backgroundColor="#F3F6FA"
+        <KeyboardAwareScrollView
+          style={demoScrollStyle}
+          bottomOffset={16}
           showsVerticalScrollIndicator={true}
           viewportExtensionTop={200}
           viewportExtensionBottom={200}
         >
           <view
             paddingTop={12}
-            paddingBottom={bottomInset}
-            paddingLeft={16}
-            paddingRight={16}
+            paddingBottom={Math.max(props.insets.bottom, 16) + 24}
+            paddingLeft={props.insets.left + 16}
+            paddingRight={props.insets.right + 16}
             flexDirection="column"
           >
             <view
@@ -509,7 +514,7 @@ export function SolidDemoPage(props: SolidPageProps<PageViewModel, PageContext>)
                   font={systemFont(14)}
                   color="#0F172A"
                   placeholderColor="#94A3B8"
-                  placeholder="Tap to test native keyboard lift (insets fixed)..."
+                  placeholder="Tap to test KeyboardAwareScrollView lift..."
                   value={noteText()}
                   onChange={event => {
                     setNoteText(event.text);
@@ -534,7 +539,7 @@ export function SolidDemoPage(props: SolidPageProps<PageViewModel, PageContext>)
               />
             </view>
           </view>
-        </scroll>
+        </KeyboardAwareScrollView>
 
         <ModalBottomSheet
           index={sheetIndex()}

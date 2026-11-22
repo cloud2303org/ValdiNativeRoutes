@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.findViewTreeOnBackPressedDispatcherOwner
+import io.valdiroutes.app_ui.appui.AppUI
 
 internal data class CloseRequestInputState(
     val isPresented: Boolean,
@@ -189,6 +190,17 @@ internal fun Context.findActivity(): Activity? {
         ctx = ctx.baseContext
     }
     return null
+}
+
+internal fun View.findHostActivity(): Activity? {
+    context.findActivity()?.let { return it }
+    var current: View? = parent as? View
+    while (current != null) {
+        current.context.findActivity()?.let { return it }
+        current = current.parent as? View
+    }
+    rootView?.context?.findActivity()?.let { return it }
+    return AppUI.hostActivity
 }
 
 /**

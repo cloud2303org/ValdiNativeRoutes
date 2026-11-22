@@ -202,6 +202,10 @@ object AppUI {
     internal val hostWindow: Window?
         get() = activity?.window
 
+    /** Foreground Activity used by window-overlay BottomSheets when Valdi views carry Application context. */
+    internal val hostActivity: ComponentActivity?
+        get() = activity
+
     /** Clears focus and hides the soft keyboard on the foreground Activity window before modal transitions. */
     internal fun clearHostFocusAndHideKeyboard() {
         val hostActivity = activity ?: return

@@ -4,8 +4,6 @@ import path from 'node:path';
 import test from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
-import { codegenModules, generateNativeCode, nativeSourceFiles } from '../codegen/index';
-import { valdiTs } from '../valdiTs';
 
 const source = path.resolve(import.meta.dirname, '../../../valdi/modules/app_ota/src/index.ts');
 
@@ -111,46 +109,4 @@ test('unsupported platforms reject without loading the native host', async () =>
   await assert.rejects(f.api.getInfo(), /Android.*iOS/);
   await assert.rejects(f.api.checkForUpdate(), /Android.*iOS/);
   assert.deepEqual(f.calls, []);
-});
-
-test('OTA generates a native host proxy, info model and module factory', () => {
-  const target = codegenModules().app_ota;
-  assert.ok(target, 'app_ota must be an enabled native module');
-  const code = generateNativeCode(target);
-  const kotlin = [...nativeSourceFiles(target, code, 'android').values()].join('\n');
-  const objc = [...nativeSourceFiles(target, code, 'ios').values()].join('\n');
-  assert.match(kotlin, /interface OtaHost/);
-  assert.match(kotlin, /fun getInfo\(\): Promise<OtaInfo>/);
-  assert.match(kotlin, /fun checkForUpdate\(\): Promise<OtaInfo>/);
-  assert.match(kotlin, /class OtaInfo/);
-  assert.match(kotlin, /pendingBundleVersion: String\?/);
-  assert.match(kotlin, /isNewVersion: Boolean/);
-  assert.match(kotlin, /previousBundleVersion: String\?/);
-  assert.match(kotlin, /OtaNativeModuleFactory/);
-  assert.match(kotlin, /return "app_ota\/src\/Ota"/);
-  assert.match(objc, /@protocol VROtaHost/);
-  assert.match(objc, /SCValdiPromise<VROtaInfo \*> \* _Nonnull\)getInfo/);
-  assert.match(objc, /SCValdiPromise<VROtaInfo \*> \* _Nonnull\)checkForUpdate/);
-  assert.match(objc, /VROtaNativeModuleFactory/);
-  assert.match(objc, /isNewVersion/);
-  assert.match(objc, /previousBundleVersion/);
-  assert.match(objc, /return @"app_ota\/src\/Ota"/);
-});
-
-test('OTA facade and contract typecheck against the configured Valdi sources', () => {
-  const target = codegenModules().app_ota;
-  const compiler = valdiTs(target.module);
-  try {
-    const program = compiler.program();
-    const errors = program.getSourceFiles()
-      .filter(file => file.fileName.startsWith(target.module.dir + path.sep))
-      .flatMap(file => [...program.getSyntacticDiagnostics(file), ...program.getSemanticDiagnostics(file)]);
-    assert.equal(errors.length, 0, ts.formatDiagnostics(errors, {
-      getCanonicalFileName: file => file,
-      getCurrentDirectory: () => process.cwd(),
-      getNewLine: () => '\n',
-    }));
-  } finally {
-    compiler.dispose();
-  }
 });

@@ -630,52 +630,28 @@ test('CLI rejects malformed, empty, missing and escaping C++ roots before any co
   t.diagnostic(`${invalid.length} invalid configurations rejected before output mutation, including an unplanned module`);
 });
 
-test('real module C++ source roots preserve the exact demo prefix and omit foundation, retaining all implementation owners', t => {
+test('real module C++ plan reflects enabled roots without disabled optional modules or foundation', t => {
   const directory = temporary(t);
   const modules = codegenModules();
-  const full = nativeSourceFiles(modules.app_pages, generateNativeCode(modules.app_pages), 'cpp');
   const calls: string[] = [];
-  const cache = new Map<string, NativeCode>();
   const generate = (target: CodegenModule) => {
     calls.push(target.module.name);
-    const code = generateNativeCode(cppSourceRootTarget(target, moduleConfig(target.module.name).cppSourceRoots));
-    cache.set(target.module.name, code);
-    return code;
+    return generateNativeCode(cppSourceRootTarget(target, moduleConfig(target.module.name).cppSourceRoots));
   };
   const plan = planCppModules({ modules, availableModules: availableModuleNames(path.resolve(import.meta.dirname, '../../..')), generate });
-  assert.deepEqual(plan.roots, ['app_pages', 'app_vision']);
-  assert.deepEqual(plan.implementationRoots, plan.roots);
-  assert.deepEqual(plan.modules.map(({ name, dependencies }) => ({ name, dependencies })), [
-    { name: 'app_pages', dependencies: [] },
-    { name: 'app_vision', dependencies: [] },
-  ]);
-  assert.deepEqual(calls, plan.roots);
-  for (const [file, content] of plan.modules.find(module => module.name === 'app_pages')!.files) {
-    const generic = full.get(file)!;
-    assert.ok(content.length > 0 && content.length < generic.length);
-    assert.equal(generic.slice(0, content.length), content, `exact CppStats/CppModule prefix: ${file}`);
-    assert.match(content, /snap::valdi_modules::app_pages/);
-    assert.doesNotMatch(content, /app_foundation|StartApp|TabBarViewModel/);
-    assert.match(generic, /StartApp/);
-    if (file.endsWith('.hpp')) {
-      assert.match(content, /class CppStats: /);
-      assert.match(content, /class CppModule: /);
-      assert.match(content, /class CppModuleFactory: /);
-    } else {
-      assert.match(content, /return Valdi::StringBox::fromCString\("app_pages\/src\/cpp\/Cpp"\)/);
-    }
-  }
+  assert.deepEqual(plan.roots, []);
+  assert.deepEqual(plan.implementationRoots, []);
+  assert.deepEqual(plan.modules, []);
+  assert.deepEqual(calls, []);
   const output = path.join(directory, 'output');
-  assert.equal(syncCppModules(plan, output).length, 8);
-  for (const module of plan.modules) {
-    for (const [file, content] of nativeSourceFiles(modules[module.name], cache.get(module.name)!, 'cpp')) {
-      assert.equal(readFileSync(path.join(output, module.name, 'cpp/generated', file), 'utf8'), content);
-    }
-  }
+  assert.equal(syncCppModules(plan, output).length, 2);
+  assert.ok(existsSync(path.join(output, 'runtime-cpp.bzl')));
+  assert.ok(existsSync(path.join(output, 'runtime-packages.bazelrc')));
   assert.deepEqual(syncCppModules(plan, output, true), []);
   assert.equal(existsSync(path.join(output, 'app_ui')), false);
   assert.equal(existsSync(path.join(output, 'app_video')), false);
   assert.equal(existsSync(path.join(output, 'app_foundation')), false);
+  assert.equal(existsSync(path.join(output, 'app_vision')), false);
   const before = snapshot(output);
   assert.deepEqual(syncCppModules(plan, output), []);
   assert.deepEqual(snapshot(output), before);
@@ -790,21 +766,15 @@ test('CLI combines module C++, generic flat C++, Kotlin and ObjC, and reports re
     `common --deleted_packages=${available.map(name => `modules/${name}`).join(',')}`);
   assert.equal(existsSync(path.join(directory, 'flat/runtime-packages.bazelrc')), false);
   assert.equal(existsSync(path.join(directory, 'flat/runtime-cpp.bzl')), false);
-  for (const extension of ['hpp', 'cpp']) {
-    const scoped = readFileSync(path.join(out, `app_pages/cpp/generated/valdi_modules/app_pages/app_pages.${extension}`), 'utf8');
-    const flat = readFileSync(path.join(directory, `flat/valdi_modules/app_pages/app_pages.${extension}`), 'utf8');
-    assert.equal(flat.slice(0, scoped.length), scoped);
-    assert.ok(flat.length > scoped.length);
-  }
   for (const platform of ['kotlin', 'objc', 'flat']) {
     const hashes = (root: string) => Object.fromEntries(Object.entries(snapshot(path.join(root, platform)))
       .map(([file, { content }]) => [file, createHash('sha256').update(content).digest('hex')]));
     assert.deepEqual(hashes(directory), hashes(baseline), `${platform} hashes unchanged in combined invocation`);
   }
-  assert.equal(existsSync(path.join(out, 'app_foundation')), false);
-  assert.ok(existsSync(path.join(out, 'app_vision/cpp/generated/valdi_modules/app_vision/app_vision.hpp')));
-  assert.match(readFileSync(path.join(directory, 'kotlin/app_pages.kt'), 'utf8'), /CppStats/);
-  assert.match(readFileSync(path.join(directory, 'objc/app_pagesTypes/app_pagesTypes.h'), 'utf8'), /ValdiRuntime\//);
+  assert.ok(existsSync(path.join(out, 'app_foundation/cpp/generated/valdi_modules/app_foundation/app_foundation.hpp')));
+  assert.equal(existsSync(path.join(out, 'app_vision')), false);
+  assert.ok(existsSync(path.join(directory, 'kotlin/app_pages.kt')));
+  assert.match(readFileSync(path.join(directory, 'objc/app_pagesTypes/app_pagesTypes.h'), 'utf8'), /app_foundationTypes\/|VRRouteDeclaration/);
   assert.equal(existsSync(path.join(directory, 'flat/valdi_modules/app_foundation')), false);
   const expectedConfig = readFileSync(config, 'utf8');
   for (const staleConfig of [undefined, '# obsolete runtime config\n']) {
@@ -821,8 +791,6 @@ test('CLI combines module C++, generic flat C++, Kotlin and ObjC, and reports re
   }
   const stale = path.join(out, 'app_video/cpp/generated/valdi_modules/app_video/app_video.hpp');
   put(stale, 'stale');
-  const header = path.join(out, 'app_pages/cpp/generated/valdi_modules/app_pages/app_pages.hpp');
-  put(header, 'changed');
   const before = snapshot(directory);
   const check = run(['--check']);
   assert.equal(check.status, 1, check.stderr);

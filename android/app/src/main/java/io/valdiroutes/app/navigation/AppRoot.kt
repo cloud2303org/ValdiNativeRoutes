@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
@@ -151,31 +150,7 @@ private fun StatusBarIcons(style: String) {
     }
 }
 
-private class ModalImeLatch {
-    var suppressed: Boolean = false
-}
-
-/**
- * The keyboard height, read once per screen container so the edge-to-edge window
- * never resizes while pages account for the IME themselves.
- * While a modal dialog is open—and until the IME finishes collapsing after it
- * closes—the underlying page sees 0 so transient dialog IME teardown cannot
- * jitter the page behind it.
- */
-@Composable
-private fun rememberPageKeyboardHeightPx(): Int {
-    val rawImePx = WindowInsets.ime.getBottom(LocalDensity.current)
-    val modalOpen = AppUI.modal != null
-    val latch = remember { ModalImeLatch() }
-    if (modalOpen) {
-        latch.suppressed = true
-    } else if (rawImePx == 0) {
-        latch.suppressed = false
-    }
-    return if (modalOpen || latch.suppressed) 0 else rawImePx
-}
-
-/** Fixed initial insets for a page: system bars and display cutout without IME subtraction. */
+/** System safe-area insets for a page (system bars and display cutout, without IME subtraction). */
 @Composable
 private fun pageInsets(): Insets {
     val density = LocalDensity.current
@@ -189,13 +164,11 @@ private fun pageInsets(): Insets {
     )
 }
 
-/** Full-screen Valdi page: the page owns its background and insets; the keyboard shrinks its container. */
+/** Full-screen Valdi page: edge-to-edge; pages handle keyboard avoidance via `app_ui` keyboard components. */
 @Composable
 private fun ValdiScreen(entry: PageEntry, navigator: Navigator) {
-    val imeBottomPx = rememberPageKeyboardHeightPx()
-    val imeBottomDp = with(LocalDensity.current) { imeBottomPx.toDp() }
-    Box(Modifier.fillMaxSize().padding(bottom = imeBottomDp)) {
-        ValdiPage(entry, pageInsets(), navigator, Modifier.fillMaxSize(), imeBottomPx = imeBottomPx)
+    Box(Modifier.fillMaxSize()) {
+        ValdiPage(entry, pageInsets(), navigator, Modifier.fillMaxSize())
     }
 }
 
@@ -205,7 +178,6 @@ private fun ValdiPage(
     insets: Insets,
     navigator: Navigator,
     modifier: Modifier,
-    imeBottomPx: Int = 0,
     acceptsInput: Boolean = true,
     prepareTab: Boolean = false,
     onTabReady: () -> Unit = {},
@@ -219,7 +191,6 @@ private fun ValdiPage(
         factory = { context ->
             PageContentContainer(context).apply {
                 this.acceptsInput = acceptsInput
-                setKeyboardHeightPx(imeBottomPx)
                 val rootView = entry.rootView ?: ValdiHost.createPage(context, entry, insets, navigator).also {
                     entry.rootView = it
                     entry.appliedInsets = insets
@@ -230,7 +201,10 @@ private fun ValdiPage(
         },
         update = { container ->
             container.acceptsInput = acceptsInput
-            container.setKeyboardHeightPx(imeBottomPx)
+            if (entry.appliedInsets != insets) {
+                entry.appliedInsets = insets
+                ValdiHost.updateInsets(entry, insets)
+            }
         },
         onRelease = { container ->
             container.removeAllViews()
@@ -257,7 +231,7 @@ private fun insetsOf(density: Density, top: Int, bottom: Int, horizontal: Window
  * Default bars use the glass bar's measured footprint (including its system bottom inset).
  * Docked custom bars (`bar.height != null`) anchor at the bottom and add `height + safeAreaBottom` to page insets.
  * Full-viewport overlay custom bars (`overlay: true`, `bar.height == null`) pass system insets only.
- * In every mode, the soft keyboard shrinks the tab page container.
+ * Pages handle keyboard avoidance themselves via `app_ui` keyboard components.
  */
 @Composable
 private fun TabsScreen(shell: PageEntry, navigator: Navigator) {
@@ -298,10 +272,8 @@ private fun TabsScreen(shell: PageEntry, navigator: Navigator) {
                 // Do not apply this padding to the source bounds: native pixels must extend behind the glass.
                 val barBottomDp = maxOf(rawBottomDp, padding.calculateBottomPadding().value)
                 val insets = baseInsets.copy(bottom = barBottomDp)
-                val imeBottomPx = rememberPageKeyboardHeightPx()
-                val imeBottomDp = with(LocalDensity.current) { imeBottomPx.toDp() }
-                Box(Modifier.fillMaxSize().hazeSource(hazeState).padding(bottom = imeBottomDp)) {
-                    TabPage(shell, selected, insets, navigator, imeBottomPx)
+                Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+                    TabPage(shell, selected, insets, navigator)
                 }
             }
         }
@@ -309,7 +281,7 @@ private fun TabsScreen(shell: PageEntry, navigator: Navigator) {
 }
 
 @Composable
-private fun TabPage(shell: PageEntry, selected: String, insets: Insets, navigator: Navigator, imeBottomPx: Int = 0) {
+private fun TabPage(shell: PageEntry, selected: String, insets: Insets, navigator: Navigator) {
     val bar = requireNotNull(navigator.tabBar) { "No tab bar" }
     val latestInsets = rememberUpdatedState(insets)
     val isTop = navigator.stack.lastOrNull() === shell
@@ -327,7 +299,6 @@ private fun TabPage(shell: PageEntry, selected: String, insets: Insets, navigato
                     if (page.definition.kind == "valdi") {
                         ValdiPage(
                             page, latestInsets.value, navigator, Modifier.fillMaxSize(),
-                            imeBottomPx = imeBottomPx,
                             acceptsInput = selection.displayed == page.route && latestIsTop.value,
                             prepareTab = true,
                             onTabReady = {
@@ -400,10 +371,8 @@ private fun DockedCustomTabsScreen(
     navigator: Navigator,
 ) {
     Box(Modifier.fillMaxSize()) {
-        val imeBottomPx = rememberPageKeyboardHeightPx()
-        val imeBottomDp = with(LocalDensity.current) { imeBottomPx.toDp() }
-        Box(Modifier.fillMaxSize().padding(bottom = imeBottomDp)) {
-            TabPage(shell, selected, insets, navigator, imeBottomPx)
+        Box(Modifier.fillMaxSize()) {
+            TabPage(shell, selected, insets, navigator)
         }
         key(shell.id) {
             AndroidView(
@@ -446,10 +415,8 @@ private fun OverlayCustomTabsScreen(
 ) {
     val composition = rememberCompositionContext()
     val pageContent by rememberUpdatedState<@Composable () -> Unit>({
-        val imeBottomPx = rememberPageKeyboardHeightPx()
-        val imeBottomDp = with(LocalDensity.current) { imeBottomPx.toDp() }
-        Box(Modifier.fillMaxSize().padding(bottom = imeBottomDp)) {
-            TabPage(shell, selected, insets, navigator, imeBottomPx)
+        Box(Modifier.fillMaxSize()) {
+            TabPage(shell, selected, insets, navigator)
         }
     })
     key(shell.id) {

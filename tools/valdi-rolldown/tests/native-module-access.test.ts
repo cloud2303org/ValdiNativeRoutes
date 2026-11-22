@@ -94,23 +94,19 @@ test('Vision caches its singleton host and registers real one-shot callbacks und
   ]);
 });
 
-test('real module codegen exposes AppContext and Vision factories with debug-only startup', () => {
+test('real module codegen exposes AppContext factory with debug-only startup', () => {
   const targets = codegenModules();
   const output = (name: string) => generateNativeCode(targets[name]).sources
     .map(item => item.source.content).join('\n');
   const pages = output('app_pages');
   const foundation = output('app_foundation');
-  const vision = output('app_vision');
   assert.ok(foundation.includes('AppContextNativeModuleFactory'));
   assert.ok(foundation.includes('app_foundation/src/host/AppContext'));
   assert.doesNotMatch(foundation, /TokenStore|getTokenStore/);
-  assert.ok(vision.includes('VisionNativeModuleFactory'));
-  assert.ok(vision.includes('app_vision/src/Vision'));
   assert.match(pages, /fun invoke\(debug: Boolean\): RouteDeclaration/);
   assert.doesNotMatch(pages, /AppContextNativeModuleFactory|VisionNativeModuleFactory/);
   assert.doesNotMatch(foundation, /VisionNativeModuleFactory/);
-  assert.doesNotMatch(vision, /AppContextNativeModuleFactory/);
-  for (const all of [pages, foundation, vision]) {
+  for (const all of [pages, foundation]) {
     assert.doesNotMatch(all, /app_pages\/src\/(?:AppContext|vision\/Vision)/);
     assert.doesNotMatch(all, /installVisionHost/);
   }

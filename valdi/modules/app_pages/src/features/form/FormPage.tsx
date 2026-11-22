@@ -1,12 +1,11 @@
+import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'app_ui/src/keyboard';
 import type { PageContext, PageViewModel } from 'app_foundation/src/page/Page';
 import { createSignal, For, Show } from 'solid-js';
 import type { SolidPageProps } from 'solid_native/src/bridge';
-import type { NativeElement } from 'solid_native/src/native-tree';
 import { Style } from 'valdi_core/src/Style';
 import { systemFont } from 'valdi_core/src/SystemFont';
-import type { Label, ScrollView, View } from 'valdi_tsx/src/NativeTemplateElements';
+import type { Label, View } from 'valdi_tsx/src/NativeTemplateElements';
 import { Button } from '../../components/Button';
-import { FocusScroller } from '../../components/FocusScroller';
 import { FormField } from '../../components/FormField';
 import { PageHeader } from '../../components/PageHeader';
 import { usePageStatusBar } from '../../components/usePageStatusBar';
@@ -24,26 +23,17 @@ type FormViewModel = Omit<PageViewModel, 'route' | 'params'> & {
 };
 
 /**
- * Keyboard test page. The page never reads the keyboard height: the host shrinks its viewport,
- * so all it has to do is lay out inside its bounds.
+ * Keyboard test page demonstrating `app_ui` native keyboard components (`KeyboardAwareScrollView` and
+ * `KeyboardAvoidingView`) without host-level container resizing.
  */
 export function FormPage(props: SolidPageProps<FormViewModel, PageContext>) {
   const router = new Router(props.context);
   usePageStatusBar(props, 'auto');
 
-  const focusScroller = new FocusScroller();
   const [values, setValues] = createSignal<Record<string, string>>({});
 
   const handleChange = (id: string, text: string) => {
     setValues(prev => ({ ...prev, [id]: text }));
-  };
-
-  const handleFocus = (element: NativeElement | undefined) => {
-    focusScroller.focus(element);
-  };
-
-  const handleBlur = (element: NativeElement | undefined) => {
-    focusScroller.blur(element);
   };
 
   const handleBack = () => {
@@ -62,9 +52,11 @@ export function FormPage(props: SolidPageProps<FormViewModel, PageContext>) {
     <Show
       when={props.params.layout === 'scroll'}
       fallback={
-        // The input sits at the bottom, so it rides up with the bottom edge when the host shrinks the page.
-        <view
+        // Bottom input avoids the keyboard via KeyboardAvoidingView translate-with-padding (zero Yoga relayout).
+        <KeyboardAvoidingView
           style={styles.plainPage}
+          behavior="translate-with-padding"
+          keyboardVerticalOffset={-insets.bottom}
           paddingTop={insets.top + 12}
           paddingBottom={insets.bottom + 16}
           paddingLeft={insets.left + 20}
@@ -72,7 +64,7 @@ export function FormPage(props: SolidPageProps<FormViewModel, PageContext>) {
         >
           <PageHeader
             title="底部输入框"
-            subtitle="没有 scroll，输入框贴着底部"
+            subtitle="KeyboardAvoidingView 抬起输入框"
             onBack={handleBack}
           />
           <view style={styles.spacer} />
@@ -86,16 +78,14 @@ export function FormPage(props: SolidPageProps<FormViewModel, PageContext>) {
             onChange={handleChange}
           />
           <Button id="submit" title="发送" onTap={handleSubmit} />
-        </view>
+        </KeyboardAvoidingView>
       }
     >
       <view style={styles.page}>
-        <scroll
-          ref={focusScroller.scrollRef}
+        <KeyboardAwareScrollView
           style={styles.scroll}
           dismissKeyboardOnDrag={true}
-          onScroll={focusScroller.onScroll}
-          onLayout={focusScroller.onLayout}
+          bottomOffset={16}
         >
           <view
             paddingTop={insets.top + 12}
@@ -115,8 +105,6 @@ export function FormPage(props: SolidPageProps<FormViewModel, PageContext>) {
                   label={field}
                   value={values()[field] ?? ''}
                   onChange={handleChange}
-                  onFocus={handleFocus}
-                  onBlur={handleBlur}
                 />
               )}
             </For>
@@ -126,12 +114,10 @@ export function FormPage(props: SolidPageProps<FormViewModel, PageContext>) {
               value={values()[NOTES] ?? ''}
               multiline={true}
               onChange={handleChange}
-              onFocus={handleFocus}
-              onBlur={handleBlur}
             />
             <Button id="submit" title="提交" onTap={handleSubmit} />
           </view>
-        </scroll>
+        </KeyboardAwareScrollView>
       </view>
     </Show>
   );
@@ -143,7 +129,7 @@ const styles = {
     height: '100%',
     backgroundColor: color.canvas,
   }),
-  scroll: new Style<ScrollView>({
+  scroll: new Style<View>({
     width: '100%',
     height: '100%',
   }),

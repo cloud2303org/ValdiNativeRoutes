@@ -1,14 +1,36 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import test from 'node:test';
+import { before, test } from 'node:test';
 import vm from 'node:vm';
 import { transformSync } from '@babel/core';
 import solidBabelPlugin from '@solidjs/babel-plugin';
 import ts from 'typescript';
+import { appModule, appModules, buildModule, prepareEditorProject } from '../pipeline';
+import { valdiTs } from '../valdiTs';
 
 const repoRoot = path.resolve(import.meta.dirname, '../../..');
-const outRoot = path.join(repoRoot, 'tools/valdi-rolldown/out');
+let compiledModules = new Map<string, Buffer>();
+
+before(async () => {
+  const allMods = appModules();
+  const entries = new Map<string, Buffer>();
+  for (const name of ['solid_runtime', 'solid_native', 'app_foundation', 'app_ui', 'native_common', 'app_pages']) {
+    const mod = allMods.find(candidate => candidate.name === name) ?? appModule(name);
+    await prepareEditorProject(mod, allMods);
+    const plugin = valdiTs(mod);
+    try {
+      const diag = plugin.diagnostics();
+      assert.equal(diag, '', `Expected zero TypeScript diagnostics for ${name}:\n${diag}`);
+      const built = await buildModule(mod, plugin, false);
+      for (const [file, bytes] of built.entries) {
+        entries.set(`${name}/${file}`, bytes);
+      }
+    } finally {
+      plugin.dispose();
+    }
+  }
+  compiledModules = entries;
+});
 
 const enum Opcode {
   CREATE_ELEMENT = 1,
@@ -434,6 +456,34 @@ function createValdiTestHarness(platform = 2) {
     'valdi_core/src/ValdiRuntimeProvider': {
       getValdiRuntime: () => sim.runtimeApi,
     },
+    'valdi_core/src/Valdi': {
+      getDaemonClientManager: () => undefined,
+    },
+    'valdi_core/src/debugging/Messages': {
+      Messages: {
+        listContextsResponse: () => ({}),
+        getContextTreeResponse: () => ({}),
+        takeElementSnapshotResponse: () => ({}),
+        errorResponse: () => ({}),
+      },
+    },
+    'valdi_core/src/utils/StringUtils': {
+      debugStringify: (value: unknown) => String(value),
+    },
+    'valdi_core/src/utils/GeometricPathBuilder': {
+      GeometricPathBuilder: class {
+        moveTo() {
+          return this;
+        }
+        lineTo() {
+          return this;
+        }
+        build() {
+          return {};
+        }
+      },
+      GeometricPathScaleType: { Contain: 1 },
+    },
     'valdi_core/src/NativeReferences': {
       withLocalNativeRefs: (contextId: string, cb: () => any) => {
         sim.runtimeApi.pushCurrentContext(contextId);
@@ -460,6 +510,7 @@ function createValdiTestHarness(platform = 2) {
         isIOS: () => true,
         isRTL: () => false,
         isDarkMode: () => false,
+        getDisplayScale: () => 3,
         observeDarkMode: () => ({ cancel() {} }),
       },
     },
@@ -468,36 +519,94 @@ function createValdiTestHarness(platform = 2) {
       isDebugEnabled: () => false,
     },
     'app_ui/src/AppUI': {
-      getHost: () => ({}),
+      getHost: () => ({
+        showToast: () => Promise.resolve(),
+        showModal: () => Promise.resolve({ confirm: false }),
+        showActionSheet: () => Promise.resolve({ tapIndex: 0 }),
+        showPicker: () => Promise.resolve({ confirm: false }),
+        showDatePicker: () => Promise.resolve({ confirm: false }),
+        observeKeyboard: () => ({ cancel() {} }),
+      }),
     },
     'theme_bridge/src/ThemeBridge': {
       getHost: () => ({
         getTokens: () => ({
           light: {
+            canvas: '#f5f7fb',
             surface: '#ffffff',
+            ink: '#0f172a',
             text: '#172033',
             muted: '#667085',
+            title: '#0f172a',
+            section: '#475467',
+            description: '#667085',
+            chevron: '#98a2b3',
+            icon: '#344054',
             hairline: '#ececec',
-            handle: '#D6DCE5',
+            border: '#e4e7ec',
+            separator: '#ececec',
+            pressed: '#f2f4f7',
+            backPressed: '#f2f4f7',
+            iconWell: '#f2f4f7',
+            primary: '#1e62d0',
+            success: '#16a34a',
+            danger: '#dc2626',
             scrim: 'rgba(16,24,40,0.32)',
+            handle: '#D6DCE5',
+            segmentTrack: '#eef2f7',
+            segmentIndicator: '#ffffff',
+            segmentText: '#475467',
+            segmentTextActive: '#0f172a',
             buttonPrimary: '#1e62d0',
             buttonOnPrimary: '#ffffff',
             buttonSecondary: '#eef2f7',
             buttonOnSecondary: '#1d2939',
+            buttonDanger: '#dc2626',
+            buttonOnDanger: '#ffffff',
+            playerBackground: '#000000',
           },
           dark: {
+            canvas: '#101114',
             surface: '#1E1F23',
+            ink: '#f9fafb',
             text: '#ffffff',
             muted: '#969696',
+            title: '#ffffff',
+            section: '#98a2b3',
+            description: '#98a2b3',
+            chevron: '#667085',
+            icon: '#e4e7ec',
             hairline: '#2A2B32',
-            handle: '#969696',
+            border: '#2A2B32',
+            separator: '#2A2B32',
+            pressed: '#2c2e35',
+            backPressed: '#2c2e35',
+            iconWell: '#2c2e35',
+            primary: '#5295ff',
+            success: '#22c55e',
+            danger: '#ef4444',
             scrim: 'rgba(0,0,0,0.75)',
+            handle: '#969696',
+            segmentTrack: '#25262b',
+            segmentIndicator: '#373a40',
+            segmentText: '#9ca3af',
+            segmentTextActive: '#ffffff',
             buttonPrimary: '#377dff',
             buttonOnPrimary: '#ffffff',
             buttonSecondary: '#2c2e35',
             buttonOnSecondary: '#f2f4f7',
+            buttonDanger: '#ef4444',
+            buttonOnDanger: '#ffffff',
+            playerBackground: '#000000',
           },
-          shared: { radius: { sheet: 22 } },
+          shared: {
+            radius: { tiny: 4, small: 8, medium: 10, compact: 10, control: 12, icon: 12, button: 14, surface: 16, card: 18, sheet: 22, pill: 999 },
+            size: { nav: 44, back: 44, icon: 24, row: 48, button: 48 },
+            space: { xxs: 4, xs: 6, tight: 8, sm: 10, section: 12, md: 14, lg: 16, xl: 20, content: 22, roomy: 24, xxl: 28, wide: 32, bottom: 36 },
+            font: { nav: 17, button: 16, title: 17, segment: 13, section: 13, body: 15, tiny: 12, sheetTitle: 17, heading: 22 },
+            icon: { row: 20, chevron: 16, back: 20 },
+            motion: { pressedOpacity: 0.72, pressedScale: 0.98, disabledOpacity: 0.45 },
+          },
         }),
       }),
     },
@@ -540,6 +649,7 @@ function createValdiTestHarness(platform = 2) {
             backs++;
           },
           updateRoutes: () => {},
+          setStatusBarStyle: () => {},
         }),
       }),
     },
@@ -612,13 +722,9 @@ function createValdiTestHarness(platform = 2) {
     if (builtins[normalized]) return builtins[normalized];
     if (moduleCache.has(normalized)) return moduleCache.get(normalized);
 
-    let code: string | undefined = memoryModules.get(normalized);
+    let code: string | undefined = memoryModules.get(normalized) ?? compiledModules.get(`${normalized}.js`)?.toString();
     if (code === undefined) {
-      const diskPath = path.join(outRoot, `${normalized}.js`);
-      if (!existsSync(diskPath)) {
-        throw new Error(`Module not found in Valdi test harness: ${normalized} (${diskPath})`);
-      }
-      code = readFileSync(diskPath, 'utf8');
+      throw new Error(`Module not found in Valdi test harness: ${normalized}`);
     }
 
     const mod = { exports: {} as any };
@@ -834,13 +940,14 @@ test('2. Multi-signal updates auto-batch into a single RenderRequest via microta
 test('3. Per-page Solid roots + single shared solid_runtime on compiled app_pages', async () => {
   const h = createValdiTestHarness();
     const routesMod = h.loadModule('app_pages/src/routes');
-    assert.equal(routesMod.routes.pages.home.component, 'HomePage@app_pages/src/pages/HomePage');
-    assert.equal(routesMod.routes.pages.shared.component, 'SharedPage@app_pages/src/pages/SharedPage');
+    assert.equal(routesMod.routes.pages.home.component, 'HomePage@app_pages/src/features/home/HomePage');
+    assert.equal(routesMod.routes.pages.solidDemo.component, 'SolidDemoPage@app_pages/src/features/solid/SolidDemoPage');
+    assert.equal(routesMod.routes.pages.shared.component, 'SharedPage@app_pages/src/features/solid/SharedPage');
 
     const page1Back = () => {};
     const page2Back = () => {};
-    h.manager.create('1', 'HomePage@app_pages/src/pages/HomePage', makePageViewModel('home', 'p1'), { back: page1Back, finish() {} });
-    h.manager.create('2', 'SharedPage@app_pages/src/pages/SharedPage', makePageViewModel('shared', 'p2'), { back: page2Back, finish() {} });
+    h.manager.create('1', 'SolidDemoPage@app_pages/src/features/solid/SolidDemoPage', makePageViewModel('solidDemo', 'p1'), { back: page1Back, finish() {} });
+    h.manager.create('2', 'SharedPage@app_pages/src/features/solid/SharedPage', makePageViewModel('shared', 'p2'), { back: page2Back, finish() {} });
 
     const tree1 = h.sim.getTree('1');
     const tree2 = h.sim.getTree('2');
@@ -875,7 +982,7 @@ test('3. Per-page Solid roots + single shared solid_runtime on compiled app_page
 
 test('4. <Show> conditional mount/unmount across repeated cycles without sentinel views or OOB', async () => {
   const h = createValdiTestHarness();
-    h.manager.create('1', 'HomePage@app_pages/src/pages/HomePage', makePageViewModel('home', 'p1'), { back() {}, finish() {} });
+    h.manager.create('1', 'SolidDemoPage@app_pages/src/features/solid/SolidDemoPage', makePageViewModel('solidDemo', 'p1'), { back() {}, finish() {} });
     const tree = h.sim.getTree('1');
 
     const hasSentinelNode = () => [...tree.nodes.values()].some(n => n.viewClass === '#sentinel');
@@ -901,7 +1008,7 @@ test('4. <Show> conditional mount/unmount across repeated cycles without sentine
 
 test('5. <For> keyed list append, prepend, reverse, rotate, remove middle, clear', async () => {
   const h = createValdiTestHarness();
-    h.manager.create('1', 'HomePage@app_pages/src/pages/HomePage', makePageViewModel('home', 'p1'), { back() {}, finish() {} });
+    h.manager.create('1', 'SolidDemoPage@app_pages/src/features/solid/SolidDemoPage', makePageViewModel('solidDemo', 'p1'), { back() {}, finish() {} });
     const tree = h.sim.getTree('1');
 
     assert.deepEqual(findForRowLabels(tree), [
@@ -1003,7 +1110,7 @@ test('6. Text child policy rejects non-empty text and keeps "" as pure-JS sentin
 
 test('7. onNextDraw emits ON_NEXT_DRAW opcode for splash screen dismissal', () => {
   const h = createValdiTestHarness();
-    h.manager.create('1', 'HomePage@app_pages/src/pages/HomePage', makePageViewModel('home', 'p1'), { back() {}, finish() {} });
+    h.manager.create('1', 'SolidDemoPage@app_pages/src/features/solid/SolidDemoPage', makePageViewModel('solidDemo', 'p1'), { back() {}, finish() {} });
     const simTree = h.sim.getTree('1');
     let drawn = false;
     h.manager.rootComponents['1'].renderer.onNextDraw(() => {
@@ -1322,8 +1429,8 @@ test('12. Native animate() / useAnimate() / cancel() emit BEGIN_ANIMATIONS (14),
 
     h.manager.destroy('61');
 
-    // Also exercise HomePage's compiled parity card ("Animate Box" -> "Collapse Box")
-    h.manager.create('62', 'HomePage@app_pages/src/pages/HomePage', makePageViewModel('home', 'p62'), {
+    // Also exercise SolidDemoPage's compiled parity card ("Animate Box" -> "Collapse Box")
+    h.manager.create('62', 'SolidDemoPage@app_pages/src/features/solid/SolidDemoPage', makePageViewModel('solidDemo', 'p62'), {
       back() {},
       finish() {},
     });
@@ -1587,7 +1694,7 @@ test('14. Full 17-element JSX definitions typecheck and disallow direct children
     }
   `;
 
-  const virtualBad = path.join(repoRoot, 'valdi/modules/app_pages/src/__virtual_jsx_bad.tsx');
+  const virtualBad = path.join(path.resolve(import.meta.dirname, '../../..'), 'valdi/modules/app_pages/src/__virtual_jsx_bad.tsx');
   const badSource = `
     export function BadLabel() {
       return <label>Direct text not allowed</label>;
@@ -1610,7 +1717,7 @@ test('14. Full 17-element JSX definitions typecheck and disallow direct children
     return origGetSourceFile(f, langVersion, onError, shouldCreate);
   };
 
-  const jsxDeclPath = path.join(repoRoot, 'valdi/modules/solid_native/src/jsx.d.ts');
+  const jsxDeclPath = path.join(path.resolve(import.meta.dirname, '../../..'), 'valdi/modules/solid_native/src/jsx.d.ts');
   const validProgram = ts.createProgram([jsxDeclPath, virtualValid], parsed.options, host);
   const validDiags = ts.getPreEmitDiagnostics(validProgram, validProgram.getSourceFile(virtualValid));
   assert.deepEqual(
@@ -1627,7 +1734,7 @@ test('14. Full 17-element JSX definitions typecheck and disallow direct children
 test('8. Default transport uses raw tags, INSERT_ELEMENT_BEFORE (20), and DETACH_ELEMENT (19) re-attach', () => {
   const h = createValdiTestHarness();
   const defaultMgr = h.bridge.createRootComponentsManager();
-  defaultMgr.create('77', 'HomePage@app_pages/src/pages/HomePage', makePageViewModel('home', 'p77'), {
+  defaultMgr.create('77', 'SolidDemoPage@app_pages/src/features/solid/SolidDemoPage', makePageViewModel('solidDemo', 'p77'), {
     back() {},
     finish() {},
   });
@@ -1690,7 +1797,7 @@ test('8. Default transport uses raw tags, INSERT_ELEMENT_BEFORE (20), and DETACH
   tree.dispose();
 });
 
-test('16. Fixed props.insets/props.params ignore keyboard inset churn, while onPageShow/onPageHide/whilePageVisible track visibility events', async () => {
+test('16. props.params stays fixed while reactive props.insets updates on safe-area changes with zero batches on unchanged renders, and lifecycle hooks track visibility', async () => {
   const h = createValdiTestHarness();
   const events: string[] = [];
 
@@ -1737,23 +1844,16 @@ test('16. Fixed props.insets/props.params ignore keyboard inset churn, while onP
   assert.deepEqual(collectLabels(simTree), ['Param=Inbox']);
   assert.deepEqual(events, ['show:navigation', 'effect:start']);
 
-  // Simulate per-frame keyboard insets updates: zero native batches, zero layout change, no duplicate events
+  // Cover page with unchanged insets -> zero relayout batches, stops whilePageVisible then fires onPageHide('covered')
   const batchesAfterMount = simTree.batches.length;
-  h.manager.render('16', { ...vm0, insets: { top: 47, bottom: 20, left: 0, right: 0 } });
-  h.manager.render('16', { ...vm0, insets: { top: 47, bottom: 0, left: 0, right: 0 } });
+  h.manager.render('16', { ...vm0, visible: false, visibilityReason: 'covered' });
   await h.flushMicrotasks();
-  assert.equal(simTree.batches.length, batchesAfterMount, 'Keyboard inset updates must not trigger re-layout batches');
+  assert.equal(simTree.batches.length, batchesAfterMount, 'Unchanged insets must not trigger re-layout batches');
   assert.equal(rootCard.attrs.paddingBottom, 34);
-  assert.deepEqual(events, ['show:navigation', 'effect:start']);
-
-  // Cover page -> stops whilePageVisible then fires onPageHide('covered')
-  h.manager.render('16', { ...vm0, insets: { top: 47, bottom: 0, left: 0, right: 0 }, visible: false, visibilityReason: 'covered' });
-  await h.flushMicrotasks();
-  assert.equal(simTree.batches.length, batchesAfterMount);
   assert.deepEqual(events, ['show:navigation', 'effect:start', 'effect:stop', 'hide:covered']);
 
-  // Return to foreground -> fires onPageShow('foreground') then restarts whilePageVisible
-  h.manager.render('16', { ...vm0, insets: { top: 47, bottom: 34, left: 0, right: 0 }, visible: true, visibilityReason: 'foreground' });
+  // Return to foreground with unchanged insets -> zero relayout batches, fires onPageShow('foreground') then restarts whilePageVisible
+  h.manager.render('16', { ...vm0, visible: true, visibilityReason: 'foreground' });
   await h.flushMicrotasks();
   assert.equal(simTree.batches.length, batchesAfterMount);
   assert.deepEqual(events, [
@@ -1764,6 +1864,20 @@ test('16. Fixed props.insets/props.params ignore keyboard inset churn, while onP
     'show:foreground',
     'effect:start',
   ]);
+
+  // Orientation / safe-area change -> reactively updates props.insets while keeping params fixed and zero duplicate lifecycle events
+  h.manager.render('16', {
+    ...vm0,
+    params: { title: 'Changed', events },
+    insets: { top: 24, bottom: 20, left: 48, right: 0 },
+    visible: true,
+    visibilityReason: 'foreground',
+  });
+  await h.flushMicrotasks();
+  assert.equal(rootCard.attrs.paddingTop, 24);
+  assert.equal(rootCard.attrs.paddingBottom, 20);
+  assert.deepEqual(collectLabels(simTree), ['Param=Inbox']);
+  assert.equal(events.length, 6);
 
   // Destroy page -> stops whilePageVisible without firing onPageHide
   h.manager.destroy('16');

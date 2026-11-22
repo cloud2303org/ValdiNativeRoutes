@@ -24,7 +24,7 @@ import net from 'node:net';
 import { promisify } from 'node:util';
 import { appModules, modulesDir } from './pipeline';
 import { startDevControls } from '../../scripts/lib/dev-controls.mjs';
-import { DevBuild, ModuleBuild, recordChange, type Pending } from './dev-build';
+import { DevBuild, ModuleBuild, filterHotReloadResources, recordChange, type Pending } from './dev-build';
 
 import { DEVICE_PORT, DevPacketReader, encodeDevPacket, updatedResources, type DevResource } from './dev-protocol';
 /** The name the booted iOS simulator goes by here; it is reached at 127.0.0.1:DEVICE_PORT, without a forward. */
@@ -88,8 +88,10 @@ class DeviceConnection {
 
   send(resources: Resource[]) {
     if (!this.configured || !resources.length) return;
-    this.write(updatedResources(resources));
-    console.log(`[${this.serial}] Sent ${resources.map(({ bundle, file }) => `${bundle}:${file}`).join(', ')}`);
+    const { deliverable } = filterHotReloadResources(resources);
+    if (!deliverable.length) return;
+    this.write(updatedResources(deliverable));
+    console.log(`[${this.serial}] Sent ${deliverable.map(({ bundle, file }) => `${bundle}:${file}`).join(', ')}`);
   }
 
   private write(payload: object) {
@@ -175,7 +177,13 @@ watch(modulesDir, { recursive: true }, (_event, file) => {
     building = building.then(async () => {
       try {
         const changed = await builds.rebuild(batch);
-        for (const device of devices.values()) device.send(changed);
+        const { deliverable, skippedBundles } = filterHotReloadResources(changed);
+        if (skippedBundles.length) {
+          console.log(`[HotReload] Skipped runtime singleton module(s): ${skippedBundles.join(', ')} (rebuild & restart app to apply).`);
+        }
+        if (deliverable.length) {
+          for (const device of devices.values()) device.send(deliverable);
+        }
       } catch (error) {
         console.error(error instanceof Error ? error.message : error);
       }

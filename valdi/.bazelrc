@@ -5,7 +5,7 @@ try-import %workspace%/modules/runtime-packages.bazelrc
 # Registry from the same immutable Valdi fork commit as MODULE.bazel
 # Keep both registries in common: platform configs expand later and would let
 # BCR win over the patched fork rules if only the fork used common:<platform>.
-common --registry=https://raw.githubusercontent.com/cloud2303org/Valdi/70fa9c63a04fbbaa2ddafb53400c0eea6fd5ca27/registry
+common --registry=https://raw.githubusercontent.com/cloud2303org/Valdi/f539fdc33bac193afa028ac7c97238a2aacefd77/registry
 common --registry=https://bcr.bazel.build
 
 common --enable_platform_specific_config

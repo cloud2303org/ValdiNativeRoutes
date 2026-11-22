@@ -6,13 +6,26 @@
 
 import UIKit
 
+/// Normalized per-frame keyboard geometry in points, matching `react-native-keyboard-controller`.
+struct AppUIKeyboardFrame: Equatable {
+    let height: CGFloat
+    let progress: CGFloat
+    let targetHeight: CGFloat
+    let isAnimating: Bool
+    let isInteractive: Bool
+
+    static let zero = AppUIKeyboardFrame(height: 0, progress: 0, targetHeight: 0, isAnimating: false, isInteractive: false)
+}
+
 /// The keyboard's visible height, updated every frame while it animates and while it is dragged interactively.
 final class AppUIKeyboardObserver: NSObject {
     static let shared = AppUIKeyboardObserver()
 
     private(set) var height: CGFloat = 0
+    private(set) var currentFrame: AppUIKeyboardFrame = .zero
 
     private var listeners: [UUID: (CGFloat) -> Void] = [:]
+    private var frameListeners: [UUID: (AppUIKeyboardFrame) -> Void] = [:]
     private let trackingView = AppUIKeyboardTrackingView()
     private var displayLink: CADisplayLink!
     private var interactiveObserver: NSKeyValueObservation?
@@ -33,6 +46,8 @@ final class AppUIKeyboardObserver: NSObject {
                                                name: UIResponder.keyboardWillShowNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillDisappear),
                                                name: UIResponder.keyboardWillHideNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChangeFrame),
+                                               name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
     }
 
     /// Puts the tracking view in the window ahead of the first keyboard: a view attached when the keyboard is already
@@ -48,11 +63,35 @@ final class AppUIKeyboardObserver: NSObject {
         return AppUIKeyboardSubscription { [weak self] in self?.listeners[id] = nil }
     }
 
-    private func emit(_ position: CGFloat) {
+    /// Calls `onChange` with normalized height/progress/animation state on every frame until released.
+    func observeFrame(_ onChange: @escaping (AppUIKeyboardFrame) -> Void) -> AppUIKeyboardSubscription {
+        let id = UUID()
+        frameListeners[id] = onChange
+        onChange(currentFrame)
+        return AppUIKeyboardSubscription { [weak self] in self?.frameListeners[id] = nil }
+    }
+
+    private func emit(_ position: CGFloat, isAnimating: Bool, isInteractive: Bool) {
         let value = max(0, position)
-        guard value != height else { return }
+        let target = value > 0 ? max(keyboardHeight, value) : 0
+        let progress = (value > 0 && target > 0) ? min(max(value / target, 0), 1) : 0
+        let nextFrame = AppUIKeyboardFrame(
+            height: value,
+            progress: progress,
+            targetHeight: target,
+            isAnimating: isAnimating,
+            isInteractive: isInteractive
+        )
+        let heightChanged = value != height
+        let frameChanged = nextFrame != currentFrame
         height = value
-        listeners.values.forEach { $0(value) }
+        currentFrame = nextFrame
+        if heightChanged {
+            listeners.values.forEach { $0(value) }
+        }
+        if frameChanged {
+            frameListeners.values.forEach { $0(nextFrame) }
+        }
     }
 
     // MARK: - Notifications
@@ -75,6 +114,26 @@ final class AppUIKeyboardObserver: NSObject {
         scheduleDidEvent(height: 0, duration: animation?.duration ?? duration)
     }
 
+    @objc private func keyboardWillChangeFrame(_ notification: Notification) {
+        let (duration, frame) = notification.appUIKeyboardMetaData()
+        guard let frame, displayLink.isPaused else { return }
+        let windowHeight = UIApplication.appUITopViewController()?.view.window?.bounds.height
+            ?? trackingView.window?.bounds.height
+            ?? 0
+        let visibleHeight: CGFloat
+        if windowHeight > 0 {
+            visibleHeight = frame.minY >= windowHeight || frame.height <= 0 ? 0 : max(0, windowHeight - frame.minY)
+        } else {
+            visibleHeight = max(0, frame.height)
+        }
+        guard abs(visibleHeight - keyboardHeight) > 0.5 else { return }
+        keyboardHeight = visibleHeight
+        trackingView.attachToTopmostView()
+        displayLink.isPaused = false
+        initializeAnimation(fromValue: prevPosition, toValue: visibleHeight)
+        scheduleDidEvent(height: visibleHeight, duration: animation?.duration ?? max(duration, 0.05))
+    }
+
     /// The `did` notifications arrive late; settle when the animation curve says the keyboard has arrived.
     private func scheduleDidEvent(height: CGFloat, duration: Double) {
         didTask?.cancel()
@@ -83,7 +142,7 @@ final class AppUIKeyboardObserver: NSObject {
             self.displayLink.isPaused = true
             self.animation = nil
             self.prevPosition = height
-            self.emit(height)
+            self.emit(height, isAnimating: false, isInteractive: false)
             if height > 0 { self.setupInteractiveObserver() }
         }
         didTask = task
@@ -130,7 +189,7 @@ final class AppUIKeyboardObserver: NSObject {
             position = animation.isIncreasing ? max(predicted, position) : min(predicted, position)
             animation.lastValue = position
         }
-        emit(position)
+        emit(position, isAnimating: true, isInteractive: false)
     }
 
     // MARK: - Interactive dismissal
@@ -146,7 +205,7 @@ final class AppUIKeyboardObserver: NSObject {
             guard position != AppUIKeyboardTrackingView.invalidPosition, position != 0 else { return }
             self.prevPosition = position
             self.didTask?.cancel()
-            self.emit(position)
+            self.emit(position, isAnimating: false, isInteractive: true)
         }
     }
 

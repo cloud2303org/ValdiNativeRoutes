@@ -115,6 +115,10 @@ final class ValdiHost {
         return rootView
     }
 
+    func updateInsets(_ entry: PageEntry, insets: UIEdgeInsets) {
+        entry.rootView?.valdiContext?.viewModel = viewModel(entry, insets)
+    }
+
     func createTabBar(_ bar: TabBar, shell: PageEntry, safeAreaBottom: CGFloat,
                       navigator: Navigator) -> SCValdiRootView {
         guard let component = bar.component else { preconditionFailure("Missing custom tab bar component") }

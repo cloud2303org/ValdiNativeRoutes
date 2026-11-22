@@ -32,7 +32,7 @@ export interface ValdiModule {
   /** Explicit runtime-module inputs; ordinary app modules still discover src/. */
   sourceEntries?: string[];
   includeJavaScript?: boolean;
-  jsxBackend?: 'solid';
+  jsxBackend?: 'solid' | 'valdi';
 }
 
 const EXTENSIONS = ['.ts', '.tsx', '/index.ts', '/index.tsx'];

@@ -74,10 +74,11 @@ function execute(f: Awaited<ReturnType<typeof fixture>>, dependencies: Record<st
 function addCustomBar(f: Awaited<ReturnType<typeof fixture>>) {
   const file = path.join(f.module.dir, 'src/AppTabBar.ts');
   writeFileSync(file, `
-import { Component } from 'valdi_core/src/Component';
 import type { TabBarContext, TabBarViewModel } from './components/TabBar';
 /** @Component({viewModel: 'TabBarViewModel', context: 'TabBarContext'}) */
-export class AppTabBar extends Component<TabBarViewModel, TabBarContext> {
+export class AppTabBar {
+  declare viewModel: TabBarViewModel;
+  declare context: TabBarContext;
   onRender(): void {}
 }
 `);
@@ -97,7 +98,6 @@ test('routes compile direct components/res to metadata, execute without loading 
   assert.equal(host.routes.some((route: any) => route.route === 'login'), false);
   assert.equal(routes.home, '$tabs');
   assert.equal(host.routes.find((route: any) => route.route === 'home').component, 'HomePage@app_pages/src/features/home/HomePage');
-  assert.equal(host.routes.find((route: any) => route.route === 'calculator').component, 'CalculatorComponent@calculator/src/CalculatorComponent');
   assert.equal(host.routes.find((route: any) => route.route === 'picker').nativeName, 'app/device-picker');
   assert.equal(host.tabBar.initial, 'home');
   assert.equal(host.tabBar.mode, 'default');
@@ -108,7 +108,7 @@ test('routes compile direct components/res to metadata, execute without loading 
     .some(suffix => file.endsWith(suffix))), loaded.join('\n'));
   assert.throws(() => routes.assertRoute('absent'), /Unknown route: "absent"/);
   assert.throws(() => routes.assertTab('detail'), /Unknown tab/);
-  f.change(path.join(f.module.dir, 'src/features/home/HomePage.tsx'), text => text.replace('export class HomePage', 'export default class HomePage'));
+  f.change(path.join(f.module.dir, 'src/features/home/HomePage.tsx'), text => text.replace('export function HomePage', 'export default function HomePage'));
   f.change(f.routeFile, text => text.replace("import { HomePage } from './features/home/HomePage';", "import HomePage from './features/home/HomePage';"));
   assert.equal(f.plugin.diagnostics(), '');
   assert.equal(execute(f).routes.toHost().routes.find((route: any) => route.route === 'home').component, 'default@app_pages/src/features/home/HomePage');
@@ -152,7 +152,7 @@ export { type AppTabBar as BusinessBarType };
 test('type-only aliases do not retain runtime imports of valdiPage components', async t => {
   const f = await fixture(t);
   f.change(f.routeFile, text => `${text}
-export type PageInstance = HomePage;
+export type PageInstance = typeof HomePage;
 export type { HomePage };
 `);
   assert.equal(f.plugin.diagnostics(), '');
@@ -218,11 +218,17 @@ export class Consumer {
     test(`ambient ${ambient} does not retain the metadata-only ${component} import`, async t => {
       const f = await fixture(t);
       if (component === 'AppTabBar') addCustomBar(f);
-      const declaration = ambient === 'class'
-        ? `export declare class DeclaredBar extends ${component} {}`
-        : `export declare namespace Declared {
-            namespace Nested { class DeclaredBar extends ${component} {} }
-          }`;
+      const declaration = component === 'AppTabBar'
+        ? (ambient === 'class'
+          ? `export declare class DeclaredBar extends ${component} {}`
+          : `export declare namespace Declared {
+              namespace Nested { class DeclaredBar extends ${component} {} }
+            }`)
+        : (ambient === 'class'
+          ? `export declare function declaredHome(props: Parameters<typeof ${component}>[0]): ReturnType<typeof ${component}>;`
+          : `export declare namespace Declared {
+              namespace Nested { function declaredHome(props: Parameters<typeof ${component}>[0]): ReturnType<typeof ${component}>; }
+            }`);
       f.change(f.routeFile, text => `${text}\n${declaration}\n`);
       assert.equal(f.plugin.diagnostics(), '');
       const emitted = f.plugin.emit(f.routeFile);
@@ -344,8 +350,8 @@ const defaultHeight: TabBarDefinition = { type: 'default', height: 64 };
 const overlayWithHeight: TabBarDefinition = { type: 'custom', component: HomePage, overlay: true, height: 64 };
 // @ts-expect-error modes are closed
 const invalid: TabBarDefinition = { type: 'floating' };
-// @ts-expect-error callbacks are not component classes
-const callback: TabBarDefinition = { type: 'custom', component: () => undefined };
+// @ts-expect-error non-component values are not valid components
+const callback: TabBarDefinition = { type: 'custom', component: 123 };
 // @ts-expect-error canonical strings belong to generated metadata, not business source
 const raw: TabBarDefinition = { type: 'custom', component: 'HomePage@app_pages/src/features/home/HomePage' };
 `);
@@ -359,7 +365,7 @@ test('editor types reject unknown native/Valdi routes, wrong params/results, and
   writeFileSync(file, `
 import { router, Router, type RouteViewModel } from './router';
 import type { PageContext } from 'app_foundation/src/page/Page';
-import type { DetailPage } from './features/detail/DetailPage';
+import { DetailPage } from './features/detail/DetailPage';
 router.push('home');
 router.push('picker');
 router.push('detail', { id: 123, from: 'test' });
@@ -402,12 +408,12 @@ const route: 'detail' = model.route;
 const wrongRoute: 'form' = model.route;
 // @ts-expect-error only routes in this application have view model contracts
 type MissingPage = RouteViewModel<'absent'>;
-declare const detailPage: DetailPage;
-const pageId: number = detailPage.viewModel.params.id;
+declare const detailProps: Parameters<typeof DetailPage>[0];
+const pageId: number = detailProps.params.id;
 // @ts-expect-error the actual page exposes typed params, not the native any dictionary
-const wrongPageId: string = detailPage.viewModel.params.id;
+const wrongPageId: string = detailProps.params.id;
 // @ts-expect-error a detail page's model cannot be used as a form page's model
-const formModel: RouteViewModel<'form'> = detailPage.viewModel;
+const formModel: RouteViewModel<'form'> = detailProps.initialViewModel;
 `);
   f.plugin.invalidate(file);
   assert.equal(f.plugin.diagnostics(), '', 'every expect-error must be consumed and valid calls must type-check');

@@ -78,6 +78,8 @@ const ROLLDOWN_TESTS = [
   'tests/console-log.test.ts',
   'tests/lazy-import.test.ts',
   'tests/upstream-runtime.test.ts',
+  'tests/solid-hot-reload.test.ts',
+  'tests/solid2-universal.test.ts',
 ];
 
 function main() {

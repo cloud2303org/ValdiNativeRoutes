@@ -21,18 +21,23 @@ test('video page and generic host typecheck with the application configuration',
   assert.equal(config.error, undefined);
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, directory, { noEmit: true }, configFile);
   assert.deepEqual(parsed.errors, []);
-  const program = ts.createProgram([pageFile], parsed.options);
+  const program = ts.createProgram([pageFile, path.join(modules, 'solid_native/src/jsx.d.ts')], parsed.options);
   const diagnostics = ts.getPreEmitDiagnostics(program);
   assert.deepEqual(diagnostics.map(error => ts.flattenDiagnosticMessageText(error.messageText, '\n')), []);
 });
 
-// The real page executes against native/platform boundaries. Rendering is not invoked.
-// This exercises both initial load and the offline reload through real lifecycle/cleanup code.
+// The real page executes against native/platform boundaries. Solid signals and cleanups
+// are supplied in memory so lifecycle methods and cleanup guards execute unchanged.
 for (const android of [true, false]) {
   test(`business page loads its own ${android ? 'Android asset' : 'iOS bundle'} sample and releases it`, async () => {
     const sources: string[] = [];
     const commands: string[] = [];
     let protectedCalls = 0;
+    const cleanups: (() => void)[] = [];
+    const buttons = new Map<string, () => void>();
+    const signalGetters: Array<() => unknown> = [];
+    let sourceSignalIndex = -1;
+
     const host = {
       async create(source: string) {
         sources.push(source);
@@ -47,45 +52,76 @@ for (const android of [true, false]) {
         };
       },
     };
-    class Page {
-      renderer = { contextId: 42 };
-      viewModel = { visible: true };
-      state = {};
-      setState(update: object) { Object.assign(this.state, update); }
-    }
+    const React = {
+      Fragment: Symbol('Fragment'),
+      createElement(type: unknown, props: Record<string, any> | null) {
+        if (type === 'Button' && props?.id && typeof props.onTap === 'function') {
+          buttons.set(props.id, props.onTap);
+        }
+        return { type, props };
+      },
+    };
     const boundaries: Record<string, unknown> = {
       'app_video/src/Video': { getHost: () => host },
+      'solid-js': {
+        createSignal<T>(initial: T) {
+          let value = initial;
+          const idx = signalGetters.length;
+          const get = () => value;
+          if (sourceSignalIndex < 0 && idx === 0) sourceSignalIndex = idx;
+          signalGetters.push(get);
+          const set = (next: T | ((prev: T) => T)) => {
+            value = typeof next === 'function' ? (next as (prev: T) => T)(value) : next;
+            return value;
+          };
+          return [get, set];
+        },
+        onCleanup: (fn: () => void) => cleanups.push(fn),
+        Show: () => null,
+      },
+      'solid_native/src/bridge': {
+        onPageShow: () => () => {},
+        onPageHide: () => () => {},
+      },
       'valdi_core/src/Device': { Device: { isAndroid: () => android } },
       'valdi_core/src/NativeReferences': {
-        asyncWithProtectedRefsForContextId(id: number, operation: () => unknown) {
-          assert.equal(id, 42);
+        asyncWithProtectedRefsForContextId(id: string, operation: () => unknown) {
+          assert.equal(id, '42');
           protectedCalls++;
           return operation();
         },
       },
       'valdi_core/src/Style': { Style: class {} },
       'valdi_core/src/SystemFont': { systemFont() {}, systemSemiboldFont() {} },
-      '../../components/Button': {},
-      '../../components/NavigationBar': {},
-      'app_foundation/src/page/PageComponent': { Page },
+      '../../components/Button': { Button: 'Button' },
+      '../../components/NavigationBar': { NavigationBar: 'NavigationBar' },
+      '../../components/usePageStatusBar': { usePageStatusBar: () => () => {} },
       '../../components/theme': { color: {}, tokens: { space: {}, radius: {} } },
     };
-    const module = { exports: {} as { VideoPage: new () => any } };
-    vm.runInNewContext(`(function(require, module, exports) { ${pageCode}\n})`, {}, { filename: pageFile })(
+    const module = { exports: {} as { VideoPage: (props: any) => any } };
+    vm.runInNewContext(`(function(require, module, exports, React) { ${pageCode}\n})`, {}, { filename: pageFile })(
       (name: string) => {
         assert.ok(Object.hasOwn(boundaries, name), `Unexpected dependency ${name}`);
         return boundaries[name];
-      }, module, module.exports,
+      }, module, module.exports, React,
     );
-    const page = new module.exports.VideoPage();
     const settle = () => new Promise(resolve => setImmediate(resolve));
-    page.onCreate();
+    module.exports.VideoPage({
+      contextId: '42',
+      viewModel: () => ({ visible: true }),
+      initialViewModel: { visible: true, insets: { top: 0, bottom: 0, left: 0, right: 0 } },
+      insets: { top: 0, bottom: 0, left: 0, right: 0 },
+      params: {},
+      context: { back() {}, finish() {} },
+    });
     await settle();
-    assert.equal(page.state.source, 'valdi-video://test-1');
-    page.handleOffline();
+    assert.equal(signalGetters[sourceSignalIndex](), 'valdi-video://test-1');
+    const reloadOffline = buttons.get('video-offline');
+    assert.ok(reloadOffline, 'Expected video-offline Button handler');
+    reloadOffline();
     await settle();
-    assert.equal(page.state.source, 'valdi-video://test-2');
-    page.onDestroy();
+    assert.equal(signalGetters[sourceSignalIndex](), 'valdi-video://test-2');
+    for (const fn of cleanups) fn();
     // Both commands must already be submitted before the first cleanup await.
     assert.deepEqual(commands, ['unsubscribe-1', 'release-1', 'unsubscribe-2', 'release-2']);
     await settle();

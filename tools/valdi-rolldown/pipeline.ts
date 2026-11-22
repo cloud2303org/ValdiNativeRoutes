@@ -45,14 +45,14 @@ export interface ModuleConfig {
   iosModuleFactory?: string;
   iosModuleFactoryClass?: string;
   template?: string;
-  jsxBackend?: 'solid';
+  jsxBackend?: 'solid' | 'valdi';
 }
 
 export function moduleConfig(name: string): ModuleConfig {
   const file = path.join(modulesDir, name, 'module.json');
   if (!existsSync(file)) return {};
   const config = JSON.parse(readFileSync(file, 'utf8'));
-  if (config.jsxBackend !== undefined && config.jsxBackend !== 'solid') {
+  if (config.jsxBackend !== undefined && !['solid', 'valdi'].includes(config.jsxBackend)) {
     throw new Error(`${file}: unsupported jsxBackend`);
   }
   if (config.nativeBuild !== undefined && !['bazel', 'host', 'cpp'].includes(config.nativeBuild)) throw new Error(`${file}: unsupported nativeBuild`);

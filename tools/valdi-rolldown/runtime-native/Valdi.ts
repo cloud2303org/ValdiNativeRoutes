@@ -12,7 +12,8 @@ let manager: (IRootComponentsManager & { rootComponents: Record<string, any> }) 
 
 export function makeRootComponentsManager(): IRootComponentsManager {
   // Delayed until C++ requests its first context so all app archives are registered.
-  return (manager ??= require('solid_native/src/bridge', true).createRootComponentsManager());
+  manager = require('solid_native/src/bridge', true).createRootComponentsManager();
+  return manager!;
 }
 
 export function getLastRootComponentsManager():

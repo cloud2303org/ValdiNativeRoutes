@@ -141,6 +141,7 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
 
         sheetContainer.clipChildren = false
         sheetContainer.clipToPadding = false
+        sheetContainer.visibility = INVISIBLE
         sheetContainer.addView(
             clipContainer,
             FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT),
@@ -1104,6 +1105,10 @@ internal class BottomSheetHostView(context: Context) : ViewGroup(context), Neste
             cardElevationPx <= 0.5f
         val clipBottom = if (canKeepStaticBottomClip) containerHeightPx.toFloat() else cardHeight
 
+        val nextSheetVisibility = if (openPx > 0.5f) VISIBLE else INVISIBLE
+        if (sheetContainer.visibility != nextSheetVisibility) {
+            sheetContainer.visibility = nextSheetVisibility
+        }
         sheetContainer.translationY = sheetOffsetY
         clipContainer.setClipsToCard(hasCardGaps || cardShadows.isNotEmpty() || cardElevationPx > 0f)
         clipContainer.setCard(cardLeft, 0f, cardRight, clipBottom)

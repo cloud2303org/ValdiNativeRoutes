@@ -166,6 +166,18 @@ internal object BottomSheetMath {
     }
 
     /**
+     * Splits a downward drag `dyPx > 0` across a scroll view with `remainingScrollPx >= 0`
+     * distance left to top: returns `(scrollConsumePx, sheetLeftoverPx)` so handoff at top
+     * consumes exact remaining scroll distance and hands leftover pixels to the sheet on the same frame.
+     */
+    fun splitCollapseScrollDelta(remainingScrollPx: Float, dyPx: Float): Pair<Float, Float> {
+        if (dyPx <= 0f) return 0f to 0f
+        val avail = remainingScrollPx.coerceAtLeast(0f)
+        val consumed = min(avail, dyPx)
+        return consumed to (dyPx - consumed)
+    }
+
+    /**
      * Clamps release velocity ratio against travel distance (`[-5, 5] * distance`) matching
      * `0.16.2` `SheetHostView.kt` for the default `STIFFNESS_MEDIUM` spring.
      */

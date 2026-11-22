@@ -59,7 +59,7 @@ test('one-module Release build uses its HBC base without rebuilding native modul
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const marker = path.join(dir, 'permissions.valdimodule');
   writeFileSync(marker, 'keep the sibling archive');
-  const baseEntries = new Map([['src/pages/HomePage.js', Buffer.from('exports.previous = "baseline-only-marker-7";')]]);
+  const baseEntries = new Map([['src/features/home/HomePage.js', Buffer.from('exports.previous = "baseline-only-marker-7";')]]);
   await precompile(baseEntries);
   const base = path.join(dir, 'base.valdimodule');
   writeFileSync(base, pack(baseEntries));
@@ -68,7 +68,7 @@ test('one-module Release build uses its HBC base without rebuilding native modul
   assert.doesNotMatch(result.stdout, /custom module rule/);
   assert.equal(readFileSync(marker, 'utf8'), 'keep the sibling archive');
   const entries = unpack(readFileSync(path.join(dir, 'app_pages.valdimodule')));
-  assert.ok(entries.get('src/pages/HomePage.js')!.includes(Buffer.from('baseline-only-marker-7')));
+  assert.ok(entries.get('src/features/home/HomePage.js')!.includes(Buffer.from('baseline-only-marker-7')));
   assert.ok(existsSync(path.join(dir, 'app_pages.map.json')));
 
   const separatedOut = path.join(dir, 'assets-out');

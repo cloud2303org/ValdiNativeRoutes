@@ -309,6 +309,20 @@ function createSolidHost(platform: 1 | 2, entries: Map<string, Buffer>) {
     'valdi_core/src/ValdiRuntimeProvider': {
       getValdiRuntime: () => sim.runtimeApi,
     },
+    'valdi_core/src/Valdi': {
+      getDaemonClientManager: () => undefined,
+    },
+    'valdi_core/src/debugging/Messages': {
+      Messages: {
+        listContextsResponse: () => ({}),
+        getContextTreeResponse: () => ({}),
+        takeElementSnapshotResponse: () => ({}),
+        errorResponse: () => ({}),
+      },
+    },
+    'valdi_core/src/utils/StringUtils': {
+      debugStringify: (value: unknown) => String(value),
+    },
     'valdi_core/src/NativeReferences': {
       withLocalNativeRefs: (contextId: string, cb: () => any) => {
         sim.runtimeApi.pushCurrentContext(contextId);

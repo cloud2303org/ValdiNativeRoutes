@@ -9,11 +9,11 @@ bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "vision", version = "0.1")
 local_path_override(module_name = "vision", path = "../vision")
 
-# -- Maintained Valdi fork (upstream main: aed1249d) -----------------------
+# -- Maintained Valdi fork (upstream main: fcbd6549) -----------------------
 # Framework customizations and Hermes build inputs live in the pinned Valdi fork source.
 # Pin immutable commits; scripts/maintainer/upstream.mjs updates this and the matching registry together.
 VALDI_REPOSITORY = "cloud2303org/Valdi"
-VALDI_COMMIT = "f539fdc33bac193afa028ac7c97238a2aacefd77"
+VALDI_COMMIT = "56b39abf3df05b4ec14b14a10164697ac48dc196"
 VALDI_URL = "https://github.com/" + VALDI_REPOSITORY + "/archive/" + VALDI_COMMIT + ".tar.gz"
 VALDI_PREFIX = "Valdi-" + VALDI_COMMIT
 

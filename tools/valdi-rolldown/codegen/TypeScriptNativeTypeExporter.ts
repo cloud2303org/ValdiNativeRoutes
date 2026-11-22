@@ -1,6 +1,7 @@
 // TypeScript/TypeScriptNativeTypeExporter.swift: a dumped interface, class, enum, function or module as the Valdi
 // model the generators write, its TypeScript types mapped to Valdi's (references to other exported types through the
 // resolver). Synchronous here: Swift's Promises only carried errors.
+import path from 'node:path';
 import type { AST, DumpedRootNode } from '../vendor/companion/AST';
 import {
   EMPTY_INJECTABLE_PARAMS,
@@ -108,6 +109,70 @@ export class TypeScriptNativeTypeExporter {
     throw new CompilerError(`Unrecognized type '${name}'. Only annotated types can be exported.`);
   }
 
+  private typeDescription(type: AST.Type, references: readonly AST.TypeReference[]): string {
+    if (type.typeReferenceIndex !== undefined && type.typeReferenceIndex >= 0 && type.typeReferenceIndex < references.length) {
+      return references[type.typeReferenceIndex].name;
+    }
+    return type.name;
+  }
+
+  private primitiveTypeName(
+    type: AST.Type,
+    references: readonly AST.TypeReference[],
+  ): 'string' | 'number' | 'boolean' | undefined {
+    if (type.typeReferenceIndex === undefined) {
+      return type.name === 'string' || type.name === 'number' || type.name === 'boolean' ? type.name : undefined;
+    }
+    if (type.typeReferenceIndex < 0 || type.typeReferenceIndex >= references.length) {
+      return undefined;
+    }
+    // The companion resolves primitives to their lib wrapper types; a user type with the same name is not one.
+    const typeReference = references[type.typeReferenceIndex];
+    const libFileName = path.basename(typeReference.fileName);
+    if (!libFileName.startsWith('lib.') || !libFileName.endsWith('.d.ts')) {
+      return undefined;
+    }
+    switch (typeReference.name) {
+      case 'String':
+        return 'string';
+      case 'Number':
+        return 'number';
+      case 'Boolean':
+        return 'boolean';
+      default:
+        return undefined;
+    }
+  }
+
+  /** A branded type's base: a primitive's name, or `Uint8Array` or `Long`, which resolve as they do unbranded. */
+  private brandBaseTypeName(type: AST.Type, references: readonly AST.TypeReference[]): string | undefined {
+    const primitive = this.primitiveTypeName(type, references);
+    if (primitive) return primitive;
+    if (type.typeReferenceIndex === undefined || type.typeReferenceIndex < 0 || type.typeReferenceIndex >= references.length) {
+      return undefined;
+    }
+    const name = references[type.typeReferenceIndex].name;
+    return name === 'Uint8Array' || name === 'Long' ? name : undefined;
+  }
+
+  /** The one member of a branded intersection that crosses the bridge, or undefined when there isn't one. */
+  private brandBaseMember(
+    type: AST.Type,
+    references: readonly AST.TypeReference[],
+  ): { member: AST.Type; baseTypeName: string } | undefined {
+    if (!type.intersections) return undefined;
+    const baseMembers: { member: AST.Type; baseTypeName: string }[] = [];
+    for (const member of type.intersections) {
+      const baseTypeName = this.brandBaseTypeName(member, references);
+      if (baseTypeName) baseMembers.push({ member, baseTypeName });
+    }
+    const first = baseMembers[0];
+    if (!first || !baseMembers.every(item => item.baseTypeName === first.baseTypeName)) {
+      return undefined;
+    }
+    return first;
+  }
+
   private resolveType(type: AST.Type, references: readonly AST.TypeReference[]): ValdiModelPropertyType {
     const annotations = type.leadingComments
       ? ValdiTypeScriptAnnotation.extractAnnotations(type.leadingComments, this.commentedFile.fileContent)
@@ -158,13 +223,15 @@ export class TypeScriptNativeTypeExporter {
       }
       const typeReference = references[typeReferenceIndex];
 
+      const primitive = this.primitiveTypeName(type, references);
+      if (primitive) {
+        return this.resolveType({ name: primitive }, references);
+      }
       switch (typeReference.name) {
         case 'Uint8Array':
           return { kind: 'bytes' };
         case 'Long':
           return { kind: 'long' };
-        case 'Number':
-          return { kind: 'double' };
         case 'Promise':
         case 'CancelablePromise': {
           const typeArgument = type.typeArguments?.[0];
@@ -207,20 +274,42 @@ export class TypeScriptNativeTypeExporter {
     if (type.array) return { kind: 'array', elementType: this.resolveType(type.array, references) };
 
     if (type.unions) {
-      let resolvedType: ValdiModelPropertyType | undefined;
-      let optional = false;
+      const isNullish = (member: AST.Type) => member.name === 'null' || member.name === 'undefined';
+      const optional = type.unions.some(isNullish);
+      let members = type.unions.filter(member => !isNullish(member));
       const description = () => type.unions!.map(union => union.name).join(' | ');
-      for (const union of type.unions) {
-        if (union.name === 'null' || union.name === 'undefined') {
-          optional = true;
-        } else {
-          if (resolvedType)
-            throw new CompilerError(`Union types are only supported with null or undefined (got ${description()}`);
-          resolvedType = this.resolveType(union, references);
+      if (members.length > 1) {
+        // TypeScript distributes `boolean & Brand` into `(true & Brand) | (false & Brand)`.
+        const brandBaseTypeNames = new Set(
+          members.map(member => this.brandBaseMember(member, references)?.baseTypeName),
+        );
+        if (brandBaseTypeNames.size === 1 && !brandBaseTypeNames.has(undefined)) {
+          members = [members[0]];
         }
       }
-      if (!resolvedType) throw new CompilerError(`Could not resolve type in union '${description()}'`);
+      if (members.length > 1) {
+        throw new CompilerError(`Union types are only supported with null or undefined (got ${description()}`);
+      }
+      if (members.length === 0) {
+        throw new CompilerError(`Could not resolve type in union '${description()}'`);
+      }
+      const resolvedType = this.resolveType(members[0], references);
       return optional ? { kind: 'nullable', type: resolvedType } : resolvedType;
+    }
+
+    if (type.intersections) {
+      // Branded types like `number & { __brand: 'Id' }` only exist at compile time, so only the base
+      // member crosses the bridge. The other members are ignored whatever their shape.
+      const base = this.brandBaseMember(type, references);
+      if (!base) {
+        const desc = type.intersections
+          .map(member => this.typeDescription(member, references))
+          .join(' & ');
+        throw new CompilerError(
+          `Intersection types are only supported with exactly one string, number, boolean, Uint8Array or Long member (got ${desc})`,
+        );
+      }
+      return this.resolveType(base.member, references);
     }
 
     switch (type.name) {

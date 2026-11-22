@@ -113,6 +113,13 @@ function createSolidSimulator(platform: number) {
     rootId?: number;
     nodes: Map<number, { id: number; viewClass: string; parentId?: number; children: number[]; attrs: Record<string, unknown> }>;
     batches: Array<Array<{ type: number; id?: number; viewClass?: string; attr?: string; value?: unknown }>>;
+    visibilityObserver?: (
+      appearingIds: number[],
+      disappearingIds: number[],
+      viewportUpdates: number[],
+      acknowledger: () => void,
+      eventTime: number,
+    ) => void;
   }>();
   const getTree = (id: string) => {
     let tree = trees.get(id);
@@ -122,8 +129,21 @@ function createSolidSimulator(platform: number) {
     }
     return tree;
   };
-  const applyRequest = (request: { treeId: string; descriptor: ArrayBuffer; descriptorSize: number; values: unknown[] }) => {
+  const applyRequest = (request: {
+    treeId: string;
+    descriptor: ArrayBuffer;
+    descriptorSize: number;
+    values: unknown[];
+    visibilityObserver?: (
+      appearingIds: number[],
+      disappearingIds: number[],
+      viewportUpdates: number[],
+      acknowledger: () => void,
+      eventTime: number,
+    ) => void;
+  }) => {
     const tree = getTree(request.treeId);
+    if (request.visibilityObserver) tree.visibilityObserver = request.visibilityObserver;
     const view = new DataView(request.descriptor, 0, request.descriptorSize * 4);
     const ops: Array<{ type: number; id?: number; viewClass?: string; attr?: string; value?: unknown }> = [];
     let pos = 0;
@@ -240,9 +260,21 @@ function createSolidSimulator(platform: number) {
 function solidHost(platform: number, application: Map<string, Buffer>, typesRoot: string) {
   const entries = runtimeMode === 'source' ? new Map<string, Buffer>() : packaged(platform);
   if (runtimeMode !== 'source') {
-    for (const required of ['valdi_core/src/Valdi', 'valdi_core/src/Renderer', 'valdi_core/src/Style']) {
+    for (const required of [
+      'valdi_core/src/Valdi',
+      'valdi_core/src/NativeDebuggerTransport',
+      'valdi_core/src/Style',
+      'valdi_core/src/ValdiRuntimeProvider',
+      'valdi_core/src/NativeReferences',
+      'valdi_core/src/ModuleLoaderGlobal',
+    ]) {
       assert.ok(entries.has(`${required}.js`), `Missing exported runtime module ${required}`);
     }
+    assert.match(entries.get('valdi_core/src/Valdi.js')!.toString(), /solid_native\/src\/bridge/);
+    assert.equal(entries.has('valdi_core/src/Renderer.js'), false,
+      'legacy valdi_core/src/Renderer.js must remain stripped in Solid 2.0 packaged runtime');
+    assert.equal(entries.has('valdi_core/src/JSXBootstrap.js'), false,
+      'legacy valdi_core/src/JSXBootstrap.js must remain stripped in Solid 2.0 packaged runtime');
   }
   const sim = createSolidSimulator(platform);
   const modulesRoot = path.join(typesRoot, modulePrefix);
@@ -333,8 +365,10 @@ function solidHost(platform: number, application: Map<string, Buffer>, typesRoot
   return { sim, manager: bridge.createRootComponentsManager(), compileInlineTsx };
 }
 
-// Source checks run before native exports. Explicit packaged checks run the same
-// assertions against the matching platform's exported modules after export.
+// Source checks run before native exports. `host()` is the legacy
+// `jsxBackend: 'valdi'` source harness (exported packaged runtimes strip legacy
+// `JSXBootstrap` and `Renderer` for Solid 2.0); `solidHost()` verifies both
+// selected sources and packaged platform archives.
 // Only native DeviceBridge/runtime/debug services are supplied by the host;
 // RendererTestDelegate is the unmodified official native boundary for legacy tests.
 function host(platform: number, application: Map<string, Buffer>, typesRoot: string) {
@@ -477,7 +511,91 @@ test(`actual shared wheels typecheck against selected sources; ${runtimeLabel} r
   }
 });
 
-test('mobile classes retain lazy, key, ref and typed config/callback under the production transformer', () => {
+test(`Solid <Lazy> + <custom-view> defers creation until visible and retains ref, config, and callback across ${runtimeLabel}`, async t => {
+  const entries = new Map<string, Buffer>();
+  for (const depName of ['solid_runtime', 'solid_native']) {
+    const depModule = appModule(depName);
+    const depPlugin = valdiTs(depModule);
+    try {
+      const built = await buildModule(depModule, depPlugin, false);
+      assert.equal(depPlugin.diagnostics(), '');
+      for (const source of depPlugin.program().getSourceFiles()) hash(source.fileName);
+      for (const [file, bytes] of built.entries) entries.set(`${depName}/${file}`, bytes);
+    } finally {
+      depPlugin.dispose();
+    }
+  }
+
+  for (const platform of platforms) {
+    const h = solidHost(platform, entries, sourceRoot);
+    h.compileInlineTsx('inline/LazyWheelProof', `
+      import { Lazy } from 'solid_native/src/Lazy';
+      export function LazyWheelProof(props) {
+        const vm = props.viewModel;
+        return (
+          <Lazy height={200} unmountWhenHidden={false}>
+            <custom-view
+              iosClass="VRColumnWheelView"
+              androidClass="io.valdiroutes.app.ColumnWheelView"
+              ref={(el: any) => vm().onRef(el)}
+              config={vm().config}
+              onChange={vm().onChange}
+            />
+          </Lazy>
+        );
+      }
+    `);
+
+    const attachedRefs: any[] = [];
+    const callback = (_value: string) => {};
+    const config = { value: 'a' };
+    const vm0 = {
+      config,
+      onChange: callback,
+      onRef: (el: any) => attachedRefs.push(el),
+    };
+    const expectedClass = platform === 1 ? 'io.valdiroutes.app.ColumnWheelView' : 'VRColumnWheelView';
+
+    h.manager.create('lazy-wheel-1', 'LazyWheelProof@inline/LazyWheelProof', vm0, {});
+    const tree = h.sim.getTree('lazy-wheel-1');
+
+    assert.equal([...tree.nodes.values()].filter(n => n.viewClass === expectedClass).length, 0,
+      'deferred child custom-view must not materialize before visibility');
+    assert.equal(attachedRefs.length, 0, 'ref must not run before child materializes');
+    const lazyNode = [...tree.nodes.values()].find(n => n.viewClass === 'layout' && n.attrs.observeVisibility === true);
+    assert.ok(lazyNode, 'Lazy container layout must register observeVisibility');
+    assert.ok(tree.visibilityObserver, 'Solid tree must register visibilityObserver');
+
+    tree.visibilityObserver!([lazyNode.id], [], [], () => {}, 1);
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+
+    const wheelNodes = [...tree.nodes.values()].filter(n => n.viewClass === expectedClass);
+    assert.equal(wheelNodes.length, 1);
+    const wheelNode = wheelNodes[0];
+    assert.equal(attachedRefs.length, 1, 'ref must attach once visible');
+    assert.equal(attachedRefs[0].id, wheelNode.id);
+    assert.equal(wheelNode.attrs.config, config, 'config must retain object reference identity');
+    assert.equal(wheelNode.attrs.onChange, callback, 'onChange must retain callback identity');
+
+    const batchesBefore = tree.batches.length;
+    const nextConfig = { value: 'b' };
+    h.manager.render('lazy-wheel-1', { ...vm0, config: nextConfig });
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+
+    const updateOps = tree.batches.slice(batchesBefore).flat();
+    assert.equal(updateOps.some(op => op.type === 1 || op.type === 2), false,
+      'controlled rerender inside <Lazy> must reuse custom-view');
+    assert.equal(attachedRefs.length, 1, 'ref must not re-fire on controlled update');
+    assert.equal(wheelNode.attrs.config, nextConfig, 'updated config must retain object reference identity');
+
+    h.manager.destroy('lazy-wheel-1');
+    t.diagnostic(`types=${sourceRoot} runtime=${runtimeMode} platform=${platform}`);
+  }
+});
+
+test('mobile classes retain lazy, key, ref and typed config/callback under the production transformer',
+  { skip: runtimeMode !== 'source' ? 'exported mobile runtime strips legacy valdi_core JSXBootstrap/Renderer for Solid 2.0' : false },
+  () => {
   for (const Processor of [JSXProcessor]) {
     const { plugin, module } = fixture(sourceRoot, `
 import type {} from 'valdi_tsx/src/JSX';

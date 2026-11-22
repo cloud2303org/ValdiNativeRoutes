@@ -30,12 +30,12 @@ export type SolidIntrinsic<T, AllowChildren extends boolean = true> = Omit<T, 'c
 export type LayoutProps = SolidIntrinsic<Layout>;
 export type ViewProps = SolidIntrinsic<View>;
 export type ScrollProps = SolidIntrinsic<ScrollViewInteractive>;
-export type LabelProps = SolidIntrinsic<Label, false>;
+export type LabelProps = SolidIntrinsic<Label>;
 export type ImageProps = SolidIntrinsic<ImageView, false>;
 export type VideoProps = SolidIntrinsic<VideoView, false>;
 export type WebViewProps = SolidIntrinsic<WebViewElement, false>;
 export type TextFieldProps = SolidIntrinsic<TextFieldInteractive, false>;
-export type TextViewProps = SolidIntrinsic<TextViewInteractive, false>;
+export type TextViewProps = SolidIntrinsic<TextViewInteractive>;
 export type TextAnimationGroupProps = SolidIntrinsic<TextAnimationGroup>;
 export type SpinnerProps = SolidIntrinsic<SpinnerView, false>;
 export type ShapeProps = SolidIntrinsic<ShapeView, false>;

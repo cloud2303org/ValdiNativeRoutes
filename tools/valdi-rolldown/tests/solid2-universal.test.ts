@@ -1649,7 +1649,7 @@ test('15. <Lazy> recycles offscreen subtrees by default with measured height and
     h.manager.destroy('81');
   });
 
-test('14. Full 17-element JSX definitions typecheck and disallow direct children on <label>', () => {
+test('14. Full 17-element JSX definitions typecheck, allow inline children on <label>/<textview>, and disallow children on void elements', () => {
   const tsconfigPath = path.join(repoRoot, 'valdi/modules/app_pages/tsconfig.json');
   const configResult = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
   assert.equal(configResult.error, undefined);
@@ -1667,12 +1667,18 @@ test('14. Full 17-element JSX definitions typecheck and disallow direct children
           <view style={boxStyle} onVisibilityChanged={() => {}} onViewportChanged={() => {}}>
             <scroll horizontal={true} contentOffsetX={10} showsHorizontalScrollIndicator={false}>
               <label value="Title" numberOfLines={1} />
+              <label value={[1, 'Hi ', 17, { childIndex: 0, verticalAlignment: 0 }]}>
+                <view width={16} height={16} />
+              </label>
             </scroll>
             <image src="https://example.com/a.png" objectFit="cover" />
             <video />
             <webview />
             <textfield placeholder="Input" onChange={() => {}} />
             <textview placeholder="Multiline" />
+            <textview value={[1, 'Edit ', 17, { childIndex: 0, verticalAlignment: 0 }]}>
+              <view width={14} height={14} />
+            </textview>
             <textanimationgroup>
               <label value="Animated" />
             </textanimationgroup>
@@ -1696,8 +1702,8 @@ test('14. Full 17-element JSX definitions typecheck and disallow direct children
 
   const virtualBad = path.join(path.resolve(import.meta.dirname, '../../..'), 'valdi/modules/app_pages/src/__virtual_jsx_bad.tsx');
   const badSource = `
-    export function BadLabel() {
-      return <label>Direct text not allowed</label>;
+    export function BadImage() {
+      return <image>Direct text not allowed</image>;
     }
   `;
 
@@ -1728,7 +1734,7 @@ test('14. Full 17-element JSX definitions typecheck and disallow direct children
 
   const badProgram = ts.createProgram([jsxDeclPath, virtualBad], parsed.options, host);
   const badDiags = ts.getPreEmitDiagnostics(badProgram, badProgram.getSourceFile(virtualBad));
-  assert.ok(badDiags.length > 0, '<label> with direct child text must fail typecheck');
+  assert.ok(badDiags.length > 0, '<image> with direct child text must fail typecheck');
 });
 
 test('8. Default transport uses raw tags, INSERT_ELEMENT_BEFORE (20), and DETACH_ELEMENT (19) re-attach', () => {
@@ -1890,4 +1896,242 @@ test('16. props.params stays fixed while reactive props.insets updates on safe-a
     'effect:start',
     'effect:stop',
   ]);
+});
+
+test('17. Inline children on <label>/<textview> defer and re-apply AttributedText value safely across dynamic mutations while still rejecting direct text', async () => {
+  const h = createValdiTestHarness();
+  let setExtra!: (v: boolean) => void;
+  let setUseFirst!: (v: boolean) => void;
+  let setPlain!: (v: boolean) => void;
+
+  const initialRich = [1, 'Before ', 17, { childIndex: 0, verticalAlignment: 0 }, 1, ' after'];
+  const grownRich = [
+    1,
+    'Before ',
+    17,
+    { childIndex: 0, verticalAlignment: 0 },
+    1,
+    ' & ',
+    17,
+    { childIndex: 1, verticalAlignment: 0 },
+    1,
+    ' after',
+  ];
+  const editorRich = [1, 'Edit ', 17, { childIndex: 0, verticalAlignment: 0 }, 1, ' note'];
+
+  h.compileInlineTsx(
+    'inline_test/InlineRichTextPage',
+    `
+    import { Show, createSignal } from 'solid-js';
+
+    export function InlineRichTextPage(props) {
+      const [extra, _setExtra] = createSignal(false);
+      const [useFirst, _setUseFirst] = createSignal(true);
+      const [plain, _setPlain] = createSignal(false);
+      props.params.bindControls({ setExtra: _setExtra, setUseFirst: _setUseFirst, setPlain: _setPlain });
+
+      return (
+        <view width="100%">
+          <label
+            accessibilityId="rich-label"
+            value={
+              plain()
+                ? 'Plain string'
+                : extra()
+                  ? props.params.grownRich
+                  : props.params.initialRich
+            }
+          >
+            <Show when={useFirst()} fallback={<view accessibilityId="inline-b" width={20} height={16} />}>
+              <view accessibilityId="inline-a" width={16} height={16} />
+            </Show>
+            <Show when={extra()}>
+              <view accessibilityId="inline-extra" width={24} height={16} />
+            </Show>
+          </label>
+          <textview accessibilityId="rich-textview" value={props.params.editorRich}>
+            <view accessibilityId="editor-chip" width={18} height={16} />
+          </textview>
+        </view>
+      );
+    }
+    `,
+  );
+
+  h.manager.create(
+    '17',
+    'InlineRichTextPage@inline_test/InlineRichTextPage',
+    {
+      ...makePageViewModel('inlineRich', 'p17'),
+      params: {
+        initialRich,
+        grownRich,
+        editorRich,
+        bindControls: (controls: {
+          setExtra: (v: boolean) => void;
+          setUseFirst: (v: boolean) => void;
+          setPlain: (v: boolean) => void;
+        }) => {
+          setExtra = controls.setExtra;
+          setUseFirst = controls.setUseFirst;
+          setPlain = controls.setPlain;
+        },
+      },
+    },
+    { back() {}, finish() {} },
+  );
+
+  const simTree = h.sim.getTree('17');
+  const richLabel = [...simTree.nodes.values()].find(n => n.attrs.accessibilityId === 'rich-label')!;
+  const richTextView = [...simTree.nodes.values()].find(n => n.attrs.accessibilityId === 'rich-textview')!;
+  const inlineA = [...simTree.nodes.values()].find(n => n.attrs.accessibilityId === 'inline-a')!;
+  const editorChip = [...simTree.nodes.values()].find(n => n.attrs.accessibilityId === 'editor-chip')!;
+  assert.ok(richLabel && richTextView && inlineA && editorChip);
+  assert.deepEqual(richLabel.children, [inlineA.id]);
+  assert.deepEqual(richTextView.children, [editorChip.id]);
+
+  // 1. Initial mount: value SET_ATTRIBUTE_ARRAY comes AFTER child INSERT_ELEMENT_BEFORE, with NO undefined reset
+  const batch0 = simTree.batches[0];
+  for (const [parentNode, childNode] of [
+    [richLabel, inlineA],
+    [richTextView, editorChip],
+  ] as const) {
+    const insertIdx = batch0.findIndex(
+      op => op.type === Opcode.INSERT_ELEMENT_BEFORE && op.parentId === parentNode.id && op.id === childNode.id,
+    );
+    const setValIdx = batch0.findIndex(
+      op => op.type === Opcode.SET_ATTRIBUTE_ARRAY && op.id === parentNode.id && op.attr === 'value',
+    );
+    const resetValIdx = batch0.findIndex(
+      op => op.type === Opcode.SET_ATTRIBUTE_UNDEFINED && op.id === parentNode.id && op.attr === 'value',
+    );
+    assert.ok(insertIdx >= 0 && setValIdx > insertIdx, `${parentNode.viewClass} value array must follow child insert`);
+    assert.equal(resetValIdx, -1, `Initial mount of ${parentNode.viewClass} must not emit SET_ATTRIBUTE_UNDEFINED for value`);
+  }
+
+  // 2. Dynamic append + value update on already-mounted <label>
+  setExtra(true);
+  await h.flushMicrotasks();
+  const batch1 = simTree.batches[1];
+  const inlineExtra = [...simTree.nodes.values()].find(n => n.attrs.accessibilityId === 'inline-extra')!;
+  assert.ok(inlineExtra);
+  assert.deepEqual(richLabel.children, [inlineA.id, inlineExtra.id]);
+  const insertExtraIdx = batch1.findIndex(
+    op => op.type === Opcode.INSERT_ELEMENT_BEFORE && op.parentId === richLabel.id && op.id === inlineExtra.id,
+  );
+  const clearBeforeGrowIdx = batch1.findIndex(
+    op => op.type === Opcode.SET_ATTRIBUTE_UNDEFINED && op.id === richLabel.id && op.attr === 'value',
+  );
+  const setGrownValIdx = batch1.findIndex(
+    op => op.type === Opcode.SET_ATTRIBUTE_ARRAY && op.id === richLabel.id && op.attr === 'value',
+  );
+  assert.ok(insertExtraIdx >= 0 && clearBeforeGrowIdx > insertExtraIdx && setGrownValIdx > clearBeforeGrowIdx);
+
+  // Also test NativeTree directly when set(label, 'value', ...) is queued BEFORE insert(label, newChild)
+  {
+    const { NativeTree } = h.loadModule('solid_native/src/native-tree');
+    const { ValdiBinarySink } = h.loadModule('solid_native/src/transport');
+    const directTree = new NativeTree(new ValdiBinarySink('17b', h.sim.runtimeApi));
+    const directLabel = directTree.create('label', { value: initialRich });
+    const c0 = directTree.create('view', { width: 10 });
+    directTree.insert(directTree.root, directLabel);
+    directTree.insert(directLabel, c0);
+    directTree.flush();
+
+    const c1 = directTree.create('view', { width: 12 });
+    directTree.set(directLabel, 'value', grownRich);
+    directTree.insert(directLabel, c1);
+    directTree.flush();
+
+    const directBatch1 = h.sim.getTree('17b').batches[1];
+    const dInsertIdx = directBatch1.findIndex(
+      op => op.type === Opcode.INSERT_ELEMENT_BEFORE && op.parentId === directLabel.id && op.id === c1.id,
+    );
+    const dSetValIdx = directBatch1.findIndex(
+      op => op.type === Opcode.SET_ATTRIBUTE_ARRAY && op.id === directLabel.id && op.attr === 'value',
+    );
+    assert.ok(dInsertIdx >= 0 && dSetValIdx > dInsertIdx, 'value update queued before insert must still flush after insert');
+    directTree.dispose();
+  }
+
+  // 3. Dynamic child swap while value remains the exact same AttributedText array
+  setUseFirst(false);
+  await h.flushMicrotasks();
+  const batch2 = simTree.batches[2];
+  const inlineB = [...simTree.nodes.values()].find(n => n.attrs.accessibilityId === 'inline-b')!;
+  assert.ok(inlineB);
+  assert.deepEqual(richLabel.children, [inlineB.id, inlineExtra.id]);
+  const detachAIdx = batch2.findIndex(op => op.type === Opcode.DETACH_ELEMENT && op.id === inlineA.id);
+  const insertBIdx = batch2.findIndex(
+    op => op.type === Opcode.INSERT_ELEMENT_BEFORE && op.parentId === richLabel.id && op.id === inlineB.id,
+  );
+  const swapResetIdx = batch2.findIndex(
+    op => op.type === Opcode.SET_ATTRIBUTE_UNDEFINED && op.id === richLabel.id && op.attr === 'value',
+  );
+  const swapReapplyIdx = batch2.findIndex(
+    op => op.type === Opcode.SET_ATTRIBUTE_ARRAY && op.id === richLabel.id && op.attr === 'value',
+  );
+  assert.ok(detachAIdx >= 0 && insertBIdx >= 0);
+  assert.ok(swapResetIdx > detachAIdx && swapResetIdx > insertBIdx);
+  assert.ok(swapReapplyIdx > swapResetIdx);
+  assert.deepEqual((batch2[swapReapplyIdx] as Extract<DecodedOp, { attr: string }>).value, grownRich);
+
+  // 4. Removing inline child while switching value to a plain string: deferred string follows detach without undefined reset
+  setExtra(false);
+  setPlain(true);
+  await h.flushMicrotasks();
+  const batch3 = simTree.batches[3];
+  assert.deepEqual(richLabel.children, [inlineB.id]);
+  const detachExtraIdx = batch3.findIndex(op => op.type === Opcode.DETACH_ELEMENT && op.id === inlineExtra.id);
+  const plainResetIdx = batch3.findIndex(
+    op => op.type === Opcode.SET_ATTRIBUTE_UNDEFINED && op.id === richLabel.id && op.attr === 'value',
+  );
+  const plainSetIdx = batch3.findIndex(
+    op =>
+      op.type === Opcode.SET_ATTRIBUTE_ATTACHED_VALUE &&
+      op.id === richLabel.id &&
+      op.attr === 'value' &&
+      op.value === 'Plain string',
+  );
+  assert.ok(detachExtraIdx >= 0 && plainSetIdx > detachExtraIdx);
+  assert.equal(plainResetIdx, -1, 'Switching to plain string value must not emit SET_ATTRIBUTE_UNDEFINED');
+
+  h.manager.destroy('17');
+
+  // 5. Direct non-empty text children still throw at runtime on both <label> and <textview>
+  h.compileInlineTsx(
+    'inline_test/DirectTextLabelPage',
+    `
+    export function DirectTextLabelPage() {
+      return <label>Direct text not allowed</label>;
+    }
+    `,
+  );
+  assert.throws(
+    () =>
+      h.manager.create('17-bad-label', 'DirectTextLabelPage@inline_test/DirectTextLabelPage', makePageViewModel('b1', 'b1'), {
+        back() {},
+        finish() {},
+      }),
+    /Direct text children are not supported/,
+  );
+  h.loadModule('solid_runtime/src/solid').resetErrorHalt();
+
+  h.compileInlineTsx(
+    'inline_test/DirectTextViewPage',
+    `
+    export function DirectTextViewPage() {
+      return <textview>Direct text not allowed</textview>;
+    }
+    `,
+  );
+  assert.throws(
+    () =>
+      h.manager.create('17-bad-tv', 'DirectTextViewPage@inline_test/DirectTextViewPage', makePageViewModel('b2', 'b2'), {
+        back() {},
+        finish() {},
+      }),
+    /Direct text children are not supported/,
+  );
+  h.loadModule('solid_runtime/src/solid').resetErrorHalt();
 });

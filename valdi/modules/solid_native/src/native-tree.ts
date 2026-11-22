@@ -46,7 +46,7 @@ type HostOp =
       parent: NativeElement;
       anchor?: NativeElement;
     }
-  | { type: 'detach'; node: NativeElement }
+  | { type: 'detach'; node: NativeElement; parent?: NativeElement }
   | { type: 'beginAnimation'; options: AnimationOptions; cancelToken: number }
   | { type: 'endAnimation' }
   | { type: 'cancelAnimation'; cancelToken: number }
@@ -55,6 +55,10 @@ type HostOp =
 
 const JS_ONLY_PROPS = new Set(['onLayout', '$onLayout', 'onVisibilityChanged', 'onViewportChanged']);
 const CUSTOM_VIEW_CLASS_PROPS = new Set(['iosClass', 'androidClass', 'macosClass', 'linuxClass']);
+
+function isInlineTextContainer(node: NativeElement): boolean {
+  return node.tag === 'label' || node.tag === 'textview';
+}
 
 function scheduleMicrotask(fn: () => void): void {
   if (typeof queueMicrotask === 'function') {
@@ -252,7 +256,7 @@ export class NativeTree {
     this.unlink(node);
     if (node.kind === 'sentinel') return;
     if (this.materialized.has(node)) {
-      this.enqueue({ type: 'detach', node });
+      this.enqueue({ type: 'detach', node, parent });
     }
   }
 
@@ -378,6 +382,46 @@ export class NativeTree {
           );
         }
 
+        let inlineTextChildParents: Set<NativeElement> | undefined;
+        for (let i = 0; i < ops.length; i++) {
+          const op = ops[i];
+          if (op.type === 'insert' && isInlineTextContainer(op.parent)) {
+            (inlineTextChildParents ??= new Set()).add(op.parent);
+          } else if (op.type === 'detach' && op.parent && isInlineTextContainer(op.parent)) {
+            (inlineTextChildParents ??= new Set()).add(op.parent);
+          }
+        }
+        let createdInlineTextParents: Set<NativeElement> | undefined;
+        let deferredValueSetNodes: Set<NativeElement> | undefined;
+        if (inlineTextChildParents) {
+          for (let i = 0; i < ops.length; i++) {
+            const op = ops[i];
+            if (op.type === 'create' && inlineTextChildParents.has(op.node)) {
+              (createdInlineTextParents ??= new Set()).add(op.node);
+            }
+          }
+        }
+        const flushDeferredInlineTextValues = () => {
+          if (!inlineTextChildParents || inlineTextChildParents.size === 0) return;
+          for (const node of inlineTextChildParents) {
+            if (!this.materialized.has(node)) continue;
+            if (this.disposedNodes.has(node) && !this.isAttachedToRoot(node)) continue;
+            const currentValue = node.props.value;
+            if (Array.isArray(currentValue)) {
+              // C++ ValueArray::operator== skips postprocessing when value stays structurally equal, so
+              // clearing with undefined first forces ViewNodeTextInlineAttachment rebinding on child updates.
+              if (!createdInlineTextParents?.has(node)) {
+                this.sink.set(node.id, 'value', undefined);
+              }
+              this.sink.set(node.id, 'value', currentValue);
+            } else if (deferredValueSetNodes?.has(node)) {
+              this.sink.set(node.id, 'value', currentValue);
+            }
+          }
+          inlineTextChildParents.clear();
+          deferredValueSetNodes?.clear();
+        };
+
         for (let i = 0; i < ops.length; i++) {
           const op = ops[i];
           switch (op.type) {
@@ -393,6 +437,10 @@ export class NativeTree {
               this.sink.setRoot(op.node.id);
               break;
             case 'set':
+              if (op.key === 'value' && inlineTextChildParents?.has(op.node)) {
+                (deferredValueSetNodes ??= new Set()).add(op.node);
+                break;
+              }
               this.sink.set(op.node.id, op.key, op.value);
               break;
             case 'insert':
@@ -405,6 +453,7 @@ export class NativeTree {
               this.sink.beginAnimation?.(op.options, op.cancelToken);
               break;
             case 'endAnimation':
+              flushDeferredInlineTextValues();
               this.sink.endAnimation?.();
               break;
             case 'cancelAnimation':
@@ -418,6 +467,7 @@ export class NativeTree {
               break;
           }
         }
+        flushDeferredInlineTextValues();
 
         const toDestroySet = new Set<NativeElement>();
         for (const node of this.disposedNodes) {

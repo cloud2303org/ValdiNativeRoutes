@@ -15,7 +15,6 @@ const modulesRoot = path.join(upstream, 'src/valdi_modules/src/valdi');
 const suites = [
   ['valdi_core/test/ElementLayoutDispatcher.spec.ts', 'valdi_core/src/ElementLayoutDispatcher.ts'],
   ['valdi_core/test/PropertyList.spec.ts', 'valdi_core/src/utils/PropertyList.ts'],
-  ['valdi_test/test/Renderer.spec.ts', 'valdi_core/src/Renderer.ts'],
   ['valdi_test/test/ModuleLoader.spec.ts', 'valdi_core/src/ModuleLoader.ts'],
   ['valdi_core/test/ModuleLoaderUnloadTest.ts', 'valdi_core/src/ModuleLoader.ts'],
   ['valdi_test/test/DebuggerInputMessageHandler.spec.ts', 'valdi_core/src/debugging/DebuggerInputMessageHandler.ts'],
@@ -174,9 +173,6 @@ for (const [spec, algorithm] of suites) {
 
     host.load(spec); // Read and execute unmodified specs, never copied assertions.
     assert.ok(host.cache.has(path.join(modulesRoot, algorithm)), `Did not load actual ${algorithm}`);
-    if (spec.includes('Renderer.spec')) {
-      assert.ok(host.cache.has(path.join(modulesRoot, 'valdi_test/test/RendererTestDelegate.ts')));
-    }
     host.context.__env = env;
     let deadline: ReturnType<typeof setTimeout> | undefined;
     try {

@@ -750,7 +750,7 @@ export function SolidSample() {
   symlinkSync(realpathSync(path.join(root, 'valdi/node_modules/solid-js')),
     path.join(f.own.nodeModules!, 'solid-js'), 'junction');
   const solidNative = { name: 'solid_native', dir: path.join(root, 'valdi/modules/solid_native'), generatedDirs: [] };
-  const sample = { ...f.own, jsxBackend: 'solid' as const };
+  const sample = f.own;
   const alias = path.join(f.directory, 'module-build/modules');
   mkdirSync(path.dirname(alias), { recursive: true });
   symlinkSync(path.join(f.directory, 'valdi/modules'), alias, 'dir');

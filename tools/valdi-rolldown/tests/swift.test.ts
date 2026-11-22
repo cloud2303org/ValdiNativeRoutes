@@ -13,8 +13,6 @@ import { valdiTs } from '../valdiTs';
 // Real annotations, normal pipeline and (when requested) the actual exported
 // Swift runtime. No handwritten ABI stubs.
 export const swiftFixture = `
-import { Component } from 'valdi_core/src/Component';
-import 'valdi_tsx/src/JSX';
 /** @ExportEnum */
 export enum State { Idle = 0, Ready = 1 }
 /** @ExportEnum */
@@ -58,9 +56,10 @@ export function echo(value: Payload, service: Service): Payload { return service
 export interface ScreenModel { title: string; }
 /** @Context @ExportModel */
 export interface ScreenContext { onClose: () => void; }
-/** @Component @ExportModel */
-export class Screen extends Component<ScreenModel, ScreenContext> {
-  onRender() { <label value={this.viewModel.title} />; }
+/** @Component(viewModel: 'ScreenModel', context: 'ScreenContext') @ExportModel */
+export class Screen {
+  constructor(readonly viewModel: ScreenModel, readonly context: ScreenContext) {}
+  onRender() { return <label value={this.viewModel.title} />; }
 }
 `;
 
@@ -70,7 +69,7 @@ test('Swift-only and dual bindings cover official schemas and compile against th
   mkdirSync(path.join(dir, 'src'));
   writeFileSync(path.join(dir, 'src/index.tsx'), swiftFixture);
   writeFileSync(path.join(dir, 'src/Calculator.d.ts'), '/** @ExportModule */\nexport declare function multiply(left: number, right: number): number;\n');
-  const module = { name: 'swift_fixture', dir, generatedDirs: [], nodeModules: path.join(root, 'valdi/node_modules'), jsxBackend: 'valdi' as const };
+  const module = { name: 'swift_fixture', dir, generatedDirs: [], nodeModules: path.join(root, 'valdi/node_modules') };
   for (const language of ['swift', 'both'] as const) {
     const out = path.join(dir, language);
     await compileNodeModule(module, out, 'SwiftFixture', 'debug', [], language);

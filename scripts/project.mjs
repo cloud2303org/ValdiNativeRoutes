@@ -74,7 +74,6 @@ const ROLLDOWN_TESTS = [
   'tests/bluetooth.test.ts',
   'tests/bluetooth-execution.test.ts',
   'tests/module-selection.test.ts',
-  'tests/jsx-upstream.test.ts',
   'tests/console-log.test.ts',
   'tests/lazy-import.test.ts',
   'tests/upstream-runtime.test.ts',

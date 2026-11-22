@@ -111,7 +111,7 @@ export async function compileRuntimeModule(spec: RuntimeModuleSpec, execroot = p
     writeFileSync(path.join(temporary, 'tsconfig.json'), JSON.stringify(config));
     const module: ValdiModule = {
       name: spec.name, dir: temporary, generatedDirs: [], includeJavaScript: true,
-      sourceEntries: sources.filter(file => /\.(tsx?|js)$/.test(file) && !file.endsWith('.d.ts') && !file.includes('.spec.')),
+      sourceEntries: sources.filter(file => /\.(ts|js)$/.test(file) && !file.endsWith('.d.ts') && !file.includes('.spec.')),
     };
     // Runtime bootstrap cannot require bundler chunks: ModuleLoader is loaded
     // before require() exists and its root evaluator accepts only tslib.

@@ -12,7 +12,6 @@ import ts from 'typescript';
 import { unpack } from '../archive';
 import { appModule, root, buildModule, valdiSourceRoot } from '../pipeline';
 import { valdiTs } from '../valdiTs';
-import { JSXProcessor } from '../vendor/companion/JSXProcessor';
 
 const sourceRoot = valdiSourceRoot();
 assert.ok(sourceRoot, 'Prepare Valdi sources or set VALDI_SOURCE_ROOT');
@@ -30,33 +29,13 @@ const hash = (file: string) => {
 };
 hash(import.meta.filename);
 
-function fixture(typesRoot: string, source?: string) {
+function fixture(typesRoot: string) {
   const dir = mkdtempSync(path.join(proof, 'fixture-'));
   mkdirSync(path.join(dir, 'src'));
   const modules = path.join(typesRoot, modulePrefix);
   const paths = Object.fromEntries(['valdi_core', 'valdi_tsx', 'coreutils'].map(name =>
     [`${name}/*`, [path.join(modules, name, '*')]]));
-  for (const name of ['native_common', 'app_ui'])
-    paths[`${name}/*`] = [path.join(root, 'valdi/modules', name, '*')];
-  if (source) {
-    writeFileSync(path.join(dir, 'tsconfig.json'), JSON.stringify({
-      extends: path.join(typesRoot, 'modules/_configs/base.tsconfig.json'),
-      compilerOptions: {
-        allowSyntheticDefaultImports: true,
-        moduleResolution: 'node10',
-        baseUrl: dir, paths: { ...paths, 'wheel_fixture/*': [path.join(dir, '*')], tslib: [path.join(modules, 'valdi_core/src/tslib')] },
-        types: [path.join(typesRoot, 'modules/types/Long'), path.join(typesRoot, 'modules/types/globals')],
-      }, include: ['src/**/*'],
-    }));
-    writeFileSync(path.join(dir, 'src/fixture.tsx'), source);
-    const module = { name: 'wheel_fixture', dir, generatedDirs: [], nodeModules: path.join(root, 'valdi/node_modules'), jsxBackend: 'valdi' as const };
-    const plugin = valdiTs(module);
-    assert.equal(plugin.diagnostics(), '');
-    for (const file of plugin.program().getSourceFiles()) hash(file.fileName);
-    return { module, plugin };
-  }
-
-  for (const name of ['solid_native', 'solid_runtime'])
+  for (const name of ['native_common', 'app_ui', 'solid_native', 'solid_runtime'])
     paths[`${name}/*`] = [path.join(root, 'valdi/modules', name, '*')];
   writeFileSync(path.join(dir, 'tsconfig.json'), JSON.stringify({
     extends: path.join(typesRoot, 'modules/_configs/base.tsconfig.json'),
@@ -79,7 +58,7 @@ function fixture(typesRoot: string, source?: string) {
   }
   // Package resolution uses the existing installation, never network.
   execFileSync('ln', ['-s', path.join(root, 'valdi/node_modules'), path.join(dir, 'node_modules')]);
-  const module = { name: 'wheel_fixture', dir, generatedDirs: [], nodeModules: path.join(root, 'valdi/node_modules'), jsxBackend: 'solid' as const };
+  const module = { name: 'wheel_fixture', dir, generatedDirs: [], nodeModules: path.join(root, 'valdi/node_modules') };
   const plugin = valdiTs(module);
   assert.equal(plugin.diagnostics(), '');
   for (const file of plugin.program().getSourceFiles()) hash(file.fileName);
@@ -365,65 +344,6 @@ function solidHost(platform: number, application: Map<string, Buffer>, typesRoot
   return { sim, manager: bridge.createRootComponentsManager(), compileInlineTsx };
 }
 
-// Source checks run before native exports. `host()` is the legacy
-// `jsxBackend: 'valdi'` source harness (exported packaged runtimes strip legacy
-// `JSXBootstrap` and `Renderer` for Solid 2.0); `solidHost()` verifies both
-// selected sources and packaged platform archives.
-// Only native DeviceBridge/runtime/debug services are supplied by the host;
-// RendererTestDelegate is the unmodified official native boundary for legacy tests.
-function host(platform: number, application: Map<string, Buffer>, typesRoot: string) {
-  const entries = runtimeMode === 'source' ? new Map<string, Buffer>() : packaged(platform);
-  const modulesRoot = path.join(typesRoot, modulePrefix);
-  const cache = new Map<string, { exports: any }>();
-  const context = vm.createContext({
-    console, setTimeout, clearTimeout,
-    runtime: { getCurrentPlatform: () => platform, getCurrentContext: () => 'wheel-proof',
-      internString: (v: string) => v, getAttributeId: () => 0 },
-  });
-  vm.runInContext('global = globalThis;', context);
-  function load(id: string, from = ''): any {
-    if (id.startsWith('.')) id = path.posix.normalize(path.posix.join(path.posix.dirname(from), id));
-    id = id.replace(/\.js$/, '');
-    if (cache.has(id)) return cache.get(id)!.exports;
-    if (id === 'valdi_core/src/BuildType') return { isDevBuild: () => false, isDebugEnabled: () => false };
-    if (id === 'valdi_core/src/DeviceBridge') return {
-      getSystemType: () => platform === 1 ? 'android' : 'ios',
-      observeDisplayInsetChange: () => ({ cancel() {} }),
-      observeDisplaySizeChange: () => ({ cancel() {} }),
-      observeDarkMode: () => ({ cancel() {} }),
-    };
-    if (id === 'valdi_core/src/debugging/DaemonClientManager') {
-      return { DaemonClientManager: class { addListener() {} } };
-    }
-    const appId = id.replace(/^wheel_fixture\//, '');
-    const bytes = application.get(appId + '.js') ?? entries.get(id + '.js');
-    let code = bytes?.toString();
-    if (!code) {
-      assert.ok(runtimeMode === 'source' || !['valdi_core', 'valdi_tsx', 'coreutils'].includes(id.split('/')[0]),
-        `Missing exported runtime module ${id}; packaged checks cannot fall back to source`);
-      const base = path.join(modulesRoot, id);
-      const file = [base + '.ts', base + '.js', base + '.d.ts'].find(existsSync);
-      assert.ok(file, `Missing real module ${id}`);
-      hash(file);
-      code = file.endsWith('.js') ? readFileSync(file, 'utf8') : ts.transpileModule(readFileSync(file, 'utf8'), {
-        fileName: file.replace(/\.d\.ts$/, '.ts'),
-        compilerOptions: { target: ts.ScriptTarget.ES2021, module: ts.ModuleKind.CommonJS },
-      }).outputText;
-    }
-    const module = { exports: {} };
-    cache.set(id, module);
-    vm.runInContext(`(function(require,module,exports){${code}\n})`, context, { filename: id })(
-      (name: string) => load(name, id), module, module.exports);
-    return module.exports;
-  }
-  const { jsx } = load('valdi_core/src/JSXBootstrap');
-  const { Renderer } = load('valdi_core/src/Renderer');
-  const { RendererTestDelegate } = load('valdi_test/test/RendererTestDelegate');
-  const delegate = new RendererTestDelegate();
-  const renderer = new Renderer('wheel-proof', undefined, delegate);
-  return { load, jsx, renderer, delegate };
-}
-
 test(`actual shared wheels typecheck against selected sources; ${runtimeLabel} retain class identity`, async t => {
   for (const typesRoot of [sourceRoot]) {
     const { module, plugin } = fixture(typesRoot);
@@ -590,56 +510,6 @@ test(`Solid <Lazy> + <custom-view> defers creation until visible and retains ref
 
     h.manager.destroy('lazy-wheel-1');
     t.diagnostic(`types=${sourceRoot} runtime=${runtimeMode} platform=${platform}`);
-  }
-});
-
-test('mobile classes retain lazy, key, ref and typed config/callback under the production transformer',
-  { skip: runtimeMode !== 'source' ? 'exported mobile runtime strips legacy valdi_core JSXBootstrap/Renderer for Solid 2.0' : false },
-  () => {
-  for (const Processor of [JSXProcessor]) {
-    const { plugin, module } = fixture(sourceRoot, `
-import type {} from 'valdi_tsx/src/JSX';
-import type { IRenderedElementHolder } from 'valdi_tsx/src/IRenderedElementHolder';
-import type { View } from 'valdi_tsx/src/NativeTemplateElements';
-export function render(holder: IRenderedElementHolder<View>, callback: (value: string) => void, config: {value: string}) {
- <custom-view iosClass="VRColumnWheelView" androidClass="io.valdiroutes.app.ColumnWheelView"
-   key="wheel-key" ref={holder} lazy config={config} onChange={callback}/>;
-}`);
-    const program = ts.createProgram(plugin.program().getRootFileNames(),
-      { ...plugin.program().getCompilerOptions(), module: ts.ModuleKind.CommonJS });
-    const file = program.getSourceFile(path.join(module.dir, 'src/fixture.tsx'))!;
-    const application = new Map<string, Buffer>();
-    program.emit(file, (name, text) => {
-      if (name.endsWith('.js') || name.endsWith('.jsx')) application.set('src/fixture.js', Buffer.from(text));
-    }, undefined, false, { before: new Processor().makeTransformers(program.getTypeChecker()) });
-    const code = application.get('src/fixture.js')!.toString();
-    assert.match(code, /beginRenderIfNeeded/);
-    assert.match(code, /wheel-key/);
-    for (const platform of platforms) {
-      const h = host(platform, application, sourceRoot);
-      let attached = 0;
-      const holder = { onElementCreated() { ++attached; }, onElementDestroyed() {}, setElements() {} };
-      const callback = (_value: string) => {};
-      h.renderer.begin();
-      const config = { value: 'a' };
-      h.load('wheel_fixture/src/fixture').render(holder, callback, config);
-      h.renderer.end();
-      const initial = h.delegate.requests.flatMap((r: any) => r.entries);
-      const created = initial.find((e: any) => e.type === 'CreateElement');
-      assert.ok(created);
-      assert.equal(attached, 0, 'lazy attributes ran before native visibility');
-      h.delegate.notifyElementVisibilityChanged(created.id, true);
-      h.delegate.clear();
-      h.renderer.begin();
-      h.load('wheel_fixture/src/fixture').render(holder, callback, config);
-      h.renderer.end();
-      const entries = h.delegate.requests.flatMap((r: any) => r.entries);
-      assert.ok(!entries.some((e: any) => e.type === 'CreateElement'), 'lazy visibility replaced keyed view');
-      const attrs = entries.filter((e: any) => e.type === 'SetElementAttribute');
-      assert.equal(attached, 1, 'ref was lost');
-      assert.equal(attrs.find((e: any) => e.name === 'onChange')?.value, callback);
-      assert.equal(attrs.find((e: any) => e.name === 'config')?.value, config);
-    }
   }
 });
 

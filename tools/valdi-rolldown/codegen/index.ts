@@ -3,9 +3,6 @@
 // see LICENSE). The stages are the compiler's processors, in its order, mirroring its Swift names so the two can be
 // compared: symbols dumped from the module's program, annotations parsed and applied, models / view classes / context
 // factories generated per language (Kotlin, Objective-C, Swift, C++), then combined into one file per language and kind.
-
-// valdiTs imports the companion's JSXProcessor, whose source-map has no types of its own.
-/// <reference path="../vendor/companion/source-map.d.ts" />
 import path from 'node:path';
 import type ts from 'typescript';
 import { appModules, moduleConfig } from '../pipeline';

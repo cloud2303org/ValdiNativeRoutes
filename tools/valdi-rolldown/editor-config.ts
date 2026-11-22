@@ -41,7 +41,7 @@ export function createEditorConfig(
       absolute(paths.join(import.meta.dirname, 'runtime-native/NativeDebuggerTransport.ts')),
     ];
   }
-  const solidJsxDecl = module.jsxBackend === 'solid' && solidNative && module.name !== 'solid_native'
+  const solidJsxDecl = solidNative && module.name !== 'solid_native'
     ? [absolute(paths.join(solidNative.dir, 'src/jsx.d.ts'))]
     : [];
   // npm packages use normal node_modules lookup. A wildcard paths mapping to

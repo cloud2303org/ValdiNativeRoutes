@@ -97,7 +97,11 @@ test('runtime modules match the historical ABI and produce usable Node assets', 
         if (name !== 'jasmine') assert.equal(content.readUInt32LE(0), 0x0100c634, file);
       }
       if (name === 'valdi_core') {
-        for (const file of ['Init', 'Long', 'Promise', 'tslib']) assert.ok(debug.has(`src/${file}.js`), file);
+        for (const file of ['Init', 'Long', 'Promise', 'tslib', 'Valdi', 'NativeDebuggerTransport']) assert.ok(debug.has(`src/${file}.js`), file);
+        assert.match(debug.get('src/Valdi.js')!.toString(), /solid_native\/src\/bridge/);
+        for (const stripped of ['src/Renderer.js', 'src/JSXBootstrap.js', 'src/Component.js', 'src/Lazy.js', 'src/debugging/ErrorComponent.js']) {
+          assert.equal(debug.has(stripped), false, `${stripped} must not be packaged in Solid 2.0 valdi_core`);
+        }
         assert.match(debug.get('src/Init.js')!.toString(), /moduleLoader/);
         // Init's root evaluator can load only tslib until ModuleLoader.create
         // installs normal require. A Rolldown shared chunk here crashes startup.

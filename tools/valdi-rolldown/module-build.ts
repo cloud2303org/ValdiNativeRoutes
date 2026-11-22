@@ -63,7 +63,6 @@ export async function compileNodeModule(
     ? JSON.parse(readFileSync(originalConfigFile, 'utf8')) : moduleConfig(name);
   const solidNativeDir = path.join(modulesDir, 'solid_native');
   const hasSolidNative = existsSync(solidNativeDir);
-  const jsxBackend = original.jsxBackend ?? originalConfig.jsxBackend ?? (hasSolidNative ? 'solid' : undefined);
   const temporary = realpathSync(mkdtempSync(path.join(tmpdir(), `node-valdi-${name}-`)));
   try {
     symlinkSync(original.nodeModules!, path.join(temporary, 'node_modules'), 'dir');
@@ -85,8 +84,7 @@ export async function compileNodeModule(
       makeWritable(generated);
       return { ...source, dir, generatedDirs: [generated] };
     };
-    const stagedModule = staged({ ...original, generatedDirs: [] });
-    const module: ValdiModule = jsxBackend ? { ...stagedModule, jsxBackend } : stagedModule;
+    const module = staged({ ...original, generatedDirs: [] });
     const stagedDependencies = dependencies.map(staged);
     if (existsSync(path.join(original.dir, 'res'))) {
       const stagedRes = path.join(module.dir, 'res');
@@ -95,7 +93,6 @@ export async function compileNodeModule(
     }
     const configModules: ValdiModule[] = [module, ...stagedDependencies];
     if (
-      jsxBackend === 'solid' &&
       hasSolidNative &&
       module.name !== 'solid_native' &&
       !stagedDependencies.some(dep => dep.name === 'solid_native')

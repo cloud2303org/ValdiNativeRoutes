@@ -45,15 +45,14 @@ export interface ModuleConfig {
   iosModuleFactory?: string;
   iosModuleFactoryClass?: string;
   template?: string;
-  jsxBackend?: 'solid' | 'valdi';
 }
 
 export function moduleConfig(name: string): ModuleConfig {
   const file = path.join(modulesDir, name, 'module.json');
   if (!existsSync(file)) return {};
   const config = JSON.parse(readFileSync(file, 'utf8'));
-  if (config.jsxBackend !== undefined && !['solid', 'valdi'].includes(config.jsxBackend)) {
-    throw new Error(`${file}: unsupported jsxBackend`);
+  if (config.jsxBackend !== undefined) {
+    throw new Error(`${file}: jsxBackend is no longer supported; Solid 2.0 is the only JSX frontend`);
   }
   if (config.nativeBuild !== undefined && !['bazel', 'host', 'cpp'].includes(config.nativeBuild)) throw new Error(`${file}: unsupported nativeBuild`);
   // Keep the cpp ownership contract aligned with scripts/lib/module-native-config.mjs.
@@ -76,15 +75,13 @@ export function moduleConfig(name: string): ModuleConfig {
 }
 
 export function appModule(name: string): ValdiModule {
-  const config = moduleConfig(name);
-  const jsxBackend = config.jsxBackend ?? (existsSync(path.join(modulesDir, 'solid_native')) ? 'solid' : undefined);
+  moduleConfig(name);
   return {
     name,
     dir: path.join(modulesDir, name),
     generatedDirs: [genDir(name)],
     // The npm packages its sources import (valdi/package.json, pinned by valdi/pnpm-lock.yaml) are bundled into it.
     nodeModules: path.join(valdi, 'node_modules'),
-    ...(jsxBackend ? { jsxBackend } : {}),
   };
 }
 

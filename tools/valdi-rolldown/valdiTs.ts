@@ -1,7 +1,7 @@
 /// <reference path="./ambient.d.ts" />
-// A rolldown plugin compiling a Valdi module's .ts/.tsx as the Valdi compiler does: TypeScript with the module's
-// tsconfig, Valdi's JSXProcessor on .tsx (it needs the type checker, so this is a whole program, not per-file
-// transpilation) and its console transformer on everything. TypeScript emits ES modules; rolldown turns them into
+// A rolldown plugin compiling a Valdi module's .ts/.tsx: TypeScript with the module's
+// tsconfig, route and console log transformers, and Solid 2.0 Universal (`@solidjs/babel-plugin`)
+// on .tsx. TypeScript emits ES modules (or CommonJS for bootstrap) and rolldown turns them into
 // one CommonJS file per source file (pipeline.ts).
 //
 // Imports are resolved the way Valdi lays modules out: `<module>/…` and relative paths inside the module are bundled,
@@ -15,7 +15,6 @@ import solidBabelPlugin from '@solidjs/babel-plugin';
 import type { Plugin } from 'rolldown';
 import ts from 'typescript';
 import { createConsoleLogTransformer } from './vendor/companion/ConsoleLogTransformer';
-import { JSXProcessor } from './vendor/companion/JSXProcessor';
 import { routeTransformer } from './routes-transform';
 import { prepareStrings } from './localization';
 import { formatDiagnostics, projectDiagnostics, readModuleProject } from './typescript-project';
@@ -32,7 +31,6 @@ export interface ValdiModule {
   /** Explicit runtime-module inputs; ordinary app modules still discover src/. */
   sourceEntries?: string[];
   includeJavaScript?: boolean;
-  jsxBackend?: 'solid' | 'valdi';
 }
 
 const EXTENSIONS = ['.ts', '.tsx', '/index.ts', '/index.tsx'];
@@ -176,14 +174,9 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
     directoryExists: ts.sys.directoryExists,
     getDirectories: ts.sys.getDirectories,
     realpath: ts.sys.realpath,
-    // Called once per emitted file: JSXProcessor keeps per-file state (node prototypes, ids), as in Valdi's
-    // Workspace.doEmitFile.
     getCustomTransformers: () => ({
       before: [
         routeTransformer(service.getProgram()!.getTypeChecker(), module, inlineRouteIcons),
-        ...(module.jsxBackend !== 'solid' && emitting.endsWith('.tsx')
-          ? new JSXProcessor().makeTransformers(service.getProgram()!.getTypeChecker())
-          : []),
         createConsoleLogTransformer(),
       ],
       after: [requireExternals],
@@ -199,7 +192,6 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
     getCustomTransformers: undefined,
   }, registry);
   service = ts.createLanguageService(host, registry);
-  let emitting = '';
 
   // CommonJS syntax in external framework sources is valid and is emitted by
   // that framework's compiler. Our own ESNext inputs must also satisfy the
@@ -226,16 +218,15 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
   const emitWithMap = (real: string): { code: string; map: string } => {
     const diagnostics = emissionDiagnostics(real);
     if (diagnostics) throw new Error(diagnostics);
-    emitting = real;
     const output = service.getEmitOutput(real);
-    // jsx: preserve names .tsx output .jsx, though JSXProcessor leaves no JSX in it.
+    // jsx: preserve names .tsx output .jsx; Solid's Babel preset compiles JSX right below.
     const js = output.outputFiles.find(file => /\.jsx?$/.test(file.name));
     const map = output.outputFiles.find(file => /\.jsx?\.map$/.test(file.name));
     if (!js || !map) throw new Error(`TypeScript emitted nothing for ${real}`);
     const sourceMap = JSON.parse(map.text);
     sourceMap.sources = sourceMap.sources.map((source: string) => path.resolve(path.dirname(map.name), source));
     const code = js.text.replace(/\n\/\/# sourceMappingURL=\S+\s*$/, '\n');
-    if (module.jsxBackend === 'solid' && real.endsWith('.tsx')) {
+    if (real.endsWith('.tsx')) {
       const compiled = transformSync(code, {
         filename: real,
         configFile: false,
@@ -245,6 +236,20 @@ export function valdiTs(module: ValdiModule, moduleKind = ts.ModuleKind.ESNext, 
         plugins: [[solidBabelPlugin, { generate: 'universal', moduleName: 'solid_native/src/renderer', dev: false }]],
       });
       if (!compiled?.code || !compiled.map) throw new Error(`Solid emitted nothing for ${real}`);
+      if (moduleKind === ts.ModuleKind.CommonJS) {
+        const cjs = ts.transpileModule(compiled.code, {
+          fileName: real.replace(/\.tsx$/, '.js'),
+          compilerOptions: {
+            target: ts.ScriptTarget.ES2020,
+            module: ts.ModuleKind.CommonJS,
+            sourceMap: true,
+          },
+        });
+        return {
+          code: cjs.outputText.replace(/\n\/\/# sourceMappingURL=[^\n]+\s*$/, '\n'),
+          map: cjs.sourceMapText ?? JSON.stringify(compiled.map),
+        };
+      }
       return { code: compiled.code, map: JSON.stringify(compiled.map) };
     }
     return { code, map: JSON.stringify(sourceMap) };

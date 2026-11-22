@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test, { type TestContext } from 'node:test';
@@ -29,8 +29,9 @@ function fixture(t: TestContext) {
   t.after(() => rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));
   const paths = Object.fromEntries(['valdi_core', 'valdi_tsx', 'coreutils', 'source_map']
     .map(name => [`${name}/*`, [path.join(upstreamModules, name, '*')]]));
+  paths['solid_native/*'] = [path.join(root, 'valdi/modules/solid_native/*')];
   paths.tslib = [path.join(upstreamModules, 'valdi_core/src/tslib')];
-  const config = {
+  const runtimeConfig = {
     extends: path.join(upstream, 'modules/_configs/base.tsconfig.json'),
     compilerOptions: {
       paths,
@@ -38,7 +39,17 @@ function fixture(t: TestContext) {
     },
   };
   const dir = path.join(temporary, 'fixture');
-  write(dir, 'tsconfig.json', JSON.stringify({ ...config, include: ['src/**/*'] }));
+  write(dir, 'tsconfig.json', JSON.stringify({
+    extends: runtimeConfig.extends,
+    compilerOptions: {
+      ...runtimeConfig.compilerOptions,
+      allowSyntheticDefaultImports: true,
+      module: 'preserve',
+      moduleResolution: 'bundler',
+    },
+    include: ['src/**/*', path.join(root, 'valdi/modules/solid_native/src/jsx.d.ts')],
+  }));
+  symlinkSync(realpathSync(path.join(root, 'valdi/node_modules')), path.join(dir, 'node_modules'), 'junction');
   const logging = `
 export let argumentEvaluations = 0;
 function argument(label: string) { argumentEvaluations++; return label; }
@@ -52,8 +63,7 @@ export function run() {
 }
 `;
   const jsx = `
-import type {} from 'valdi_tsx/src/JSX';
-export function render() { <label value="console fixture" />; }
+export function render() { return <label value="console fixture" />; }
 `;
   for (const extension of ['ts', 'tsx']) {
     const suffix = extension === 'tsx' ? jsx : '';
@@ -61,7 +71,7 @@ export function render() { <label value="console fixture" />; }
     // A function reference is not a call and must not introduce a provider.
     write(dir, `src/quiet-${extension}.${extension}`, 'export const report = console.error;\n' + suffix);
   }
-  const module: ValdiModule = { name: 'console_fixture', dir, generatedDirs: [] };
+  const module: ValdiModule = { name: 'console_fixture', dir, generatedDirs: [], nodeModules: path.join(root, 'valdi/node_modules') };
   const plugin = valdiTs(module);
   t.after(() => plugin.dispose());
 
@@ -69,7 +79,7 @@ export function render() { <label value="console fixture" />; }
   // remain in the framework checkout; only the temporary tsconfig is written.
   const runtimeDir = path.join(temporary, 'runtime');
   const runtimeSources = [providerId, loaderId].map(id => path.join(upstreamModules, `${id}.ts`));
-  write(runtimeDir, 'tsconfig.json', JSON.stringify({ ...config, files: runtimeSources, include: [] }));
+  write(runtimeDir, 'tsconfig.json', JSON.stringify({ ...runtimeConfig, files: runtimeSources, include: [] }));
   const runtimePlugin = valdiTs({
     name: 'valdi_core', dir: runtimeDir, generatedDirs: [], sourceEntries: runtimeSources,
   }, ts.ModuleKind.CommonJS);
@@ -133,10 +143,10 @@ function execute(entries: Map<string, Buffer>, entry: string, providerCode: stri
   });`, context);
   const cache = new Map<string, Record<string, any>>();
   const required: string[] = [];
-  const jsx = {
-    makeNodePrototype(tag: string) { return { tag }; },
-    beginRender(node: { tag: string }) { renders.push(node.tag); },
-    endRender() { renders.push('end'); },
+  const solidRenderer = {
+    createElement(tag: string) { renders.push(tag); return { tag }; },
+    setProp() {},
+    effect(fn: () => void) { fn(); },
   };
   function load(id: string): Record<string, any> {
     if (cache.has(id)) return cache.get(id)!;
@@ -147,7 +157,7 @@ function execute(entries: Map<string, Buffer>, entry: string, providerCode: stri
     const value = evaluate(code.toString(), id, context, specifier => {
       required.push(specifier);
       if (specifier === providerId) return provider;
-      if (specifier === 'valdi_core/src/JSX') return { jsx };
+      if (specifier === 'solid_native/src/renderer') return solidRenderer;
       assert.ok(specifier.startsWith('.'), `Unexpected external ${specifier}`);
       return load(path.posix.normalize(path.posix.join(path.posix.dirname(id), specifier)) + '.js');
     }, exports);
@@ -193,7 +203,7 @@ test('console logging through valdiTs and debug/minified buildModule output', as
         assert.equal(h.lookups(), 0);
         if (extension === 'tsx') {
           h.exports.render();
-          assert.deepEqual(h.renders, ['label', 'end']);
+          assert.deepEqual(h.renders, ['label']);
         }
       });
 
@@ -240,7 +250,7 @@ test('console logging through valdiTs and debug/minified buildModule output', as
         run(false);
         if (extension === 'tsx') {
           h.exports.render();
-          assert.deepEqual(h.renders, ['label', 'end'], 'the fixture must actually execute transformed JSX');
+          assert.deepEqual(h.renders, ['label'], 'the fixture must actually execute transformed JSX');
         }
       });
     }
